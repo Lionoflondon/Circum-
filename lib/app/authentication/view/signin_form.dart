@@ -245,7 +245,7 @@ class SigninFormState extends State<SigninForm> {
               },
               widget: AppText.text('Sign In',
                   fontWeight: FontWeight.w700, color: Colors.white),
-              isLoading: state.isLoading));
+              isLoading: state.status == Status.loading || state.isLoading));
     });
   }
 

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 import '../health_plus/view/health_plus.dart';
 import '../sender_mobile/gift_mode_view.dart';
@@ -49,7 +52,8 @@ class BusinessView extends StatefulWidget {
   State<BusinessView> createState() => _BusinessViewState();
 }
 
-class _BusinessViewState extends State<BusinessView> {
+class _BusinessViewState extends State<BusinessView>
+    with WidgetsBindingObserver {
   late final BusinessRepository _repository;
   late final SenderPaymentProfileRepository _paymentRepository;
   final _search = TextEditingController();
@@ -63,6 +67,7 @@ class _BusinessViewState extends State<BusinessView> {
   bool _loading = true;
   bool _working = false;
   String? _error;
+  String? _rothCheckoutKey;
 
   @override
   void initState() {
@@ -70,13 +75,26 @@ class _BusinessViewState extends State<BusinessView> {
     _repository = widget.repository ?? FirebaseBusinessRepository();
     _paymentRepository = widget.paymentProfileRepository ??
         FirebaseSenderPaymentProfileRepository();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _rothCheckoutKey != null &&
+        !_loading &&
+        !_working &&
+        _account != null) {
+      unawaited(_load(accountId: _account!.id));
+    }
   }
 
   Future<void> _load({String? accountId}) async {
@@ -101,7 +119,10 @@ class _BusinessViewState extends State<BusinessView> {
       );
       final results = await Future.wait<dynamic>([
         _repository.loadWorkspace(selected),
-        _paymentRepository.paymentMethods().catchError(
+        _paymentRepository
+            .paymentMethods()
+            .timeout(businessOperationTimeout)
+            .catchError(
               (_) => SenderPaymentProfile.empty(),
             ),
         _repository.loadPendingAccessRequests(selected).catchError(
@@ -116,10 +137,32 @@ class _BusinessViewState extends State<BusinessView> {
         _paymentProfile = results[1] as SenderPaymentProfile;
         _accessRequests = results[2] as List<BusinessAccessRequest>;
       });
+      unawaited(_loadRequestHistory(selected));
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadRequestHistory(BusinessAccount account) async {
+    try {
+      final history = await _repository.loadRequestHistory(account);
+      if (!mounted || _account?.id != account.id || _workspace == null) return;
+      final current = _workspace!;
+      setState(() {
+        _workspace = BusinessWorkspaceData(
+          account: current.account,
+          deliveries: current.deliveries,
+          invoices: current.invoices,
+          healthRequests: history.healthRequests,
+          giftRequests: history.giftRequests,
+          wallet: current.wallet,
+          rothTransactions: history.rothTransactions,
+        );
+      });
+    } catch (_) {
+      // Optional product history fails soft; core Business remains usable.
     }
   }
 
@@ -510,16 +553,19 @@ class _BusinessViewState extends State<BusinessView> {
       const SizedBox(height: 8),
       _ResponsiveGrid(minItemWidth: 145, childAspectRatio: 3.2, children: [
         _CompactAction(
+            visible: false,
             label: 'Cancel',
             icon: Icons.cancel_outlined,
             onTap: () => _showMessage(
                 'Open Delivery Details to cancel eligible deliveries.')),
         _CompactAction(
+            visible: false,
             label: 'Delivery Details',
             icon: Icons.info_outline_rounded,
             onTap: () => _showMessage(
                 'Select a delivery row to open delivery details.')),
         _CompactAction(
+            visible: false,
             label: 'Export CSV',
             icon: Icons.table_view_rounded,
             onTap: () =>
@@ -573,28 +619,34 @@ class _BusinessViewState extends State<BusinessView> {
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
+            visible: false,
             label: 'Download PDF',
             icon: Icons.picture_as_pdf_rounded,
             onTap: () => _showMessage('Select an invoice to download PDF.')),
         _CompactAction(
+            visible: false,
             label: 'Download CSV',
             icon: Icons.table_view_rounded,
             onTap: () => _showMessage('Invoice CSV export is being prepared.')),
         _CompactAction(
+            visible: false,
             label: 'VAT Invoices',
             icon: Icons.description_rounded,
             onTap: () => _showMessage('VAT invoices use existing records.')),
         _CompactAction(
+            visible: false,
             label: 'Statement History',
             icon: Icons.history_rounded,
             onTap: () => _showMessage(
                 'Statement history uses your existing invoice records.')),
         _CompactAction(
+            visible: false,
             label: 'Roth Offset Used',
             icon: Icons.diamond_outlined,
             onTap: () => _showMessage(
                 'Roth offsets are shown on each invoice and Finance.')),
         _CompactAction(
+            visible: false,
             label: 'Payment Method',
             icon: Icons.credit_card_rounded,
             onTap: () =>
@@ -629,15 +681,18 @@ class _BusinessViewState extends State<BusinessView> {
       ),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
+            visible: false,
             label: 'Permissions',
             icon: Icons.rule_rounded,
             onTap: () =>
                 _showMessage('Permissions are applied through team roles.')),
         _CompactAction(
+            visible: false,
             label: 'Activity Log',
             icon: Icons.manage_history_rounded,
             onTap: () => _showMessage('Team activity log is being prepared.')),
         _CompactAction(
+            visible: false,
             label: 'Resend Invitation',
             icon: Icons.mark_email_unread_rounded,
             onTap: () =>
@@ -818,6 +873,7 @@ class _BusinessViewState extends State<BusinessView> {
       Wrap(spacing: 8, runSpacing: 8, children: [
         if (isHealth) ...[
           _CompactAction(
+              visible: false,
               label: 'Medical Chain of Custody',
               icon: Icons.verified_user_rounded,
               onTap: () => _showMessage(
@@ -828,6 +884,7 @@ class _BusinessViewState extends State<BusinessView> {
               onTap: _openHealthPlus),
         ] else ...[
           _CompactAction(
+              visible: false,
               label: 'Gift History',
               icon: Icons.history_rounded,
               onTap: () => _showMessage('Gift history uses existing orders.')),
@@ -878,19 +935,23 @@ class _BusinessViewState extends State<BusinessView> {
       const SizedBox(height: 12),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
+            visible: false,
             label: 'Audit Trail',
             icon: Icons.manage_search_rounded,
             onTap: () => _showMessage('Open a protected delivery for audit.')),
         _CompactAction(
+            visible: false,
             label: 'Signature Verification',
             icon: Icons.draw_rounded,
             onTap: () => _showMessage(
                 'Signature verification appears on protected delivery records.')),
         _CompactAction(
+            visible: false,
             label: 'Delivery Timeline',
             icon: Icons.timeline_rounded,
             onTap: () => _showMessage('Select a delivery to view timeline.')),
         _CompactAction(
+            visible: false,
             label: 'Chain of Custody',
             icon: Icons.hub_rounded,
             onTap: () => _showMessage(
@@ -981,9 +1042,7 @@ class _BusinessViewState extends State<BusinessView> {
       ]),
       const SizedBox(height: 14),
       _SecondaryButton(
-          label: 'Export analytics',
-          icon: Icons.download_rounded,
-          onTap: () => _showMessage('Analytics export is being prepared.')),
+          label: 'Export analytics', icon: Icons.download_rounded, onTap: null),
     ]);
   }
 
@@ -1037,6 +1096,27 @@ class _BusinessViewState extends State<BusinessView> {
         title: 'Roth',
         subtitle: 'Available for full or split invoice payment',
       ),
+      const SizedBox(height: 12),
+      _PrimaryButton(
+        label: 'Buy Roth',
+        icon: Icons.add_card_rounded,
+        onTap: _working ? null : _buyBusinessRoth,
+      ),
+      if (_workspace!.rothTransactions.isNotEmpty) ...[
+        const _SectionLabel('Recent Roth activity'),
+        ..._workspace!.rothTransactions.take(5).map(
+              (item) => _SimpleRow(
+                icon: item.direction.toLowerCase() == 'debit'
+                    ? Icons.remove_circle_outline
+                    : Icons.add_circle_outline,
+                title:
+                    '${item.direction.toLowerCase() == 'debit' ? '−' : '+'}${item.amount.toStringAsFixed(2)} Roth',
+                subtitle: item.createdAt == null
+                    ? item.status
+                    : '${DateFormat('d MMM yyyy, HH:mm').format(item.createdAt!)} · ${item.status}',
+              ),
+            ),
+      ],
       const _SectionLabel('Invoices & statements'),
       ..._workspace!.invoices.take(4).map(_invoiceRow),
       if (_workspace!.invoices.isEmpty)
@@ -1053,12 +1133,84 @@ class _BusinessViewState extends State<BusinessView> {
             label: 'Spending Trends',
             icon: Icons.show_chart_rounded,
             onTap: () => _selectSection(BusinessSection.analytics)),
-        _CompactAction(
-            label: 'Export Statements',
-            icon: Icons.download_rounded,
-            onTap: () => _showMessage('Statement export is being prepared.')),
       ]),
     ]);
+  }
+
+  Future<void> _buyBusinessRoth() async {
+    final account = _account;
+    if (account == null || _working) return;
+    final controller = TextEditingController();
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _raised,
+        title: const Text('Buy Business Roth'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Roth is Circum credit. Your secure checkout may offer a saved card, Apple Pay or Google Pay when supported.',
+              style: TextStyle(color: _muted, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                    RegExp(r'^\d{0,5}(\.\d{0,2})?')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixText: '£',
+                helperText: 'Minimum £1 · Maximum £10,000',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final parsed = double.tryParse(controller.text.trim());
+              if (parsed == null || parsed < 1 || parsed > 10000) return;
+              Navigator.pop(dialogContext, parsed);
+            },
+            child: const Text('Continue securely'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (amount == null || !mounted) return;
+    _rothCheckoutKey ??= const Uuid().v4();
+    setState(() => _working = true);
+    try {
+      final checkout = await _repository.createRothCheckout(
+        account: account,
+        amount: amount,
+        idempotencyKey: _rothCheckoutKey!,
+      );
+      final opened = await launchUrl(
+        checkout.checkoutUrl,
+        mode: LaunchMode.externalApplication,
+      ).timeout(businessOperationTimeout);
+      if (!opened) throw StateError('Secure Roth checkout could not open.');
+      _showMessage('Complete payment securely, then return to refresh Roth.');
+    } on TimeoutException {
+      _showMessage('Roth checkout timed out. Try again safely.');
+    } catch (error) {
+      _showMessage('Roth checkout could not start. Please try again.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
   }
 
   Widget _settings() {
@@ -1416,15 +1568,13 @@ class _BusinessViewState extends State<BusinessView> {
                     child: _SecondaryButton(
                         label: 'Download PDF',
                         icon: Icons.picture_as_pdf_rounded,
-                        onTap: () =>
-                            _showMessage('Invoice PDF is being prepared.'))),
+                        onTap: null)),
                 const SizedBox(width: 8),
                 Expanded(
                     child: _SecondaryButton(
                         label: 'Download CSV',
                         icon: Icons.table_view_rounded,
-                        onTap: () =>
-                            _showMessage('Invoice CSV is being prepared.'))),
+                        onTap: null)),
               ]),
             ]),
       ),
@@ -2478,14 +2628,21 @@ class _CompactAction extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+  final bool visible;
   const _CompactAction(
-      {required this.label, required this.icon, required this.onTap});
+      {required this.label,
+      required this.icon,
+      required this.onTap,
+      this.visible = true});
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(side: const BorderSide(color: _border)));
+  Widget build(BuildContext context) => visible
+      ? OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style:
+              OutlinedButton.styleFrom(side: const BorderSide(color: _border)))
+      : const SizedBox.shrink();
 }
 
 class _Pill extends StatelessWidget {

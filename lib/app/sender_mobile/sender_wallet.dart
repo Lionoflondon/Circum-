@@ -572,15 +572,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _walletTelemetry('timeout', startedAt);
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _wallet ??= const SenderWalletData(
-            balance: 0,
-            frozen: false,
-            onboardingCompleted: true,
-          );
-          _error =
-              "You're offline or the network is slow. Showing your most recent wallet.";
+          _error = _wallet == null
+              ? "Your Roth balance is unavailable. Check your connection and retry."
+              : "You're offline or the network is slow. Showing your last saved wallet.";
           _refreshing = false;
-          _showingCachedWallet = _wallet != null;
         });
         _scheduleWalletRetry();
       }
@@ -588,12 +583,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _walletTelemetry('failed', startedAt, error: error);
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _wallet ??= const SenderWalletData(
-            balance: 0,
-            frozen: false,
-            onboardingCompleted: true,
-          );
-          _error = '$error';
+          _error = _wallet == null
+              ? 'Your Roth balance is unavailable. Please retry.'
+              : '$error';
           _refreshing = false;
         });
         _scheduleWalletRetry();
@@ -3844,6 +3836,9 @@ class _WalletColors {
 
 String _walletSafeError(String error) {
   final lower = error.toLowerCase();
+  if (lower.contains('roth balance is unavailable')) {
+    return 'Your Roth balance is unavailable. Check your connection and retry.';
+  }
   if (lower.contains('permission') || lower.contains('denied')) {
     return 'Wallet access is unavailable for this account right now.';
   }

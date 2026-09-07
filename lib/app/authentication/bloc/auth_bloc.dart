@@ -143,9 +143,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       firestore: db,
       functions: functions,
     );
-    await authority.ensureCanonicalSenderAccount(user, '$phase.ensure');
-    final profile = await authority.load(phase);
-    final phone = profile.data['phone'] ?? user.phoneNumber;
+    final account =
+        await authority.ensureCanonicalSenderAccount(user, '$phase.ensure');
+    final profile = account['profile'] is Map
+        ? Map<String, dynamic>.from(account['profile'] as Map)
+        : const <String, dynamic>{};
+    final phone = profile['phone'] ?? user.phoneNumber;
     if (phone != null && '$phone'.trim().isNotEmpty) {
       await storage
           .write(key: 'phone', value: '$phone')

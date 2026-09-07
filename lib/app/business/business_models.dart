@@ -98,16 +98,15 @@ class BusinessAccount {
       paymentPreferences: Map<String, dynamic>.from(
         data['paymentPreferences'] as Map? ?? const {},
       ),
-      irisMoments:
-          ((data['irisMoments'] ?? data['moments'] ?? data['businessMoments'])
-                      as List? ??
-                  const [])
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList(growable: false),
+      irisMoments: ((data['irisMoments'] ??
+                  data['moments'] ??
+                  data['businessMoments']) as List? ??
+              const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false),
       isPatron: patron['awarded'] == true || data['isPatron'] == true,
-      patronNumber:
-          (patron['number'] as num?)?.toInt() ??
+      patronNumber: (patron['number'] as num?)?.toInt() ??
           (data['patronNumber'] as num?)?.toInt(),
     );
   }
@@ -259,8 +258,8 @@ class BusinessDelivery {
           .toLowerCase(),
       bookedBy: '${data['bookedByName'] ?? data['senderName'] ?? ''}'.trim(),
       vehicle: '${data['vehicleType'] ?? data['vehicle'] ?? ''}'.trim(),
-      category: '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'
-          .trim(),
+      category:
+          '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'.trim(),
       amount: _money(
         data['totalAmount'] ?? data['price'] ?? data['amountPaid'],
       ),
@@ -273,11 +272,11 @@ class BusinessDelivery {
   }
 
   bool get isCompleted => const {
-    'delivered',
-    'completed',
-    'cancelled',
-    'cancelled_admin',
-  }.contains(status);
+        'delivered',
+        'completed',
+        'cancelled',
+        'cancelled_admin',
+      }.contains(status);
 
   bool get isScheduled =>
       !isCompleted &&
@@ -325,8 +324,7 @@ class BusinessInvoice {
       total: _money(data['total'] ?? data['subtotal']),
       balanceDue: _money(data['balanceDue'] ?? data['total']),
       rothApplied: _money(data['rothApplied'] ?? data['rothAmount']),
-      deliveryCount:
-          (data['deliveryCount'] as num?)?.toInt() ??
+      deliveryCount: (data['deliveryCount'] as num?)?.toInt() ??
           (data['deliveryIds'] as List?)?.length ??
           0,
       dueAt: _date(data['dueAt'] ?? data['dueDate']),
@@ -430,6 +428,7 @@ class BusinessWorkspaceData {
   final List<BusinessRequestSummary> healthRequests;
   final List<BusinessRequestSummary> giftRequests;
   final BusinessWalletSummary wallet;
+  final List<BusinessRothTransaction> rothTransactions;
 
   const BusinessWorkspaceData({
     required this.account,
@@ -438,6 +437,7 @@ class BusinessWorkspaceData {
     required this.healthRequests,
     required this.giftRequests,
     required this.wallet,
+    this.rothTransactions = const [],
   });
 
   int get monthlyDeliveries {
@@ -459,6 +459,31 @@ class BusinessWorkspaceData {
   int get activeGiftRequests => giftRequests
       .where((item) => !const {'completed', 'delivered'}.contains(item.status))
       .length;
+}
+
+class BusinessRothTransaction {
+  final String id;
+  final double amount;
+  final String direction;
+  final String status;
+  final DateTime? createdAt;
+
+  const BusinessRothTransaction({
+    required this.id,
+    required this.amount,
+    required this.direction,
+    required this.status,
+    required this.createdAt,
+  });
+
+  factory BusinessRothTransaction.fromMap(Map<String, dynamic> data) =>
+      BusinessRothTransaction(
+        id: '${data['id'] ?? data['transactionId'] ?? ''}',
+        amount: (data['amount'] as num?)?.toDouble() ?? 0,
+        direction: '${data['direction'] ?? 'credit'}',
+        status: '${data['status'] ?? 'completed'}',
+        createdAt: _date(data['createdAt']),
+      );
 }
 
 DateTime? _date(dynamic value) {
