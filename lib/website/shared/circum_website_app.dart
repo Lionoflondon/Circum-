@@ -8040,6 +8040,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _businessCompanyCode = TextEditingController();
   final _businessInvoiceAmount = TextEditingController();
   final _businessRothAmount = TextEditingController(text: '50');
+  String? _businessRothCheckoutKey;
   final _ratingFeedback = TextEditingController();
   final _senderEmail = TextEditingController();
   final _senderPassword = TextEditingController();
@@ -10660,18 +10661,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _businessBusy = true;
       _businessMessage = 'Preparing Roth checkout...';
     });
+    _businessRothCheckoutKey ??=
+        '${_senderUser?.uid ?? 'sender'}:${DateTime.now().microsecondsSinceEpoch}';
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessRothCheckout')
           .call({
         'businessId': businessId,
         'amount': amount,
+        'idempotencyKey': _businessRothCheckoutKey,
         'returnUrl': 'https://circumuk.com/?app=business',
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
         await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
+        _businessRothCheckoutKey = null;
       }
     } finally {
       if (mounted) setState(() => _businessBusy = false);
