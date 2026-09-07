@@ -63,6 +63,15 @@ void main() {
     expect(signUp, isNot(contains('Sign in could not be completed')));
   });
 
+  test('Sender web payment sheet uses the legal company display name', () {
+    expect(website, contains("merchantDisplayName: 'Circum Technologies'"));
+    expect(
+      RegExp(r"merchantDisplayName: 'Circum'(?! Technologies)")
+          .hasMatch(website),
+      isFalse,
+    );
+  });
+
   test('legacy Sender AuthBloc auth operations are bounded and do not rethrow',
       () {
     expect(authBloc, contains('_authOperationTimeout'));

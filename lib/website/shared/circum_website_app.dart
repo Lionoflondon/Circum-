@@ -9657,7 +9657,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                                     SetupPaymentSheetParameters(
                                   paymentIntentClientSecret:
                                       '${data['clientSecret']}',
-                                  merchantDisplayName: 'Circum',
+                                  merchantDisplayName: 'Circum Technologies',
                                   style: ThemeMode.dark,
                                 ),
                               )
