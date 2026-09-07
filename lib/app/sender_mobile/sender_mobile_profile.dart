@@ -1386,7 +1386,8 @@ class _SenderGiftStoriesCard extends StatelessWidget {
               else
                 ...docs.map((doc) {
                   final data = doc.data();
-                  final recipient = '${data['recipientDisplayName'] ?? 'Recipient'}';
+                  final recipient =
+                      '${data['recipientDisplayName'] ?? 'Recipient'}';
                   final occasion = '${data['occasion'] ?? 'A special moment'}';
                   return _ProfileShortcut(
                     key: Key('sender-gift-story-${doc.id}'),
@@ -1396,7 +1397,9 @@ class _SenderGiftStoriesCard extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => GiftStoryView(
-                          draft: GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
+                          draft:
+                              GiftJourneyDraft.forMode(SenderGiftMode.someone)
+                                  .copyWith(
                             recipientName: recipient,
                             occasion: occasion,
                             linkedGiftDeliveryStatus: 'delivered',
@@ -2504,13 +2507,18 @@ class _SenderClosedSubmissionScreenState
         'closeImmediately': true,
         if ((user?.displayName ?? '').trim().isNotEmpty)
           'displayName': user!.displayName!.trim(),
-      });
+      }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
       if (!mounted) return;
       _controller.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.successMessage)),
       );
       Navigator.of(context).pop();
+    } on TimeoutException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Message timed out. Please retry.')),
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

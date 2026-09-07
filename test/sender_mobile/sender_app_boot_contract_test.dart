@@ -102,7 +102,9 @@ void main() {
     );
     expect(
         wallet, contains("profile?.data['senderWalletOnboardingCompleted']"));
-    expect(wallet, contains('_wallet ??= const SenderWalletData'));
+    expect(wallet, isNot(contains('_wallet ??= const SenderWalletData')));
+    expect(wallet, contains('Your Roth balance is unavailable'));
+    expect(wallet, contains('Showing your last saved wallet'));
     expect(wallet, contains('_scheduleWalletRetry'));
     expect(wallet,
         isNot(contains('if (wallet == null || profile == null) return;')));

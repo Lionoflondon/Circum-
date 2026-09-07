@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sender_mobile/design_system/sender_design_system.dart';
 
+const _chatOperationTimeout = Duration(seconds: 15);
+
 /// Canonical delivery conversation. Messages are persisted by the
 /// communication callable and remain visible after the delivery closes.
 class RideChatPageView extends StatefulWidget {
@@ -92,6 +94,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   }
 
   Future<void> _resolveSupportChatId() async {
+    if (mounted) setState(() => _supportError = null);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -106,7 +109,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         'topic': 'wallet_support',
         'title': 'Circum Support',
         'participantRole': 'sender',
-      });
+      }).timeout(_chatOperationTimeout);
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : const <String, dynamic>{};
@@ -115,6 +118,11 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         throw StateError('Support conversation was not created.');
       }
       if (mounted) setState(() => _chatId = chatId);
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _supportError =
+            'Circum Support took too long to open. Check your connection and retry.');
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -138,7 +146,8 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('setConversationTyping')
-          .call({'chatId': chatId, 'typing': typing});
+          .call({'chatId': chatId, 'typing': typing}).timeout(
+              _chatOperationTimeout);
     } catch (_) {
       // Typing is deliberately best-effort and never blocks messaging.
     }
@@ -148,7 +157,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('markConversationRead')
-          .call({'chatId': chatId});
+          .call({'chatId': chatId}).timeout(_chatOperationTimeout);
     } catch (_) {
       // The visible stream remains available when acknowledgement is offline.
     }
@@ -160,11 +169,20 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text'
+      }).timeout(_chatOperationTimeout);
       _input.clear();
       await _setTyping(false);
+    } on TimeoutException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Message timed out. Your text is preserved—please retry.'),
+        ));
+      }
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -196,8 +214,10 @@ class _RideChatPageViewState extends State<RideChatPageView> {
               icon: Icons.support_agent_outlined,
               title: 'Support is unavailable',
               body: _supportError!,
-              actionLabel: 'Back',
-              onAction: () => Navigator.of(context).pop(),
+              actionLabel: widget.supportConversation ? 'Retry' : 'Back',
+              onAction: widget.supportConversation
+                  ? _resolveSupportChatId
+                  : () => Navigator.of(context).pop(),
             )
           : chatId == null
               ? const _ChatLoadingState(

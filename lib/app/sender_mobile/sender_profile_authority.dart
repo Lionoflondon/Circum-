@@ -127,7 +127,8 @@ class SenderProfileAuthority {
     }
   }
 
-  Future<void> ensureCanonicalSenderAccount(User user, String phase) async {
+  Future<Map<String, dynamic>> ensureCanonicalSenderAccount(
+      User user, String phase) async {
     logSenderProfileStage(
       uid: user.uid,
       phase: phase,
@@ -151,6 +152,7 @@ class SenderProfileAuthority {
         path: 'functions/ensureSenderAccount',
         event: 'ensure_complete',
       );
+      return Map<String, dynamic>.from(result.data);
     } on TimeoutException catch (error, stack) {
       logSenderProfileDiagnostic(
         code: SenderProfileDiagnosticCode.startupRace,
