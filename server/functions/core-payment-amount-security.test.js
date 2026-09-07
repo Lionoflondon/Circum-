@@ -93,6 +93,20 @@ test("canonical payment authority calculates and records authoritative pricing",
   assert.match(senderBookingSource, /const idempotencyKey = `sender_booking_\$\{quoteId\}`/);
 });
 
+test("Sender payment authority binds Roth to one valid external rail", () => {
+  const paymentSource = senderBookingSource.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);/)[0];
+  assert.match(senderBookingSource, /function normalizeSenderPaymentFallback/);
+  assert.match(senderBookingSource, /if \(!stripeRequired\) return "roth";/);
+  assert.match(senderBookingSource, /requested === "roth"/);
+  assert.match(senderBookingSource, /Saved card checkout cannot be combined with Apple Pay or Google Pay/);
+  assert.match(senderBookingSource, /Choose a saved card before using saved-card checkout/);
+  assert.match(senderBookingSource, /Web checkout uses secure Stripe card checkout/);
+  assert.match(paymentSource, /const requestedFallback = normalizeSenderPaymentFallback/);
+  assert.match(paymentSource, /fallbackMethod: requestedFallback/);
+  assert.match(paymentSource, /paymentMethod: requestedFallback/);
+  assert.match(paymentSource, /savedPaymentMethodId: savedPaymentMethodId \|\| null/);
+});
+
 test("Sender web Checkout forces a fresh Stripe session on retry", () => {
   assert.match(senderBookingSource, /payment_method_types: \["card"\]/);
   assert.match(senderBookingSource, /checkoutKey: requestedSessionKey/);
