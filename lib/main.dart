@@ -114,4 +114,14 @@ Future<void> _configureNotifications() async {
   );
 
   await flutterLocalNotificationsPlugin.initialize(settings);
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
 }
