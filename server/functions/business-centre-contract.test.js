@@ -52,6 +52,7 @@ test("Business backend exports the canonical workspace, team, and payment callab
     "adminCreateBusinessInvoice",
     "createBusinessInvoiceCheckout",
     "createBusinessRothCheckout",
+    "listBusinessRothTransactions",
   ]) {
     assert.match(businessPaymentsSource, new RegExp(`exports\\.${name}\\s*=`));
     assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*businessPayments\\.${name}`));
@@ -171,6 +172,18 @@ test("Business Roth invoice payment debits and marks invoice paid atomically", (
       businessPaymentsSource.indexOf("exports._private ="),
   );
   assert.doesNotMatch(invoiceFinalizer, /debitBusinessRoth\(/);
+});
+
+test("Business Roth purchase is attested, bounded, and retry-idempotent", () => {
+  assert.match(
+    businessPaymentsSource,
+    /createBusinessRothCheckout[\s\S]*enforceAppCheck:\s*true/,
+  );
+  assert.match(businessPaymentsSource, /amount > 10000/);
+  assert.match(businessPaymentsSource, /idempotencyKey/);
+  assert.match(businessPaymentsSource, /business_roth:\$\{purchaseId\}/);
+  assert.match(businessPaymentsSource, /createdByUserId !== context\.auth\.uid/);
+  assert.match(businessPaymentsSource, /return \{[\s\S]*idempotent:\s*true/);
 });
 
 test("Business invoices expose printable PDF records without client-side invoice generation", () => {

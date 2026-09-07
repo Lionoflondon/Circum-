@@ -2,6 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
+const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {
   verifiedStripePaidGbpSession,
@@ -471,15 +472,40 @@ exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, cont
   };
 });
 
-exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createBusinessRothCheckout = (stripe) => functions
+  .runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]})
+  .https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
-  const amount = money(data.amount);
-  if (!businessId || amount < 1) {
+  const rawAmount = Number(data.amount);
+  const amount = money(rawAmount);
+  const idempotencyKey = text(data.idempotencyKey, 160);
+  if (!businessId || !Number.isFinite(rawAmount) || amount < 1 || amount > 10000 || rawAmount !== amount) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account and Roth amount.");
+  }
+  if (!idempotencyKey || idempotencyKey.length < 12) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid checkout request is required.");
   }
   const account = await requireBusinessMember(businessId, context);
   const db = getFirestore();
-  const purchaseRef = db.collection("businessRothPurchases").doc();
+  const purchaseId = crypto.createHash("sha256")
+    .update(`${context.auth.uid}:${businessId}:${idempotencyKey}`)
+    .digest("hex");
+  const purchaseRef = db.collection("businessRothPurchases").doc(purchaseId);
+  const existing = await purchaseRef.get();
+  if (existing.exists) {
+    const record = existing.data() || {};
+    if (money(record.amountGbp) !== amount || record.businessId !== businessId || record.createdByUserId !== context.auth.uid) {
+      throw new functions.https.HttpsError("already-exists", "This checkout request was already used.");
+    }
+    if (record.checkoutUrl && record.stripeSessionId) {
+      return {
+        checkoutUrl: record.checkoutUrl,
+        sessionId: record.stripeSessionId,
+        purchaseId: purchaseRef.id,
+        idempotent: true,
+      };
+    }
+  }
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
   const separator = baseUrl.includes("?") ? "&" : "?";
   const session = await stripe.checkout.sessions.create({
@@ -506,7 +532,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
       amountGbp: `${amount}`,
       createdByUserId: context.auth.uid,
     },
-  });
+  }, {idempotencyKey: `business_roth:${purchaseId}`});
   await purchaseRef.set({
     purchaseId: purchaseRef.id,
     businessId,
@@ -517,6 +543,8 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     paymentMethod: "card",
     paymentProvider: "stripe",
     stripeSessionId: session.id,
+    checkoutUrl: session.url,
+    idempotencyKey,
     status: "pending_verification",
     createdAt: FieldValue.serverTimestamp(),
     paidAt: null,
@@ -528,6 +556,22 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   }, {merge: true});
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
 });
+
+exports.listBusinessRothTransactions = functions
+  .runWith({enforceAppCheck: true})
+  .https.onCall(async (data, context) => {
+    const businessId = text(data && data.businessId, 160);
+    if (!businessId) {
+      throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account.");
+    }
+    const db = getFirestore();
+    await requireBusinessMember(businessId, context, db);
+    const snapshot = await db.collection("business_wallets").doc(businessId)
+      .collection("transactions").orderBy("createdAt", "desc").limit(20).get();
+    return {
+      transactions: snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()})),
+    };
+  });
 
 async function createBusinessInvoiceCheckoutHandler(stripe, data, context, dependencies = {}) {
   const invoiceId = text(data && data.invoiceId, 160);

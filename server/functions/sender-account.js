@@ -183,6 +183,10 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
           roles: Array.from(roles),
           action: "existing_sender_role_allowed",
           starterRothEligible: starterRothPending(existing),
+          profile: {
+            phone: cleanText(existing.phone || existing.phoneNumber, 80),
+            displayName: cleanText(existing.displayName || existing.name, 180),
+          },
         };
       }
       return {allowed: false, roles: Array.from(roles), action: "blocked_conflicting_role"};
@@ -214,6 +218,10 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       roles: ["sender"],
       action: userSnap.exists ? "merged_sender_role" : "created_sender_profile",
       starterRothEligible,
+      profile: {
+        phone: cleanText(existing.phone || existing.phoneNumber, 80),
+        displayName: cleanText(existing.displayName || existing.name, 180),
+      },
     };
   });
 
