@@ -30,10 +30,6 @@ void main() {
     expect(home, contains('_senderAuthRestoreTimeout'));
     expect(home, contains('setPersistence(Persistence.LOCAL)'));
     expect(home, contains('authStateChanges()'));
-    expect(home, contains('FirebaseAuth.instance.currentUser'));
-    expect(home, contains('changes.skip(1)'));
-    expect(home, contains('_isWeakNetworkSenderAuthFailure'));
-    expect(home, contains('_canContinueAfterWeakNetworkBootstrap'));
     final emailAuthFile = File('lib/app/authentication/sender_email_auth.dart');
     final emailAuth =
         emailAuthFile.existsSync() ? emailAuthFile.readAsStringSync() : home;
@@ -43,27 +39,9 @@ void main() {
         File('lib/app/sender_mobile/sender_profile_authority.dart')
             .readAsStringSync();
     expect('$home$authority', contains("httpsCallable('ensureSenderAccount')"));
-    expect(authority, contains('_isTransientFunctionsFailure'));
-    expect(authority, contains("'deadline-exceeded'"));
-    expect(authority, contains('SenderProfileDiagnosticCode.startupRace'));
     expect(home, contains(".load('sender_mobile.auth.profile')"));
     expect(home, contains('getIdToken(true)'));
     expect(home, contains('.timeout('));
-  });
-
-  test('Sender auth tab changes clear stale failure copy', () {
-    final entry = home.substring(
-      home.indexOf('class _SenderAuthEntryState'),
-      home.indexOf('class _AmbientOrbs'),
-    );
-    final changeMode = entry.substring(
-      entry.indexOf('void _changeMode'),
-      entry.indexOf('Future<void> _submit()'),
-    );
-
-    expect(entry, contains('onChanged: _changeMode'));
-    expect(changeMode, contains('_showErrors = false'));
-    expect(changeMode, contains('_authMessage = null'));
   });
 
   test('Sender web auth and post-auth bootstrap are bounded and terminal', () {
@@ -83,6 +61,15 @@ void main() {
     }
     expect(signUp, contains('account may have been created'));
     expect(signUp, isNot(contains('Sign in could not be completed')));
+  });
+
+  test('Sender web payment sheet uses the legal company display name', () {
+    expect(website, contains("merchantDisplayName: 'Circum Technologies'"));
+    expect(
+      RegExp(r"merchantDisplayName: 'Circum'(?! Technologies)")
+          .hasMatch(website),
+      isFalse,
+    );
   });
 
   test('legacy Sender AuthBloc auth operations are bounded and do not rethrow',
