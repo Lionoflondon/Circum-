@@ -113,7 +113,8 @@ void main() {
     expect(entitlements, contains('merchant.com.circum.app'));
     expect(
       wallet,
-      contains("const _senderWalletMerchantDisplayName = 'Circum Technologies'"),
+      contains(
+          "const _senderWalletMerchantDisplayName = 'Circum Technologies'"),
     );
     expect(wallet, contains('label: _senderWalletMerchantDisplayName'));
     expect(wallet, contains('merchantName: _senderWalletMerchantDisplayName'));
@@ -162,7 +163,6 @@ void main() {
       File('lib/app/sender_mobile/gift_payment_view.dart').readAsStringSync(),
       File('lib/app/send_package/view/ratings.dart').readAsStringSync(),
       File('lib/app/account/bloc/account_bloc.dart').readAsStringSync(),
-      File('lib/website/shared/circum_website_app.dart').readAsStringSync(),
     ].join('\n');
 
     expect(paymentSources, contains('Circum Technologies'));
@@ -182,7 +182,8 @@ void main() {
 
     expect(paymentStart, contains('SenderPaymentSplit.calculate('));
     expect(paymentStart, contains('rothEnabled: split.rothEnabled'));
-    expect(paymentStart, contains('rothAppliedAmount: split.rothAppliedAmount'));
+    expect(
+        paymentStart, contains('rothAppliedAmount: split.rothAppliedAmount'));
     expect(paymentStart, contains('remainingAmount: split.remainingAmount'));
     expect(paymentStart, contains('paymentSplitSummary: split.splitSummary'));
     expect(
