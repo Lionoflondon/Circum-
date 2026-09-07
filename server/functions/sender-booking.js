@@ -47,6 +47,7 @@ const FORBIDDEN_DRAFT_KEYS = [
   "blob", "bytes", "debug", "internal", "functionresponse",
 ];
 const ROUTE_REQUEST_TIMEOUT_MS = 10000;
+const SENDER_EXTERNAL_PAYMENT_METHODS = new Set(["card", "apple_pay", "google_pay", "saved_card"]);
 
 function requireSender(context) {
   if (!context.auth) {
@@ -65,6 +66,62 @@ function text(value) {
 
 function money(value) {
   return roundMoney(Number(value || 0));
+}
+
+function senderPaymentFallbackAlias(value) {
+  const normalized = text(value).toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "applepay") return "apple_pay";
+  if (normalized === "googlepay") return "google_pay";
+  if (normalized === "savedcard") return "saved_card";
+  if (normalized === "stripe" || normalized === "stripe_card") return "card";
+  return normalized;
+}
+
+function normalizeSenderPaymentFallback({
+  requestedFallback,
+  savedPaymentMethodId = "",
+  stripeRequired,
+  webCheckout,
+}) {
+  if (!stripeRequired) return "roth";
+  const savedId = text(savedPaymentMethodId);
+  const requested = senderPaymentFallbackAlias(
+      requestedFallback || (savedId ? "saved_card" : "card"),
+  );
+  if (requested === "roth") {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Choose a card, Apple Pay, or Google Pay for the remaining amount.",
+    );
+  }
+  if (savedId) {
+    if (requested !== "card" && requested !== "saved_card") {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Saved card checkout cannot be combined with Apple Pay or Google Pay.",
+      );
+    }
+    return "saved_card";
+  }
+  if (requested === "saved_card") {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Choose a saved card before using saved-card checkout.",
+    );
+  }
+  if (webCheckout && requested !== "card") {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Web checkout uses secure Stripe card checkout for the remaining amount.",
+    );
+  }
+  if (!SENDER_EXTERNAL_PAYMENT_METHODS.has(requested)) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Choose card, Apple Pay, Google Pay, or Roth before checkout.",
+    );
+  }
+  return requested;
 }
 
 function canonicalVehicle(value) {
@@ -1154,7 +1211,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
   const savedPaymentMethodId = text(data.paymentMethodId);
-  const requestedFallback = text(data.fallbackMethod) || "card";
+  const requestedFallbackInput = text(data.fallbackMethod);
   const checkoutMode = text(data.checkoutMode);
   const webCheckout = checkoutMode === "web_checkout";
   const deliveryPayload = cleanMap(data.deliveryPayload);
@@ -1162,6 +1219,12 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     orderTotalGbp: total,
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
     selectedCurrency: "gbp",
+  });
+  const requestedFallback = normalizeSenderPaymentFallback({
+    requestedFallback: requestedFallbackInput,
+    savedPaymentMethodId,
+    stripeRequired: split.stripeRequired,
+    webCheckout,
   });
   const requestedSessionKey = stableId(JSON.stringify({
     rothEnabled,
@@ -2299,6 +2362,7 @@ exports._private = {
   routeCoordinate,
   fetchSenderRoute,
   assertDeliveryMatchesQuote,
+  normalizeSenderPaymentFallback,
   riderDisplayAliases,
   riderPayoutFromQuote,
   resumeExistingSenderPaymentIntent,
