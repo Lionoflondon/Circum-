@@ -14,9 +14,10 @@ before(async () => {
     return {appId: "test", token: {app_id: "test"}};
   });
   const endpoints = require("./delivery-adjustments");
+  endpoints.confirmRiderIrisAssessment = require("./rider-iris-acknowledgement").confirmRiderIrisAssessment;
   endpoints.requestRiderCancellation = require("./rider-cancellation").requestRiderCancellation;
   const service = express(); service.use(express.json());
-  for (const name of ["requestRiderCancellation", "reportLoadDiscrepancy", "reviewDeliveryAdjustment", "cancelAdjustedCollection"]) service.post(`/${name}`, endpoints[name]);
+  for (const name of ["confirmRiderIrisAssessment", "requestRiderCancellation", "reportLoadDiscrepancy", "reviewDeliveryAdjustment", "cancelAdjustedCollection"]) service.post(`/${name}`, endpoints[name]);
   server = service.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   url = `http://127.0.0.1:${server.address().port}`;
@@ -24,7 +25,7 @@ before(async () => {
 after(async () => {
   mock.restoreAll(); if (server) await new Promise((resolve) => server.close(resolve)); if (app) await deleteApp(app);
 });
-for (const name of ["requestRiderCancellation", "reportLoadDiscrepancy", "reviewDeliveryAdjustment", "cancelAdjustedCollection"]) {
+for (const name of ["confirmRiderIrisAssessment", "requestRiderCancellation", "reportLoadDiscrepancy", "reviewDeliveryAdjustment", "cancelAdjustedCollection"]) {
   test(`${name}: real callable transport rejects missing/invalid App Check and missing auth`, async () => {
     for (const token of [null, "invalid-test-token"]) {
       const response = await fetch(`${url}/${name}`, {method: "POST", headers: {"Content-Type": "application/json", "Authorization": "Bearer test", ...(token ? {"X-Firebase-AppCheck": token} : {})}, body: JSON.stringify({data: {}})});

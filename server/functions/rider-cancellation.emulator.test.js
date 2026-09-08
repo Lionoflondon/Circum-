@@ -75,7 +75,7 @@ test("release races real acceptance and old lifecycle loses authority", async ()
     const d = (await db.doc(`deliveryRequests/${id}`).get()).data();
     assert.equal(d.assignedRiderId, next); assert.equal(d.paymentStatus, "paid");
     assert.equal(d.stripePaymentIntentId, "pi_unchanged");
-    await assert.rejects(tracking.updateDeliveryTrackingStatus.run({deliveryId: id, action: "collected"}, ctx));
+    await assert.rejects(tracking.updateDeliveryTrackingStatus.run({deliveryId: id, action: "start_heading_to_pickup"}, ctx), {code: "permission-denied"});
     await release(id);
     assert.equal((await db.doc(`deliveryRequests/${id}`).get()).data().assignedRiderId, next);
     assert.equal((await db.collection("riderOperationalAudit").where("deliveryId", "==", id).get()).size, 1);
@@ -127,4 +127,20 @@ test("offer generation racing release produces one safe projection and stale acc
   assert.equal((await db.collection("deliveryTimeline").where("deliveryId", "==", id).get()).size, 1);
   await release(id);
   assert.equal((await db.collection("deliveryTimeline").where("deliveryId", "==", id).get()).size, 1);
+});
+
+test("release archives old IRIS acknowledgement and replacement Rider confirms independently", async () => {
+  const iris = require("./rider-iris-acknowledgement");
+  const id = "iris-rematch";
+  await fixture(id, {status: "arrived_at_pickup"});
+  await iris.confirmRiderIrisAssessment.run({deliveryId: id}, ctx);
+  const result = await release(id);
+  assert.equal((await db.doc(`riderIrisAcknowledgements/${id}`).get()).exists, false);
+  assert.equal((await db.doc(`deliveryRequests/${id}`).get()).data().riderIrisAcknowledgement, undefined);
+  const archived = (await db.doc(`deliveryPolicyEvents/rider_release_${result.eventId}`).get()).data();
+  assert.equal(archived.priorIrisAcknowledgement.riderId, "rider");
+  await db.doc(`deliveryRequests/${id}`).update({assignedRiderId: "replacement", status: "arrived_at_pickup", deliveryStage: "arrived_at_pickup"});
+  await assert.rejects(iris.confirmRiderIrisAssessment.run({deliveryId: id}, ctx), {code: "permission-denied"});
+  const next = await iris.confirmRiderIrisAssessment.run({deliveryId: id}, {auth: {uid: "replacement"}});
+  assert.equal(next.duplicate, false); assert.equal(next.acknowledgement.riderId, "replacement");
 });

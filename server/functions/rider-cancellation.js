@@ -47,6 +47,8 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
     const chats = await tx.getAll(...chatIds.map((id) => db.collection("chats").doc(id)));
     const activeRef = db.collection("activeDeliveries").doc(deliveryId);
     const active = await tx.get(activeRef);
+    const acknowledgementRef = db.doc(`riderIrisAcknowledgements/${deliveryId}`);
+    const acknowledgement = await tx.get(acknowledgementRef);
     const result = {success: true, deliveryId, riderId: uid, redispatch: true, eventId, senderId: text(delivery.senderId || delivery.userId || delivery.customerId)};
     const auditEvent = {type: "rider_cancellation_requested", deliveryId, riderId: uid, reason, eventId, previousState: delivery.status, createdAt: Date.now(), redispatch: true};
     const patch = {
@@ -58,7 +60,7 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
       lastRiderAction: "rider_cancelled", lastRiderActionAt: FieldValue.serverTimestamp(),
       auditHistory: FieldValue.arrayUnion(auditEvent),
     };
-    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt", "assignedVehicleId", "assignedVehicleClass", "assignedVehicleSnapshot", "riderLiveLocation"]) patch[field] = FieldValue.delete();
+    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt", "assignedVehicleId", "assignedVehicleClass", "assignedVehicleSnapshot", "riderLiveLocation", "riderIrisAcknowledgement", "irisAcknowledgementUpdatedAt"]) patch[field] = FieldValue.delete();
     tx.update(ref, patch);
     for (const doc of riderDocs) {
       if (!doc.exists) continue;
@@ -91,7 +93,8 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
       reliabilityImpact: "released_before_pickup", createdAt: FieldValue.serverTimestamp(),
     });
     tx.create(db.collection("deliveryTimeline").doc(`rider_release_${eventId}`), auditEvent);
-    tx.create(eventRef, {type: "rider_cancellation", result, createdAt: FieldValue.serverTimestamp()});
+    if (acknowledgement.exists) tx.delete(acknowledgementRef);
+    tx.create(eventRef, {type: "rider_cancellation", result, priorIrisAcknowledgement: acknowledgement.exists ? acknowledgement.data() : null, createdAt: FieldValue.serverTimestamp()});
     return result;
   });
   // Replays also repair interrupted notification persistence; the existing engine deduplicates records.

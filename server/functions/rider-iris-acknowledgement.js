@@ -1,3 +1,5 @@
+const {riderCallable} = require("./rider-app-check");
+const {assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
@@ -16,10 +18,10 @@ function requireRider(context) {
 }
 
 function assignedRider(delivery) {
-  return text(delivery.riderId || delivery.assignedRiderId || delivery.driverId || delivery.assignedDriverId);
+  return assignedRiderId(delivery);
 }
 
-exports.confirmRiderIrisAssessment = functions.https.onCall(async (data, context) => {
+exports.confirmRiderIrisAssessment = riderCallable(async (data, context) => {
   const riderId = requireRider(context);
   const deliveryId = text(data && data.deliveryId);
   if (!deliveryId) {
@@ -44,6 +46,7 @@ exports.confirmRiderIrisAssessment = functions.https.onCall(async (data, context
       throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can confirm this assessment.");
     }
     if (existingSnapshot.exists) {
+      if (existingSnapshot.data().riderId !== riderId) throw new functions.https.HttpsError("failed-precondition", "Pickup assessment belongs to an earlier assignment. Contact Support.");
       return {success: true, duplicate: true, acknowledgement: existingSnapshot.data()};
     }
     if (delivery.loadDiscrepancy || delivery.adjustmentId) {
