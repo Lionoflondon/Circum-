@@ -1,3 +1,4 @@
+const {assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
@@ -32,10 +33,7 @@ const terminal = (d) =>
     "settlement_pending",
   ].includes(text(d.status || d.deliveryStatus).toLowerCase()) ||
   Boolean(d.cancellationSettlementStatus);
-const owns = (d, uid) =>
-  [d.riderId, d.driverId, d.assignedRiderId, d.assignedDriverId]
-    .map(text)
-    .includes(uid);
+const owns = (d, uid) => Boolean(uid) && assignedRiderId(d) === uid;
 const error = (message) =>
   new functions.https.HttpsError("failed-precondition", message);
 function decodeImage(data) {

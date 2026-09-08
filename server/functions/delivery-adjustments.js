@@ -1,3 +1,5 @@
+const {assignedRiderId} = require("./delivery-assignment");
+const {riderCallable} = require("./rider-app-check");
 const {verifyDeliveryEvidence} = require("./delivery-evidence-authority");
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
@@ -53,7 +55,7 @@ async function bookingReference(db, requestId) {
   return query.empty ? null : query.docs[0];
 }
 
-exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => {
+exports.reportLoadDiscrepancy = riderCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
@@ -65,7 +67,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   const requestRef = bookingSnapshot.ref;
   const booking = bookingSnapshot.data();
   const riderId = context.auth.uid;
-  if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
+  if (assignedRiderId(booking) !== riderId) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
 
   for (const photoUrl of evidencePhotos) {
@@ -111,7 +113,9 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
 
   await db.runTransaction(async (transaction) => {
     const latest = await transaction.get(requestRef);
+    if (!latest.exists || assignedRiderId(latest.data()) !== riderId) throw new functions.https.HttpsError("permission-denied", "The assignment changed. Refresh this delivery.");
     const latestStatus = latest.data().status;
+    if (!["accepted", "assigned", "rider_assigned", "navigating_to_pickup", "en_route_to_pickup", "arrived_at_pickup", "waiting"].includes(latestStatus)) throw new functions.https.HttpsError("failed-precondition", "Parcel differences must be reported before collection.");
     if (latestStatus === "awaiting_sender_adjustment" || latestStatus === "awaiting_adjustment_review") throw new functions.https.HttpsError("failed-precondition", "A pending adjustment already exists.");
     if (adjustment.additionalAmount <= 0) {
       transaction.set(adjustmentRef, {...adjustment, status: "closed_no_charge", adminDecision: "not_required", senderDecision: "not_required"});
@@ -149,7 +153,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
 });
 
-exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
+exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const token = context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
@@ -218,10 +222,12 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
   return {success: true, adjustmentId, decision};
 });
 
-exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
+exports.cancelAdjustedCollection = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  const adjustmentId = `${data && data.adjustmentId || ""}`.trim();
+  if (!adjustmentId || adjustmentId.includes("/")) throw new functions.https.HttpsError("invalid-argument", "Choose an adjustment to cancel.");
   const db = getFirestore();
-  const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
+  const adjustmentRef = db.collection("deliveryAdjustments").doc(adjustmentId);
   const adjustment = await adjustmentRef.get();
   if (!adjustment.exists || adjustment.data().senderId !== context.auth.uid) throw new functions.https.HttpsError("permission-denied", "Only the sender can cancel this collection.");
   const bookingRef = db.collection("deliveryRequests").doc(adjustment.data().bookingId);

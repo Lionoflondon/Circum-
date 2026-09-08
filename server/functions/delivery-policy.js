@@ -1,3 +1,4 @@
+const {ASSIGNMENT_FIELDS, assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
@@ -26,7 +27,7 @@ function assertSender(uid, delivery) {
 }
 
 function assertAssignedRider(uid, delivery) {
-  const rider = text(delivery.riderId || delivery.assignedRiderId);
+  const rider = assignedRiderId(delivery);
   if (!rider || rider !== uid) {
     throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can request this action.");
   }
@@ -404,6 +405,9 @@ exports.requestSenderCancellation = (stripe) => senderPaymentCallable(async (dat
     const idemRef = idempotencyRef(deliveryId, idempotencyKey);
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertSender(uid, delivery);
+    if (ASSIGNMENT_FIELDS.some((field) => text(delivery[field])) && !assignedRiderId(delivery)) {
+      throw new functions.https.HttpsError("failed-precondition", "Rider assignment requires Support reconciliation.");
+    }
     const now = Date.now();
     const previousLifecycleState = text(delivery.state || delivery.deliveryStage || delivery.deliveryStatus || delivery.status);
     const decision = core.cancellationDecision({
@@ -439,13 +443,14 @@ exports.requestSenderCancellation = (stripe) => senderPaymentCallable(async (dat
       riderCompensation: decision.riderCompensation,
       platformRetainedAmount: decision.platformRetainedAmount,
       deliveryId,
-      riderId: delivery.riderId || delivery.assignedRiderId,
+      riderId: assignedRiderId(delivery),
       actorId: uid,
       actorType: "sender",
       reason: decision.cancellationType,
       serverNow: now,
     }) : null;
     const evidence = core.evidencePackage({
+      riderId: assignedRiderId(delivery),
       deliveryId,
       actorId: uid,
       actorType: "sender",
@@ -461,7 +466,7 @@ exports.requestSenderCancellation = (stripe) => senderPaymentCallable(async (dat
       decision, financial, evidenceId: evidenceRef.id, createdAt: now,
     };
     const result = {success: true, decision, financial, breakdown, evidenceId: evidenceRef.id, createdAt: now,
-      deliveryId, riderId: text(delivery.riderId || delivery.assignedRiderId) || null,
+      deliveryId, riderId: assignedRiderId(delivery) || null,
       senderId: uid, senderEmail: payment.senderEmail,
       paymentSessionId: payment.paymentSessionId,
       stripePaymentIntentId: payment.stripePaymentIntentId,

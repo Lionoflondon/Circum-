@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
+const {assignedRiderId} = require("./delivery-assignment");
 
 const functions = require("firebase-functions/v1");
 const {
@@ -130,12 +131,7 @@ async function findDelivery(db, transaction, deliveryId) {
 }
 
 function assertRiderOwnsDelivery(delivery, riderId) {
-  const assigned = text(
-    delivery.riderId ||
-      delivery.driverId ||
-      delivery.assignedRiderId ||
-      delivery.assignedDriverId,
-  );
+  const assigned = assignedRiderId(delivery);
   if (!assigned || assigned !== riderId) {
     throw new functions.https.HttpsError(
       "permission-denied",
