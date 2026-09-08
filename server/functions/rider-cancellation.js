@@ -48,14 +48,17 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
     const activeRef = db.collection("activeDeliveries").doc(deliveryId);
     const active = await tx.get(activeRef);
     const result = {success: true, deliveryId, riderId: uid, redispatch: true, eventId, senderId: text(delivery.senderId || delivery.userId || delivery.customerId)};
+    const auditEvent = {type: "rider_cancellation_requested", deliveryId, riderId: uid, reason, eventId, previousState: delivery.status, createdAt: Date.now(), redispatch: true};
     const patch = {
       status: "requested", state: FieldValue.delete(), deliveryStatus: "requested", deliveryStage: "requested",
       dispatchStatus: "requested", matchingStatus: "available", dispatchBlocked: false, broadcastBlocked: false,
       removedFromActiveQueues: false, updatedAt: FieldValue.serverTimestamp(),
       riderCancellation: {riderId: uid, reason, detail: text(data.detail).slice(0, 500), eventId},
       rematchEventId: eventId,
+      lastRiderAction: "rider_cancelled", lastRiderActionAt: FieldValue.serverTimestamp(),
+      auditHistory: FieldValue.arrayUnion(auditEvent),
     };
-    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt"]) patch[field] = FieldValue.delete();
+    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt", "assignedVehicleId", "assignedVehicleClass", "assignedVehicleSnapshot", "riderLiveLocation"]) patch[field] = FieldValue.delete();
     tx.update(ref, patch);
     for (const doc of riderDocs) {
       if (!doc.exists) continue;
@@ -87,6 +90,7 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
       action: "rider_cancellation", riderId: uid, deliveryId, reason, eventId,
       reliabilityImpact: "released_before_pickup", createdAt: FieldValue.serverTimestamp(),
     });
+    tx.create(db.collection("deliveryTimeline").doc(`rider_release_${eventId}`), auditEvent);
     tx.create(eventRef, {type: "rider_cancellation", result, createdAt: FieldValue.serverTimestamp()});
     return result;
   });

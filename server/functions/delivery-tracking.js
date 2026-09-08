@@ -762,9 +762,7 @@ async function reconcileSettlementPendingDelivery(db, deliveryId) {
     if (normalized(delivery.status) !== "settlement_pending") {
       return {deliveryId, status: normalized(delivery.status), idempotent: true};
     }
-    const riderId = text(
-        delivery.riderId || delivery.assignedRiderId || delivery.driverId,
-    );
+    const riderId = assignedRiderId(delivery);
     if (!riderId) return {deliveryId, status: "pending_authority"};
     const privateSnapshot = await transaction.get(db.collection("deliveryRequestsPrivate").doc(deliveryId));
     const privateDelivery = privateSnapshot.data() || {};

@@ -1,4 +1,4 @@
-const {assignedRiderId} = require("./delivery-assignment");
+const {ASSIGNMENT_FIELDS, assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
@@ -405,6 +405,9 @@ exports.requestSenderCancellation = (stripe) => senderPaymentCallable(async (dat
     const idemRef = idempotencyRef(deliveryId, idempotencyKey);
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertSender(uid, delivery);
+    if (ASSIGNMENT_FIELDS.some((field) => text(delivery[field])) && !assignedRiderId(delivery)) {
+      throw new functions.https.HttpsError("failed-precondition", "Rider assignment requires Support reconciliation.");
+    }
     const now = Date.now();
     const previousLifecycleState = text(delivery.state || delivery.deliveryStage || delivery.deliveryStatus || delivery.status);
     const decision = core.cancellationDecision({

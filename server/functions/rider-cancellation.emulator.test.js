@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
-const {initializeTestEnvironment, assertFails} = require("@firebase/rules-unit-testing");
+const {initializeTestEnvironment, assertFails, assertSucceeds} = require("@firebase/rules-unit-testing");
 const {doc, getDoc} = require("firebase/firestore");
 const {requestRiderCancellation} = require("./rider-cancellation");
 const {ASSIGNMENT_FIELDS} = require("./delivery-assignment");
@@ -13,6 +13,7 @@ before(async () => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST);
   app = initializeApp({projectId: "demo-rider-release"}); db = getFirestore(); db.settings({ignoreUndefinedProperties: true});
   env = await initializeTestEnvironment({projectId: "demo-rider-release", firestore: {rules: fs.readFileSync(`${__dirname}/../../firestore.rules`, "utf8")}});
+  await env.clearFirestore();
 });
 after(async () => {
   if (env) await env.cleanup(); if (app) await deleteApp(app);
@@ -26,6 +27,9 @@ async function fixture(id, patch = {}) {
 const release = (id, context = ctx) => requestRiderCancellation.run({deliveryId: id, reason: "cannot_complete", idempotencyKey: `${id}:assignment`}, context);
 test("concurrent release clears aliases and access, preserves payment and records one impact", async () => {
   const id = "all-aliases"; await fixture(id, Object.fromEntries(ASSIGNMENT_FIELDS.map((f) => [f, "rider"])));
+  const beforeClient = env.authenticatedContext("rider", {role: "rider", adminRole: "rider"}).firestore();
+  await assertSucceeds(getDoc(doc(beforeClient, `deliveryRequests/${id}`)));
+  await assertSucceeds(getDoc(doc(beforeClient, `chats/${id}`)));
   const results = await Promise.all(Array.from({length: 8}, () => release(id)));
   assert.equal(new Set(results.map((r) => r.eventId)).size, 1);
   const d = (await db.doc(`deliveryRequests/${id}`).get()).data();
@@ -56,7 +60,7 @@ test("missing auth and foreign rider cannot release", async () => {
 async function readyRider(uid) {
   await db.doc(`riders/${uid}`).set({approvalStatus: "approved", vehicleApproved: true, vehicleType: "car"});
   await db.doc(`riderProfiles/${uid}`).set({approvalStatus: "approved", vehicleApproved: true, vehicleType: "car"});
-  await db.doc(`riderPresence/${uid}`).set({isOnline: true, availabilityStatus: "available", lastHeartbeatAt: Date.now(), currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 5, updatedAt: Date.now()}});
+  await db.doc(`riderPresence/${uid}`).set({isOnline: true, dispatchEligible: true, availabilityStatus: "available", lastHeartbeatAt: Date.now(), currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 5, updatedAt: Date.now()}});
 }
 test("release races real acceptance and old lifecycle loses authority", async () => {
   const accept = require("./accept-ride-requests");
@@ -107,4 +111,20 @@ test("Sender cancellation races release without reopening settled delivery or du
     assert.ok(refunds.size <= 1);
     assert.ok((await db.collection("riderOperationalAudit").where("deliveryId", "==", id).get()).size <= 1);
   }
+});
+
+test("offer generation racing release produces one safe projection and stale access stays denied", async () => {
+  const offers = require("./rider-offers");
+  const id = "rematch-projection"; const uid = "projection-rider";
+  await fixture(id, {createdAt: Date.now(), pickupPosition: {geopoint: {latitude: 51.5, longitude: -0.1}}, packageDescription: "Books", weight: "1 kg", distanceMiles: 2, vehicleType: "car"});
+  await readyRider(uid);
+  const caller = {auth: {uid}, app: {appId: "test"}};
+  const results = await Promise.allSettled([release(id), offers.getOffers({}, caller)]);
+  for (const result of results) assert.equal(result.status, "fulfilled", result.reason && result.reason.stack);
+  const visible = await offers.getOffers({}, caller);
+  assert.equal(visible.nearestRequests.filter((offer) => offer.id === id || offer.requestId === id || offer.deliveryId === id).length, 1);
+  assert.equal((await db.collection(`riderOfferProjections/${uid}/offers`).get()).docs.filter((d) => d.id === id).length, 1);
+  assert.equal((await db.collection("deliveryTimeline").where("deliveryId", "==", id).get()).size, 1);
+  await release(id);
+  assert.equal((await db.collection("deliveryTimeline").where("deliveryId", "==", id).get()).size, 1);
 });
