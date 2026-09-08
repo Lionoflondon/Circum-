@@ -60,7 +60,8 @@ void main() {
       );
     });
 
-    test('rebuilt Sender home header uses local greeting and never Ayo fallback',
+    test(
+        'rebuilt Sender home header uses local greeting and never Ayo fallback',
         () {
       final source = File('lib/app/sender_mobile/sender_mobile_home.dart')
           .readAsStringSync();

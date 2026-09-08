@@ -1040,9 +1040,6 @@ class _BusinessViewState extends State<BusinessView>
             items: _topEntries(dropoffLocations),
             empty: 'Drop-off locations will appear here.'),
       ]),
-      const SizedBox(height: 14),
-      _SecondaryButton(
-          label: 'Export analytics', icon: Icons.download_rounded, onTap: null),
     ]);
   }
 
@@ -1562,20 +1559,6 @@ class _BusinessViewState extends State<BusinessView>
                       Navigator.pop(context);
                       await _chooseInvoicePayment(invoice);
                     }),
-              const SizedBox(height: 8),
-              Row(children: [
-                Expanded(
-                    child: _SecondaryButton(
-                        label: 'Download PDF',
-                        icon: Icons.picture_as_pdf_rounded,
-                        onTap: null)),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: _SecondaryButton(
-                        label: 'Download CSV',
-                        icon: Icons.table_view_rounded,
-                        onTap: null)),
-              ]),
             ]),
       ),
     );

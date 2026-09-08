@@ -46,7 +46,8 @@ void main() {
     expect(refreshed, isFalse);
   });
 
-  test('recoverable account failure is bounded and reports its stage', () async {
+  test('recoverable account failure is bounded and reports its stage',
+      () async {
     final result = await sequence.runRecoverable(
       ensureAccount: () => Completer<void>().future,
       hydrateProfile: () async {},

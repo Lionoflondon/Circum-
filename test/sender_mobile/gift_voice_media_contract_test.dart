@@ -48,7 +48,9 @@ void main() {
     );
   });
 
-  test('Sender profile photos are owner scoped while rider photos remain operational', () {
+  test(
+      'Sender profile photos are owner scoped while rider photos remain operational',
+      () {
     final rules = File('storage.rules').readAsStringSync();
 
     expect(rules, contains('match /profilePhotos/{userId}/{allPaths=**}'));
@@ -58,7 +60,8 @@ void main() {
           'allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);'),
     );
     expect(rules, contains('match /users/{userId}/profile/{fileName}'));
-    expect(rules, contains("fileName.matches('avatar\\\\.jpg|avatar\\\\.png')"));
+    expect(
+        rules, contains("fileName.matches('avatar\\\\.jpg|avatar\\\\.png')"));
     expect(rules, contains('match /rider-profiles/{riderId}/{fileName}'));
     expect(rules, contains('allow read: if signedIn() || isAdmin();'));
   });

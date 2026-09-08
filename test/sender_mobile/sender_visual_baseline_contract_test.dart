@@ -32,8 +32,8 @@ void main() {
   });
 
   test('Sender primary shell consumes baseline tokens', () {
-    final shell = File('lib/app/sender_mobile/sender_page_shell.dart')
-        .readAsStringSync();
+    final shell =
+        File('lib/app/sender_mobile/sender_page_shell.dart').readAsStringSync();
 
     expect(shell, contains('SenderUiBaseline.pageHorizontal'));
     expect(shell, contains('SenderUiBaseline.pageTop'));

@@ -4,7 +4,8 @@ import 'dart:async';
 Future<T> boundedCancellationCall<T>(
   Future<T> operation, {
   Duration timeout = const Duration(seconds: 20),
-}) => operation.timeout(timeout);
+}) =>
+    operation.timeout(timeout);
 
 /// Financial settlement must be confirmed before hiding the active delivery.
 bool cancellationConfirmed(Map<String, dynamic> response) =>

@@ -45,7 +45,9 @@ class SenderAuthCommitResult {
   final SenderAuthCommitStage? failedStage;
   final Object? error;
 
-  const SenderAuthCommitResult.success() : failedStage = null, error = null;
+  const SenderAuthCommitResult.success()
+      : failedStage = null,
+        error = null;
 
   const SenderAuthCommitResult.failure(this.failedStage, this.error);
 

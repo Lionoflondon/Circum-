@@ -195,9 +195,10 @@ class _GiftStoryViewState extends State<GiftStoryView>
           .httpsCallable(senderStoryId != null && senderStoryId.isNotEmpty
               ? 'getSenderGiftStory'
               : 'resolveGiftStoryAccess')
-          .call<Map<String, dynamic>>(senderStoryId != null && senderStoryId.isNotEmpty
-              ? {'giftRequestId': senderStoryId}
-              : {'token': token});
+          .call<Map<String, dynamic>>(
+              senderStoryId != null && senderStoryId.isNotEmpty
+                  ? {'giftRequestId': senderStoryId}
+                  : {'token': token});
       final data = Map<String, dynamic>.from(result.data);
       final story = Map<String, dynamic>.from(data['story'] as Map);
       if (!mounted) return;
