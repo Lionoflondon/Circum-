@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      apk_only:
+        description: Export the signed runtime APK without starting the GitHub emulator
+        required: false
+        default: false
+        type: boolean
       payment_environment:
         description: Stripe/wallet environment for this artifact
         required: true
@@ -295,6 +300,7 @@ jobs:
           EOF
           chmod +x "artifacts/android-${{ matrix.api }}/smoke.sh"
       - name: Android ${{ matrix.api }} launch smoke test
+        if: ${{ !inputs.apk_only }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -310,7 +316,9 @@ jobs:
         if: always()
         with:
           name: sender-android-${{ matrix.api }}-runtime-evidence
-          path: artifacts/android-${{ matrix.api }}
+          path: |
+            artifacts/android-${{ matrix.api }}
+            build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: warn
       - name: Remove temporary signing material
         if: always()
