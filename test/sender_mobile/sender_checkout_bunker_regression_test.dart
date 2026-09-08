@@ -71,11 +71,55 @@ void main() {
       canvas,
       contains('Select an address from the suggestions to continue.'),
     );
-    expect(
-      canvas,
-      contains(
-          '(canContinue || isSenderTypedAddressSpecific(controller.text))'),
+    final panel = canvas.substring(canvas.indexOf('class _AddressPanel'));
+    final eligibility = panel.substring(
+      panel.indexOf('final buttonEnabled'),
+      panel.indexOf('return Column('),
     );
+    expect(eligibility, contains('!isResolvingTypedAddress'));
+    expect(eligibility, contains('canContinue'));
+    expect(eligibility, contains('isSenderTypedAddressSpecific('));
+    expect(eligibility, contains('senderBestAddressSuggestionForInput('));
+
+    final advance = canvas.substring(
+      canvas.indexOf('void _advance()'),
+      canvas.indexOf('void _advanceResolved()'),
+    );
+    for (final pickup in ['true', 'false']) {
+      expect(
+        advance,
+        matches(RegExp(
+          'unawaited\\(_resolveTypedAddress\\(pickup: $pickup\\)\\);\\s*return;',
+        )),
+      );
+    }
+    expect(advance, contains('senderMatchingAddressSuggestions('));
+    expect(advance, isNot(contains('_requestBackendQuote(')));
+
+    final resolution = canvas.substring(
+      canvas.indexOf('Future<void> _resolveTypedAddress'),
+      canvas.indexOf('Future<void> _resolveVisibleAddressSuggestion'),
+    );
+    final wait = resolution.indexOf('await bloc.stream');
+    final store = resolution.indexOf('_setDraft(nextDraft)');
+    final proceed = resolution.indexOf('_advanceResolved()');
+    expect(wait, greaterThanOrEqualTo(0));
+    expect(store, greaterThan(wait));
+    expect(proceed, greaterThan(store));
+    expect(resolution, contains('state.pickupCoordinate != null'));
+    expect(resolution, contains('state.desinationCoordinate != null'));
+    expect(
+        resolution, contains('SenderManualAddressResolutionStatus.ambiguous'));
+    expect(resolution, isNot(contains('_requestBackendQuote(')));
+
+    final quote = canvas.substring(
+      canvas.indexOf('void _requestBackendQuote('),
+      canvas.indexOf('void _onParcelChanged()'),
+    );
+    final ready =
+        quote.indexOf('if (!_routeReadyForQuote(engine, draft)) return;');
+    expect(ready, greaterThanOrEqualTo(0));
+    expect(quote.indexOf('RequestSenderBookingQuote('), greaterThan(ready));
     expect(
       canvas,
       contains('canContinue: engine.pickupCoordinate != null ||'),

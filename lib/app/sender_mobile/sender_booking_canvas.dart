@@ -1,5 +1,7 @@
 import 'package:circum/app/sender_mobile/native_payment_return.dart';
+
 import 'native_payment_identity.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -18,9 +20,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../env/env.dart';
 import '../business/business_journey_context.dart';
+import '../platform/address_engine.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
+import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
@@ -265,12 +269,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         if (!mounted || _uid != owner) return;
         if (saved != null) {
           _draftId = saved['draftId'] as String?;
-          _hydrateRestoredDraft(SenderBookingDraft.fromBackendDraft(
-            Map<String, dynamic>.from(saved['draft'] as Map),
-          ).copyWith(
+          _hydrateRestoredDraft(
+            SenderBookingDraft.fromBackendDraft(
+              Map<String, dynamic>.from(saved['draft'] as Map),
+            ).copyWith(
               step: SenderBookingStep.payment,
               paymentStatus: SenderPaymentStatus.failed,
-              cardConfirmationStarted: false));
+              cardConfirmationStarted: false,
+            ),
+          );
           context.read<SendPackageBloc>().add(RestoreNativePaymentQuote(saved));
           setState(() {
             _draftLoading = false;
@@ -279,8 +286,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           return;
         }
       }
-      final restoredLocally =
-          await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
+      final restoredLocally = await _restoreQueuedLocalDraft().timeout(
+        _localDraftRestoreTimeout,
+      );
       if (!mounted) return;
       setState(() => _draftLoading = false);
       if (restoredLocally) return;
@@ -691,16 +699,58 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _advance() {
+    if (_addressResolving) return;
     final engine = context.read<SendPackageBloc>().state;
+    if ((_draft.step == SenderBookingStep.pickup ||
+            _draft.step == SenderBookingStep.dropoff) &&
+        senderMatchingAddressSuggestions(
+              _draft.step == SenderBookingStep.pickup
+                  ? _pickup.text
+                  : _dropoff.text,
+              engine.suggestions,
+            ).length >
+            1) {
+      setState(() {
+        _addressResolutionMessage =
+            'Select an address from the suggestions to continue.';
+      });
+      return;
+    }
     if (_draft.step == SenderBookingStep.pickup &&
         engine.pickupCoordinate == null &&
         (_draft.pickupLat == null || _draft.pickupLng == null)) {
+      final suggestion = senderBestAddressSuggestionForInput(
+        _pickup.text,
+        engine.suggestions,
+      );
+      if (suggestion != null) {
+        unawaited(
+          _resolveVisibleAddressSuggestion(
+            pickup: true,
+            suggestion: suggestion,
+          ),
+        );
+        return;
+      }
       unawaited(_resolveTypedAddress(pickup: true));
       return;
     }
     if (_draft.step == SenderBookingStep.dropoff &&
         engine.desinationCoordinate == null &&
         (_draft.dropoffLat == null || _draft.dropoffLng == null)) {
+      final suggestion = senderBestAddressSuggestionForInput(
+        _dropoff.text,
+        engine.suggestions,
+      );
+      if (suggestion != null) {
+        unawaited(
+          _resolveVisibleAddressSuggestion(
+            pickup: false,
+            suggestion: suggestion,
+          ),
+        );
+        return;
+      }
       unawaited(_resolveTypedAddress(pickup: false));
       return;
     }
@@ -775,14 +825,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   Future<void> _resolveTypedAddress({required bool pickup}) async {
     if (_addressResolving) return;
     final controller = pickup ? _pickup : _dropoff;
-    final typed = controller.text.trim();
-    if (!isSenderTypedAddressSpecific(typed)) {
+    final typedSnapshot = controller.text.trim();
+    if (!isSenderTypedAddressSpecific(typedSnapshot)) {
       setState(() {
         _addressResolutionMessage =
             'Select an address from the suggestions to continue.';
       });
       return;
     }
+    final lookupInput = AddressEngine.lookupInput(typedSnapshot);
 
     final generation = ++_addressResolutionGeneration;
     final languageCode = Localizations.localeOf(context).languageCode;
@@ -796,12 +847,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         'manual-${pickup ? 'pickup' : 'dropoff'}-$generation',
       );
       final result = await _manualAddressResolver.resolve(
-        input: typed,
+        input: lookupInput,
         search: (input) => provider.fetchSuggestions(input, languageCode),
       );
       if (!mounted ||
           generation != _addressResolutionGeneration ||
-          controller.text.trim() != typed) {
+          controller.text.trim() != typedSnapshot) {
         return;
       }
       if (result.status == SenderManualAddressResolutionStatus.stale) return;
@@ -823,7 +874,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (result.status == SenderManualAddressResolutionStatus.ambiguous) {
         context.read<SendPackageBloc>().add(
               SearchAPlaceEvent(
-                query: typed,
+                query: lookupInput,
                 lang: languageCode,
                 pickup: pickup,
               ),
@@ -835,7 +886,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return;
       }
 
-      final suggestion = result.suggestion!;
+      final suggestion = AddressEngine.cleanSuggestion(result.suggestion!);
       final bloc = context.read<SendPackageBloc>();
       if (pickup) {
         bloc.add(
@@ -865,12 +916,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           .timeout(const Duration(seconds: 10));
       if (!mounted ||
           generation != _addressResolutionGeneration ||
-          controller.text.trim() != typed) {
+          controller.text.trim() != typedSnapshot) {
         return;
       }
       final coordinate =
           pickup ? resolved.pickupCoordinate! : resolved.desinationCoordinate!;
       controller.text = suggestion.description;
+      controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      );
       final nextDraft = pickup
           ? _draft.copyWith(
               pickupAddress: suggestion.description,
@@ -881,6 +935,98 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             )
           : _draft.copyWith(
               dropoffAddress: suggestion.description,
+              dropoffLat: coordinate.lat,
+              dropoffLng: coordinate.lng,
+            );
+      setState(() {
+        _addressResolving = false;
+        _addressResolutionMessage = null;
+      });
+      _setDraft(nextDraft);
+      _advanceResolved();
+    } on TimeoutException {
+      if (!mounted || generation != _addressResolutionGeneration) return;
+      setState(() {
+        _addressResolutionMessage =
+            'Address lookup timed out. Check the address and try again.';
+      });
+    } catch (_) {
+      if (!mounted || generation != _addressResolutionGeneration) return;
+      setState(() {
+        _addressResolutionMessage =
+            "We couldn't locate that address. Choose a suggested address or edit it.";
+      });
+    } finally {
+      if (mounted && generation == _addressResolutionGeneration) {
+        setState(() => _addressResolving = false);
+      }
+    }
+  }
+
+  Future<void> _resolveVisibleAddressSuggestion({
+    required bool pickup,
+    required Suggestion suggestion,
+  }) async {
+    if (_addressResolving) return;
+    final controller = pickup ? _pickup : _dropoff;
+    final typedSnapshot = controller.text.trim();
+    final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
+    final generation = ++_addressResolutionGeneration;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    setState(() {
+      _addressResolving = true;
+      _addressResolutionMessage = null;
+    });
+
+    try {
+      final bloc = context.read<SendPackageBloc>();
+      if (pickup) {
+        bloc.add(
+          SetPickupAddress(
+            val: cleanSuggestion.description,
+            pickupLocationSubAddress: cleanSuggestion.subText,
+            placeId: cleanSuggestion.placeId,
+            lang: languageCode,
+          ),
+        );
+      } else {
+        bloc.add(
+          SetDeliveryAddress(
+            val: cleanSuggestion.description,
+            destinationLocationSubAddress: cleanSuggestion.subText,
+            placeId: cleanSuggestion.placeId,
+            lang: languageCode,
+          ),
+        );
+      }
+      final resolved = await bloc.stream
+          .firstWhere(
+            (state) => pickup
+                ? state.pickupCoordinate != null
+                : state.desinationCoordinate != null,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (!mounted ||
+          generation != _addressResolutionGeneration ||
+          controller.text.trim() != typedSnapshot) {
+        return;
+      }
+      final coordinate =
+          pickup ? resolved.pickupCoordinate! : resolved.desinationCoordinate!;
+      controller.text = cleanSuggestion.description;
+      controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      );
+      final nextDraft = pickup
+          ? _draft.copyWith(
+              pickupAddress: cleanSuggestion.description,
+              pickupLat: coordinate.lat,
+              pickupLng: coordinate.lng,
+              dropoffAddress: '',
+              clearDropoffCoordinate: true,
+            )
+          : _draft.copyWith(
+              dropoffAddress: cleanSuggestion.description,
               dropoffLat: coordinate.lat,
               dropoffLng: coordinate.lng,
             );
@@ -1516,24 +1662,24 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           onSuggestion: (suggestion) {
-            final lat = suggestion.lat is num
-                ? (suggestion.lat as num).toDouble()
-                : null;
-            final lng = suggestion.lng is num
-                ? (suggestion.lng as num).toDouble()
-                : null;
+            final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
+            final lat = cleanSuggestion.lat;
+            final lng = cleanSuggestion.lng;
             context.read<SendPackageBloc>().add(
                   SetPickupAddress(
-                    val: suggestion.description,
-                    pickupLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
+                    val: cleanSuggestion.description,
+                    pickupLocationSubAddress: cleanSuggestion.subText,
+                    placeId: cleanSuggestion.placeId,
                     lang: Localizations.localeOf(context).languageCode,
                   ),
                 );
-            pickup.text = suggestion.description;
+            pickup.text = cleanSuggestion.description;
+            pickup.selection = TextSelection.collapsed(
+              offset: pickup.text.length,
+            );
             onDraft(
               draft.copyWith(
-                pickupAddress: suggestion.description,
+                pickupAddress: cleanSuggestion.description,
                 pickupLat: lat,
                 pickupLng: lng,
                 dropoffAddress: '',
@@ -1572,24 +1718,24 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           onSuggestion: (suggestion) {
-            final lat = suggestion.lat is num
-                ? (suggestion.lat as num).toDouble()
-                : null;
-            final lng = suggestion.lng is num
-                ? (suggestion.lng as num).toDouble()
-                : null;
+            final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
+            final lat = cleanSuggestion.lat;
+            final lng = cleanSuggestion.lng;
             context.read<SendPackageBloc>().add(
                   SetDeliveryAddress(
-                    val: suggestion.description,
-                    destinationLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
+                    val: cleanSuggestion.description,
+                    destinationLocationSubAddress: cleanSuggestion.subText,
+                    placeId: cleanSuggestion.placeId,
                     lang: Localizations.localeOf(context).languageCode,
                   ),
                 );
-            dropoff.text = suggestion.description;
+            dropoff.text = cleanSuggestion.description;
+            dropoff.selection = TextSelection.collapsed(
+              offset: dropoff.text.length,
+            );
             onDraft(
               draft.copyWith(
-                dropoffAddress: suggestion.description,
+                dropoffAddress: cleanSuggestion.description,
                 dropoffLat: lat,
                 dropoffLng: lng,
               ),
@@ -1702,13 +1848,13 @@ class _AddressPanel extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final String helperText;
-  final List suggestions;
+  final List<Suggestion> suggestions;
   final bool isSearching;
   final String errorText;
   final String? resolutionMessage;
   final bool isResolvingTypedAddress;
   final ValueChanged<String> onChanged;
-  final ValueChanged<dynamic> onSuggestion;
+  final ValueChanged<Suggestion> onSuggestion;
   final String primaryLabel;
   final bool canContinue;
   final VoidCallback onContinue;
@@ -1735,23 +1881,10 @@ class _AddressPanel extends StatelessWidget {
     final typed = controller.text.trim().toLowerCase();
     final typedAddressCanContinue = isSenderTypedAddressSpecific(typed);
     final buttonEnabled = !isResolvingTypedAddress &&
-        (canContinue || isSenderTypedAddressSpecific(controller.text));
-    dynamic exactSuggestion;
-    if (!canContinue && typed.isNotEmpty) {
-      for (final suggestion in suggestions) {
-        final main = '${suggestion.mainText}'.trim().toLowerCase();
-        final description = '${suggestion.description}'.trim().toLowerCase();
-        if (main == typed || description == typed) {
-          exactSuggestion = suggestion;
-          break;
-        }
-      }
-    }
-    if (exactSuggestion != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        onSuggestion(exactSuggestion);
-      });
-    }
+        (canContinue ||
+            isSenderTypedAddressSpecific(controller.text) ||
+            senderBestAddressSuggestionForInput(controller.text, suggestions) !=
+                null);
     return Column(
       children: [
         Align(
@@ -1988,9 +2121,8 @@ class _DeliveryTimePanel extends StatelessWidget {
                     hint: 'Start HH:MM',
                     keyboardType: TextInputType.datetime,
                     errorText: customWindowStart.text.trim().isNotEmpty &&
-                            !RegExp(
-                              r'^\d{2}:\d{2}$',
-                            ).hasMatch(customWindowStart.text.trim())
+                            !RegExp(r'^\d{2}:\d{2}$')
+                                .hasMatch(customWindowStart.text.trim())
                         ? 'Use HH:MM'
                         : null,
                     onChanged: (value) =>
@@ -3203,10 +3335,7 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
   return reasons.toSet().toList(growable: false);
 }
 
-bool _routeReadyForQuote(
-  SendPackageState engine, [
-  SenderBookingDraft? draft,
-]) {
+bool _routeReadyForQuote(SendPackageState engine, [SenderBookingDraft? draft]) {
   return engine.distance != null ||
       engine.pickupCoordinate != null && engine.desinationCoordinate != null ||
       draft?.hasCompleteRouteCoordinates == true;
@@ -5240,21 +5369,24 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             ),
           )
           .timeout(_senderPaymentSheetInitTimeout);
-      await Stripe.instance
-          .presentPaymentSheet()
-          .timeout(_senderPaymentSheetPresentTimeout);
+      await Stripe.instance.presentPaymentSheet().timeout(
+            _senderPaymentSheetPresentTimeout,
+          );
       if (!context.mounted) return;
-      setState(() => _paymentConfirmationMessage =
-          'Payment is being verified. Your delivery will be submitted once confirmation completes.');
+      setState(
+        () => _paymentConfirmationMessage =
+            'Payment is being verified. Your delivery will be submitted once confirmation completes.',
+      );
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.processing));
       _createPaidDelivery(context, engine);
-      SenderAccessibilityScope.maybeOf(
-        context,
-      )?.haptic(SenderFeedbackEvent.paymentCompleted);
+      SenderAccessibilityScope.maybeOf(context)
+          ?.haptic(SenderFeedbackEvent.paymentCompleted);
     } on TimeoutException {
       if (!context.mounted) return;
-      setState(() => _paymentConfirmationMessage =
-          'Payment confirmation is taking longer than expected. We will check its status before another attempt.');
+      setState(
+        () => _paymentConfirmationMessage =
+            'Payment confirmation is taking longer than expected. We will check its status before another attempt.',
+      );
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.processing));
     } on StripeException catch (error) {
       debugPrint(
@@ -5280,8 +5412,10 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         'Sender mobile payment confirmation failed: ${error.runtimeType}',
       );
       if (!context.mounted) return;
-      setState(() => _paymentConfirmationMessage =
-          "We couldn't complete the payment. Your delivery has not been submitted.");
+      setState(
+        () => _paymentConfirmationMessage =
+            "We couldn't complete the payment. Your delivery has not been submitted.",
+      );
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
     }
   }
