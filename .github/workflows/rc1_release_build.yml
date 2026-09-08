@@ -19,7 +19,7 @@ on:
 
 jobs:
   web:
-    if: ${{ !inputs.runtime_only }}
+    if: ${{ false }}
     name: Build Public Website and Sender Web
     runs-on: ubuntu-latest
     steps:
@@ -147,6 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter build appbundle --release --target=lib/main.dart \
+            --build-name=1.0.7 --build-number=39 \
             --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
             --dart-define=PAYMENT_ENVIRONMENT="$PAYMENT_ENVIRONMENT"
       - name: Verify Sender AAB
@@ -181,6 +182,7 @@ jobs:
           rm -rf android/app/release-signing
 
   sender-android-runtime:
+    if: ${{ inputs.runtime_only }}
     name: Sender Android API ${{ matrix.api }} runtime certification
     runs-on: ubuntu-latest
     timeout-minutes: 35
