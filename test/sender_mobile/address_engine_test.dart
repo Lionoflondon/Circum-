@@ -3,6 +3,16 @@ import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('postcode extraction normalizes case and spacing without null errors',
+      () {
+    for (final value in ['SE6 1DQ', 'SE61DQ', 'se6 1dq', 'Se6 1Dq']) {
+      expect(AddressEngine.extractUkPostcode(value), 'SE6 1DQ');
+    }
+    for (final value in [null, '', 'London', 'SE6']) {
+      expect(AddressEngine.extractUkPostcode(value), isNull);
+    }
+  });
+
   test('only complete repeated components are collapsed', () {
     expect(
       AddressEngine.joinDistinctParts([
