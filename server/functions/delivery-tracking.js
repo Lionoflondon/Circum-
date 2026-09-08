@@ -1,6 +1,6 @@
-const {assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
+const {assignedRiderId} = require("./delivery-assignment");
 
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");

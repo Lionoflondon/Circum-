@@ -38,7 +38,7 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
     if (assignedRiderId(delivery) !== uid) fail("permission-denied", "You are no longer assigned to this delivery.");
     const states = [delivery.status, delivery.state, delivery.deliveryStatus, delivery.deliveryStage].filter(Boolean);
     if (!states.length || states.some((s) => !PRE_CUSTODY_STATES.has(text(s).toLowerCase())) ||
-        delivery.collectedAt || delivery.pickupVerifiedAt || delivery.completedAt || delivery.cancellationSettlementStatus) {
+        delivery.collectedAt || delivery.pickupVerifiedAt || delivery.collectionPinVerified === true || delivery.pickupPinVerified === true || delivery.completedAt || delivery.cancellationSettlementStatus) {
       fail("failed-precondition", "This delivery cannot be released. Contact Support if you have taken custody or cancellation is pending.");
     }
     const riderRefs = ["riders", "riderProfiles", "riderPresence"].map((c) => db.collection(c).doc(uid));
@@ -60,7 +60,7 @@ async function requestRiderCancellationHandler(data = {}, context = {}) {
       lastRiderAction: "rider_cancelled", lastRiderActionAt: FieldValue.serverTimestamp(),
       auditHistory: FieldValue.arrayUnion(auditEvent),
     };
-    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt", "assignedVehicleId", "assignedVehicleClass", "assignedVehicleSnapshot", "riderLiveLocation", "riderIrisAcknowledgement", "irisAcknowledgementUpdatedAt"]) patch[field] = FieldValue.delete();
+    for (const field of [...ASSIGNMENT_FIELDS, "acceptedAt", "assignedAt", "riderName", "driverName", "courierName", "driverVehicle", "driverPlateNumber", "arrivedAt", "pickupArrivedAt", "waitingStartedAt", "offerExpiresAt", "dispatchExpiresAt", "matchingExpiresAt", "expiresAt", "assignedVehicleId", "assignedVehicleClass", "assignedVehicleSnapshot", "riderLiveLocation", "riderIrisAcknowledgement", "irisAcknowledgementUpdatedAt", "arrivedAtPickupAt", "waiting", "waitingContextState", "arrivalLocation", "arrivalDistanceMeters", "arrivalGpsAccuracyMeters", "pendingNotification"]) patch[field] = FieldValue.delete();
     tx.update(ref, patch);
     for (const doc of riderDocs) {
       if (!doc.exists) continue;

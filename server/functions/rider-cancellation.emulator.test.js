@@ -26,7 +26,7 @@ async function fixture(id, patch = {}) {
 }
 const release = (id, context = ctx) => requestRiderCancellation.run({deliveryId: id, reason: "cannot_complete", idempotencyKey: `${id}:assignment`}, context);
 test("concurrent release clears aliases and access, preserves payment and records one impact", async () => {
-  const id = "all-aliases"; await fixture(id, Object.fromEntries(ASSIGNMENT_FIELDS.map((f) => [f, "rider"])));
+  const id = "all-aliases"; await fixture(id, {...Object.fromEntries(ASSIGNMENT_FIELDS.map((f) => [f, "rider"])), waiting: {riderId: "rider"}, arrivedAtPickupAt: 1, assignedVehicleId: "old-car"});
   const beforeClient = env.authenticatedContext("rider", {role: "rider", adminRole: "rider"}).firestore();
   await assertSucceeds(getDoc(doc(beforeClient, `deliveryRequests/${id}`)));
   await assertSucceeds(getDoc(doc(beforeClient, `chats/${id}`)));
@@ -34,6 +34,7 @@ test("concurrent release clears aliases and access, preserves payment and record
   assert.equal(new Set(results.map((r) => r.eventId)).size, 1);
   const d = (await db.doc(`deliveryRequests/${id}`).get()).data();
   for (const f of ASSIGNMENT_FIELDS) assert.equal(d[f], undefined);
+  assert.equal(d.waiting, undefined); assert.equal(d.arrivedAtPickupAt, undefined); assert.equal(d.assignedVehicleId, undefined);
   assert.equal(d.status, "requested"); assert.equal(d.paymentStatus, "paid"); assert.equal(d.price, 20); assert.equal(d.rothAppliedAmount, 7); assert.equal(d.stripePaymentIntentId, "pi_unchanged");
   assert.equal((await db.collection("riderOperationalAudit").where("deliveryId", "==", id).get()).size, 1);
   assert.equal((await db.collection("notifications").where("data.deliveryId", "==", id).get()).size, 2);
@@ -45,7 +46,7 @@ test("concurrent release clears aliases and access, preserves payment and record
   assert.equal((await db.doc(`deliveryRequests/${id}`).get()).data().assignedRiderId, "new-rider");
 });
 test("custody, terminal, conflicting aliases and Sender cancellation fail closed", async () => {
-  for (const [i, patch] of [{status: "collected"}, {status: "in_transit"}, {status: "delivered"}, {status: "pickup_verified"}, {status: "waiting", collectedAt: 1}, {riderId: "other"}, {cancellationSettlementStatus: "pending_reconciliation"}].entries()) {
+  for (const [i, patch] of [{status: "collected"}, {status: "in_transit"}, {status: "delivered"}, {status: "pickup_verified"}, {status: "waiting", collectedAt: 1}, {status: "waiting", collectionPinVerified: true}, {riderId: "other"}, {cancellationSettlementStatus: "pending_reconciliation"}].entries()) {
     const id = `deny-${i}`; await fixture(id, patch);
     await assert.rejects(release(id));
     assert.equal((await db.doc(`deliveryRequests/${id}`).get()).data().assignedRiderId, "rider");
