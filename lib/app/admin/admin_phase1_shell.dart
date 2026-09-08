@@ -2331,7 +2331,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           'manual_${_user?.uid ?? _user?.email}_${DateTime.now().microsecondsSinceEpoch}';
       await _functions.httpsCallable('adminGrantRothToUser').call({
         'grantId': idempotencyKey,
-        cleanRecipient.contains('@') ? 'recipientEmail' : 'recipientUid': cleanRecipient,
+        cleanRecipient.contains('@') ? 'recipientEmail' : 'recipientUid':
+            cleanRecipient,
         'amountRoth': amount,
         'reason': cleanReason,
       });

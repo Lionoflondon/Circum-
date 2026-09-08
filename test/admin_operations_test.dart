@@ -946,7 +946,8 @@ void main() {
       expect(source, contains('Alias Manager'));
       expect(source, contains('Category Management'));
       expect(source, contains('Imports and Repository Settings'));
-      expect(source, contains("httpsCallable('adminUpdateIrisRepositoryRecord')"));
+      expect(
+          source, contains("httpsCallable('adminUpdateIrisRepositoryRecord')"));
       expect(
         source,
         isNot(contains("collection('irisCanonicalObjects').doc(canonicalId)")),
@@ -968,8 +969,10 @@ void main() {
       expect(source, contains('Future<void> _suggestGiftCampaignMatch'));
       expect(source, contains('Future<void> _approveGiftCampaignMatch'));
       expect(source, contains('Future<void> _bulkGiftCampaignAction'));
-      expect(source, contains("httpsCallable('adminSuggestGiftCampaignMatch')"));
-      expect(source, contains("httpsCallable('adminApproveGiftCampaignMatch')"));
+      expect(
+          source, contains("httpsCallable('adminSuggestGiftCampaignMatch')"));
+      expect(
+          source, contains("httpsCallable('adminApproveGiftCampaignMatch')"));
       expect(source, contains("httpsCallable('adminBulkGiftCampaignAction')"));
       expect(
         source,
