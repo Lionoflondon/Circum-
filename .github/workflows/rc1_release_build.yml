@@ -191,7 +191,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 50d1ef8c2141d6fc28e32f501fb7c81294ddfe0d
           fetch-depth: 1
       - uses: actions/setup-java@v4
         with:
@@ -241,7 +240,7 @@ jobs:
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
-          flutter build apk --release --target=lib/main.dart \
+          flutter build apk --release --target=lib/map_release_smoke_temp.dart \
             --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
             --dart-define=PAYMENT_ENVIRONMENT="$PAYMENT_ENVIRONMENT"
       - name: Prepare runtime evidence directory
