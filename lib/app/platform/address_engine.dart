@@ -67,9 +67,10 @@ class AddressEngine {
 
   static String? extractUkPostcode(Object? value) {
     final match = _ukPostcodePattern.firstMatch(clean(value));
-    final compact =
-        match?.group(0).toUpperCase().replaceAll(RegExp(r'\s+'), '');
-    if (compact == null || compact.isEmpty) return null;
+    final matched = match?.group(0);
+    if (matched == null) return null;
+    final compact = matched.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+    if (compact.isEmpty) return null;
     if (compact.length <= 3) return compact;
     return '${compact.substring(0, compact.length - 3)} '
         '${compact.substring(compact.length - 3)}';
