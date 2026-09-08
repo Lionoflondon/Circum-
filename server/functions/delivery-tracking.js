@@ -1,3 +1,4 @@
+const {assignedRiderId} = require("./delivery-assignment");
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
 
@@ -172,12 +173,7 @@ async function findDelivery(db, transaction, deliveryId) {
 }
 
 function assertRiderOwnsDelivery(delivery, riderId) {
-  const assigned = text(
-      delivery.riderId ||
-      delivery.driverId ||
-      delivery.assignedRiderId ||
-      delivery.assignedDriverId,
-  );
+  const assigned = assignedRiderId(delivery);
   if (!assigned || assigned !== riderId) {
     throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can update this delivery.");
   }
@@ -378,6 +374,12 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
   }
   if (!nextStatus) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported rider tracking action.");
+  }
+
+  if (nextStatus === "cancelled") {
+    return require("./rider-cancellation").requestRiderCancellationHandler({
+      ...data, deliveryId, reason: data.reason || "cannot_complete",
+    }, context);
   }
 
   const db = getFirestore();

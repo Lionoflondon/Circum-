@@ -145,6 +145,7 @@ exports.onGiftRequestVoiceMediaDeleted =
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
+exports.requestRiderCancellation = require("./rider-cancellation").requestRiderCancellation;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
