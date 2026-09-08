@@ -21524,7 +21524,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21545,7 +21546,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21566,7 +21568,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21587,7 +21590,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21608,7 +21612,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21629,7 +21634,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21650,7 +21656,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21671,7 +21678,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21692,7 +21700,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21713,7 +21722,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21739,7 +21749,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21765,7 +21776,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21791,7 +21803,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21817,7 +21830,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21843,7 +21857,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21869,7 +21884,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21895,7 +21911,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21921,7 +21938,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21947,7 +21965,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21973,7 +21992,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -21999,7 +22019,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22025,7 +22046,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22051,7 +22073,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22077,7 +22100,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22103,7 +22127,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22129,7 +22154,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22155,7 +22181,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22181,7 +22208,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22207,7 +22235,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22233,7 +22262,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
@@ -22254,7 +22284,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22275,7 +22306,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22296,7 +22328,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22317,7 +22350,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22338,7 +22372,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22359,7 +22394,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22385,7 +22421,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22411,7 +22448,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22437,7 +22475,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
@@ -22458,7 +22497,8 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
+      deliveryNotes:
+          "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
