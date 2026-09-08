@@ -299,9 +299,7 @@ class DeliveryPricing {
       vehicleSurcharge: vehicleSurcharge,
       specialConditions: specialConditions,
       serviceLevelSurcharge: serviceLevelSurcharge,
-      serviceLevel: input.express
-          ? 'express'
-          : 'standard',
+      serviceLevel: input.express ? 'express' : 'standard',
       surgeMultiplier: surgeMultiplier,
       total: total,
       weightCategory: weightBand.category,
@@ -736,7 +734,7 @@ class DeliveryPricing {
           ? 'Recommended because this item may be bulky or needs extra loading space.'
           : recommended == 'Car'
               ? 'Recommended because this item fits safely in a car.'
-          : 'Recommended as the fastest suitable option for this small, lightweight delivery.',
+              : 'Recommended as the fastest suitable option for this small, lightweight delivery.',
       handlingNotes: compactLuggage && weightKg > 20
           ? 'Heavy item - rider must confirm they can lift safely.'
           : handlingNotes?.trim().isNotEmpty == true

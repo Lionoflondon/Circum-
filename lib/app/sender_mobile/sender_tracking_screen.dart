@@ -878,8 +878,8 @@ Future<Map<String, dynamic>> _callFunction(
       .call<Map<String, dynamic>>(payload);
   final result =
       name == 'previewSenderCancellation' || name == 'requestSenderCancellation'
-      ? await boundedCancellationCall(operation)
-      : await operation;
+          ? await boundedCancellationCall(operation)
+          : await operation;
   return Map<String, dynamic>.from(result.data);
 }
 

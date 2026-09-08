@@ -46,9 +46,8 @@ class SenderPrimaryPageShell extends StatelessWidget {
           builder: (context, constraints) {
             final padding = paddingBuilder?.call(constraints) ??
                 senderPrimaryPagePadding(constraints);
-            final contentWidth =
-                (constraints.maxWidth - padding.horizontal)
-                    .clamp(0.0, double.infinity);
+            final contentWidth = (constraints.maxWidth - padding.horizontal)
+                .clamp(0.0, double.infinity);
             final contentHeight = (constraints.maxHeight - padding.vertical)
                 .clamp(0.0, double.infinity);
             return Padding(
@@ -94,9 +93,8 @@ class SenderScrollablePageShell extends StatelessWidget {
           builder: (context, constraints) {
             final padding = paddingBuilder?.call(constraints) ??
                 senderPrimaryPagePadding(constraints);
-            final contentWidth =
-                (constraints.maxWidth - padding.horizontal)
-                    .clamp(0.0, double.infinity);
+            final contentWidth = (constraints.maxWidth - padding.horizontal)
+                .clamp(0.0, double.infinity);
             final contentHeight = (constraints.maxHeight - padding.vertical)
                 .clamp(0.0, double.infinity);
             return Padding(
