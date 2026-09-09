@@ -13,7 +13,7 @@ const indexSource = fs.readFileSync(
 test("Admin governance actions are callable and exported", () => {
   assert.match(
       source,
-      /exports\.adminGovernanceAction = functions\.https\.onCall/,
+      /exports\.adminGovernanceAction = adminCallable/,
   );
   assert.match(
       indexSource,
@@ -24,7 +24,7 @@ test("Admin governance actions are callable and exported", () => {
 test("Admin governance requires Super Admin reason and audit", () => {
   assert.match(source, /requireAdmin\(context/);
   assert.match(source, /Super Admin recovery access is required/);
-  assert.match(source, /roles\.has\("super_admin"\)/);
+  assert.match(source, /roles\.includes\("super_admin"\)/);
   assert.match(source, /A recovery reason is required/);
   assert.match(source, /adminAuditLogs/);
   assert.match(source, /before/);

@@ -1,25 +1,10 @@
 /* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
-
-const ADMIN_ROLES = new Set([
-  "admin",
-  "super_admin",
-  "operations_admin",
-  "support_agent",
-  "finance_admin",
-  "driver_manager",
-]);
-
-function clean(value) {
-  return `${value || ""}`.trim().toLowerCase();
-}
+const {ROLE_ALIASES, tokenRoles} = require("./admin-permissions");
+const ADMIN_ROLES = new Set(Object.keys(ROLE_ALIASES));
 
 function hasAdminClaim(token = {}) {
-  const roles = Array.isArray(token.roles) ? token.roles.map(clean) : [];
-  return token.admin === true || token.superAdmin === true ||
-    token.super_admin === true ||
-    [clean(token.adminRole), clean(token.role), ...roles]
-        .some((role) => ADMIN_ROLES.has(role));
+  return tokenRoles(token).length > 0;
 }
 
 function requireAdmin(context, message = "Administrator access is required.") {

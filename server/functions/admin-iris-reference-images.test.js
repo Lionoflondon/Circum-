@@ -7,8 +7,8 @@ const source = fs.readFileSync(
     path.join(__dirname, "admin-iris-reference-images.js"),
     "utf8",
 );
-const adminAuth = fs.readFileSync(
-    path.join(__dirname, "admin-auth.js"),
+const adminPermissions = fs.readFileSync(
+    path.join(__dirname, "admin-permissions.js"),
     "utf8",
 );
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
@@ -28,8 +28,9 @@ test("IRIS reference image workflow is admin-only and audited", () => {
       source,
       /requireAdmin\(context, "IRIS administrator access is required\."\)/,
   );
-  assert.match(adminAuth, /super_admin/);
-  assert.match(adminAuth, /operations_admin/);
+  assert.match(adminPermissions, /super_admin/);
+  assert.match(adminPermissions, /operations_admin/);
+  assert.match(source, /adminCallable/);
   assert.match(source, /iris_reference_image_uploaded/);
   assert.match(source, /iris_reference_image_replaced/);
   assert.match(source, /iris_reference_image_deleted/);

@@ -60,7 +60,8 @@ test("Business backend exports the canonical workspace, team, and payment callab
 });
 
 test("Admin can create audited Business invoices through backend authority", () => {
-  assert.match(businessPaymentsSource, /exports\.adminCreateBusinessInvoice\s*=\s*functions\.https\.onCall/);
+  assert.match(businessPaymentsSource, /exports\.adminCreateBusinessInvoice\s*=\s*adminCallable/);
+  assert.match(businessPaymentsSource, /hasPermission\(tokenRoles\(context\.auth\.token \|\| \{\}\), "business\.manage"\)/);
   assert.match(businessPaymentsSource, /requireAdmin\(context, "Your Admin role cannot create Business invoices\."\)/);
   assert.match(businessPaymentsSource, /collection\("businessInvoices"\)\.doc\(\)/);
   assert.match(businessPaymentsSource, /status: "open"/);
@@ -133,8 +134,8 @@ test("Business signup creates one canonical pending company for Admin review", (
 test("Business owners can read their own workspace but cannot write it directly", () => {
   assert.match(rulesSource, /function canReadBusinessId\(businessId\)/);
   assert.match(rulesSource, /match \/businessAccounts\/\{businessId\}/);
-  assert.match(rulesSource, /allow read: if isAdmin\(\) \|\| isBusinessMemberRecord\(\);/);
-  assert.match(rulesSource, /allow write: if isAdmin\(\);/);
+  assert.match(rulesSource, /allow read: if \(isOperationsAdmin\(\) \|\| isFinanceAdmin\(\)\) \|\| isBusinessMemberRecord\(\);/);
+  assert.match(rulesSource, /match \/businessAccounts\/\{businessId\}[\s\S]*allow write: if false;/);
   assert.match(rulesSource, /match \/businessMemberships\/\{membershipId\}/);
   assert.match(rulesSource, /match \/businessInvoices\/\{invoiceId\}/);
   assert.match(rulesSource, /match \/businessAuditLogs\/\{logId\}/);

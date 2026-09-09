@@ -7,7 +7,6 @@ const test = require("node:test");
 
 const rothLedgerSource = fs.readFileSync("roth-ledger.js", "utf8");
 const businessPaymentsSource = fs.readFileSync("business-payments.js", "utf8");
-const adminSource = fs.readFileSync("../../lib/app/admin/admin_phase1_shell.dart", "utf8");
 
 test("individual Roth purchases are finalized from verified Stripe amount only", () => {
   assert.match(rothLedgerSource, /verifiedStripeRothPurchase\(sessionData,\s*\{[\s\S]*?ownerId: metadata\.userId \|\| metadata\.uid/);
@@ -39,8 +38,9 @@ test("Roth purchase ledger records expose audit and admin-visible fields", () =>
   for (const field of ["transactionId", "amountGBP", "rothIssued", "currency", "source", "paymentIntentId", "previousBalance", "resultingBalance"]) {
     assert.match(businessPaymentsSource, new RegExp(`${field}:`));
   }
-  assert.match(adminSource, /collection\('walletTransactions'\)/);
-  assert.match(adminSource, /collection\('businessRothPurchases'\)/);
+  const adminAuthoritySource = fs.readFileSync("admin-operations-authority.js", "utf8");
+  assert.match(adminAuthoritySource, /walletTransactions:/);
+  assert.match(adminAuthoritySource, /businessRothPurchases:/);
 });
 
 test("Roth purchase confirmation notifications are emitted without client balance authority", () => {

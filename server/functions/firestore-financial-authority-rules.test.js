@@ -77,7 +77,7 @@ test("riderProfiles mirrors riders admin-only authority fields", () => {
   assert.match(rules, /function riderAdminOnlyFields\(\)/);
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if false;[\s\S]*allow update: if isSafeRiderSelfUpdate\(driverId\);/,
   );
   for (const field of [
     "approvalStatus",
@@ -105,11 +105,11 @@ test("users cannot self-write admin or rider role escalation fields", () => {
 test("rider earnings, wallet ledger, payout requests, and bank data are not client-writable", () => {
   assert.match(
       rules,
-      /match \/riderEarnings\/\{riderId\}[\s\S]*allow create, update: if isAdmin\(\);/,
+      /match \/riderEarnings\/\{riderId\}[\s\S]*allow create, update: if false;/,
   );
   assert.match(
       rules,
-      /match \/riderWalletTransactions\/\{transactionId\}[\s\S]*allow create: if isAdmin\(\);/,
+      /match \/riderWalletTransactions\/\{transactionId\}[\s\S]*allow create: if false;/,
   );
   assert.match(
       rules,
@@ -117,7 +117,7 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
   assert.match(
       rules,
-      /match \/riderBankAccounts\/\{riderId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow create, update: if isAdmin\(\);/,
+      /match \/riderBankAccounts\/\{riderId\}[\s\S]*allow read: if \(isFinanceAdmin\(\)\);[\s\S]*allow create, update: if false;/,
   );
   assert.match(
       rules,
@@ -139,26 +139,26 @@ test("delivery cancellation settlements are backend-owned only", () => {
   );
 });
 
-test("rider applications and documents are backend/admin write-authoritative", () => {
+test("rider applications and documents are backend write-authoritative", () => {
   assert.match(
       rules,
-      /match \/riderApplications\/\{applicationId\} \{[\s\S]*applicationId == request\.auth\.uid[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if isAdmin\(\);/,
+      /match \/riderApplications\/\{applicationId\} \{[\s\S]*applicationId == request\.auth\.uid[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if false;/,
   );
   assert.match(
       rules,
-      /match \/riderDocuments\/\{documentId\} \{[\s\S]*allow read: if isAdmin\(\) \|\|[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if isAdmin\(\);/,
+      /match \/riderDocuments\/\{documentId\} \{[\s\S]*allow read: if \(isDriverManager\(\)\) \|\|[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if false;/,
   );
 });
 
-test("notifications are backend or admin authored only", () => {
+test("notifications are backend authored only", () => {
   const notificationBlock = rules.match(
       /match \/notifications\/\{notificationId\} \{[\s\S]*?\n {4}\}/,
   )[0];
-  assert.match(notificationBlock, /allow update: if isAdmin\(\);/);
+  assert.match(notificationBlock, /allow update: if false;/);
   assert.doesNotMatch(notificationBlock, /allow read, update:/);
   assert.match(
       notificationBlock,
-      /allow create: if isAdmin\(\);/,
+      /allow create: if false;/,
   );
   assert.doesNotMatch(
       notificationBlock,
@@ -217,7 +217,7 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
   }
   assert.match(
       rules,
-      /match \/riders\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riders\/\{driverId\}[\s\S]*allow create: if false;[\s\S]*allow update: if isSafeRiderSelfUpdate\(driverId\);/,
   );
 });
 

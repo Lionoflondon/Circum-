@@ -38,9 +38,11 @@ test("Sender Trust keeps canonical backend tier thresholds", () => {
 });
 
 test("Sender Trust admin callable accepts customer-editing Admin roles only", () => {
-  assert.equal(tokenHasTrustAdminRole({admin: true}), true);
-  assert.equal(tokenHasTrustAdminRole({role: "operations_admin"}), true);
-  assert.equal(tokenHasTrustAdminRole({adminRole: "support_agent"}), true);
+  assert.equal(tokenHasTrustAdminRole({role: "risk_reviewer"}), true);
+  assert.equal(tokenHasTrustAdminRole({role: "super_admin"}), true);
+  assert.equal(tokenHasTrustAdminRole({admin: true}), false);
+  assert.equal(tokenHasTrustAdminRole({role: "operations_admin"}), false);
+  assert.equal(tokenHasTrustAdminRole({adminRole: "support_agent"}), false);
   assert.equal(tokenHasTrustAdminRole({roles: ["sender"]}), false);
   assert.equal(tokenHasTrustAdminRole({role: "finance_admin"}), false);
 });

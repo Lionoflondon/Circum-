@@ -121,10 +121,10 @@ test("participants cannot rewrite chat authority fields", async () => {
   }
 });
 
-test("admin/backend authority can create and update chat metadata", async () => {
+test("Admin chat metadata writes remain backend-only", async () => {
   const db = testEnv.authenticatedContext("admin-user", {roles: ["support_agent"]}).firestore();
   const chat = doc(db, "chats", "admin-created-chat");
-  await assertSucceeds(setDoc(chat, {
+  await assertFails(setDoc(chat, {
     conversationType: "support",
     participants: ["sender-a", "circum-support"],
     participantRoles: {
@@ -134,7 +134,8 @@ test("admin/backend authority can create and update chat metadata", async () => 
     createdAt: new Date("2026-08-28T10:00:00Z"),
     updatedAt: new Date("2026-08-28T10:00:00Z"),
   }));
-  await assertSucceeds(updateDoc(chat, {lastMessage: "Handled by support."}));
+  await seedDoc("chats", "admin-created-chat", {participants: ["sender-a", "circum-support"]});
+  await assertFails(updateDoc(chat, {lastMessage: "Handled by support."}));
 });
 
 test("sender self-writes cannot create privileged sender fields", async () => {
@@ -198,7 +199,7 @@ test("sender self-writes cannot update privileged sender fields", async () => {
   }
 });
 
-test("ordinary sender profile edits and admin authority remain intact", async () => {
+test("ordinary sender profile edits remain intact and Admin writes use backend authority", async () => {
   await seedDoc("senders", "sender-a", {
     displayName: "Sender A",
     preferences: {email: true},
@@ -221,7 +222,7 @@ test("ordinary sender profile edits and admin authority remain intact", async ()
     displayName: "Hijacked",
   }));
   await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "senders", "sender-a")));
-  await assertSucceeds(updateDoc(doc(adminDb, "senders", "sender-a"), {
+  await assertFails(updateDoc(doc(adminDb, "senders", "sender-a"), {
     verificationStatus: "verified",
   }));
 });

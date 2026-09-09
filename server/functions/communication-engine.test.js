@@ -63,13 +63,13 @@ test("legacy sendMessage delegates to canonical communication handler", () => {
 
 test("notification retry is backend-authoritative and audited", () => {
   assert.match(source, /async function retryNotificationDelivery/);
-  assert.match(source, /isAdmin\(context\)/);
+  assert.match(source, /canAdmin\(context, "support\.manage"\)/);
   assert.match(source, /getMessaging\(\)\.send/);
   assert.match(source, /actionType:\s*"notification_retry_sent"/);
   assert.match(source, /actionType:\s*"notification_retry_failed"/);
   assert.match(
       source,
-      /exports\.retryNotificationDelivery = functions\.https\.onCall/,
+      /exports\.retryNotificationDelivery = adminCallable/,
   );
   assert.match(
       indexSource,

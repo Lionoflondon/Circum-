@@ -9,6 +9,7 @@ const {
   verifiedStripeRothPurchase,
 } = require("./roth-ledger-core");
 const {requireAdmin} = require("./admin-auth");
+const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const communicationEngine = require("./communication-engine");
 const checkoutReservations = require("./business-checkout-reservations");
 
@@ -386,8 +387,11 @@ async function payBusinessInvoiceAtomically({
   });
 }
 
-exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, context) => {
+exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   const adminUid = requireAdmin(context, "Your Admin role cannot create Business invoices.");
+  if (!hasPermission(tokenRoles(context.auth.token || {}), "business.manage")) {
+    throw new functions.https.HttpsError("permission-denied", "Business administration access is required.");
+  }
   const data = payload || {};
   const db = getFirestore();
   const businessId = text(data.businessId, 120);

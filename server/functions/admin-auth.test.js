@@ -21,7 +21,6 @@ test("admin callable guard rejects ordinary and unrelated roles", () => {
     {role: "sender"},
     {role: "rider"},
     {roles: ["sender", "rider"]},
-    {adminRole: "customer_support"},
   ]) {
     assert.equal(hasAdminClaim(token), false);
     assert.throws(
@@ -40,6 +39,7 @@ test("admin callable guard accepts established admin claim shapes", () => {
     {role: "super_admin"},
     {roles: ["operations_admin"]},
     {adminRole: "support_agent"},
+    {adminRole: "customer_support"},
     {role: "finance_admin"},
     {roles: ["driver_manager"]},
     {roles: ["sender", "ADMIN"]},

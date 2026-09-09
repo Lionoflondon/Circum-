@@ -1,16 +1,43 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath, Timestamp} = require("firebase-admin/firestore");
+const {
+  normalizeRole,
+  tokenRoles: canonicalTokenRoles,
+  permissionsForRoles,
+  hasPermission,
+  adminCallable,
+} = require("./admin-permissions");
 
-const ADMIN_ROLES = new Set([
-  "admin",
-  "super_admin",
-  "operations_admin",
-  "support_agent",
-  "finance_admin",
-  "driver_manager",
-]);
-const MANAGE_ADMIN_ROLES = new Set(["admin", "super_admin"]);
+const ADMIN_DATASETS = Object.freeze({
+  deliveryRequests: "deliveries.read", users: "users.read",
+  riderProfiles: "riders.read", adminUsers: "*", payments: "finance.read",
+  payoutRequests: "payouts.read", riderEarnings: "payouts.read",
+  riderWalletTransactions: "finance.read", wallets: "finance.read",
+  walletTransactions: "finance.read", business_wallets: "finance.read",
+  businessInvoices: "finance.read", businessRothPurchases: "finance.read",
+  driverRatings: "ratings.read", deliveryTips: "finance.read",
+  supportTickets: "support.read", healthPlusPayments: "finance.read",
+  prescriptionPickups: "health.read", healthPlusProfiles: "health.read",
+  recurringPickupSchedules: "health.read", healthPlusCustodyArchive: "health.read",
+  businessAccounts: "business.read", giftOrders: "gift.read",
+  giftRequests: "gift.read", giftBrands: "gift.read",
+  giftCampaignParticipants: "gift.read", giftCampaignMatches: "gift.read",
+  adminAuditLogs: "audit.read", chats: "support.read",
+  riderApplications: "riders.read", riderDocuments: "riders.read",
+  riderOnboardingEvents: "riders.read", driverPerformanceMetrics: "riders.read",
+  websiteVisitors: "analytics.read", irisCanonicalObjects: "deliveries.read",
+  irisLearningCases: "deliveries.read", iris_learning_review_candidates: "deliveries.read",
+  irisLearningOutliers: "deliveries.read", irisPolicies: "deliveries.read",
+  irisEvidence: "deliveries.read", irisReferenceImages: "deliveries.read",
+  platformConfig: "*", platformStatus: "dashboard.read", platformNotices: "dashboard.read",
+  platformVersions: "dashboard.read", notifications: "support.read",
+  messageReports: "support.read", adminNotes: "support.read",
+  senderTrustEvents: "risk.read", recognitionAwards: "riders.read",
+  recognitionAuditLogs: "audit.read", recognitionCounters: "riders.read",
+  rateLimits: "risk.read", senderBookingDrafts: "deliveries.read",
+  riderPresence: "riders.read",
+});
 
 function clean(value) {
   return `${value || ""}`.trim();
@@ -20,15 +47,16 @@ function lower(value) {
   return clean(value).toLowerCase();
 }
 
+function requireReason(data = {}, actionLabel = "Admin action") {
+  const reason = clean(data.reason || data.note);
+  if (!reason) {
+    throw new functions.https.HttpsError("invalid-argument", `${actionLabel}: reason is required.`);
+  }
+  return reason;
+}
+
 function tokenRoles(token = {}) {
-  const roles = Array.isArray(token.roles) ? token.roles.map(lower) : [];
-  return new Set([
-    lower(token.role),
-    lower(token.adminRole),
-    ...roles,
-    token.admin === true ? "admin" : "",
-    token.superAdmin === true || token.super_admin === true ? "super_admin" : "",
-  ].filter(Boolean));
+  return new Set(canonicalTokenRoles(token));
 }
 
 function activeRolesFromRecord(record = {}) {
@@ -37,7 +65,7 @@ function activeRolesFromRecord(record = {}) {
     record.role,
     record.adminRole,
     ...(Array.isArray(record.roles) ? record.roles : []),
-  ].map(lower).filter(Boolean);
+  ].map(normalizeRole).filter(Boolean);
   return roles.length ? roles : [];
 }
 
@@ -58,14 +86,15 @@ async function resolveActor(context) {
     ...tokenRoles(context.auth.token || {}),
     ...docRecords.flatMap(activeRolesFromRecord),
   ]);
-  if (![...roles].some((role) => ADMIN_ROLES.has(role))) {
+  if (!roles.size) {
     throw new functions.https.HttpsError("permission-denied", "Administrator access is required.");
   }
   return {
     uid,
     email,
     roles: [...roles],
-    canManageAdmins: [...roles].some((role) => MANAGE_ADMIN_ROLES.has(role)),
+    permissions: permissionsForRoles([...roles]),
+    canManageAdmins: hasPermission([...roles], "*"),
     label: email || uid,
   };
 }
@@ -76,23 +105,16 @@ function requireManageAdmins(actor) {
   }
 }
 
-function requireAnyRole(actor, allowed, message) {
-  const roles = new Set((actor.roles || []).map(lower));
-  if (!allowed.some((role) => roles.has(role))) {
-    throw new functions.https.HttpsError("permission-denied", message);
-  }
-}
-
 function requireOperations(actor, message = "Operations Admin access is required.") {
-  requireAnyRole(actor, ["admin", "super_admin", "operations_admin"], message);
+  if (!hasPermission(actor.roles, "deliveries.manage")) throw new functions.https.HttpsError("permission-denied", message);
 }
 
 function requireSupport(actor, message = "Support Admin access is required.") {
-  requireAnyRole(actor, ["admin", "super_admin", "operations_admin", "support_agent"], message);
+  if (!hasPermission(actor.roles, "support.manage")) throw new functions.https.HttpsError("permission-denied", message);
 }
 
 function requireFinance(actor, message = "Finance Admin access is required.") {
-  requireAnyRole(actor, ["admin", "super_admin", "finance_admin"], message);
+  if (!hasPermission(actor.roles, "finance.manage")) throw new functions.https.HttpsError("permission-denied", message);
 }
 
 function auditPayload(actor, data, before, after) {
@@ -521,7 +543,7 @@ function platformOperationPatch(status, actor, reason) {
   };
 }
 
-exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
+exports.adminResolveAccess = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   const db = getFirestore();
   const patch = {lastLoginAt: FieldValue.serverTimestamp()};
@@ -529,22 +551,49 @@ exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
     db.collection("adminUsers").doc(actor.uid).set(patch, {merge: true}),
     actor.email ? db.collection("adminUsers").doc(actor.email).set(patch, {merge: true}) : null,
   ].filter(Boolean));
-  return {roles: actor.roles};
+  return {roles: actor.roles, permissions: actor.permissions};
 });
 
-exports.adminRecordAuditEntry = functions.https.onCall(async (data, context) => {
+exports.adminQueryPage = adminCallable(async (data, context) => {
+  const actor = await resolveActor(context);
+  const collection = clean(data && data.collection);
+  const permission = ADMIN_DATASETS[collection];
+  if (!permission || !hasPermission(actor.roles, permission)) {
+    throw new functions.https.HttpsError("permission-denied", "This dataset is not available to your Admin role.");
+  }
+  const pageSize = Math.max(1, Math.min(Number(data.pageSize) || 50, 50));
+  const cursor = clean(data.cursor);
+  let query = getFirestore().collection(collection)
+      .orderBy(FieldPath.documentId())
+      .limit(pageSize);
+  if (cursor) query = query.startAfter(cursor);
+  const [snapshot, total] = await Promise.all([
+    query.get(),
+    getFirestore().collection(collection).count().get(),
+  ]);
+  return {
+    collection,
+    records: snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()})),
+    nextCursor: snapshot.size === pageSize ? snapshot.docs[snapshot.docs.length - 1].id : null,
+    total: total.data().count,
+    pageSize,
+  };
+});
+
+exports.adminRecordAuditEntry = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   const db = getFirestore();
   const auditId = await writeAudit(db, actor, data || {}, data.oldValue || {}, data.newValue || {});
   return {ok: true, auditId};
 });
 
-exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
+exports.adminSaveAdminUser = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireManageAdmins(actor);
   const email = lower(data.email);
   const documentId = clean(data.documentId || email);
-  if (!email || !email.includes("@") || !documentId) {
+  const role = normalizeRole(data.role || "operations_admin");
+  if (!email || !email.includes("@") || !documentId || !role) {
     throw new functions.https.HttpsError("invalid-argument", "A valid Admin email is required.");
   }
   const db = getFirestore();
@@ -553,9 +602,9 @@ exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
   const before = snap.exists ? snap.data() : {};
   const patch = {
     email,
-    role: clean(data.role || "operations_admin"),
+    role,
     status: clean(data.status || "active"),
-    roles: [clean(data.role || "operations_admin")],
+    roles: [role],
     invitedBy: actor.label,
     updatedAt: FieldValue.serverTimestamp(),
     ...(snap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
@@ -566,34 +615,17 @@ exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
     actionType: snap.exists ? "admin_user_edit" : "admin_user_invite",
     recordType: "adminUsers",
     recordId: documentId,
-    reason: clean(data.reason || "Admin user updated from Admin."),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true, documentId};
 });
 
-exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) => {
-  const actor = await resolveActor(context);
-  requireOperations(actor);
-  const id = clean(data.deliveryId);
-  const db = getFirestore();
-  await writeAudit(db, actor, {
-    actionType: "delivery_duplicate_rejected",
-    recordType: "deliveryRequests",
-    recordId: id,
-    reason: clean(data.reason || "Admin duplicate delivery is retired; use Sender paid booking orchestration."),
-  }, {requestId: id}, {status: "rejected_duplicate_authority"});
-  throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Delivery duplication is retired. Create deliveries through the Sender payment flow.",
-  );
-});
-
-exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, context) => {
+exports.adminUpdateDeliveryOperation = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
   const status = lower(data.status);
-  const reason = clean(data.reason || "Updated from Circum Admin Delivery Operations");
+  const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Delivery and status are required.");
   const db = getFirestore();
   const ref = db.collection("deliveryRequests").doc(id);
@@ -610,7 +642,7 @@ exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
+exports.adminArchiveDelivery = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -624,7 +656,7 @@ exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
     archivedByAdminId: actor.uid,
     archivedByAdminEmail: actor.email || null,
     archivedAt: FieldValue.serverTimestamp(),
-    adminArchiveReason: clean(data.reason || "Archived from isolated Circum Admin"),
+    adminArchiveReason: requireReason(data),
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(patch, {merge: true});
@@ -637,12 +669,12 @@ exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.adminUpdateIrisReview = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisReview = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
   const status = lower(data.status);
-  const reason = clean(data.reason || "Updated from Circum Admin Parcel Intelligence");
+  const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Delivery and status are required.");
   const db = getFirestore();
   const ref = db.collection("deliveryRequests").doc(id);
@@ -659,12 +691,12 @@ exports.adminUpdateIrisReview = functions.https.onCall(async (data, context) => 
   return {ok: true};
 });
 
-exports.adminUpdateSenderAccountStatus = functions.https.onCall(async (data, context) => {
+exports.adminUpdateSenderAccountStatus = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const id = clean(data.userId);
   const status = lower(data.status);
-  const reason = clean(data.reason || "Sender account status updated from Admin");
+  const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "User and status are required.");
   const db = getFirestore();
   const ref = db.collection("users").doc(id);
@@ -681,7 +713,7 @@ exports.adminUpdateSenderAccountStatus = functions.https.onCall(async (data, con
   return {ok: true};
 });
 
-exports.adminUpdateBusinessAccountStatus = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessAccountStatus = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const id = clean(data.businessId);
@@ -697,17 +729,17 @@ exports.adminUpdateBusinessAccountStatus = functions.https.onCall(async (data, c
     actionType: `business_account_${status}`,
     recordType: "businessAccounts",
     recordId: id,
-    reason: clean(data.reason || "Business account status updated from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
 
-exports.adminUpdateBusinessOperation = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessOperation = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const id = clean(data.businessId);
   const status = lower(data.status);
-  const reason = clean(data.reason || "Updated from Circum Admin Business Operations");
+  const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Business and status are required.");
   const db = getFirestore();
   const ref = db.collection("businessAccounts").doc(id);
@@ -724,7 +756,7 @@ exports.adminUpdateBusinessOperation = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminUpdateBusinessMember = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessMember = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const businessId = clean(data.businessId);
@@ -766,17 +798,17 @@ exports.adminUpdateBusinessMember = functions.https.onCall(async (data, context)
     actionType: data.remove === true ? "business_member_removed" : "business_member_role_updated",
     recordType: "businessAccounts",
     recordId: businessId,
-    reason: clean(data.reason || "Business member updated from Admin"),
+    reason: requireReason(data),
   }, beforeMember, afterMember);
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusPickup = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusPickup = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.pickupId);
   const status = lower(data.status);
-  const reason = clean(data.reason || "Updated from Circum Admin Health+ Operations");
+  const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ pickup and status are required.");
   const db = getFirestore();
   const ref = db.collection("prescriptionPickups").doc(id);
@@ -801,7 +833,7 @@ exports.adminUpdateHealthPlusPickup = functions.https.onCall(async (data, contex
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusSchedule = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.scheduleId);
@@ -816,7 +848,7 @@ exports.adminUpdateHealthPlusSchedule = functions.https.onCall(async (data, cont
     adminReviewStatus: status,
     updatedAt: FieldValue.serverTimestamp(),
     adminUpdatedBy: actor.label,
-    adminReason: clean(data.reason || "Health+ recurring schedule reviewed from Admin"),
+    adminReason: requireReason(data),
   };
   await ref.set(patch, {merge: true});
   await db.collection("healthPlusCustodyArchive").add({
@@ -842,7 +874,7 @@ exports.adminUpdateHealthPlusSchedule = functions.https.onCall(async (data, cont
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusProfile = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.profileId);
@@ -857,7 +889,7 @@ exports.adminUpdateHealthPlusProfile = functions.https.onCall(async (data, conte
     adminReviewStatus: status,
     updatedAt: FieldValue.serverTimestamp(),
     adminUpdatedBy: actor.label,
-    adminReason: clean(data.reason || "Health+ profile reviewed from Admin"),
+    adminReason: requireReason(data),
   };
   await ref.set(patch, {merge: true});
   await db.collection("healthPlusCustodyArchive").add({
@@ -881,7 +913,7 @@ exports.adminUpdateHealthPlusProfile = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminUpdateFinanceWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateFinanceWorkflow = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireFinance(actor);
   const id = clean(data.paymentId);
@@ -897,12 +929,12 @@ exports.adminUpdateFinanceWorkflow = functions.https.onCall(async (data, context
     actionType: `finance_workflow_${status}`,
     recordType: "payments",
     recordId: id,
-    reason: clean(data.reason || "Finance workflow updated from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
 
-exports.adminRequestAccountMergeReview = functions.https.onCall(async (data, context) => {
+exports.adminRequestAccountMergeReview = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const primaryAccountId = clean(data.primaryAccountId);
@@ -925,18 +957,18 @@ exports.adminRequestAccountMergeReview = functions.https.onCall(async (data, con
     actionType: "account_merge_review_requested",
     recordType: "accountMergeReviews",
     recordId: ref.id,
-    reason: clean(data.reason || "Duplicate account merge review requested from Admin"),
+    reason: requireReason(data),
   }, {}, record);
   return {ok: true, reviewId: ref.id};
 });
 
-exports.adminUpdateGiftWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftWorkflow = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Operations Admin access is required.");
   const id = clean(data.giftId);
   const collection = clean(data.collection || "giftOrders");
   const status = lower(data.status);
-  const reason = clean(data.reason || "Gift workflow action confirmed from Admin");
+  const reason = requireReason(data);
   if (!id || !["giftOrders", "giftRequests"].includes(collection)) {
     throw new functions.https.HttpsError("invalid-argument", "Gift record is required.");
   }
@@ -955,7 +987,7 @@ exports.adminUpdateGiftWorkflow = functions.https.onCall(async (data, context) =
   return {ok: true};
 });
 
-exports.adminUpdateGiftCampaignParticipant = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftCampaignParticipant = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const id = clean(data.participantId);
@@ -973,12 +1005,12 @@ exports.adminUpdateGiftCampaignParticipant = functions.https.onCall(async (data,
     actionType: `gift_campaign_participant_${status}`,
     recordType: "giftCampaignParticipants",
     recordId: id,
-    reason: clean(data.reason || "Gift campaign participant reviewed from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
 
-exports.adminSaveGiftBrandPartner = functions.https.onCall(async (data, context) => {
+exports.adminSaveGiftBrandPartner = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Brand Partner Admin access is required.");
   const name = clean(data.partnerName || data.brandName);
@@ -1000,12 +1032,12 @@ exports.adminSaveGiftBrandPartner = functions.https.onCall(async (data, context)
     actionType: snap.exists ? "gift_brand_partner_saved" : "gift_brand_partner_created",
     recordType: "giftBrands",
     recordId: id,
-    reason: clean(data.reason || "Brand Partner profile saved from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true, brandId: id};
 });
 
-exports.adminSuggestGiftCampaignMatch = functions.https.onCall(async (data, context) => {
+exports.adminSuggestGiftCampaignMatch = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const participantId = clean(data.participantId);
@@ -1036,7 +1068,7 @@ exports.adminSuggestGiftCampaignMatch = functions.https.onCall(async (data, cont
   return {ok: true};
 });
 
-exports.adminApproveGiftCampaignMatch = functions.https.onCall(async (data, context) => {
+exports.adminApproveGiftCampaignMatch = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const participantId = clean(data.participantId);
@@ -1102,12 +1134,12 @@ exports.adminApproveGiftCampaignMatch = functions.https.onCall(async (data, cont
     actionType: "gift_campaign_match_approved",
     recordType: "giftCampaignMatches",
     recordId: matchRef.id,
-    reason: clean(data.reason || "Campaign Matching approval confirmed from Admin"),
+    reason: requireReason(data),
   }, {}, {participantIds: [participantId, otherId], score});
   return {ok: true, matchId: matchRef.id};
 });
 
-exports.adminBulkGiftCampaignAction = functions.https.onCall(async (data, context) => {
+exports.adminBulkGiftCampaignAction = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const action = lower(data.action);
@@ -1130,12 +1162,12 @@ exports.adminBulkGiftCampaignAction = functions.https.onCall(async (data, contex
     actionType: `gift_campaign_match_bulk_${action}`,
     recordType: "giftCampaignParticipants",
     recordId: "bulk",
-    reason: clean(data.reason || "Bulk Campaign Matching workflow confirmed from Admin"),
+    reason: requireReason(data),
   }, {}, {count: participantIds.length, action});
   return {ok: true, count: participantIds.length};
 });
 
-exports.adminUpdateIrisRepositoryRecord = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisRepositoryRecord = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "IRIS Operations Admin access is required.");
   const id = clean(data.recordId);
@@ -1171,12 +1203,12 @@ exports.adminUpdateIrisRepositoryRecord = functions.https.onCall(async (data, co
     actionType: `iris_repository_${action}`,
     recordType: collection,
     recordId: targetId,
-    reason: clean(data.reason || "IRIS repository governance action confirmed from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true, recordId: targetId};
 });
 
-exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisCandidateWorkflow = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "IRIS Operations Admin access is required.");
   const id = clean(data.candidateId);
@@ -1230,7 +1262,7 @@ exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, c
       actionType: "iris_candidate_promoted",
       recordType: collection,
       recordId: id,
-      reason: clean(data.reason || "Candidate promoted to Canonical Repository from Admin"),
+      reason: requireReason(data, "Candidate promoted to Canonical Repository from Admin"),
     }, record, {promotedCanonicalId: canonicalId});
     return {ok: true, canonicalId};
   }
@@ -1251,12 +1283,12 @@ exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, c
     actionType: `iris_candidate_${action}`,
     recordType: collection,
     recordId: id,
-    reason: clean(data.reason || "IRIS candidate workflow confirmed from Admin"),
+    reason: requireReason(data),
   }, record, patch);
   return {ok: true};
 });
 
-exports.adminSaveGiftRequestEditor = functions.https.onCall(async (data, context) => {
+exports.adminSaveGiftRequestEditor = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Operations Admin access is required.");
   const id = clean(data.giftId);
@@ -1274,12 +1306,12 @@ exports.adminSaveGiftRequestEditor = functions.https.onCall(async (data, context
     actionType: "gift_request_editor_saved",
     recordType: collection,
     recordId: id,
-    reason: clean(data.reason || "Historical Gift Request editor workflow restored"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
 
-exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftWorkspace = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Workspace Admin access is required.");
   const id = clean(data.giftId);
@@ -1311,12 +1343,12 @@ exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) 
     actionType: `gift_workspace_${action}`,
     recordType: collection,
     recordId: id,
-    reason: clean(data.reason || "Gift Team workspace action confirmed from Admin"),
+    reason: requireReason(data),
   }, before, {workspaceStatus: action});
   return {ok: true};
 });
 
-exports.adminUpdatePlatformRecord = functions.https.onCall(async (data, context) => {
+exports.adminUpdatePlatformRecord = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireManageAdmins(actor);
   const id = clean(data.recordId);
@@ -1329,18 +1361,18 @@ exports.adminUpdatePlatformRecord = functions.https.onCall(async (data, context)
   const ref = db.collection(collection).doc(id);
   const snap = await ref.get();
   const before = snap.exists ? snap.data() : {};
-  const patch = platformOperationPatch(status, actor, data.reason || "Platform operation confirmed from Admin");
+  const patch = platformOperationPatch(status, actor, requireReason(data));
   await ref.set(patch, {merge: true});
   await writeAudit(db, actor, {
     actionType: `platform_operation_${status}`,
     recordType: collection,
     recordId: id,
-    reason: clean(data.reason || "Platform operation updated from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
 
-exports.adminAddAdminNote = functions.https.onCall(async (data, context) => {
+exports.adminAddAdminNote = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const recordType = clean(data.recordType);
@@ -1366,14 +1398,16 @@ exports.adminAddAdminNote = functions.https.onCall(async (data, context) => {
     actionType: "admin_note_added",
     recordType,
     recordId,
-    reason: clean(data.reason || "Internal Admin note added"),
+    reason: requireReason(data),
   }, {}, {noteId: ref.id, pinned: note.pinned});
   return {ok: true, noteId: ref.id};
 });
 
-exports.adminRecordRiderEvent = functions.https.onCall(async (data, context) => {
+exports.adminRecordRiderEvent = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireAnyRole(actor, ["admin", "super_admin", "operations_admin", "driver_manager"], "Rider Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "riders.review")) {
+    throw new functions.https.HttpsError("permission-denied", "Rider Operations Admin access is required.");
+  }
   const riderId = clean(data.riderId);
   const action = lower(data.action);
   if (!riderId || !action) {
@@ -1395,12 +1429,12 @@ exports.adminRecordRiderEvent = functions.https.onCall(async (data, context) => 
     actionType: `rider_event_${action}`,
     recordType: "riderAdminEvents",
     recordId: ref.id,
-    reason: clean(data.reason || data.note || "Rider Admin event recorded"),
+    reason: requireReason(data),
   }, {}, event);
   return {ok: true, eventId: ref.id};
 });
 
-exports.adminResolveMessageReport = functions.https.onCall(async (data, context) => {
+exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const id = clean(data.reportId);
@@ -1425,7 +1459,7 @@ exports.adminResolveMessageReport = functions.https.onCall(async (data, context)
     actionType: `message_report_${status}`,
     recordType: "messageReports",
     recordId: id,
-    reason: clean(data.reason || "Message report reviewed from Admin"),
+    reason: requireReason(data),
   }, before, patch);
   return {ok: true};
 });
