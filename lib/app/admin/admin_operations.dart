@@ -3,15 +3,26 @@ enum AdminRole {
   operationsAdmin('operations_admin'),
   supportAgent('support_agent'),
   financeAdmin('finance_admin'),
-  driverManager('driver_manager');
+  riderReviewer('rider_reviewer'),
+  riskReviewer('risk_reviewer'),
+  analyticsViewer('analytics_viewer');
 
   final String value;
 
   const AdminRole(this.value);
 
   static AdminRole? fromString(String? value) {
+    final normalized = switch (value?.trim().toLowerCase()) {
+      'admin' || 'operations' => 'operations_admin',
+      'support' || 'customer_support' => 'support_agent',
+      'finance' => 'finance_admin',
+      'driver_manager' || 'rider_manager' || 'reviewer' => 'rider_reviewer',
+      'risk' => 'risk_reviewer',
+      'analytics' => 'analytics_viewer',
+      final value => value,
+    };
     for (final role in AdminRole.values) {
-      if (role.value == value) return role;
+      if (role.value == normalized) return role;
     }
     return null;
   }
@@ -28,11 +39,17 @@ enum AdminPermission {
   manageDriverRanks,
   viewDeliveries,
   editDeliveries,
-  duplicateDeliveries,
   viewFinance,
   manageFinance,
   viewHealthPlus,
   manageHealthPlus,
+  viewBusiness,
+  manageBusiness,
+  viewGifts,
+  manageGifts,
+  viewRatings,
+  viewRisk,
+  viewAnalytics,
   viewSupport,
   manageIssues,
   viewAudit,
@@ -141,11 +158,18 @@ class AdminAccessPolicy {
       AdminPermission.viewCustomers,
       AdminPermission.editCustomers,
       AdminPermission.viewDrivers,
+      AdminPermission.editDrivers,
+      AdminPermission.approveDrivers,
+      AdminPermission.manageDriverRanks,
       AdminPermission.viewDeliveries,
       AdminPermission.editDeliveries,
-      AdminPermission.duplicateDeliveries,
       AdminPermission.viewHealthPlus,
       AdminPermission.manageHealthPlus,
+      AdminPermission.viewBusiness,
+      AdminPermission.manageBusiness,
+      AdminPermission.viewGifts,
+      AdminPermission.manageGifts,
+      AdminPermission.viewRatings,
       AdminPermission.viewSupport,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
@@ -157,6 +181,8 @@ class AdminAccessPolicy {
       AdminPermission.viewDrivers,
       AdminPermission.viewDeliveries,
       AdminPermission.viewSupport,
+      AdminPermission.viewGifts,
+      AdminPermission.viewRatings,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
     ],
@@ -167,21 +193,56 @@ class AdminAccessPolicy {
       AdminPermission.viewDeliveries,
       AdminPermission.viewFinance,
       AdminPermission.manageFinance,
-      AdminPermission.viewHealthPlus,
+      AdminPermission.viewBusiness,
       AdminPermission.viewAudit,
     ],
-    AdminRole.driverManager: [
+    AdminRole.riderReviewer: [
       AdminPermission.viewDashboard,
       AdminPermission.viewDrivers,
       AdminPermission.editDrivers,
       AdminPermission.approveDrivers,
       AdminPermission.manageDriverRanks,
       AdminPermission.viewDeliveries,
-      AdminPermission.viewHealthPlus,
-      AdminPermission.viewSupport,
-      AdminPermission.manageIssues,
       AdminPermission.viewAudit,
     ],
+    AdminRole.riskReviewer: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewCustomers,
+      AdminPermission.viewDrivers,
+      AdminPermission.viewDeliveries,
+      AdminPermission.viewRatings,
+      AdminPermission.viewRisk,
+      AdminPermission.viewAudit,
+    ],
+    AdminRole.analyticsViewer: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewAnalytics,
+    ],
+  };
+
+  static const _modulePermissions = <String, AdminPermission>{
+    'dashboard': AdminPermission.viewDashboard,
+    'visitorAnalytics': AdminPermission.viewAnalytics,
+    'deliveries': AdminPermission.viewDeliveries,
+    'discrepancyReview': AdminPermission.viewDeliveries,
+    'irisRepository': AdminPermission.viewDeliveries,
+    'irisCandidates': AdminPermission.viewDeliveries,
+    'governance': AdminPermission.manageIssues,
+    'recognition': AdminPermission.manageIssues,
+    'users': AdminPermission.viewCustomers,
+    'riders': AdminPermission.viewDrivers,
+    'verification': AdminPermission.viewDrivers,
+    'support': AdminPermission.viewSupport,
+    'finance': AdminPermission.viewFinance,
+    'rothGrantCampaigns': AdminPermission.manageFinance,
+    'healthPlus': AdminPermission.viewHealthPlus,
+    'business': AdminPermission.viewBusiness,
+    'gifts': AdminPermission.viewGifts,
+    'troubleshooting': AdminPermission.manageIssues,
+    'analytics': AdminPermission.viewAnalytics,
+    'audit': AdminPermission.viewAudit,
+    'chat': AdminPermission.viewSupport,
+    'settings': AdminPermission.manageAdmins,
   };
 
   static bool hasAnyAdminRole(Iterable<String> roles) {
@@ -197,6 +258,11 @@ class AdminAccessPolicy {
       }
     }
     return false;
+  }
+
+  static bool canViewModule(Iterable<String> roles, String moduleName) {
+    final permission = _modulePermissions[moduleName];
+    return permission != null && can(roles, permission);
   }
 }
 
@@ -494,8 +560,9 @@ class RiderRankPolicy {
   }
 
   static bool canManage(Iterable<String> roles) {
-    return roles.contains(AdminRole.superAdmin.value) ||
-        roles.contains(AdminRole.driverManager.value);
+    final normalized = roles.map(AdminRole.fromString).toSet();
+    return normalized.contains(AdminRole.superAdmin) ||
+        normalized.contains(AdminRole.riderReviewer);
   }
 
   static Map<String, dynamic> updatePatch({
@@ -935,28 +1002,6 @@ bool _hasStatus(Map<String, dynamic> record, List<String> statuses) {
 }
 
 class AdminDeliveryTools {
-  static Map<String, dynamic> duplicateDelivery(
-    Map<String, dynamic> source, {
-    required String newId,
-    required Object createdAt,
-  }) {
-    final copy = Map<String, dynamic>.from(source);
-    copy
-      ..remove('historyId')
-      ..remove('driverRatingId')
-      ..remove('ratedAt')
-      ..remove('proofOfDelivery')
-      ..['requestId'] = newId
-      ..['status'] = 'requested'
-      ..['dispatchStatus'] = 'requested'
-      ..['matchingStatus'] = 'available'
-      ..['createdAt'] = createdAt
-      ..['updatedAt'] = createdAt
-      ..['source'] = '${source['source'] ?? 'circum'}-admin-duplicate'
-      ..['adminDuplicatedFrom'] = source['requestId'] ?? source['id'];
-    return copy;
-  }
-
   static Map<String, dynamic> safeDeliveryPatch({
     String? pickupAddress,
     String? dropoffAddress,

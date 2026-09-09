@@ -59,7 +59,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _announcementBody = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _auth = FirebaseAuth.instance;
-  final _db = FirebaseFirestore.instance;
   final _functions = FirebaseFunctions.instance;
 
   AdminModule _module = AdminModule.dashboard;
@@ -124,7 +123,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final roles = await _loadRoles(user);
+      final roles = await _loadRoles(user).timeout(const Duration(seconds: 20));
       setState(() {
         _user = user;
         _email.text = user.email ?? _email.text;
@@ -138,8 +137,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
               'This account is signed in but has no active Circum admin role.',
         );
       }
+    } on TimeoutException {
+      setState(
+        () => _message =
+            'Admin access timed out. Check the connection and retry.',
+      );
     } catch (_) {
-      setState(() => _message = 'Could not load Admin access.');
+      setState(() => _message = 'Could not load Admin access. Retry.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -169,13 +173,22 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       _message = 'Checking Admin access...';
     });
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: _email.text.trim(),
-        password: _password.text.trim(),
-      );
-      await _restore(credential.user);
+      final credential = await _auth
+          .signInWithEmailAndPassword(
+            email: _email.text.trim(),
+            password: _password.text.trim(),
+          )
+          .timeout(const Duration(seconds: 20));
+      await _restore(credential.user).timeout(const Duration(seconds: 30));
     } on FirebaseAuthException catch (error) {
       setState(() => _message = _authMessage(error));
+    } on TimeoutException {
+      setState(
+        () => _message =
+            'Admin sign in timed out. Check the connection and try again.',
+      );
+    } catch (_) {
+      setState(() => _message = 'Admin sign in could not finish. Try again.');
     } finally {
       if (mounted) setState(() => _signingIn = false);
     }
@@ -192,7 +205,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   Future<void> _loadAdminData() async {
     setState(() => _loadingData = true);
     try {
-      final data = await AdminRepository(_db).load(
+      final repository = AdminRepository(_functions);
+      final data = await repository.load(
         canManageAdmins: _can(AdminPermission.manageAdmins),
         canViewFinance: _can(AdminPermission.viewFinance),
         canViewSupport: _can(AdminPermission.viewSupport),
@@ -209,7 +223,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           supportTickets: data.supportTickets,
           healthPlusPayments: data.healthPlusPayments,
         );
-        _message = 'Admin data refreshed.';
+        _message = repository.failures.isEmpty
+            ? 'Admin data refreshed. Counts show this page; global totals are server-authoritative.'
+            : 'Admin data loaded. Retry unavailable sections: ${repository.failures.join(', ')}.';
       });
     } catch (_) {
       setState(() => _message = 'Could not load Admin data.');
@@ -267,21 +283,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final result =
         await _functions.httpsCallable('adminReviewRider').call(payload);
     return Map<String, dynamic>.from(result.data as Map? ?? {});
-  }
-
-  Future<void> _duplicateDelivery(Map<String, dynamic> delivery) async {
-    if (!_can(AdminPermission.duplicateDeliveries)) {
-      setState(() => _message = 'Your role cannot duplicate deliveries.');
-      return;
-    }
-    final newId = 'CIR-ADM-${DateTime.now().millisecondsSinceEpoch}';
-    await _functions.httpsCallable('adminDuplicateDelivery').call({
-      'deliveryId': _idFor(delivery),
-      'newId': newId,
-      'reason': 'Admin duplicated delivery from operations console',
-    });
-    setState(() => _message = 'Duplicated delivery as $newId.');
-    await _loadAdminData();
   }
 
   Future<void> _setRiderStatus(
@@ -1181,7 +1182,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Brand Partner action failed.');
+        () => _message = error.message ?? 'Brand Partner action failed.',
+      );
     }
   }
 
@@ -1475,7 +1477,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Bulk campaign action failed.');
+        () => _message = error.message ?? 'Bulk campaign action failed.',
+      );
     }
   }
 
@@ -2026,7 +2029,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Gift workspace action failed.');
+        () => _message = error.message ?? 'Gift workspace action failed.',
+      );
     }
   }
 
@@ -2703,7 +2707,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       _module = AdminModule.chat;
     });
     if (chatId.isEmpty) return;
-    _chatMessagesSub = _db
+    _chatMessagesSub = FirebaseFirestore.instance
         .collection('chats')
         .doc(chatId)
         .collection('messages')
@@ -3212,7 +3216,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Message report update failed.');
+        () => _message = error.message ?? 'Message report update failed.',
+      );
     }
   }
 
@@ -3347,9 +3352,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       data: _data,
                       metrics: _metrics,
                       canManageAdmins: _can(AdminPermission.manageAdmins),
-                      canDuplicateDeliveries: _can(
-                        AdminPermission.duplicateDeliveries,
-                      ),
+                      canDuplicateDeliveries: false,
                       canManageRiders: _can(AdminPermission.approveDrivers),
                       canEditDeliveries: _can(AdminPermission.editDeliveries),
                       canManageIssues: _can(AdminPermission.manageIssues),
@@ -3357,7 +3360,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                         AdminPermission.manageHealthPlus,
                       ),
                       canManageFinance: _can(AdminPermission.manageFinance),
-                      onDuplicateDelivery: _duplicateDelivery,
+                      onDuplicateDelivery: (_) {},
                       onSetRiderStatus: _setRiderStatus,
                       onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
                       onResolveStaleDeliveryLock: _resolveStaleDeliveryLock,
@@ -3693,9 +3696,10 @@ class AdminDataBundle {
 }
 
 class AdminRepository {
-  const AdminRepository(this._db);
+  AdminRepository(this._functions);
 
-  final FirebaseFirestore _db;
+  final FirebaseFunctions _functions;
+  final List<String> failures = [];
 
   Future<AdminDataBundle> load({
     required bool canManageAdmins,
@@ -3704,125 +3708,44 @@ class AdminRepository {
     required bool canViewHealthPlus,
   }) async {
     final results = await Future.wait([
-      _read(_db.collection('deliveryRequests').limit(100)),
-      _read(_db.collection('users').limit(100)),
-      _read(_db.collection('riderProfiles').limit(100)),
-      canManageAdmins
-          ? _read(_db.collection('adminUsers').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(_db.collection('payments').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(_db.collection('payoutRequests').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(_db.collection('riderEarnings').limit(120))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(
-              _db
-                  .collection('riderWalletTransactions')
-                  .orderBy('createdAt', descending: true)
-                  .limit(120),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(_db.collection('wallets').limit(120))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(
-              _db
-                  .collection('walletTransactions')
-                  .orderBy('createdAt', descending: true)
-                  .limit(160),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(_db.collection('business_wallets').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(
-              _db
-                  .collection('businessInvoices')
-                  .orderBy('createdAt', descending: true)
-                  .limit(80),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewFinance
-          ? _read(
-              _db
-                  .collection('businessRothPurchases')
-                  .orderBy('createdAt', descending: true)
-                  .limit(80),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      _read(_db.collection('driverRatings').limit(100)),
-      _read(_db.collection('deliveryTips').limit(150)),
-      canViewSupport
-          ? _read(_db.collection('supportTickets').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewHealthPlus || canViewFinance
-          ? _read(_db.collection('healthPlusPayments').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewHealthPlus
-          ? _read(_db.collection('prescriptionPickups').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewHealthPlus
-          ? _read(_db.collection('healthPlusProfiles').limit(120))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewHealthPlus
-          ? _read(_db.collection('recurringPickupSchedules').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewHealthPlus
-          ? _read(
-              _db
-                  .collection('healthPlusCustodyArchive')
-                  .orderBy('createdAt', descending: true)
-                  .limit(150),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      _read(_db.collection('businessAccounts').limit(100)),
-      _read(_db.collection('giftOrders').limit(100)),
-      _read(_db.collection('giftRequests').limit(150)),
-      _read(_db.collection('giftBrands').limit(100)),
-      _read(_db.collection('giftCampaignParticipants').limit(150)),
-      _read(_db.collection('giftCampaignMatches').limit(150)),
-      _read(
-        _db
-            .collection('adminAuditLogs')
-            .orderBy('createdAt', descending: true)
-            .limit(50),
-      ),
-      _read(
-        _db
-            .collection('chats')
-            .orderBy('updatedAt', descending: true)
-            .limit(50),
-      ),
-      _read(_db.collection('riderApplications').limit(150)),
-      _read(_db.collection('riderDocuments').limit(150)),
-      _read(_db.collection('riderOnboardingEvents').limit(150)),
-      _read(_db.collection('driverPerformanceMetrics').limit(150)),
-      _read(
-        _db
-            .collection('websiteVisitors')
-            .orderBy('createdAt', descending: true)
-            .limit(150),
-      ),
-      _readTagged(
-        _db.collection('irisCanonicalObjects').limit(150),
-        'irisCanonicalObjects',
-      ),
+      _page('deliveryRequests'),
+      _page('users'),
+      _page('riderProfiles'),
+      _page('adminUsers'),
+      _page('payments'),
+      _page('payoutRequests'),
+      _page('riderEarnings'),
+      _page('riderWalletTransactions'),
+      _page('wallets'),
+      _page('walletTransactions'),
+      _page('business_wallets'),
+      _page('businessInvoices'),
+      _page('businessRothPurchases'),
+      _page('driverRatings'),
+      _page('deliveryTips'),
+      _page('supportTickets'),
+      _page('healthPlusPayments'),
+      _page('prescriptionPickups'),
+      _page('healthPlusProfiles'),
+      _page('recurringPickupSchedules'),
+      _page('healthPlusCustodyArchive'),
+      _page('businessAccounts'),
+      _page('giftOrders'),
+      _page('giftRequests'),
+      _page('giftBrands'),
+      _page('giftCampaignParticipants'),
+      _page('giftCampaignMatches'),
+      _page('adminAuditLogs'),
+      _page('chats'),
+      _page('riderApplications'),
+      _page('riderDocuments'),
+      _page('riderOnboardingEvents'),
+      _page('driverPerformanceMetrics'),
+      _page('websiteVisitors'),
+      _page('irisCanonicalObjects'),
       Future.wait([
-        _readTagged(
-          _db.collection('irisLearningCases').limit(150),
-          'irisLearningCases',
-        ),
-        _readTagged(
-          _db.collection('iris_learning_review_candidates').limit(150),
-          'iris_learning_review_candidates',
-        ),
+        _page('irisLearningCases'),
+        _page('iris_learning_review_candidates'),
       ]).then((groups) {
         final byId = <String, Map<String, dynamic>>{};
         for (final group in groups) {
@@ -3832,68 +3755,24 @@ class AdminRepository {
         }
         return byId.values.toList(growable: false);
       }),
-      _read(_db.collection('irisLearningOutliers').limit(150)),
-      _read(_db.collection('irisPolicies').limit(50)),
-      _read(_db.collection('irisEvidence').limit(150)),
-      _readTagged(
-        _db.collection('irisReferenceImages').limit(150),
-        'irisReferenceImages',
-      ),
-      _readTagged(
-        _db.collection('platformConfig').limit(100),
-        'platformConfig',
-      ),
-      _readTagged(
-        _db.collection('platformStatus').limit(100),
-        'platformStatus',
-      ),
-      _readTagged(
-        _db.collection('platformNotices').limit(100),
-        'platformNotices',
-      ),
-      _readTagged(
-        _db.collection('platformVersions').limit(100),
-        'platformVersions',
-      ),
-      _read(
-        _db
-            .collection('notifications')
-            .orderBy('createdAt', descending: true)
-            .limit(150),
-      ),
-      canViewSupport
-          ? _read(_db.collection('messageReports').limit(100))
-          : Future.value(<Map<String, dynamic>>[]),
-      canViewSupport
-          ? _read(
-              _db
-                  .collection('adminNotes')
-                  .orderBy('createdAt', descending: true)
-                  .limit(150),
-            )
-          : Future.value(<Map<String, dynamic>>[]),
-      _read(
-        _db
-            .collection('senderTrustEvents')
-            .orderBy('createdAt', descending: true)
-            .limit(150),
-      ),
-      _read(_db.collection('recognitionAwards').limit(150)),
-      _read(
-        _db
-            .collection('recognitionAuditLogs')
-            .orderBy('createdAt', descending: true)
-            .limit(150),
-      ),
-      _read(_db.collection('recognitionCounters').limit(20)),
-      _read(_db.collection('rateLimits').limit(120)),
-      _read(
-        _db
-            .collection('senderBookingDrafts')
-            .orderBy('updatedAt', descending: true)
-            .limit(120),
-      ),
-      _read(_db.collection('riderPresence').limit(150)),
+      _page('irisLearningOutliers'),
+      _page('irisPolicies'),
+      _page('irisEvidence'),
+      _page('irisReferenceImages'),
+      _page('platformConfig'),
+      _page('platformStatus'),
+      _page('platformNotices'),
+      _page('platformVersions'),
+      _page('notifications'),
+      _page('messageReports'),
+      _page('adminNotes'),
+      _page('senderTrustEvents'),
+      _page('recognitionAwards'),
+      _page('recognitionAuditLogs'),
+      _page('recognitionCounters'),
+      _page('rateLimits'),
+      _page('senderBookingDrafts'),
+      _page('riderPresence'),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -3953,23 +3832,32 @@ class AdminRepository {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _read(
-    Query<Map<String, dynamic>> query,
-  ) async {
-    final snapshot = await query.get();
-    return snapshot.docs
-        .map((doc) => {'id': doc.id, ...doc.data()})
-        .toList(growable: false);
-  }
-
-  Future<List<Map<String, dynamic>>> _readTagged(
-    Query<Map<String, dynamic>> query,
-    String collection,
-  ) async {
-    final records = await _read(query);
-    return records
-        .map((record) => {'_collection': collection, ...record})
-        .toList(growable: false);
+  Future<List<Map<String, dynamic>>> _page(String collection) async {
+    try {
+      final result = await _functions
+          .httpsCallable('adminQueryPage')
+          .call({'collection': collection, 'pageSize': 50}).timeout(
+              const Duration(seconds: 20));
+      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final records = (data['records'] as List? ?? const []);
+      return records
+          .map(
+            (record) => <String, dynamic>{
+              '_collection': collection,
+              ...Map<String, dynamic>.from(record as Map),
+            },
+          )
+          .toList(growable: false);
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'permission-denied') failures.add(collection);
+      return const [];
+    } on TimeoutException {
+      failures.add(collection);
+      return const [];
+    } catch (_) {
+      failures.add(collection);
+      return const [];
+    }
   }
 }
 
@@ -4118,11 +4006,12 @@ class _AdminSidebar extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               children: [
                 for (final module in AdminModule.values)
-                  _ModuleButton(
-                    module: module,
-                    selected: selected == module,
-                    onTap: () => onSelect(module),
-                  ),
+                  if (AdminAccessPolicy.canViewModule(roles, module.name))
+                    _ModuleButton(
+                      module: module,
+                      selected: selected == module,
+                      onTap: () => onSelect(module),
+                    ),
               ],
             ),
           ),
@@ -4177,7 +4066,8 @@ class _AdminTopBar extends StatelessWidget {
               onSelected: onSelect,
               itemBuilder: (_) => [
                 for (final module in AdminModule.values)
-                  PopupMenuItem(value: module, child: Text(module.label)),
+                  if (AdminAccessPolicy.canViewModule(roles, module.name))
+                    PopupMenuItem(value: module, child: Text(module.label)),
               ],
             ),
           Icon(selected.icon, color: const Color(0xFF7DD3FC), size: 22),
@@ -4217,7 +4107,7 @@ class _AdminTopBar extends StatelessWidget {
                 onChanged: (_) => onSearchChanged(),
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  hintText: 'Search ${selected.label}',
+                  hintText: 'Search loaded ${selected.label} page',
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 10,
@@ -8855,8 +8745,13 @@ String _sectionStatusSummary(Map<String, dynamic> record) {
   final sections = record['sectionStatus'];
   if (sections is! Map || sections.isEmpty) return 'No section status';
   final complete = sections.values
-      .where((value) => {'submitted', 'approved', 'verified'}
-          .contains('$value'.trim().toLowerCase()))
+      .where(
+        (value) => {
+          'submitted',
+          'approved',
+          'verified',
+        }.contains('$value'.trim().toLowerCase()),
+      )
       .length;
   return '$complete/${sections.length} sections complete';
 }
@@ -9635,8 +9530,8 @@ class _DeliveryGlassSearchBanner extends StatelessWidget {
           Expanded(
             child: Text(
               query.trim().isEmpty
-                  ? 'Use the global Admin search to filter deliveries.'
-                  : 'Searching deliveries for "$query"',
+                  ? 'Search the currently loaded delivery page.'
+                  : 'Searching the loaded delivery page for "$query"',
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
@@ -18878,8 +18773,6 @@ List<Widget> _deliveryActions(
 }) {
   return [
     _MiniAction(label: 'Details', onPressed: () => onOpen(record)),
-    if (canDuplicateDeliveries)
-      _MiniAction(label: 'Duplicate', onPressed: () => onDuplicate(record)),
     if (canEditDeliveries) ...[
       _MiniAction(
         label: 'Escalate',
@@ -19339,13 +19232,17 @@ class _RiderProfileDrawer extends StatelessWidget {
         .where((document) => _documentBelongsToRider(document, riderId))
         .toList(growable: false);
     final riderApplications = applications
-        .where((application) =>
-            '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
-            riderId)
+        .where(
+          (application) =>
+              '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
+              riderId,
+        )
         .toList(growable: false);
     final riderOnboardingEvents = onboardingEvents
-        .where((event) =>
-            '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId)
+        .where(
+          (event) =>
+              '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId,
+        )
         .toList(growable: false);
     final riderRatings = ratings
         .where((rating) => _recordReferencesRider(rating, riderId))
