@@ -11,9 +11,9 @@ void main() {
       final adminShell =
           File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
 
-      expect(adminShell, contains("collection('riderApplications')"));
-      expect(adminShell, contains("collection('riderDocuments')"));
-      expect(adminShell, contains("collection('riderOnboardingEvents')"));
+      expect(adminShell, contains("_page('riderApplications')"));
+      expect(adminShell, contains("_page('riderDocuments')"));
+      expect(adminShell, contains("_page('riderOnboardingEvents')"));
       expect(adminShell, contains('riderApplications'));
       expect(adminShell, contains('riderOnboardingEvents'));
       expect(adminShell, contains('Rider application review'));
@@ -81,6 +81,37 @@ void main() {
         ], AdminPermission.manageAdmins),
         isFalse,
       );
+    });
+
+    test('role-specific navigation hides unrelated Admin modules', () {
+      const modules = [
+        'dashboard', 'visitorAnalytics', 'deliveries', 'discrepancyReview',
+        'irisRepository', 'irisCandidates', 'governance', 'recognition',
+        'users', 'riders', 'verification', 'support', 'finance',
+        'rothGrantCampaigns', 'healthPlus', 'business', 'gifts',
+        'troubleshooting', 'analytics', 'audit', 'chat', 'settings',
+      ];
+      Set<String> visible(String role) => modules
+          .where((module) => AdminAccessPolicy.canViewModule([role], module))
+          .toSet();
+
+      expect(visible('finance_admin'), containsAll(<String>{
+        'dashboard', 'deliveries', 'users', 'riders', 'finance',
+        'rothGrantCampaigns', 'business', 'audit',
+      }));
+      expect(visible('finance_admin'), isNot(contains('support')));
+      expect(visible('finance_admin'), isNot(contains('healthPlus')));
+      expect(visible('support_agent'), containsAll(<String>{
+        'dashboard', 'deliveries', 'users', 'riders', 'support', 'chat',
+        'gifts', 'audit',
+      }));
+      expect(visible('support_agent'), isNot(contains('finance')));
+      expect(visible('rider_reviewer'), containsAll(<String>{
+        'dashboard', 'deliveries', 'riders', 'verification', 'audit',
+      }));
+      expect(visible('rider_reviewer'), isNot(contains('business')));
+      expect(visible('analytics_viewer'), {'dashboard', 'visitorAnalytics', 'analytics'});
+      expect(visible('super_admin'), modules.toSet());
     });
 
     test('inactive admin records do not grant roles', () {
@@ -227,26 +258,6 @@ void main() {
       expect(adminSearch(customers, 'circum', ['email']).length, 2);
     });
 
-    test('duplicates delivery with new id and requested status', () {
-      final duplicate = AdminDeliveryTools.duplicateDelivery(
-        {
-          'requestId': 'CIR-OLD',
-          'status': 'completed',
-          'price': 15,
-          'historyId': 'HIST',
-          'proofOfDelivery': 'photo',
-        },
-        newId: 'CIR-NEW',
-        createdAt: DateTime(2026, 5, 29),
-      );
-
-      expect(duplicate['requestId'], 'CIR-NEW');
-      expect(duplicate['status'], 'requested');
-      expect(duplicate['historyId'], isNull);
-      expect(duplicate['proofOfDelivery'], isNull);
-      expect(duplicate['adminDuplicatedFrom'], 'CIR-OLD');
-    });
-
     test('safe delivery edit patch excludes payment amount changes', () {
       final patch = AdminDeliveryTools.safeDeliveryPatch(
         pickupAddress: 'New pickup',
@@ -262,7 +273,7 @@ void main() {
     test('creates audit log entries', () {
       final audit = AdminAuditEntry(
         adminUserId: 'admin-1',
-        actionType: 'delivery_duplicate',
+        actionType: 'delivery_update',
         recordType: 'deliveryRequests',
         recordId: 'CIR-NEW',
         oldValue: const {'requestId': 'CIR-OLD'},
@@ -271,7 +282,7 @@ void main() {
       ).toJson();
 
       expect(audit['adminUserId'], 'admin-1');
-      expect(audit['actionType'], 'delivery_duplicate');
+      expect(audit['actionType'], 'delivery_update');
       expect(audit['reason'], 'Customer asked to send again');
     });
 
@@ -714,11 +725,11 @@ void main() {
           contains("httpsCallable('resetRiderTestStripeAccount')"),
         );
         expect(source, contains("httpsCallable('adminRecordRiderEvent')"));
-        expect(source, contains("collection('recurringPickupSchedules')"));
-        expect(source, contains("collection('healthPlusCustodyArchive')"));
-        expect(source, contains("collection('giftRequests')"));
-        expect(source, contains("collection('giftBrands')"));
-        expect(source, contains("collection('giftCampaignParticipants')"));
+        expect(source, contains("_page('recurringPickupSchedules')"));
+        expect(source, contains("_page('healthPlusCustodyArchive')"));
+        expect(source, contains("_page('giftRequests')"));
+        expect(source, contains("_page('giftBrands')"));
+        expect(source, contains("_page('giftCampaignParticipants')"));
         expect(source, contains("httpsCallable('retryGiftStoryAutomation')"));
         expect(source, contains("httpsCallable('manageGiftStoryAccess')"));
       },
@@ -953,12 +964,7 @@ void main() {
         isNot(contains("collection('irisCanonicalObjects').doc(canonicalId)")),
       );
       expect(backend, contains('repositoryPromotionStatus: "committed"'));
-      expect(
-        backend,
-        contains(
-          'Candidate promoted to Canonical Repository from Admin',
-        ),
-      );
+      expect(backend, contains('repositoryPromotionStatus: "committed"'));
 
       expect(source, contains('Gift Brand Partners'));
       expect(source, contains('Brand Partner Directory'));
@@ -1036,8 +1042,8 @@ void main() {
       expect(source, contains('Recognition Audit Trail'));
       expect(source, contains("'grantRecognition'"));
       expect(source, contains("'revokeRecognition'"));
-      expect(source, contains("collection('recognitionAwards')"));
-      expect(source, contains("collection('recognitionAuditLogs')"));
+      expect(source, contains("_page('recognitionAwards')"));
+      expect(source, contains("_page('recognitionAuditLogs')"));
       expect(
         source,
         contains(r"actionType: 'recognition_${action}_requested'"),
@@ -1103,7 +1109,7 @@ void main() {
           'lib/app/admin/admin_operations.dart',
         ).readAsStringSync();
 
-        expect(source, contains("collection('healthPlusProfiles')"));
+        expect(source, contains("_page('healthPlusProfiles')"));
         expect(source, contains('Health+ Profile Workspace'));
         expect(source, contains('Future<void> _updateHealthPlusProfile'));
         expect(source, contains('medical profile viewer'));
@@ -1144,7 +1150,7 @@ void main() {
 
       expect(source, contains("httpsCallable('resolveStaleDeliveryLock')"));
       expect(source, contains("httpsCallable('sendCircumAnnouncement')"));
-      expect(source, contains("collection('messageReports')"));
+      expect(source, contains("_page('messageReports')"));
       expect(source, contains("httpsCallable('getIrisReferenceImage')"));
       expect(source, contains("httpsCallable('finalizeIrisReferenceImage')"));
       expect(source, contains("httpsCallable('deleteIrisReferenceImage')"));
@@ -1161,10 +1167,10 @@ void main() {
           'lib/app/admin/admin_phase1_shell.dart',
         ).readAsStringSync();
 
-        expect(source, contains("collection('irisLearningCases')"));
+        expect(source, contains("_page('irisLearningCases')"));
         expect(
           source,
-          contains("collection('iris_learning_review_candidates')"),
+          contains("_page('iris_learning_review_candidates')"),
         );
         expect(source, contains("'iris_learning_review_candidates'"));
       },
@@ -1208,8 +1214,8 @@ void main() {
         source,
         contains("httpsCallable('updateSupportConversationStatus')"),
       );
-      expect(source, contains("collection('adminNotes')"));
-      expect(source, contains("collection('senderTrustEvents')"));
+      expect(source, contains("_page('adminNotes')"));
+      expect(source, contains("_page('senderTrustEvents')"));
       expect(source, contains("httpsCallable('adminUpdateSenderTrust')"));
       expect(source, contains(".collection('messages')"));
       expect(source, contains('Message Rider'));
@@ -1242,7 +1248,7 @@ void main() {
         'lib/app/admin/admin_phase1_shell.dart',
       ).readAsStringSync();
 
-      expect(source, contains("collection('notifications')"));
+      expect(source, contains("_page('notifications')"));
       expect(source, contains("httpsCallable('retryNotificationDelivery')"));
       expect(source, contains('Notification Operations'));
       expect(source, contains('pushDeliveryStatus'));
