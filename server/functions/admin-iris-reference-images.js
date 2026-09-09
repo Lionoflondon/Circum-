@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
@@ -11,18 +12,9 @@ function text(value) {
   return `${value || ""}`.trim();
 }
 
-function lower(value) {
-  return text(value).toLowerCase();
-}
-
 function requireIrisAdmin(context) {
   const token = context.auth && context.auth.token ? context.auth.token : {};
-  const roles = Array.isArray(token.roles) ? token.roles.map(lower) : [];
-  const allowed = token.admin === true || token.superAdmin === true ||
-    token.super_admin === true ||
-    [lower(token.adminRole), lower(token.role), ...roles]
-        .some((role) => ["admin", "super_admin", "operations_admin"].includes(role));
-  if (!allowed) {
+  if (!hasPermission(tokenRoles(token), "deliveries.manage")) {
     throw new functions.https.HttpsError("permission-denied", "IRIS administrator access is required.");
   }
 }
@@ -48,7 +40,7 @@ async function signedPreview(storagePath) {
   return url;
 }
 
-exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.getIrisReferenceImage = adminCallable(async (data, context) => {
   requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId} = identifiers(data);
@@ -69,7 +61,7 @@ exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => 
   };
 });
 
-exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.finalizeIrisReferenceImage = adminCallable(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId, storagePath} = identifiers(data);
@@ -130,7 +122,7 @@ exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context
   return {success: true, itemId, action, previewUrl: await signedPreview(storagePath)};
 });
 
-exports.deleteIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.deleteIrisReferenceImage = adminCallable(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId} = identifiers(data);

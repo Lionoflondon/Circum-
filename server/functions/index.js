@@ -270,9 +270,9 @@ exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
 exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
 exports.adminGovernanceAction = adminGovernance.adminGovernanceAction;
 exports.adminResolveAccess = adminOperationsAuthority.adminResolveAccess;
+exports.adminQueryPage = adminOperationsAuthority.adminQueryPage;
 exports.adminRecordAuditEntry = adminOperationsAuthority.adminRecordAuditEntry;
 exports.adminSaveAdminUser = adminOperationsAuthority.adminSaveAdminUser;
-exports.adminDuplicateDelivery = adminOperationsAuthority.adminDuplicateDelivery;
 exports.adminUpdateDeliveryOperation =
   adminOperationsAuthority.adminUpdateDeliveryOperation;
 exports.adminArchiveDelivery = adminOperationsAuthority.adminArchiveDelivery;

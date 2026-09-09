@@ -80,7 +80,7 @@ test("Sender Gift Story rules are owner-read and backend-write only", () => {
   const rules = fs.readFileSync("../../firestore.rules", "utf8");
   const block = rules.slice(rules.indexOf("match /users/{userId}"), rules.indexOf("match /senderTrustEvents"));
   assert.match(block, /match \/giftStories\/\{giftStoryId\}/);
-  assert.match(block, /allow read: if isAdmin\(\) \|\| ownsSenderRecord\(userId\)/);
+  assert.match(block, /allow read: if \(isOperationsAdmin\(\) \|\| isSupportAdmin\(\) \|\| isFinanceAdmin\(\) \|\| isRiskAdmin\(\)\) \|\| ownsSenderRecord\(userId\)/);
   assert.match(block, /allow create, update, delete: if false/);
 });
 

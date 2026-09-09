@@ -222,7 +222,7 @@ test("private IRIS matching and verification authority cannot be seeded by Sende
       },
     ),
   );
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       doc(
         env

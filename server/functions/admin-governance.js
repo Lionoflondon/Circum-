@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {adminCallable, tokenRoles} = require("./admin-permissions");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {requireAdmin} = require("./admin-auth");
 
@@ -166,27 +167,18 @@ function lower(value) {
   return text(value).toLowerCase();
 }
 
-function roleValues(token = {}) {
-  const roles = Array.isArray(token.roles) ? token.roles.map(lower) : [];
-  return new Set([
-    lower(token.role),
-    lower(token.adminRole),
-    ...roles,
-  ].filter(Boolean));
-}
-
 function assertSuperAdmin(context) {
   const uid = requireAdmin(context, "Super Admin recovery access is required.");
-  const roles = roleValues(context.auth.token || {});
-  if (
-    context.auth.token.superAdmin === true ||
-    context.auth.token.super_admin === true ||
-    roles.has("super_admin")
-  ) {
+  const roles = tokenRoles(context.auth.token || {});
+  if (roles.includes("super_admin")) {
+    const rawRoles = Array.isArray(context.auth.token.roles) ?
+      context.auth.token.roles.map(lower) : [];
     return {
       uid,
       email: text(context.auth.token.email),
-      roles: [...roles],
+      roles,
+      elevatedRecovery: rawRoles.some((role) =>
+        ["recovery_approver", "platform_owner", "owner"].includes(role)),
     };
   }
   throw new functions.https.HttpsError(
@@ -213,10 +205,7 @@ function approvalTier(action) {
 }
 
 function hasElevatedRecoveryRole(actor) {
-  const roles = new Set((actor.roles || []).map(lower));
-  return roles.has("recovery_approver") ||
-    roles.has("platform_owner") ||
-    roles.has("owner");
+  return actor.elevatedRecovery === true;
 }
 
 function approvalFor(action, actor, data = {}) {
@@ -660,7 +649,7 @@ function requestMeta(context, data = {}) {
   };
 }
 
-exports.adminGovernanceAction = functions.https.onCall(async (data, context) => {
+exports.adminGovernanceAction = adminCallable(async (data, context) => {
   const actor = assertSuperAdmin(context);
   const action = lower(data && data.action);
   const reason = requireReason(data);

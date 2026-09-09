@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {payoutReadiness} = require("./rider-certification-policy");
@@ -27,31 +28,12 @@ function lower(value) {
   return text(value).toLowerCase();
 }
 
-function roleValues(token = {}) {
-  const roles = Array.isArray(token.roles) ? token.roles.map(lower) : [];
-  return new Set([
-    lower(token.role),
-    lower(token.adminRole),
-    ...roles,
-  ].filter(Boolean));
-}
-
 function assertRiderAdmin(context) {
   if (!context || !context.auth || !context.auth.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
   }
-  const roles = roleValues(context.auth.token || {});
-  if (
-    context.auth.token.superAdmin === true ||
-    context.auth.token.super_admin === true ||
-    roles.has("super_admin") ||
-    roles.has("admin") ||
-    roles.has("operations_admin") ||
-    roles.has("driver_manager") ||
-    roles.has("rider_manager")
-  ) {
-    return context.auth.uid;
-  }
+  const roles = tokenRoles(context.auth.token || {});
+  if (hasPermission(roles, "riders.review")) return context.auth.uid;
   throw new functions.https.HttpsError(
       "permission-denied",
       "Rider manager access is required.",
@@ -59,10 +41,7 @@ function assertRiderAdmin(context) {
 }
 
 function isSuperAdminContext(context) {
-  const roles = roleValues(context.auth.token || {});
-  return context.auth.token.superAdmin === true ||
-    context.auth.token.super_admin === true ||
-    roles.has("super_admin");
+  return tokenRoles(context.auth.token || {}).includes("super_admin");
 }
 
 function requestIdFor(data, actorId) {
@@ -224,7 +203,7 @@ async function deleteStorageObject(path) {
   }
 }
 
-exports.adminReviewRider = functions.https.onCall(async (data, context) => {
+exports.adminReviewRider = adminCallable(async (data, context) => {
   const actorId = assertRiderAdmin(context);
   const db = getFirestore();
   const riderId = text(data && data.riderId);

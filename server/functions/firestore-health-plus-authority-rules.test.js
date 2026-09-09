@@ -53,15 +53,13 @@ test("existing owner, business and assigned-rider reads remain intact and cross-
   }
 });
 
-test("Operations Admin writes remain available and usage events remain append-only", async () => {
+test("Operations Admin can read Health+ but all client writes remain backend-only", async () => {
   const admin = env.authenticatedContext("admin", {adminRole: "operations_admin"}).firestore();
   for (const collection of collections) {
-    await assertSucceeds(setDoc(doc(admin, collection, "admin-created"), {senderId: "owner", status: "scheduled"}));
-    if (collection === "healthPlusUsageEvents") {
-      await assertFails(updateDoc(doc(admin, collection, "admin-created"), {status: "rewritten"}));
-    } else {
-      await assertSucceeds(updateDoc(doc(admin, collection, "admin-created"), {status: "updated"}));
-    }
+    await assertSucceeds(getDoc(doc(admin, collection, "existing")));
+    await assertFails(setDoc(doc(admin, collection, "admin-created"), {senderId: "owner", status: "scheduled"}));
+    await assertFails(updateDoc(doc(admin, collection, "existing"), {status: "updated"}));
+    await assertFails(deleteDoc(doc(admin, collection, "existing")));
   }
 });
 

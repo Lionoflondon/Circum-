@@ -73,7 +73,7 @@ test("customer cannot create, modify, remove or replace any starter-Roth authori
   }
 });
 
-test("legitimate self profile editing and Admin/backend authority remain available", async () => {
+test("legitimate self profile editing remains available while authority stays backend-only", async () => {
   const f = fixture();
   const ref = doc(f.client, "users", f.uid);
   await assertSucceeds(setDoc(ref, {role: "user", displayName: "Original"}));
@@ -81,9 +81,9 @@ test("legitimate self profile editing and Admin/backend authority remain availab
   await assertSucceeds(updateDoc(ref, {displayName: "Edited", phone: "+447700900001"}));
   assert.equal((await f.ref.get()).data().starterRothGrantStatus, "pending");
   const admin = env.authenticatedContext("finance-admin", {adminRole: "finance_admin"}).firestore();
-  await assertSucceeds(updateDoc(doc(admin, "users", f.uid), {starterRothGrantStatus: "granted"}));
+  await assertFails(updateDoc(doc(admin, "users", f.uid), {starterRothGrantStatus: "granted"}));
   const newProfile = fixture();
-  await assertSucceeds(setDoc(doc(admin, "users", newProfile.uid), authority));
+  await assertFails(setDoc(doc(admin, "users", newProfile.uid), authority));
 });
 
 test("existing users cannot forge pending eligibility through Firestore or callable payloads", async () => {

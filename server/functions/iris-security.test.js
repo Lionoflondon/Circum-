@@ -25,22 +25,22 @@ test("Firestore rules prevent senders from mutating public Iris", () => {
 
 test("Firestore rules reject create-time Iris injection from clients", () => {
   assert.match(rules, /function isSafeDeliveryCreate\(\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)/);
-  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\) \|\| \(\s*isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)[\s\S]*?hasOnly/);
+  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)[\s\S]*?hasOnly/);
 });
 
-test("Firestore rules reserve private IRIS authority for backend/admin writes", () => {
-  assert.match(rules, /match \/irisPrivate\/\{requestId\}[\s\S]*?allow create, update: if isAdmin\(\);/);
+test("Firestore rules reserve private IRIS authority for backend writes", () => {
+  assert.match(rules, /match \/irisPrivate\/\{requestId\}[\s\S]*?allow read: if isAdmin\(\);[\s\S]*?allow create, update: if false;/);
   assert.doesNotMatch(rules, /function isSenderPrivateCreate|function isAssignedRiderPrivate/);
 });
 
-test("Firestore rules keep referrals admin-only", () => {
-  assert.match(rules, /match \/irisReferrals\/\{referralId\}[\s\S]*allow read, write: if isAdmin\(\);/);
+test("Firestore rules keep referrals Admin-readable and backend-write only", () => {
+  assert.match(rules, /match \/irisReferrals\/\{referralId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow write: if false;/);
 });
 
-test("Firestore rules expose IRIS learning review collections to admins", () => {
-  assert.match(rules, /match \/irisLearningCases\/\{caseId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
-  assert.match(rules, /match \/iris_learning_review_candidates\/\{candidateId\}[\s\S]*allow read, update: if isAdmin\(\);[\s\S]*allow create: if false;/);
-  assert.match(rules, /match \/irisCanonicalObjects\/\{objectId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
+test("Firestore rules expose IRIS review data to operations and keep writes backend-only", () => {
+  assert.match(rules, /match \/irisLearningCases\/\{caseId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow create, update: if false;/);
+  assert.match(rules, /match \/iris_learning_review_candidates\/\{candidateId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow update: if false;[\s\S]*allow create: if false;/);
+  assert.match(rules, /match \/irisCanonicalObjects\/\{objectId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow create, update: if false;/);
 });
 
 test("IRIS dispatch callable requires delivery owner or admin", () => {
@@ -75,10 +75,10 @@ test("delivery dispatch is idempotent after broadcast or acceptance", () => {
   assert.match(sendPackage, /idempotent: true/);
 });
 
-test("Firestore rules reserve rider authority changes for driver managers", () => {
+test("Firestore rules reserve Rider authority changes for backend callables", () => {
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if false;[\s\S]*allow update: if isSafeRiderSelfUpdate\(driverId\);/,
   );
   assert.match(
       rules,
