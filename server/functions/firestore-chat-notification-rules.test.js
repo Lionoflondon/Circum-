@@ -30,7 +30,7 @@ after(async () => {
  mock.restoreAll(); if (env) await env.cleanup(); if (app) await deleteApp(app);
 });
 
-test("notification recipients read privately but only admins can author records", async () => {
+test("notification recipients and admins read privately while writes remain backend-only", async () => {
   const path = "notifications/authority";
   await db.doc(path).set({recipientId: "owner", title: "Original", body: "Original", data: {}, read: false});
   await assertSucceeds(getDoc(doc(client("owner"), path)));
@@ -41,10 +41,10 @@ test("notification recipients read privately but only admins can author records"
   await assertFails(setDoc(doc(client("owner"), "notifications/new"), {recipientId: "owner", title: "Forged"}));
   await assertFails(deleteDoc(doc(client("owner"), path)));
   await assertSucceeds(getDoc(doc(client("admin", "operations_admin"), path)));
-  await assertSucceeds(updateDoc(doc(client("admin", "operations_admin"), path), {title: "Admin edit"}));
-  await assertSucceeds(setDoc(doc(client("admin", "operations_admin"), "notifications/admin-authored"), {recipientId: "owner"}));
+  await assertFails(updateDoc(doc(client("admin", "operations_admin"), path), {title: "Admin edit"}));
+  await assertFails(setDoc(doc(client("admin", "operations_admin"), "notifications/admin-authored"), {recipientId: "owner"}));
   await assertFails(deleteDoc(doc(client("admin", "operations_admin"), path)));
-  await assertSucceeds(deleteDoc(doc(client("founder-test", "super_admin"), path)));
+  await assertFails(deleteDoc(doc(client("founder-test", "super_admin"), path)));
 });
 
 test("Sender and Rider safe callables preserve notification content while updating read/archive/delete state", async () => {

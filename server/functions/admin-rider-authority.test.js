@@ -5,7 +5,7 @@ const fs = require("node:fs");
 test("Admin Rider authority is backend-owned and auditable", () => {
   const source = fs.readFileSync("admin-rider-authority.js", "utf8");
 
-  assert.match(source, /exports\.adminReviewRider = functions\.https\.onCall/);
+  assert.match(source, /exports\.adminReviewRider = adminCallable/);
   assert.match(source, /assertRiderAdmin\(context\)/);
   assert.match(source, /db\.runTransaction/);
   assert.match(source, /collection\("riderProfiles"\)\.doc\(riderId\)/);

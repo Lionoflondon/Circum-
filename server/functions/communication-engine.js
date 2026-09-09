@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
@@ -40,10 +41,11 @@ function redactContactFields(value) {
 
 function isAdmin(context) {
   const token = context.auth && context.auth.token || {};
-  const role = clean(token.role || token.adminRole).toLowerCase();
-  const roles = Array.isArray(token.roles) ? token.roles.map((item) => clean(item).toLowerCase()) : [];
-  return token.admin === true || token.super_admin === true ||
-    [role, ...roles].some((item) => ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(item));
+  return hasPermission(tokenRoles(token), "support.read");
+}
+
+function canAdmin(context, permission) {
+  return Boolean(context.auth) && hasPermission(tokenRoles(context.auth.token || {}), permission);
 }
 
 function recipientRoleFor(chat, uid) {
@@ -409,7 +411,7 @@ async function reportMessage(data, context) {
 }
 
 async function sendAnnouncement(data, context) {
-  if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
+  if (!canAdmin(context, "deliveries.manage")) throw new functions.https.HttpsError("permission-denied", "Operations Admin access is required.");
   const title = clean(data.title);
   const body = clean(data.body);
   const audience = clean(data.audience || "everyone").toLowerCase();
@@ -452,7 +454,7 @@ async function sendAnnouncement(data, context) {
 }
 
 async function retryNotificationDelivery(data, context) {
-  if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
+  if (!canAdmin(context, "support.manage")) throw new functions.https.HttpsError("permission-denied", "Support Admin access is required.");
   const notificationId = clean(data.notificationId);
   if (!notificationId) throw new functions.https.HttpsError("invalid-argument", "A notification id is required.");
   return retryStoredNotification(notificationId, context.auth.uid);
@@ -538,7 +540,7 @@ async function retryStoredNotification(notificationId, actorId = "system:cancell
 }
 
 async function startAdminConversation(data, context) {
-  if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
+  if (!canAdmin(context, "support.manage")) throw new functions.https.HttpsError("permission-denied", "Support Admin access is required.");
   const participantId = clean(data.participantId);
   const participantRole = clean(data.participantRole).toLowerCase();
   const deliveryId = clean(data.deliveryId || data.bookingId);
@@ -739,7 +741,7 @@ async function submitWebsiteSupportRequest(data, context) {
 }
 
 async function updateSupportConversationStatus(data, context) {
-  if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
+  if (!canAdmin(context, "support.manage")) throw new functions.https.HttpsError("permission-denied", "Support Admin access is required.");
   const ticketId = clean(data.ticketId);
   const status = clean(data.status || "open").toLowerCase();
   if (!ticketId || !supportTicketStatuses.has(status)) {
@@ -784,15 +786,15 @@ exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
-exports.startAdminConversation = functions.https.onCall(startAdminConversation);
+exports.startAdminConversation = adminCallable(startAdminConversation);
 exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
 exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
-exports.updateSupportConversationStatus = functions.https.onCall(updateSupportConversationStatus);
+exports.updateSupportConversationStatus = adminCallable(updateSupportConversationStatus);
 exports.markConversationRead = functions.https.onCall(markConversationRead);
 exports.setConversationTyping = functions.https.onCall(setConversationTyping);
 exports.reportCircumMessage = functions.https.onCall(reportMessage);
-exports.sendCircumAnnouncement = functions.https.onCall(sendAnnouncement);
-exports.retryNotificationDelivery = functions.https.onCall(retryNotificationDelivery);
+exports.sendCircumAnnouncement = adminCallable(sendAnnouncement);
+exports.retryNotificationDelivery = adminCallable(retryNotificationDelivery);
 exports.closeDeliveryConversation = async (deliveryId, status) => {
   if (!terminalDeliveryStatuses.has(clean(status).toLowerCase())) return;
   await getFirestore().collection("chats").doc(clean(deliveryId)).set({

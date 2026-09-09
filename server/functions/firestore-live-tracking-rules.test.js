@@ -355,7 +355,7 @@ test("Rider cannot choose or mutate a public Rider ID", async () => {
   }));
 });
 
-test("Driver manager can update Rider admin fields", async () => {
+test("Driver manager Rider authority writes remain backend-only", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "riders", "rider-1"), {
       uid: "rider-1",
@@ -366,7 +366,7 @@ test("Driver manager can update Rider admin fields", async () => {
   const adminDb = testEnv.authenticatedContext("admin-1", {
     roles: ["driver_manager"],
   }).firestore();
-  await assertSucceeds(setDoc(doc(adminDb, "riders", "rider-1"), {
+  await assertFails(setDoc(doc(adminDb, "riders", "rider-1"), {
     approvalStatus: "approved",
     verificationStatus: "approved",
     driverStatus: "active",
@@ -374,7 +374,7 @@ test("Driver manager can update Rider admin fields", async () => {
     trustPoints: 100,
     updatedAt: serverTimestamp(),
   }, {merge: true}));
-  await assertSucceeds(setDoc(doc(adminDb, "riderProfiles", "rider-1"), {
+  await assertFails(setDoc(doc(adminDb, "riderProfiles", "rider-1"), {
     approvalStatus: "approved",
     verificationStatus: "approved",
     driverStatus: "active",

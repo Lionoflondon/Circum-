@@ -4,13 +4,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {emitNotification} = require("./communication-engine");
-
-const ADMIN_TRUST_ROLES = new Set([
-  "admin",
-  "super_admin",
-  "operations_admin",
-  "support_agent",
-]);
+const {adminCallable, tokenRoles: canonicalTokenRoles, hasPermission} = require("./admin-permissions");
 
 function clean(value) {
   return `${value || ""}`.trim();
@@ -29,21 +23,8 @@ function normalizeTier(value, points = 0) {
   return ["new_sender", "active_sender", "regular_sender", "priority_sender", "platinum_sender"].includes(raw) ? raw : tierForPoints(points);
 }
 
-function tokenRoles(token = {}) {
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-  return [
-    token.adminRole,
-    token.role,
-    ...roles,
-  ].map((role) => clean(role).toLowerCase()).filter(Boolean);
-}
-
 function tokenHasTrustAdminRole(token = {}) {
-  if (token.admin === true || token.superAdmin === true ||
-      token.super_admin === true) {
-    return true;
-  }
-  return tokenRoles(token).some((role) => ADMIN_TRUST_ROLES.has(role));
+  return hasPermission(canonicalTokenRoles(token), "risk.manage");
 }
 
 async function requireSenderTrustAdmin(db, context) {
@@ -54,7 +35,7 @@ async function requireSenderTrustAdmin(db, context) {
     return {
       uid: context.auth.uid,
       email: clean(context.auth.token.email),
-      role: tokenRoles(context.auth.token || {})[0] || "admin",
+      role: canonicalTokenRoles(context.auth.token || {})[0] || "risk_reviewer",
     };
   }
   const email = clean(context.auth.token && context.auth.token.email).toLowerCase();
@@ -65,15 +46,15 @@ async function requireSenderTrustAdmin(db, context) {
     if (!snapshot.exists) continue;
     const data = snapshot.data() || {};
     const status = clean(data.status || "active").toLowerCase();
-    const role = clean(data.role).toLowerCase();
+    const roles = canonicalTokenRoles(data);
     if (["disabled", "inactive", "suspended", "revoked"].includes(status)) {
       continue;
     }
-    if (ADMIN_TRUST_ROLES.has(role)) {
+    if (hasPermission(roles, "risk.manage")) {
       return {
         uid: context.auth.uid,
         email: clean(context.auth.token.email || data.email),
-        role,
+        role: roles[0],
       };
     }
   }
@@ -303,7 +284,7 @@ exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) =
   return {ok: true, baseline};
 });
 
-exports.adminUpdateSenderTrust = functions.https.onCall(async (data, context) => {
+exports.adminUpdateSenderTrust = adminCallable(async (data, context) => {
   const db = getFirestore();
   const operator = await requireSenderTrustAdmin(db, context);
   const request = trustActionRequest(data);

@@ -51,12 +51,7 @@ test("analyseIris remains ordinary authenticated and is not admin-gated", () => 
 });
 
 test("shared admin guard recognises only established admin roles", () => {
-  assert.match(adminAuth, /"admin"/);
-  assert.match(adminAuth, /"super_admin"/);
-  assert.match(adminAuth, /"operations_admin"/);
-  assert.match(adminAuth, /token\.admin === true/);
-  assert.match(adminAuth, /token\.superAdmin === true/);
-  assert.match(adminAuth, /token\.adminRole/);
-  assert.match(adminAuth, /token\.role/);
-  assert.match(adminAuth, /token\.roles/);
+  assert.match(adminAuth, /ROLE_ALIASES/);
+  assert.match(adminAuth, /tokenRoles\(token\)/);
+  assert.match(adminAuth, /ADMIN_ROLES = new Set\(Object\.keys\(ROLE_ALIASES\)\)/);
 });

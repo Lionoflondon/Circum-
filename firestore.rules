@@ -8,26 +8,62 @@ service cloud.firestore {
 
     function hasRole(role) {
       return signedIn() && (
-        request.auth.token.adminRole == role ||
-        request.auth.token.role == role ||
-        (request.auth.token.roles is list && role in request.auth.token.roles)
+        request.auth.token.get('adminRole', '') == role ||
+        request.auth.token.get('role', '') == role ||
+        (request.auth.token.get('roles', []) is list && role in request.auth.token.get('roles', []))
+      );
+    }
+
+    function hasAnyRole(roles) {
+      return signedIn() && (
+        request.auth.token.get('adminRole', '') in roles ||
+        request.auth.token.get('role', '') in roles ||
+        (request.auth.token.get('roles', []) is list && request.auth.token.get('roles', []).hasAny(roles))
       );
     }
 
     function isAdmin() {
-      return hasRole('super_admin') ||
-        hasRole('operations_admin') ||
-        hasRole('support_agent') ||
-        hasRole('finance_admin') ||
-        hasRole('driver_manager');
+      return hasAnyRole([
+        'super_admin', 'admin', 'operations', 'operations_admin',
+        'support', 'customer_support', 'support_agent',
+        'finance', 'finance_admin', 'driver_manager', 'rider_manager',
+        'reviewer', 'rider_reviewer', 'risk', 'risk_reviewer',
+        'analytics', 'analytics_viewer'
+      ]);
+    }
+
+    function isSuperAdmin() {
+      return hasRole('super_admin');
+    }
+
+    function isOperationsAdmin() {
+      return hasAnyRole(['super_admin', 'admin', 'operations', 'operations_admin']);
+    }
+
+    function isSupportAdmin() {
+      return hasAnyRole([
+        'super_admin', 'admin', 'operations', 'operations_admin',
+        'support', 'customer_support', 'support_agent'
+      ]);
     }
 
     function isFinanceAdmin() {
-      return hasRole('super_admin') || hasRole('finance_admin');
+      return hasAnyRole(['super_admin', 'finance', 'finance_admin']);
     }
 
     function isDriverManager() {
-      return hasRole('super_admin') || hasRole('driver_manager');
+      return hasAnyRole([
+        'super_admin', 'admin', 'operations', 'operations_admin',
+        'driver_manager', 'rider_manager', 'reviewer', 'rider_reviewer'
+      ]);
+    }
+
+    function isRiskAdmin() {
+      return hasAnyRole(['super_admin', 'risk', 'risk_reviewer']);
+    }
+
+    function isAnalyticsAdmin() {
+      return hasAnyRole(['super_admin', 'analytics', 'analytics_viewer']);
     }
 
     function ownsSenderRecord(userId) {
@@ -638,23 +674,23 @@ service cloud.firestore {
     }
 
     match /adminUsers/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if hasRole('super_admin');
+      allow read: if signedIn() && (request.auth.uid == userId || (isSuperAdmin()));
+      allow write: if false;
     }
 
     match /adminAuditLogs/{logId} {
-      allow read, create: if isAdmin();
-      allow update, delete: if false;
+      allow read: if (isSuperAdmin() || isOperationsAdmin() || isFinanceAdmin() || isSupportAdmin() || isDriverManager() || isRiskAdmin());
+      allow create, update, delete: if false;
     }
 
     match /adminNotes/{noteId} {
-      allow read, create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isSupportAdmin());
+      allow create, update, delete: if false;
     }
 
     match /supportTickets/{ticketId} {
-      allow read, write: if isAdmin();
+      allow read: if (isSupportAdmin());
+      allow write: if false;
       allow create: if request.resource.data.channel == 'web_live_chat' &&
         request.resource.data.keys().hasOnly([
           'channel',
@@ -679,60 +715,60 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAdmin() ||
+      allow read: if (isSupportAdmin()) ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
-      allow update: if isAdmin();
-      allow create: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow update: if false;
+      allow create: if false;
+      allow delete: if false;
     }
 
     match /businessAccounts/{businessId} {
-      allow read: if isAdmin() || isBusinessMemberRecord();
-      allow write: if isAdmin();
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) || isBusinessMemberRecord();
+      allow write: if false;
     }
 
     match /businessWorkspaces/{businessId} {
-      allow read: if isAdmin() || canReadBusinessId(businessId);
-      allow write: if isAdmin();
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) || canReadBusinessId(businessId);
+      allow write: if false;
     }
 
     match /businessSettings/{businessId} {
-      allow read: if isAdmin() || canReadBusinessId(businessId);
-      allow write: if isAdmin();
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) || canReadBusinessId(businessId);
+      allow write: if false;
     }
 
     match /businessAnalytics/{businessId} {
-      allow read: if isAdmin() || canReadBusinessId(businessId);
-      allow write: if isAdmin();
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) || canReadBusinessId(businessId);
+      allow write: if false;
     }
 
     match /business_wallets/{businessId} {
-      allow read: if isAdmin() || canReadBusinessId(businessId);
-      allow write: if isAdmin();
+      allow read: if (isFinanceAdmin()) || canReadBusinessId(businessId);
+      allow write: if false;
     }
 
     match /businessMemberships/{membershipId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         canReadBusinessId(resource.data.businessId);
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /businessJoinRequests/{requestId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         canReadBusinessId(resource.data.businessId);
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /businessInvoices/{invoiceId} {
-      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
-      allow write: if isAdmin();
+      allow read: if (isFinanceAdmin()) || canReadBusinessId(resource.data.businessId);
+      allow write: if false;
     }
 
     match /businessAuditLogs/{logId} {
-      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
-      allow write: if isAdmin();
+      allow read: if (isFinanceAdmin()) || canReadBusinessId(resource.data.businessId);
+      allow write: if false;
     }
 
     match /giftsWaitlist/{entryId} {
@@ -749,16 +785,17 @@ service cloud.firestore {
           'source',
           'createdAt'
         ]);
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /giftRequests/{giftRequestId} {
-      allow create: if isAdmin();
-      allow read: if isAdmin() ||
+      allow create: if false;
+      allow read: if (isSupportAdmin()) ||
         canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid);
-      allow update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /giftPaymentDrafts/{giftDraftId} {
@@ -770,21 +807,21 @@ service cloud.firestore {
         request.resource.data.grossBudget >= 50;
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /giftBrands/{brandId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isSupportAdmin());
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /giftCampaignParticipants/{participantId} {
       allow create: if signedIn() &&
         request.resource.data.userId == request.auth.uid;
-      allow read: if isAdmin() ||
+      allow read: if (isSupportAdmin()) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow update: if isAdmin() ||
-        (signedIn() && resource.data.userId == request.auth.uid &&
+      allow update: if signedIn() && resource.data.userId == request.auth.uid &&
           !request.resource.data.diff(resource.data).changedKeys().hasAny([
             'matchedParticipantId',
             'matchScore',
@@ -792,58 +829,65 @@ service cloud.firestore {
             'matchStatus',
             'matchLockedAt',
             'matchApprovedBy'
-          ]));
-      allow delete: if hasRole('super_admin');
+          ]);
+      allow delete: if false;
     }
 
     match /giftCampaignMatches/{matchId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isSupportAdmin());
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /irisLearningOutliers/{outlierId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&
         request.resource.data.status == 'pending_review';
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /irisLearningCases/{caseId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /iris_learning_review_candidates/{candidateId} {
-      allow read, update: if isAdmin();
+      allow read: if isAdmin();
+      allow update: if false;
       allow create: if false;
-      allow delete: if hasRole('super_admin');
+      allow delete: if false;
     }
 
     match /irisCanonicalObjects/{objectId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /irisEvidence/{evidenceId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /irisPolicies/{policyId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /deliveryAdjustments/{adjustmentId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin() || isFinanceAdmin()) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /payments/{paymentId} {
       allow read: if isFinanceAdmin();
-      allow write: if isFinanceAdmin();
+      allow write: if false;
     }
 
     match /healthPlusPayments/{paymentId} {
@@ -851,40 +895,40 @@ service cloud.firestore {
         hasRole('operations_admin') ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow write: if isFinanceAdmin();
+      allow write: if false;
     }
 
     match /riderPresence/{riderId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow read: if (isDriverManager()) || (signedIn() && request.auth.uid == riderId);
       allow write: if false;
     }
 
     match /riderProfiles/{driverId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager();
-      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
-      allow delete: if hasRole('super_admin');
+      allow read: if (isDriverManager()) || (signedIn() && request.auth.uid == driverId);
+      allow create: if false;
+      allow update: if isSafeRiderSelfUpdate(driverId);
+      allow delete: if false;
     }
 
     match /riders/{driverId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager();
-      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
-      allow delete: if hasRole('super_admin');
+      allow read: if (isDriverManager()) || (signedIn() && request.auth.uid == driverId);
+      allow create: if false;
+      allow update: if isSafeRiderSelfUpdate(driverId);
+      allow delete: if false;
     }
 
     match /publicRiderIds/{publicRiderId} {
-      allow read: if isAdmin();
+      allow read: if (isDriverManager());
       allow write: if false;
     }
 
     match /publishedDriverRatings/{ratingId} {
-      allow read: if isAdmin() || (signedIn() &&
+      allow read: if (isSupportAdmin() || isRiskAdmin()) || (signedIn() &&
         (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
       allow write: if false;
     }
     match /ratingPrivateFeedback/{ratingId} {
-      allow read: if isAdmin();
+      allow read: if (isSupportAdmin() || isRiskAdmin());
       allow write: if false;
     }
     function ratingHasCompletedDelivery() {
@@ -896,7 +940,7 @@ service cloud.firestore {
         !delivery.get('isTest', false) && !delivery.get('testData', false);
     }
     match /driverRatings/{ratingId} {
-      allow read: if isAdmin() ||
+      allow read: if (isSupportAdmin() || isRiskAdmin()) ||
         (signedIn() && ratingHasCompletedDelivery() &&
           (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
       // Ratings and moderation are authored by backend callables.
@@ -904,20 +948,20 @@ service cloud.firestore {
     }
 
     match /deliveryTips/{tipId} {
-      allow read: if isAdmin() || (signedIn() &&
+      allow read: if (isFinanceAdmin()) || (signedIn() &&
         (resource.data.senderId == request.auth.uid || resource.data.riderId == request.auth.uid));
       allow write: if false;
     }
 
     match /driverPerformanceMetrics/{metricId} {
-      allow read: if isAdmin() || (signedIn() && metricId == request.auth.uid);
+      allow read: if (isDriverManager()) || (signedIn() && metricId == request.auth.uid);
       allow write: if false;
     }
 
     match /dispatchInspections/{inspectionId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isOperationsAdmin() || isRiskAdmin());
+      allow write: if false;
+      allow delete: if false;
     }
 
     match /riderOfferAuthorizations/{riderId}/{nested=**} {
@@ -940,21 +984,20 @@ service cloud.firestore {
     }
 
     match /deliveryRequests/{deliveryId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin() || isSupportAdmin() || isFinanceAdmin() || isDriverManager() || isRiskAdmin()) ||
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
         canReadBusinessId(resource.data.businessId);
-      allow create: if isAdmin();
-      allow update: if isAdmin() ||
-        isOwnDeliveryUpdate() ||
+      allow create: if false;
+      allow update: if isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
-      allow delete: if hasRole('super_admin');
+      allow delete: if false;
 
       match /tracking/{trackingId} {
         allow read: if canReadDeliveryTracking(deliveryId);
         allow create, update: if trackingId == 'liveLocation' &&
           canWriteOwnLiveLocation(deliveryId);
-        allow delete: if isAdmin();
+        allow delete: if false;
       }
     }
 
@@ -965,46 +1008,46 @@ service cloud.firestore {
     match /activeDeliveries/{deliveryId} {
       allow read: if canReadDeliveryTracking(deliveryId);
       allow create, update: if canWriteActiveDelivery(deliveryId);
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
 
     match /webSenderRequests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.senderId == request.auth.uid);
-      allow create: if isAdmin() || (isCreatingOwnDelivery() &&
+      allow create: if isCreatingOwnDelivery() &&
         !request.resource.data.keys().hasAny(['iris']) &&
-        request.resource.data.keys().hasOnly(['senderId', 'userId', 'packageDescription', 'createdAt', 'updatedAt']));
-      allow update: if isAdmin() || (signedIn() && resource.data.senderId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['packageDescription', 'updatedAt']));
-      allow delete: if hasRole('super_admin');
+        request.resource.data.keys().hasOnly(['senderId', 'userId', 'packageDescription', 'createdAt', 'updatedAt']);
+      allow update: if signedIn() && resource.data.senderId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['packageDescription', 'updatedAt']);
+      allow delete: if false;
     }
 
     match /irisPrivate/{requestId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /irisReferrals/{referralId} {
-      allow read, write: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin();
+      allow write: if false;
+      allow delete: if false;
     }
 
     match /chats/{chatId} {
-      allow read: if isAdmin() || isParticipant();
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isSupportAdmin()) || isParticipant();
+      allow create, update: if false;
+      allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isAdmin() ||
+        allow read: if (isSupportAdmin()) ||
           (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
-        allow create: if false;
-        allow update, delete: if false;
+        allow delete: if false;
       }
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || ownsSenderRecord(userId);
-      allow create: if (isAdmin() || ownsSenderRecord(userId)) &&
+      allow read: if (isOperationsAdmin() || isSupportAdmin() || isFinanceAdmin() || isRiskAdmin()) || ownsSenderRecord(userId);
+      allow create: if ownsSenderRecord(userId) &&
         !request.resource.data.keys().hasAny([
           'isLegend',
           'legendNumber',
@@ -1012,23 +1055,18 @@ service cloud.firestore {
           'legendSource',
           'legendDeliveryId'
         ]) &&
-        (isAdmin() || (
-          !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&
-          !hasUnsafeSelfUserRoleCreate() &&
-          !hasUnsafeSelfUserTypeCreate()
-        ));
-      allow update: if hasRole('super_admin') ||
-        ((isAdmin() || ownsSenderRecord(userId)) &&
+        !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&
+        !hasUnsafeSelfUserRoleCreate() &&
+        !hasUnsafeSelfUserTypeCreate();
+      allow update: if ownsSenderRecord(userId) &&
           !changesLegendFields() &&
-          (isAdmin() || (
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
-            !hasUnsafeSelfUserRoleUpdate() &&
-            !hasUnsafeSelfUserTypeUpdate()
-          )));
-      allow delete: if hasRole('super_admin');
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
+          !hasUnsafeSelfUserRoleUpdate() &&
+          !hasUnsafeSelfUserTypeUpdate();
+      allow delete: if false;
 
       match /giftStories/{giftStoryId} {
-        allow read: if isAdmin() || ownsSenderRecord(userId);
+        allow read: if (isOperationsAdmin() || isSupportAdmin() || isFinanceAdmin() || isRiskAdmin()) || ownsSenderRecord(userId);
         allow create, update, delete: if false;
       }
     }
@@ -1045,23 +1083,23 @@ service cloud.firestore {
 
     match /platformStats/legends {
       allow read: if isAdmin();
-      allow write: if hasRole('super_admin');
+      allow write: if false;
     }
 
     match /senders/{senderId} {
-      allow read: if isAdmin() || ownsSenderRecord(senderId);
-      allow create: if isAdmin() || isSafeSenderSelfCreate(senderId);
-      allow update: if isAdmin() || isSafeSenderSelfUpdate(senderId);
-      allow delete: if hasRole('super_admin');
+      allow read: if (isOperationsAdmin() || isSupportAdmin() || isFinanceAdmin() || isRiskAdmin()) || ownsSenderRecord(senderId);
+      allow create: if isSafeSenderSelfCreate(senderId);
+      allow update: if isSafeSenderSelfUpdate(senderId);
+      allow delete: if false;
     }
 
     match /senderWallets/{walletId} {
-      allow read: if isAdmin() || ownsSenderRecord(walletId);
+      allow read: if (isFinanceAdmin()) || ownsSenderRecord(walletId);
       allow create, update, delete: if false;
     }
 
     match /referrals/{referredUid} {
-      allow read: if isAdmin() || (signedIn() && (
+      allow read: if (isSupportAdmin() || isRiskAdmin()) || (signedIn() && (
         referredUid == request.auth.uid ||
         resource.data.referrerUserId == request.auth.uid
       ));
@@ -1069,7 +1107,7 @@ service cloud.firestore {
     }
 
     match /wallets/{walletId} {
-      allow read: if isAdmin() || (signedIn() && (
+      allow read: if (isFinanceAdmin()) || (signedIn() && (
         resource.data.uid == request.auth.uid ||
         resource.data.userId == request.auth.uid ||
         walletId == request.auth.uid
@@ -1078,7 +1116,7 @@ service cloud.firestore {
     }
 
     match /walletTransactions/{transactionId} {
-      allow read: if isAdmin() || (signedIn() && (
+      allow read: if (isFinanceAdmin()) || (signedIn() && (
         resource.data.uid == request.auth.uid ||
         resource.data.userId == request.auth.uid
       ));
@@ -1086,70 +1124,70 @@ service cloud.firestore {
     }
 
     match /history/{historyId} {
-      allow read: if isAdmin() || isOwnDelivery(historyId) || isAssignedRider();
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isOperationsAdmin() || isSupportAdmin() || isDriverManager()) || isOwnDelivery(historyId) || isAssignedRider();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /prescriptionPickups/{pickupId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin()) ||
         canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         isAssignedRider();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /healthPlusProfiles/{profileId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin()) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /recurringPickupSchedules/{scheduleId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin()) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /healthPlusNotifications/{notificationId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin()) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin();
-      allow update, delete: if isAdmin();
+      allow create: if false;
+      allow update, delete: if false;
     }
 
     match /healthPlusUsageEvents/{eventId} {
-      allow read: if isAdmin() ||
+      allow read: if (isOperationsAdmin()) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin();
+      allow create: if false;
       allow update, delete: if false;
     }
 
     match /riderApplications/{applicationId} {
-      allow read: if isAdmin() ||
+      allow read: if (isDriverManager()) ||
         (signedIn() && applicationId == request.auth.uid) ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /riderOnboardingEvents/{eventId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
+      allow read: if (isDriverManager());
+      allow create: if false;
       allow update, delete: if false;
     }
 
     match /riderEarnings/{riderId} {
-      allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isFinanceAdmin()) || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /riderEarningsReconciliations/{reconciliationId} {
@@ -1158,23 +1196,23 @@ service cloud.firestore {
     }
 
     match /riderWalletTransactions/{transactionId} {
-      allow read: if isAdmin() ||
+      allow read: if (isFinanceAdmin()) ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /riderPayoutAllocations/{allocationId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow read: if (isFinanceAdmin()) || (signedIn() && resource.data.riderId == request.auth.uid);
       allow write: if false;
     }
     match /tipRecoveries/{recoveryId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow read: if (isFinanceAdmin()) || (signedIn() && resource.data.riderId == request.auth.uid);
       allow write: if false;
     }
     match /payoutRequests/{requestId} {
-      allow read: if isAdmin() ||
+      allow read: if (isFinanceAdmin()) ||
         (signedIn() && resource.data.riderId == request.auth.uid);
       allow create, update, delete: if false;
     }
@@ -1188,21 +1226,21 @@ service cloud.firestore {
     }
 
     match /riderBankAccounts/{riderId} {
-      allow read: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow read: if (isFinanceAdmin());
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /riderDocuments/{documentId} {
-      allow read: if isAdmin() ||
+      allow read: if (isDriverManager()) ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     match /{document=**} {
-      allow read: if isAdmin();
-      allow write: if hasRole('super_admin');
+      allow read: if false;
+      allow write: if false;
     }
   }
 }
