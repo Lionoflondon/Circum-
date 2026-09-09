@@ -356,14 +356,16 @@ function patchFor(action, actor, reason) {
     case "force_rider_online":
       return {
         ...common,
+        onlineIntent: true,
         isOnline: true,
         online: true,
         busy: false,
         status: "online",
-        availabilityStatus: "online",
-        dispatchEligible: true,
+        availabilityStatus: "available",
+        dispatchEligible: false,
+        dispatchReason: "location_required",
         source: "admin_governance",
-        recoveryOutcome: "force_online_requested",
+        recoveryOutcome: "online_intent_requested",
       };
     case "force_rider_offline":
       return {

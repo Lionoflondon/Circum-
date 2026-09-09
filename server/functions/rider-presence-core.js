@@ -38,12 +38,25 @@ function riderApproved(profile = {}) {
 }
 
 function blockedReason(profile = {}) {
-  if (profile.isFrozen === true || lower(profile.riderStatus) === "frozen") return "Account frozen.";
-  if (profile.isSuspended === true || lower(profile.riderStatus) === "suspended") return "Account suspended.";
-  if (profile.isClosed === true || lower(profile.riderStatus) === "closed") return "Account closed.";
+  const terminal = terminalBlockedReason(profile);
+  if (terminal) return terminal;
   if (!riderApproved(profile)) return "Rider approval required.";
   if (!vehicleVerified(profile)) return "Vehicle verification required.";
   return "";
+}
+
+function terminalBlockedReason(profile = {}) {
+  const status = lower(profile.accountStatus || profile.riderStatus);
+  if (profile.isFrozen === true || status === "frozen") return "Account frozen.";
+  if (profile.isSuspended === true || status === "suspended") return "Account suspended.";
+  if (profile.isClosed === true || status === "closed") return "Account closed.";
+  return "";
+}
+
+function readinessReason(profile = {}) {
+  if (!riderApproved(profile)) return "approval_required";
+  if (!vehicleVerified(profile)) return "vehicle_required";
+  return null;
 }
 
 function canGoOnline(profile = {}) {
@@ -51,10 +64,8 @@ function canGoOnline(profile = {}) {
 }
 
 function blockedReasonForAccess(profile = {}, founder = false) {
-  const terminal = lower(profile.riderStatus);
-  if (profile.isFrozen === true || terminal === "frozen") return "Account frozen.";
-  if (profile.isSuspended === true || terminal === "suspended") return "Account suspended.";
-  if (profile.isClosed === true || terminal === "closed") return "Account closed.";
+  const terminal = terminalBlockedReason(profile);
+  if (terminal) return terminal;
   return founder ? "" : blockedReason(profile);
 }
 
@@ -77,19 +88,33 @@ function presenceState({presence = {}, now = Date.now()}) {
   return PRESENCE_STATES.FRESH;
 }
 
-function dispatchDecision({profile = {}, presence = {}, now = Date.now()}) {
+function dispatchRequirementsDecision({profile = {}, presence = {}, now = Date.now()}) {
   const state = presenceState({presence, now});
-  if (!canGoOnline(profile)) return {allowed: false, presenceState: state, reason: "rider_not_operational"};
+  if (terminalBlockedReason(profile)) return {allowed: false, presenceState: state, reason: "account_blocked"};
+  const readiness = readinessReason(profile);
+  if (readiness) return {allowed: false, presenceState: state, reason: readiness};
   if (state === PRESENCE_STATES.OFFLINE) return {allowed: false, presenceState: state, reason: "offline"};
   if (state === PRESENCE_STATES.STALE) return {allowed: false, presenceState: state, reason: "presence_stale"};
   if (["offline", "stale", "disconnected"].includes(lower(presence.connectionStatus))) {
     return {allowed: false, presenceState: state, reason: "connection_unhealthy"};
   }
-  if (presence.dispatchEligible === false) return {allowed: false, presenceState: state, reason: "dispatch_ineligible"};
   if (presence.availabilityStatus !== "available") return {allowed: false, presenceState: state, reason: "availability_not_available"};
   if (presence.busy === true) return {allowed: false, presenceState: state, reason: "busy"};
-  if (!gpsHealthy({presence, now})) return {allowed: false, presenceState: state, reason: "gps_unhealthy"};
+  if (!gpsHealthy({presence, now})) {
+    const location = presence.currentLocation || presence.location || presence.riderLiveLocation || {};
+    const hasLocation = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    return {allowed: false, presenceState: state, reason: hasLocation ? "gps_unhealthy" : "location_required"};
+  }
   return {allowed: true, presenceState: state, reason: null};
+}
+
+function dispatchDecision(args) {
+  const decision = dispatchRequirementsDecision(args);
+  if (!decision.allowed) return decision;
+  if (!args.presence || args.presence.dispatchEligible !== true) {
+    return {...decision, allowed: false, reason: "dispatch_ineligible"};
+  }
+  return decision;
 }
 
 function canReceiveDispatch(args) {
@@ -156,9 +181,12 @@ module.exports = {
   canGoOnline,
   canReceiveDispatch,
   dispatchDecision,
+  dispatchRequirementsDecision,
   gpsHealthy,
   nextPresenceOnDelivery,
   presenceState,
   riderApproved,
+  readinessReason,
+  terminalBlockedReason,
   vehicleVerified,
 };
