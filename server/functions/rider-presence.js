@@ -57,6 +57,7 @@ function presencePatch({riderId, status, busy = false, location = null}) {
   const now = Date.now();
   const patch = {
     riderId,
+    onlineIntent: status !== "offline",
     isOnline: status !== "offline",
     status: status === "offline" ? "offline" : "online",
     presenceState: status === "offline" ? core.PRESENCE_STATES.OFFLINE : core.PRESENCE_STATES.FRESH,
@@ -107,36 +108,35 @@ exports.goOnline = riderCallable(async (data, context) => {
     const riderId = requireAuth(context);
     const db = getFirestore();
     const profile = await riderProfile(db, riderId);
-    const founder = context.auth.token && context.auth.token.founderRider === true;
-    const reason = core.blockedReasonForAccess(profile, founder);
+    const reason = core.terminalBlockedReason(profile);
     if (reason) {
       throw new functions.https.HttpsError("failed-precondition", reason);
     }
     const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
-    if (patch.dispatchEligible !== true) {
-      throw new functions.https.HttpsError(
-          "failed-precondition",
-          "A fresh, accurate location is required before you can go online.",
-      );
-    }
+    const decision = core.dispatchRequirementsDecision({profile, presence: patch});
+    patch.dispatchEligible = decision.allowed;
+    patch.dispatchReason = decision.reason;
     const batch = db.batch();
     batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
-    batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", dispatchEligible: patch.dispatchEligible === true, dispatchReason: decision.reason, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
     batch.set(db.collection("riderProfiles").doc(riderId), {
       status: "online",
       availabilityStatus: "available",
       isOnline: true,
       presenceState: core.PRESENCE_STATES.FRESH,
       dispatchEligible: patch.dispatchEligible === true,
+      dispatchReason: decision.reason,
       lastHeartbeatAt: patch.lastHeartbeatAt,
       lastOnlineAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", founderOverride: founder, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
+    batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", dispatchEligible: decision.allowed, dispatchReason: decision.reason, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
     await batch.commit();
     return {
       success: true,
-      dispatchEligible: true,
+      onlineIntent: true,
+      dispatchEligible: decision.allowed,
+      reason: decision.reason,
       presence: {...patch, serverTimestampPending: true},
     };
   } catch (error) {
@@ -233,6 +233,10 @@ exports.updateRiderPresence = riderCallable(async (data, context) => {
   }
   const status = presence.busy === true ? "busy" : "available";
   const patch = presencePatch({riderId, status, busy: presence.busy === true, location: data && data.location});
+  const profile = await riderProfile(db, riderId);
+  const decision = core.dispatchRequirementsDecision({profile, presence: patch});
+  patch.dispatchEligible = decision.allowed;
+  patch.dispatchReason = decision.reason;
   const batch = db.batch();
   batch.set(current.ref, {
     ...patch,
@@ -283,21 +287,55 @@ async function forceOfflineWhenBlocked(change, context) {
   const riderId = context.params.riderId;
   const db = getFirestore();
   const profile = await riderProfile(db, riderId);
-  const reason = core.blockedReason(profile);
-  if (!reason) return null;
-  await db.collection("riderPresence").doc(riderId).set({
+  const terminalReason = core.terminalBlockedReason(profile);
+  if (!terminalReason) {
+    const current = await db.collection("riderPresence").doc(riderId).get();
+    if (!current.exists) return null;
+    const presence = current.data();
+    const decision = core.dispatchRequirementsDecision({profile, presence});
+    const projection = {
+      dispatchEligible: decision.allowed,
+      dispatchReason: decision.reason,
+      updatedAt: FieldValue.serverTimestamp(),
+      source: "readinessRecalculation",
+    };
+    const batch = db.batch();
+    batch.set(current.ref, projection, {merge: true});
+    batch.set(db.collection("riders").doc(riderId), projection, {merge: true});
+    batch.set(db.collection("riderProfiles").doc(riderId), projection, {merge: true});
+    await batch.commit();
+    return null;
+  }
+  const offline = {
     riderId,
+    onlineIntent: false,
     isOnline: false,
     presenceState: core.PRESENCE_STATES.OFFLINE,
     busy: false,
     availabilityStatus: "offline",
     connectionStatus: "offline",
+    dispatchEligible: false,
+    dispatchReason: "account_blocked",
     offlineReason: "admin_restriction",
-    offlineDetail: reason,
+    offlineDetail: terminalReason,
     lastOfflineAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     source: "adminRestriction",
-  }, {merge: true});
+  };
+  const projection = {
+    isOnline: false,
+    status: "offline",
+    availabilityStatus: "offline",
+    dispatchEligible: false,
+    dispatchReason: "account_blocked",
+    updatedAt: FieldValue.serverTimestamp(),
+    source: "adminRestriction",
+  };
+  const batch = db.batch();
+  batch.set(db.collection("riderPresence").doc(riderId), offline, {merge: true});
+  batch.set(db.collection("riders").doc(riderId), projection, {merge: true});
+  batch.set(db.collection("riderProfiles").doc(riderId), projection, {merge: true});
+  await batch.commit();
   return null;
 }
 
@@ -364,3 +402,5 @@ exports.requireDispatchablePresence = async function(riderId, riderProfileData =
 exports.dispatchablePresenceDecision = function(riderProfileData = {}, presence = {}) {
   return core.dispatchDecision({profile: riderProfileData, presence});
 };
+
+exports._test = {forceOfflineWhenBlocked};

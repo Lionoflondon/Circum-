@@ -12,6 +12,7 @@ test("approved rider receives dispatch only when online and available", () => {
   };
   const presence = {
     isOnline: true,
+    dispatchEligible: true,
     availabilityStatus: "available",
     busy: false,
     lastHeartbeatAt: Date.now(),
@@ -81,15 +82,15 @@ test("presence writes expose explicit state without rewriting availability", () 
   assert.doesNotMatch(source, /availabilityStatus:\s*["']connection_lost["']/);
 });
 
-test("goOnline mirrors dispatch availability into riderProfiles", () => {
+test("goOnline records intent and derives dispatch eligibility without rejecting readiness", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const goOnlineStart = source.indexOf("exports.goOnline = riderCallable");
   const goOfflineStart = source.indexOf("exports.goOffline = riderCallable");
   const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
-  const rejection = goOnlineSource.indexOf("patch.dispatchEligible !== true");
-  const firstWrite = goOnlineSource.indexOf("const batch = db.batch()");
-  assert.ok(rejection >= 0 && rejection < firstWrite);
-  assert.match(goOnlineSource, /A fresh, accurate location is required/);
+  assert.doesNotMatch(goOnlineSource, /patch\.dispatchEligible !== true/);
+  assert.match(goOnlineSource, /terminalBlockedReason/);
+  assert.match(goOnlineSource, /dispatchRequirementsDecision/);
+  assert.match(goOnlineSource, /onlineIntent: true/);
   assert.match(goOnlineSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);
   assert.match(goOnlineSource, /status: "online"/);
   assert.match(goOnlineSource, /availabilityStatus: "available"/);
@@ -136,7 +137,7 @@ test("presence states separate reachability from explicit availability", () => {
     accuracyMeters: 18,
     updatedAt: now,
   };
-  const fresh = {isOnline: true, availabilityStatus: "available", busy: false, lastHeartbeatAt: now, currentLocation: gps, gpsStatus: "active"};
+  const fresh = {isOnline: true, dispatchEligible: true, availabilityStatus: "available", busy: false, lastHeartbeatAt: now, currentLocation: gps, gpsStatus: "active"};
   assert.deepEqual(core.dispatchDecision({profile, presence: fresh, now}), {allowed: true, presenceState: core.PRESENCE_STATES.FRESH, reason: null});
 
   const stale = {...fresh, lastHeartbeatAt: now - core.STALE_HEARTBEAT_MS - 1};
@@ -160,6 +161,52 @@ test("busy and stale GPS remain non-dispatchable independently", () => {
   assert.equal(core.dispatchDecision({profile, presence: {...base, connectionStatus: "disconnected"}, now}).reason, "connection_unhealthy");
 });
 
+test("online intent never bypasses approval, vehicle, location, GPS, stale or connection authority", () => {
+  const now = Date.now();
+  const approved = {onboardingStatus: "approved", vehicleStatus: "approved"};
+  const fresh = {
+    onlineIntent: true,
+    isOnline: true,
+    availabilityStatus: "available",
+    busy: false,
+    connectionStatus: "connected",
+    lastHeartbeatAt: now,
+    currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, updatedAt: now},
+    gpsStatus: "active",
+  };
+  assert.equal(core.dispatchRequirementsDecision({profile: {onboardingStatus: "pending", vehicleStatus: "approved"}, presence: fresh, now}).reason, "approval_required");
+  assert.equal(core.dispatchRequirementsDecision({profile: {onboardingStatus: "approved", vehicleStatus: "pending"}, presence: fresh, now}).reason, "vehicle_required");
+  assert.equal(core.dispatchRequirementsDecision({profile: approved, presence: {...fresh, currentLocation: {}}, now}).reason, "location_required");
+  assert.equal(core.dispatchRequirementsDecision({profile: approved, presence: {...fresh, currentLocation: {...fresh.currentLocation, accuracyMeters: 500}}, now}).reason, "gps_unhealthy");
+  assert.equal(core.dispatchRequirementsDecision({profile: approved, presence: {...fresh, lastHeartbeatAt: now - core.STALE_HEARTBEAT_MS - 1}, now}).reason, "presence_stale");
+  assert.equal(core.dispatchRequirementsDecision({profile: approved, presence: {...fresh, connectionStatus: "disconnected"}, now}).reason, "connection_unhealthy");
+  assert.equal(core.dispatchRequirementsDecision({profile: approved, presence: fresh, now}).allowed, true);
+  assert.equal(core.dispatchDecision({profile: approved, presence: {...fresh, dispatchEligible: false}, now}).allowed, false);
+  assert.equal(core.dispatchDecision({profile: approved, presence: {...fresh, dispatchEligible: true}, now}).allowed, true);
+});
+
+test("forceOfflineWhenBlocked preserves intent for readiness and forces terminal accounts offline", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  const start = source.indexOf("async function forceOfflineWhenBlocked");
+  const end = source.indexOf("exports.onRiderRecordAvailabilityWrite");
+  const body = source.slice(start, end);
+  assert.match(body, /terminalBlockedReason/);
+  assert.match(body, /dispatchRequirementsDecision/);
+  assert.match(body, /dispatchEligible: decision\.allowed/);
+  assert.match(body, /onlineIntent: false/);
+  assert.match(body, /isOnline: false/);
+});
+
+test("Admin recovery can restore intent but cannot forge dispatch eligibility", () => {
+  const governance = fs.readFileSync(path.join(__dirname, "admin-governance.js"), "utf8");
+  const start = governance.indexOf("case \"force_rider_online\"");
+  const end = governance.indexOf("case \"force_rider_offline\"", start);
+  const source = governance.slice(start, end);
+  assert.match(source, /onlineIntent: true/);
+  assert.match(source, /dispatchEligible: false/);
+  assert.doesNotMatch(source, /dispatchEligible: true/);
+});
+
 test("dispatch requires fresh accurate GPS", () => {
   const profile = {
     onboardingStatus: "approved",
@@ -167,6 +214,7 @@ test("dispatch requires fresh accurate GPS", () => {
   };
   const base = {
     isOnline: true,
+    dispatchEligible: true,
     availabilityStatus: "available",
     busy: false,
     lastHeartbeatAt: Date.now(),

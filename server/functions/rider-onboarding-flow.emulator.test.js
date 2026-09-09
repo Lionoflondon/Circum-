@@ -54,12 +54,16 @@ test("full Auth/application/PDF/image/review flow preserves zero wallet and appr
   const docs = await db.collection("riderDocuments").where("riderId", "==", user.uid).get();
   assert.deepEqual(docs.docs.map((d) => d.data().type).sort(), ["identity", "registration_v5c"]);
   assert.ok(docs.docs.every((d) => d.data().status === "pending"));
-  await assert.rejects(presence.goOnline.run({location}, ctx), (e) => e.code === "failed-precondition");
+  const pendingOnline = await presence.goOnline.run({location}, ctx);
+  assert.equal(pendingOnline.onlineIntent, true);
+  assert.equal(pendingOnline.dispatchEligible, false);
+  assert.equal(pendingOnline.reason, "approval_required");
   // Admin SDK writes are intentionally restricted to this emulator fixture.
   await db.collection("riderProfiles").doc(user.uid).set({approvalStatus: "approved", verificationStatus: "approved", onboardingComplete: true, vehicleApproved: true, onboardingStatus: "approved", riderRank: "senior", trustPoints: 42}, {merge: true});
   await db.collection("riderApplications").doc(user.uid).set({status: "approved"}, {merge: true});
   const online = await presence.goOnline.run({location}, ctx);
   assert.equal(online.success, true);
+  assert.equal(online.dispatchEligible, true);
   await account.submitRiderApplication.run({idempotencyKey: "another-key"}, ctx);
   const approved = (await db.collection("riderProfiles").doc(user.uid).get()).data();
   assert.equal(approved.approvalStatus, "approved");
