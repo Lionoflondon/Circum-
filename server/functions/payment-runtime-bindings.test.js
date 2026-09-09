@@ -14,7 +14,7 @@ const modules = {
   "gifts-payment": require("./gifts-payment"),
 };
 const injected = {
-  "business-payments": ["createBusinessInvoiceCheckout", "cancelBusinessInvoiceCheckout", "reconcileBusinessInvoiceCheckouts"],
+  "business-payments": ["createBusinessRothCheckout", "createBusinessInvoiceCheckout", "cancelBusinessInvoiceCheckout", "reconcileBusinessInvoiceCheckouts"],
   "sender-finance": ["listSenderPaymentMethods", "createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod"],
   "sender-booking": ["createSenderPaymentSession", "createSenderPaidDelivery", "finalizeSenderWebCheckout"],
   "gifts-payment": ["createGiftPayment", "finalizeGiftPayment"],
