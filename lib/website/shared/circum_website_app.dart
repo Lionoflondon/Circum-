@@ -10655,8 +10655,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _openBusinessRothCheckout() async {
     final businessId = _selectedBusinessId;
-    final amount = double.tryParse(_businessRothAmount.text.trim()) ?? 0;
+    final rawAmount = _businessRothAmount.text.trim().replaceAll(',', '');
+    final amount = double.tryParse(rawAmount) ?? 0;
     if (businessId == null || amount <= 0 || _businessBusy) return;
+    if (amount > 1000000) {
+      setState(() {
+        _businessMessage =
+            'Business Roth purchases above £1,000,000 require Circum review.';
+      });
+      return;
+    }
     setState(() {
       _businessBusy = true;
       _businessMessage = 'Preparing Roth checkout...';
@@ -10668,7 +10676,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .httpsCallable('createBusinessRothCheckout')
           .call({
         'businessId': businessId,
-        'amount': amount,
+        'amount': rawAmount,
         'idempotencyKey': _businessRothCheckoutKey,
         'returnUrl': 'https://circumuk.com/?app=business',
       });

@@ -10,5 +10,14 @@ void main() {
     expect(source, contains("httpsCallable('createBusinessRothCheckout')"));
     expect(source, contains("'idempotencyKey': _businessRothCheckoutKey"));
     expect(source, contains('_businessRothCheckoutKey ??='));
+    expect(source, contains("replaceAll(',', '')"));
+    expect(source, contains('if (amount > 1000000)'));
+    expect(
+      source,
+      contains(
+        'Business Roth purchases above £1,000,000 require Circum review.',
+      ),
+    );
+    expect(source, contains("'amount': rawAmount"));
   });
 }
