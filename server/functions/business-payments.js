@@ -12,11 +12,24 @@ const {requireAdmin} = require("./admin-auth");
 const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const communicationEngine = require("./communication-engine");
 const checkoutReservations = require("./business-checkout-reservations");
+const BUSINESS_ROTH_SELF_SERVE_CAP_GBP = 1000000;
 
 function money(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
   return Math.round(parsed * 100) / 100;
+}
+
+function businessRothAmountDecision(value) {
+  const rawAmount = Number(value);
+  const amount = money(rawAmount);
+  if (!Number.isFinite(rawAmount) || amount < 1 || rawAmount !== amount) {
+    return {allowed: false, reason: "invalid_amount", amount};
+  }
+  if (amount > BUSINESS_ROTH_SELF_SERVE_CAP_GBP) {
+    return {allowed: false, reason: "review_required", amount};
+  }
+  return {allowed: true, reason: "allowed", amount};
 }
 
 function text(value, max = 500) {
@@ -480,11 +493,17 @@ exports.createBusinessRothCheckout = (stripe) => functions
   .runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]})
   .https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
-  const rawAmount = Number(data.amount);
-  const amount = money(rawAmount);
+  const amountDecision = businessRothAmountDecision(data.amount);
+  const amount = amountDecision.amount;
   const idempotencyKey = text(data.idempotencyKey, 160);
-  if (!businessId || !Number.isFinite(rawAmount) || amount < 1 || amount > 10000 || rawAmount !== amount) {
+  if (!businessId || amountDecision.reason === "invalid_amount") {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account and Roth amount.");
+  }
+  if (amountDecision.reason === "review_required") {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Business Roth purchases above £1,000,000 require Circum review.",
+    );
   }
   if (!idempotencyKey || idempotencyKey.length < 12) {
     throw new functions.https.HttpsError("invalid-argument", "A valid checkout request is required.");
@@ -755,6 +774,8 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
 };
 
 exports._private = {
+  BUSINESS_ROTH_SELF_SERVE_CAP_GBP,
+  businessRothAmountDecision,
   creditBusinessRoth,
   debitBusinessRoth,
   markInvoicePaid,

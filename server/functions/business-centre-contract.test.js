@@ -6,6 +6,7 @@ const test = require("node:test");
 
 const businessAccessSource = fs.readFileSync(path.join(__dirname, "business-access.js"), "utf8");
 const businessPaymentsSource = fs.readFileSync(path.join(__dirname, "business-payments.js"), "utf8");
+const businessPayments = require("./business-payments");
 const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 const senderWebSource = fs.readFileSync(path.join(
     __dirname,
@@ -180,11 +181,21 @@ test("Business Roth purchase is attested, bounded, and retry-idempotent", () => 
     businessPaymentsSource,
     /createBusinessRothCheckout[\s\S]*enforceAppCheck:\s*true/,
   );
-  assert.match(businessPaymentsSource, /amount > 10000/);
+  assert.match(businessPaymentsSource, /BUSINESS_ROTH_SELF_SERVE_CAP_GBP = 1000000/);
+  assert.match(businessPaymentsSource, /above £1,000,000 require Circum review/);
   assert.match(businessPaymentsSource, /idempotencyKey/);
   assert.match(businessPaymentsSource, /business_roth:\$\{purchaseId\}/);
   assert.match(businessPaymentsSource, /createdByUserId !== context\.auth\.uid/);
   assert.match(businessPaymentsSource, /return \{[\s\S]*idempotent:\s*true/);
+  const decide = businessPayments._private.businessRothAmountDecision;
+  assert.equal(decide("25000").allowed, true);
+  assert.equal(decide("1000000").allowed, true);
+  assert.deepEqual(decide("1000000.01"), {
+    allowed: false,
+    reason: "review_required",
+    amount: 1000000.01,
+  });
+  assert.equal(decide("1.001").reason, "invalid_amount");
 });
 
 test("Business invoices expose printable PDF records without client-side invoice generation", () => {
