@@ -29,6 +29,10 @@ test("Health+ movement remains held until collection details are ready", () => {
   });
   assert.equal(ready.status, "requested");
   assert.equal(ready.matchingStatus, "available");
+  assert.equal(ready.dispatchStatus, "requested");
+  assert.equal(ready.healthDispatchReady, true);
+  assert.equal(ready.requiresVanguard, true);
+  assert.equal(ready.trustPoints, 6);
 });
 
 test("movement delivery ids are deterministic", () => {
@@ -105,6 +109,8 @@ test("Health+ projection preserves classification route and payout", () => {
   });
   assert.equal(projected.isHealthPlus, true);
   assert.equal(projected.riderEarning, 13);
+  assert.equal(projected.riderPayout, 13);
+  assert.equal(projected.driverPayout, 13);
   assert.equal(projected.routeDistanceMeters, 2400);
   assert.equal(projected.pickupLocality, "Brixton");
   assert.equal(projected.handlingInstructions, "Temperature controlled");

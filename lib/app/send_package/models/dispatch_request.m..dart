@@ -13,6 +13,17 @@ class DispatchRequest extends Equatable {
   final String? riderName;
   final double? userRating;
   final double? riderRating;
+  final double? riderPayout;
+  final double? riderEarning;
+  final double? driverPayout;
+  final String? distanceText;
+  final String? durationText;
+  final String? pickupWindow;
+  final String? serviceType;
+  final bool isBusiness;
+  final bool isHealthPlus;
+  final bool requiresVanguard;
+  final int trustPoints;
   const DispatchRequest(
       {required this.pickupData,
       required this.dropoffData,
@@ -23,7 +34,18 @@ class DispatchRequest extends Equatable {
       this.createdAt,
       this.riderName,
       this.userRating,
-      this.riderRating});
+      this.riderRating,
+      this.riderPayout,
+      this.riderEarning,
+      this.driverPayout,
+      this.distanceText,
+      this.durationText,
+      this.pickupWindow,
+      this.serviceType,
+      this.isBusiness = false,
+      this.isHealthPlus = false,
+      this.requiresVanguard = false,
+      this.trustPoints = 0});
 
   @override
   List<Object> get props => [
@@ -36,6 +58,17 @@ class DispatchRequest extends Equatable {
         {riderName},
         {userRating},
         {riderRating},
+        {riderPayout},
+        {riderEarning},
+        {driverPayout},
+        {distanceText},
+        {durationText},
+        {pickupWindow},
+        {serviceType},
+        {isBusiness},
+        {isHealthPlus},
+        {requiresVanguard},
+        {trustPoints},
       ];
 
   static DispatchRequest fromJson(dynamic json) {
@@ -44,12 +77,26 @@ class DispatchRequest extends Equatable {
       dropoffData: RideContactInfo.fromJson(json['dropoffDetails']),
       requestId: json['requestId'],
       code: json['code'],
-      price: json['price'],
+      price: (json['price'] as num).toDouble(),
       currency: json['currency'],
       createdAt: json['createdAt'],
       riderName: json['riderName'],
       userRating: json['userRating'],
       riderRating: json['riderRating'],
+      riderPayout: (json['riderPayout'] as num?)?.toDouble(),
+      riderEarning: (json['riderEarning'] as num?)?.toDouble(),
+      driverPayout: (json['driverPayout'] as num?)?.toDouble(),
+      distanceText: json['distanceText'] as String?,
+      durationText: json['durationText'] as String?,
+      pickupWindow:
+          (json['pickupWindow'] ?? json['scheduledPickupWindow']) as String?,
+      serviceType: json['serviceType'] as String?,
+      isBusiness:
+          json['isBusiness'] == true || json['businessDelivery'] == true,
+      isHealthPlus: json['isHealthPlus'] == true,
+      requiresVanguard:
+          json['requiresVanguard'] == true || json['isVanguard'] == true,
+      trustPoints: (json['trustPoints'] as num?)?.toInt() ?? 0,
     );
   }
 

@@ -28,6 +28,7 @@ function specialFlowAuthority(data = {}, payment = {}) {
   const riderEarning = firstDefined(data.riderEarning, data.riderPay, data.riderPayout, pricing.riderEarning, pricing.riderPay);
   return {
     ...(riderEarning !== undefined ? {riderEarning: Number(riderEarning)} : {}),
+    ...(riderEarning !== undefined ? {riderPayout: Number(riderEarning), driverPayout: Number(riderEarning)} : {}),
     ...(firstDefined(data.riderEligibleFare, pricing.riderEligibleFare) !== undefined ? {riderEligibleFare: Number(firstDefined(data.riderEligibleFare, pricing.riderEligibleFare))} : {}),
     ...(data.riderPayoutCalculationVersion || pricing.riderPayoutCalculationVersion ? {riderPayoutCalculationVersion: data.riderPayoutCalculationVersion || pricing.riderPayoutCalculationVersion} : {}),
     distance: firstDefined(data.distance, data.distanceText, route.distanceText, route.distance),
@@ -154,6 +155,8 @@ function healthMovement(pickupId, data, payment = {}) {
     profileId: data.profileId || payment.profileId || null,
     status: healthDeliveryStatus(data),
     matchingStatus: ready ? "available" : "held",
+    dispatchStatus: ready ? "requested" : "held",
+    healthDispatchReady: ready,
     readyForCollection: ready,
     customerId: data.senderId || data.userId || payment.userId || null,
     userId: data.senderId || data.userId || payment.userId || null,
@@ -180,6 +183,7 @@ function healthMovement(pickupId, data, payment = {}) {
     packageDescription: "Confidential sealed Health+ collection",
     healthPlusEnabled: true,
     isVanguard: true,
+    requiresVanguard: true,
     trustPoints: 6,
     planType: data.planType || data.subscriptionPlan || "core",
     riskStatus: data.riskStatus || "scheduled",
