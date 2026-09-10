@@ -174,6 +174,14 @@ test("canonical backend delivery records include Rider display aliases", () => {
   assert.match(senderBookingSource, /durationText: durationMinutes > 0/);
   assert.match(senderBookingSource, /requiresVanguard: vanguardFields\.vanguardProtocolEnabled === true/);
   assert.match(senderBookingSource, /pickupWindow: pickupWindow \|\| null/);
+  assert.match(senderBookingSource, /trustPoints: Number\(quote\.trustPoints \|\| 0\)/);
+});
+
+test("Business paid deliveries expose canonical Rider-card identity", () => {
+  assert.match(senderBookingSource, /serviceType: "BUSINESS"/);
+  assert.match(senderBookingSource, /sourceModule: "business"/);
+  assert.match(senderBookingSource, /isBusiness: true/);
+  assert.match(senderBookingSource, /businessDelivery: true/);
 });
 
 test("canonical delivery public records redact direct phone contact fields", () => {

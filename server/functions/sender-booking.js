@@ -613,6 +613,10 @@ async function verifiedBusinessContext(db, sender, rawContext) {
     billingSource: "business_finance",
     paymentProfileSource: "shared_payment_profile",
     businessMode: true,
+    serviceType: "BUSINESS",
+    sourceModule: "business",
+    isBusiness: true,
+    businessDelivery: true,
   };
 }
 
@@ -875,6 +879,7 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
       quote.vanguardRequired === true ||
       quote.vanguardProtocolEnabled === true,
     pickupWindow: pickupWindow || null,
+    trustPoints: Number(quote.trustPoints || 0),
   };
 }
 
@@ -989,6 +994,12 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     totalCircumRevenue,
     driverShare: RIDER_DELIVERY_FARE_SHARE,
     platformShare: PLATFORM_DELIVERY_FARE_SHARE,
+    ...(businessDelivery ? {
+      serviceType: "BUSINESS",
+      sourceModule: "business",
+      isBusiness: true,
+      businessDelivery: true,
+    } : {}),
     pricingSource: "sender_backend_quote_v1",
     ...(safety ? {parcelAuthority: {description: safety.description, weightKg}} : {}),
     ...(serverPhotoAnalysis ? {
@@ -2007,6 +2018,10 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       senderEmail: sender.email,
       ...(quote.businessMode === true ? {
         businessMode: true,
+        serviceType: "BUSINESS",
+        sourceModule: "business",
+        isBusiness: true,
+        businessDelivery: true,
         businessId: quote.businessId,
         businessAccountId: quote.businessAccountId,
         businessName: quote.businessName,
