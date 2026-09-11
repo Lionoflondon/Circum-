@@ -314,16 +314,6 @@ function operationalPolicyChanged(before = {}, after = {}) {
   return fields.some((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
 }
 
-exports.onRiderOperationalPolicyWrite = functions.firestore
-    .document("riderProfiles/{riderId}")
-    .onUpdate(async (change, context) => {
-      const before = change.before.data() || {};
-      const after = change.after.data() || {};
-      if (!operationalPolicyChanged(before, after)) return null;
-      await applyRiderOperationalState(context.params.riderId, "policyTransition");
-      return null;
-    });
-
 exports.markStaleRiderPresenceOffline = functions.pubsub
     .schedule("every 2 minutes")
     .onRun(async () => {

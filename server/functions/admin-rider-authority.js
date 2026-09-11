@@ -4,6 +4,7 @@ const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions"
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {payoutReadiness} = require("./rider-certification-policy");
+const {enqueueRiderPolicyRecompute} = require("./rider-policy-dispatch");
 
 const RIDER_ACTIONS = new Set([
   "approve",
@@ -19,6 +20,7 @@ const RIDER_ACTIONS = new Set([
 const STATUS_ACTIONS = new Set(["approve", "reject", "suspend", "reactivate"]);
 const DOCUMENT_STATUSES = new Set(["approved", "rejected", "replacement_requested"]);
 const ELIGIBILITY_STATES = new Set(["eligible", "ineligible", "under_review"]);
+const POLICY_ACTIONS = new Set(["approve", "reject", "suspend", "reactivate", "request_more_information", "review_document", "set_eligibility"]);
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -89,6 +91,9 @@ function statusPatch(action, actor, reason) {
       return {
         ...patch,
         adminOperationStatus: "suspended",
+        accountStatus: "suspended",
+        riderStatus: "suspended",
+        isSuspended: true,
         driverStatus: "suspended",
         eligibilityState: "ineligible",
         riderEligibilityState: "ineligible",
@@ -100,6 +105,9 @@ function statusPatch(action, actor, reason) {
       return {
         ...patch,
         adminOperationStatus: "reactivated",
+        accountStatus: "active",
+        riderStatus: "active",
+        isSuspended: false,
         approvalStatus: "approved",
         verificationStatus: "approved",
         driverStatus: "active",
@@ -379,11 +387,26 @@ exports.adminReviewRider = adminCallable(async (data, context) => {
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  let policyRecompute = {queued: false, reason: "not_required"};
+  if (POLICY_ACTIONS.has(action)) {
+    try {
+      policyRecompute = await enqueueRiderPolicyRecompute({
+        riderId,
+        cause: `admin.${result.eventAction || action}`,
+        correlationId: result.auditId,
+      });
+    } catch (error) {
+      console.error("rider_policy_enqueue_failed", {riderId, action, auditId: result.auditId, reason: error.message || "queue_failed"});
+      policyRecompute = {queued: false, reason: "queue_failed"};
+    }
+  }
+
   return {
     riderId,
     action,
     status: result.eventAction || action,
     auditId: result.auditId,
     idempotent: result.idempotent === true,
+    policyRecompute,
   };
 });

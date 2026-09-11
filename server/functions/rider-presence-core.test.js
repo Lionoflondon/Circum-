@@ -185,11 +185,11 @@ test("online intent never bypasses approval, vehicle, location, GPS, stale or co
   assert.equal(core.dispatchDecision({profile: approved, presence: {...fresh, dispatchEligible: true}, now}).allowed, true);
 });
 
-test("operational policy trigger is narrow and deleted mirrors stay unexported", () => {
+test("all recursive and failed operational policy triggers stay unexported", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
-  assert.match(source, /exports\.onRiderOperationalPolicyWrite/);
-  assert.match(source, /if \(!operationalPolicyChanged\(before, after\)\) return null/);
+  assert.doesNotMatch(source, /exports\.onRiderOperationalPolicyWrite/);
+  assert.doesNotMatch(index, /exports\.onRiderOperationalPolicyWrite/);
   assert.doesNotMatch(index, /exports\.onRiderRecordAvailabilityWrite/);
   assert.doesNotMatch(index, /exports\.onRiderProfileAvailabilityWrite/);
 });
