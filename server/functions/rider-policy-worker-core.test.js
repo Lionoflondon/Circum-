@@ -23,7 +23,7 @@ test("one thousand duplicate requests remain semantic no-ops", async () => {
       calls++;
       return {changed: false, state: {onlineIntent: true, dispatchEligible: false}};
     },
-    logger: {info: (x) => logs.push(x)},
+    logger: {info: (x) => logs.push(JSON.parse(x))},
   });
   const results = await Promise.all(Array.from({length: 1000}, (_, i) => processor({riderId: "qa-rider", cause: "duplicate", correlationId: `dup-${i}`})));
   assert.equal(calls, 1000);

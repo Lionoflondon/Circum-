@@ -42,7 +42,7 @@ function createProcessor({db, applyRiderOperationalState, logger = console}) {
       newSemanticHash: semanticHash(result.state || before),
       changedFields: result.fields || [],
     };
-    logger.info(record);
+    logger.info(JSON.stringify(record));
     return {...record, state: semanticState(result.state || before)};
   };
 }
