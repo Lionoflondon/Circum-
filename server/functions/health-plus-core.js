@@ -309,6 +309,7 @@ function buildHealthPlusCheckoutParams({
       ...metadata,
     },
   };
+  if (recurring) params.subscription_data = {metadata: {...params.metadata}};
   if (discounts) params.discounts = discounts;
   return params;
 }

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+const webhook = fs.readFileSync(path.join(__dirname, "stripe-webhook-core.js"), "utf8");
 const cancellation = fs.readFileSync(path.join(__dirname, "delivery-policy.js"), "utf8");
 const deliveryTracking = fs.readFileSync(path.join(__dirname, "delivery-tracking.js"), "utf8");
 const senderBooking = fs.readFileSync(path.join(__dirname, "sender-booking.js"), "utf8");
@@ -50,15 +51,13 @@ test("payment intents and Stripe refunds map back to deliveries", () => {
   assert.match(senderBooking, /updateSenderPaymentIntentStatus\(stripe, intent/);
   assert.match(senderBooking, /async function handleSenderPaymentIntent\(stripe, intent, eventId = ""\)/);
   assert.match(senderBooking, /createPaidDeliveryFromSession\(stripe, sender/);
-  assert.match(index, /senderBooking\.handleSenderPaymentIntent\(/);
+  assert.match(webhook, /senderBooking\.handleSenderPaymentIntent\(/);
   assert.match(senderBooking, /stripePaymentIntentId:\s*payment\.stripePaymentIntentId/);
-  assert.match(index, /event\.type === "charge\.refunded"/);
+  assert.match(webhook, /event\.type === "charge\.refunded"/);
 });
 
 test("Sender PaymentIntent webhook recovery does not depend on client return", () => {
-  assert.match(index, /event\.type === "payment_intent\.succeeded"/);
-  assert.match(index, /event\.type === "payment_intent\.payment_failed"/);
-  assert.match(index, /event\.type === "payment_intent\.canceled"/);
+  assert.match(webhook, /\["payment_intent\.succeeded", "payment_intent\.processing", "payment_intent\.payment_failed", "payment_intent\.canceled"\]\.includes\(event\.type\)/);
   assert.match(senderBooking, /paymentType !== "delivery" && paymentType !== "sender_delivery_payment"/);
   assert.match(senderBooking, /if \(intent\.status !== "succeeded"\)/);
   assert.match(senderBooking, /Sender PaymentIntent metadata does not match payment session owner/);
