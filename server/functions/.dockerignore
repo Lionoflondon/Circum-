@@ -1,0 +1,9 @@
+node_modules
+.env
+.env.*
+*.log
+*.test.js
+*.emulator.test.js
+coverage
+.git
+firebase-debug.log

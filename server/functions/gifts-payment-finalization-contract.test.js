@@ -7,6 +7,7 @@ const path = require("node:path");
 const source = fs.readFileSync(path.join(__dirname, "gifts-payment.js"), "utf8");
 const router = fs.readFileSync(path.join(__dirname, "checkout-session-router.js"), "utf8");
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+const webhook = fs.readFileSync(path.join(__dirname, "stripe-webhook-core.js"), "utf8");
 
 test("Gift finalization verifies authoritative Stripe session state", () => {
   assert.match(source, /payment\.status !== "succeeded"/);
@@ -41,8 +42,8 @@ test("Gift totals reconcile exactly and Roth debit is deterministic", () => {
 
 test("PaymentIntent webhook finalizes Gift authority before generic Sender routing", () => {
   assert.match(source, /exports\.handleGiftPaymentIntent/);
-  assert.match(index, /giftsPayment\.handleGiftPaymentIntent/);
-  assert.match(index, /gift_payment_intent_failed/);
+  assert.match(webhook, /giftsPayment\.handleGiftPaymentIntent/);
+  assert.match(webhook, /"gift_payment_intent"/);
 });
 
 test("Gift finalization is idempotent for duplicate webhook or client recovery", () => {

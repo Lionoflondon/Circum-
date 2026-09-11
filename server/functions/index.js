@@ -41,6 +41,7 @@ const acceptRideRequests = require("./accept-ride-requests");
 const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
+const healthMembershipLifecycle = require("./health-membership-lifecycle");
 const iris = require("./iris");
 const irisPhotoAnalysis = require("./iris-photo-analysis");
 const deliveryAdjustments = require("./delivery-adjustments");
@@ -84,6 +85,7 @@ const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
 const adminOperationsAuthority = require("./admin-operations-authority");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
+const {createStripeWebhookProcessor} = require("./stripe-webhook-core");
 
 initializeApp();
 getFirestore().settings({ignoreUndefinedProperties: true});
@@ -456,249 +458,49 @@ exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 
+let stripeWebhookProcessor;
+function normalStripeWebhookProcessor() {
+  if (!stripeWebhookProcessor) {
+    stripeWebhookProcessor = createStripeWebhookProcessor({
+      stripe,
+      resolveRuntimeConfig: () => resolveStripeRuntimeConfig({
+        webhookSecret: stripeWebhookSecret.value(),
+        requireWebhookSecret: true,
+      }),
+      assertEventMode: assertStripeEventMode,
+      db: getFirestore(),
+      messaging: getMessaging(),
+      giftsPayment,
+      ratingsTipping,
+      stripeRefunds,
+      senderBooking,
+      businessPayments,
+      healthPlus,
+      healthMembershipLifecycle,
+      rothLedger,
+      routeCheckoutSessionCompleted,
+      logger: console,
+    });
+  }
+  return stripeWebhookProcessor;
+}
+
 exports.StripeWebhook = functions
     .runWith({secrets: [stripeWebhookSecret, "STRIPE_SECRET_KEY"]})
     .https.onRequest(async (req, res) => {
-      const sig = req.headers["stripe-signature"];
-      // console.log(sig);
-
-      let webhookRuntimeConfig;
       try {
-        webhookRuntimeConfig = resolveStripeRuntimeConfig({
-          webhookSecret: stripeWebhookSecret.value(),
-          requireWebhookSecret: true,
+        const result = await normalStripeWebhookProcessor()({
+          rawBody: req.rawBody,
+          signature: req.headers["stripe-signature"],
+          requestId: req.headers["x-cloud-trace-context"] || "",
         });
+        return res.status(result.status).send(result.body);
       } catch (error) {
-        console.error("Stripe webhook configuration failed closed", {
-          mode: webhookRuntimeConfig && webhookRuntimeConfig.mode,
-          firebaseProject:
-            webhookRuntimeConfig && webhookRuntimeConfig.firebaseProject,
-          reason:
-          error && error.message ? error.message : "invalid_configuration",
+        console.error("stripe_webhook_processing_failed", {
+          reason: error && error.message ? error.message : "internal_error",
         });
-        return res
-            .status(500)
-            .send({error: "Stripe webhook secret is not configured"});
+        return res.status(500).send({error: "Webhook processing failed"});
       }
-
-      let event;
-      try {
-        event = getStripeClient().webhooks.constructEvent(
-            req.rawBody,
-            sig,
-            webhookRuntimeConfig.webhookSecret,
-        );
-        assertStripeEventMode(event, webhookRuntimeConfig);
-      } catch (err) {
-        console.error(
-            "Stripe webhook signature verification failed:",
-            err.message,
-        );
-        return res
-            .status(400)
-            .send({error: "Invalid Stripe webhook signature"});
-      }
-
-      if (event.type === "checkout.session.expired") {
-        const giftExpiry = await giftsPayment.handleGiftCheckoutExpired(stripe, event.data.object);
-        if (giftExpiry.handled) return res.send({success: true, gift: giftExpiry});
-      }
-
-      console.log("💰 Webhook working!");
-      console.log(`Event: ${event.type}`);
-
-      if (event.type.startsWith("charge.dispute.")) {
-        const tipDispute = await ratingsTipping.processStripeTipDispute(stripe, event);
-        if (tipDispute.handled) return res.send({success: true, tipDispute});
-      }
-      if (event.type === "charge.refunded") {
-        const tipRefund = await ratingsTipping.processStripeTipRefund(stripe, event);
-        if (tipRefund.handled) return res.send({success: true, tipRefund});
-        const refundResult = await stripeRefunds.syncChargeRefund({
-          db: getFirestore(),
-          event,
-        });
-        return res.send({success: true, refund: refundResult});
-      }
-
-      if (
-        event.type === "payment_intent.succeeded" ||
-      event.type === "payment_intent.processing" ||
-      event.type === "payment_intent.payment_failed" ||
-      event.type === "payment_intent.canceled"
-      ) {
-        try {
-          const giftIntentResult = await giftsPayment.handleGiftPaymentIntent(
-              stripe,
-              event.data.object,
-              event.id,
-          );
-          if (giftIntentResult && giftIntentResult.handled) {
-            return res.send({success: true, gift: giftIntentResult});
-          }
-        } catch (error) {
-          console.error("Gift PaymentIntent webhook finalization failed", {
-            eventId: event.id,
-            paymentIntentId: event.data && event.data.object ? event.data.object.id : null,
-            status: event.data && event.data.object ? event.data.object.status : null,
-            errorType: error && error.name || "Error",
-          });
-          return res.status(500).send({success: false, error: "gift_payment_intent_failed"});
-        }
-        const tipResult = await ratingsTipping.processStripeTipIntent(
-            stripe,
-            event.data.object,
-        );
-        if (tipResult && tipResult.handled) {
-          return res.send({success: true, tip: tipResult});
-        }
-        try {
-          const senderIntentResult =
-            await senderBooking.handleSenderPaymentIntent(
-                stripe,
-                event.data.object,
-                event.id,
-            );
-          if (senderIntentResult && senderIntentResult.handled) {
-            return res.send({success: true, sender: senderIntentResult});
-          }
-        } catch (error) {
-          console.error("Sender PaymentIntent webhook finalization failed", {
-            eventId: event.id,
-            paymentIntentId:
-              event.data && event.data.object ? event.data.object.id : null,
-            status:
-              event.data && event.data.object ? event.data.object.status : null,
-            error: error && error.message ? error.message : error,
-          });
-          return res
-              .status(500)
-              .send({success: false, error: "sender_payment_intent_failed"});
-        }
-      }
-
-      if (event.type === "charge.succeeded") {
-        console.log("💰 Payment completed!");
-        const sessionData = event.data.object;
-        const metadata = sessionData.metadata;
-
-        const messageObj = JSON.stringify({
-        // sessionData,
-          metadata,
-          success: true,
-        });
-
-        const message = {
-          apns: {
-            payload: {
-              aps: {
-                "content-available": 1,
-              },
-            },
-          },
-          data: {
-            type: "payment",
-            data: messageObj,
-          },
-          // notification: {
-          //   title: `${req.user.firstName}`,
-          //   body: text,
-          // },
-          token: metadata.pushToken,
-        };
-
-        getMessaging()
-            .send(message)
-            .then((response) => {
-              console.log(`Successfully sent message: ${response}`);
-              // console.log(`token: ${metadata.pushToken}`);
-            })
-            .catch((err) => {
-              //   console.log(err)
-              // console.log('new error')
-            });
-      }
-
-      if (event.type == "checkout.session.completed") {
-        console.log("💰 Payment completed!");
-        const sessionData = event.data.object;
-        const metadata = sessionData.metadata || {};
-
-        try {
-          await routeCheckoutSessionCompleted(sessionData, event.id, {
-            businessPayments,
-            giftsPayment,
-            healthPlus,
-            rothLedger,
-            senderBooking: {
-              handleSenderCheckoutSession:
-                (session, eventId) =>
-                  senderBooking.handleSenderCheckoutSession(
-                      stripe,
-                      session,
-                      eventId,
-                  ),
-            },
-            logger: console,
-          });
-        } catch (error) {
-          console.error("Stripe checkout session finalization failed", {
-            eventId: event.id,
-            sessionId: sessionData && sessionData.id ? sessionData.id : null,
-            metadataType: metadata.type || null,
-            purchaseRequestId: metadata.purchaseRequestId || null,
-            paymentIntentId:
-            sessionData && sessionData.payment_intent ?
-              sessionData.payment_intent :
-              null,
-            error: error && error.message ? error.message : error,
-          });
-          return res
-              .status(500)
-              .send({success: false, error: "checkout_finalization_failed"});
-        }
-
-        const messageObj = JSON.stringify({
-        // sessionData,
-          metadata,
-          success: true,
-        });
-
-        if (!metadata.pushToken) {
-          return res.send({success: true});
-        }
-
-        const message = {
-          apns: {
-            payload: {
-              aps: {
-                "content-available": 1,
-              },
-            },
-          },
-          data: {
-            type: "payment",
-            data: messageObj,
-          },
-          // notification: {
-          //   title: `${req.user.firstName}`,
-          //   body: text,
-          // },
-          token: metadata.pushToken,
-        };
-
-        getMessaging()
-            .send(message)
-            .then((response) => {
-              console.log(`Successfully sent message: ${response}`);
-            })
-            .catch((err) => {
-              //   console.log(err)
-              // console.log('new error')
-            });
-      }
-
-      res.send({success: true});
     });
 
 exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {

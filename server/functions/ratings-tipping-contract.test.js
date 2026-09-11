@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 
 const source = fs.readFileSync(require.resolve("./ratings-tipping"), "utf8");
-const index = fs.readFileSync(require.resolve("./index"), "utf8");
+const webhook = fs.readFileSync(require.resolve("./stripe-webhook-core"), "utf8");
 
 test("rating and tip documents are deterministic per delivery", () => {
   assert.match(source, /collection\("driverRatings"\)\.doc\(delivery\.id\)/);
@@ -25,7 +25,7 @@ test("Roth, Stripe and webhook confirmation share one tip finalizer", () => {
   assert.match(source, /rothLedger\.applyWalletDebit/);
   assert.match(source, /stripe\.paymentIntents\.create/);
   assert.match(source, /stripe\.paymentIntents\.retrieve/);
-  assert.match(index, /ratingsTipping\.processStripeTipIntent/);
+  assert.match(webhook, /ratingsTipping\.processStripeTipIntent/);
 });
 
 test("rating and tip notifications are deterministic backend events", () => {
