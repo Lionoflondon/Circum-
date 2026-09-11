@@ -384,8 +384,6 @@ exports.goOnline = riderPresence.goOnline;
 exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
-exports.onRiderOperationalPolicyWrite =
-  riderPresence.onRiderOperationalPolicyWrite;
 exports.markStaleRiderPresenceOffline =
   riderPresence.markStaleRiderPresenceOffline;
 exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;

@@ -6,6 +6,7 @@ const {
   getFirestore,
 } = require("firebase-admin/firestore");
 const giftVoiceMedia = require("./gift-voice-media");
+const {enqueueRiderPolicyRecompute} = require("./rider-policy-dispatch");
 
 const ACTIVE_DELIVERY_STATUSES = [
   "accepted",
@@ -232,6 +233,11 @@ async function closeAccount(data, context) {
   await batch.commit();
 
   if (accountType === "rider") {
+    try {
+      await enqueueRiderPolicyRecompute({riderId: uid, cause: "account.closed", correlationId: `account-closure:${uid}`});
+    } catch (error) {
+      console.error("rider_policy_enqueue_failed", {riderId: uid, action: "account_closed", reason: error.message || "queue_failed"});
+    }
     // Preserve the established Rider contract until that client is migrated
     // through its own provider-aware closure flow.
     await getAuth().revokeRefreshTokens(uid);
