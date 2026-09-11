@@ -185,16 +185,33 @@ test("online intent never bypasses approval, vehicle, location, GPS, stale or co
   assert.equal(core.dispatchDecision({profile: approved, presence: {...fresh, dispatchEligible: true}, now}).allowed, true);
 });
 
-test("forceOfflineWhenBlocked preserves intent for readiness and forces terminal accounts offline", () => {
+test("operational policy trigger is narrow and deleted mirrors stay unexported", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
-  const start = source.indexOf("async function forceOfflineWhenBlocked");
-  const end = source.indexOf("exports.onRiderRecordAvailabilityWrite");
-  const body = source.slice(start, end);
-  assert.match(body, /terminalBlockedReason/);
-  assert.match(body, /dispatchRequirementsDecision/);
-  assert.match(body, /dispatchEligible: decision\.allowed/);
-  assert.match(body, /onlineIntent: false/);
-  assert.match(body, /isOnline: false/);
+  const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+  assert.match(source, /exports\.onRiderOperationalPolicyWrite/);
+  assert.match(source, /if \(!operationalPolicyChanged\(before, after\)\) return null/);
+  assert.doesNotMatch(index, /exports\.onRiderRecordAvailabilityWrite/);
+  assert.doesNotMatch(index, /exports\.onRiderProfileAvailabilityWrite/);
+});
+
+test("canonical operational calculator preserves intent for readiness and blocks terminal riders", () => {
+  const now = Date.now();
+  const presence = {onlineIntent: true, isOnline: true, availabilityStatus: "available", connectionStatus: "connected", lastHeartbeatAt: now, currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, updatedAt: now}};
+  const pending = core.computeRiderOperationalState({profile: {approvalStatus: "pending", vehicleApproved: true}, presence, now});
+  assert.equal(pending.onlineIntent, true);
+  assert.equal(pending.dispatchEligible, false);
+  assert.equal(pending.dispatchReason, "approval_required");
+  const blocked = core.computeRiderOperationalState({profile: {accountStatus: "suspended", approvalStatus: "approved", vehicleApproved: true}, presence, now});
+  assert.equal(blocked.onlineIntent, false);
+  assert.equal(blocked.shouldForceOffline, true);
+  assert.equal(blocked.dispatchEligible, false);
+  assert.equal(blocked.presenceState, core.PRESENCE_STATES.OFFLINE);
+});
+
+test("semantic patch makes repeated recomputation a no-op", () => {
+  const state = {onlineIntent: false, shouldForceOffline: true, dispatchEligible: false, dispatchReason: "account_blocked", presenceState: core.PRESENCE_STATES.OFFLINE, connectionStatus: "blocked"};
+  assert.deepEqual(core.semanticPatch(state, {...state}), {});
+  assert.deepEqual(core.semanticPatch(state, {...state, dispatchReason: "vehicle_required"}), {dispatchReason: "vehicle_required"});
 });
 
 test("Admin recovery can restore intent but cannot forge dispatch eligibility", () => {

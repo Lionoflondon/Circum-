@@ -16,6 +16,7 @@ const now = () => Date.now();
 const ctx = (uid) => ({auth: {uid, token: {email: `${uid}@example.test`}}});
 const location = () => ({latitude: 51.5, longitude: -0.1, accuracyMeters: 10, permission: "always", gpsStatus: "active", capturedAt: now()});
 const approved = {approvalStatus: "approved", verificationStatus: "approved", vehicleApproved: true, vehicleType: "car", vehicleRegistration: "AB12 CDE", onboardingStatus: "approved"};
+const runId = `${Date.now()}-${process.pid}`;
 
 async function seedRider(uid, profile = approved) {
   await db.doc(`riders/${uid}`).set({riderId: uid, ...profile});
@@ -48,7 +49,7 @@ test("intent is accepted but offers and acceptance remain denied for every readi
 });
 
 test("stale presence excludes offers and independently denies acceptance", async () => {
-  const uid = "stale-rider";
+  const uid = `stale-rider-${runId}`;
   await seedRider(uid);
   await db.doc(`riderPresence/${uid}`).set({riderId: uid, onlineIntent: true, isOnline: true, presenceState: "stale", availabilityStatus: "available", connectionStatus: "stale", dispatchEligible: false, lastHeartbeatAt: now() - 180000, currentLocation: location()});
   await assertNoOffers(uid);
@@ -56,18 +57,18 @@ test("stale presence excludes offers and independently denies acceptance", async
 });
 
 test("healthy heartbeat and readiness changes recover eligibility; terminal suspension forces offline", async () => {
-  const uid = "recovery-rider";
+  const uid = `recovery-rider-${runId}`;
   await seedRider(uid, {...approved, approvalStatus: "pending", verificationStatus: "pending", vehicleApproved: false});
   await presenceApi.goOnline.run({location: location()}, ctx(uid));
   await db.doc(`riderProfiles/${uid}`).set(approved, {merge: true});
   await db.doc(`riders/${uid}`).set(approved, {merge: true});
-  await presenceApi._test.forceOfflineWhenBlocked({after: {exists: true}}, {params: {riderId: uid}});
+  await presenceApi._test.applyRiderOperationalState(uid, "test-readiness", db);
   let stored = (await db.doc(`riderPresence/${uid}`).get()).data();
   assert.equal(stored.onlineIntent, true);
   assert.equal(stored.dispatchEligible, true);
 
   await db.doc(`riderProfiles/${uid}`).set({accountStatus: "suspended"}, {merge: true});
-  await presenceApi._test.forceOfflineWhenBlocked({after: {exists: true}}, {params: {riderId: uid}});
+  await presenceApi._test.applyRiderOperationalState(uid, "test-terminal", db);
   stored = (await db.doc(`riderPresence/${uid}`).get()).data();
   assert.equal(stored.onlineIntent, false);
   assert.equal(stored.isOnline, false);
@@ -75,8 +76,8 @@ test("healthy heartbeat and readiness changes recover eligibility; terminal susp
 });
 
 test("fully eligible Rider receives an offer and acceptance revalidates then succeeds", async () => {
-  const uid = "eligible-rider";
-  const deliveryId = "eligible-delivery";
+  const uid = `eligible-rider-${runId}`;
+  const deliveryId = `eligible-delivery-${runId}`;
   await seedRider(uid);
   const online = await presenceApi.goOnline.run({location: location()}, ctx(uid));
   assert.equal(online.dispatchEligible, true);
