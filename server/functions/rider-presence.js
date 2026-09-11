@@ -282,70 +282,47 @@ exports.onDeliveryPresenceWrite = functions.firestore
       return null;
     });
 
-async function forceOfflineWhenBlocked(change, context) {
-  if (!change.after.exists) return null;
-  const riderId = context.params.riderId;
-  const db = getFirestore();
-  const profile = await riderProfile(db, riderId);
-  const terminalReason = core.terminalBlockedReason(profile);
-  if (!terminalReason) {
-    const current = await db.collection("riderPresence").doc(riderId).get();
-    if (!current.exists) return null;
-    const presence = current.data();
-    const decision = core.dispatchRequirementsDecision({profile, presence});
-    const projection = {
-      dispatchEligible: decision.allowed,
-      dispatchReason: decision.reason,
+async function applyRiderOperationalState(riderId, cause, db = getFirestore()) {
+  if (!riderId) return {changed: false, reason: "missing_rider"};
+  return db.runTransaction(async (transaction) => {
+    const riderRef = db.collection("riders").doc(riderId);
+    const profileRef = db.collection("riderProfiles").doc(riderId);
+    const presenceRef = db.collection("riderPresence").doc(riderId);
+    const [riderSnapshot, profileSnapshot, presenceSnapshot] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(profileRef),
+      transaction.get(presenceRef),
+    ]);
+    const rider = riderSnapshot.exists ? riderSnapshot.data() || {} : {};
+    const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+    const presence = presenceSnapshot.exists ? presenceSnapshot.data() || {} : {};
+    const desired = core.computeRiderOperationalState({profile: {...rider, ...profile}, presence});
+    const patch = core.semanticPatch(presence, desired);
+    if (Object.keys(patch).length === 0) return {changed: false, state: desired};
+    transaction.set(presenceRef, {
+      ...patch,
+      riderId,
       updatedAt: FieldValue.serverTimestamp(),
-      source: "readinessRecalculation",
-    };
-    const batch = db.batch();
-    batch.set(current.ref, projection, {merge: true});
-    batch.set(db.collection("riders").doc(riderId), projection, {merge: true});
-    batch.set(db.collection("riderProfiles").doc(riderId), projection, {merge: true});
-    await batch.commit();
-    return null;
-  }
-  const offline = {
-    riderId,
-    onlineIntent: false,
-    isOnline: false,
-    presenceState: core.PRESENCE_STATES.OFFLINE,
-    busy: false,
-    availabilityStatus: "offline",
-    connectionStatus: "offline",
-    dispatchEligible: false,
-    dispatchReason: "account_blocked",
-    offlineReason: "admin_restriction",
-    offlineDetail: terminalReason,
-    lastOfflineAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    source: "adminRestriction",
-  };
-  const projection = {
-    isOnline: false,
-    status: "offline",
-    availabilityStatus: "offline",
-    dispatchEligible: false,
-    dispatchReason: "account_blocked",
-    updatedAt: FieldValue.serverTimestamp(),
-    source: "adminRestriction",
-  };
-  const batch = db.batch();
-  batch.set(db.collection("riderPresence").doc(riderId), offline, {merge: true});
-  batch.set(db.collection("riders").doc(riderId), projection, {merge: true});
-  batch.set(db.collection("riderProfiles").doc(riderId), projection, {merge: true});
-  await batch.commit();
-  return null;
+      source: cause,
+    }, {merge: true});
+    return {changed: true, state: desired, fields: Object.keys(patch)};
+  });
 }
 
-exports.onRiderRecordAvailabilityWrite = functions.firestore
-    .document("riders/{riderId}")
-    .onWrite(forceOfflineWhenBlocked);
+function operationalPolicyChanged(before = {}, after = {}) {
+  const fields = ["accountStatus", "riderStatus", "approvalStatus", "verificationStatus", "onboardingStatus", "isFrozen", "isSuspended", "isClosed", "vehicleApproved", "vehicleVerified", "vehicleStatus", "vehicle"];
+  return fields.some((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
+}
 
-exports.onRiderProfileAvailabilityWrite = functions.firestore
+exports.onRiderOperationalPolicyWrite = functions.firestore
     .document("riderProfiles/{riderId}")
-    .onWrite(forceOfflineWhenBlocked);
+    .onUpdate(async (change, context) => {
+      const before = change.before.data() || {};
+      const after = change.after.data() || {};
+      if (!operationalPolicyChanged(before, after)) return null;
+      await applyRiderOperationalState(context.params.riderId, "policyTransition");
+      return null;
+    });
 
 exports.markStaleRiderPresenceOffline = functions.pubsub
     .schedule("every 2 minutes")
@@ -403,4 +380,4 @@ exports.dispatchablePresenceDecision = function(riderProfileData = {}, presence 
   return core.dispatchDecision({profile: riderProfileData, presence});
 };
 
-exports._test = {forceOfflineWhenBlocked};
+exports._test = {applyRiderOperationalState, operationalPolicyChanged};

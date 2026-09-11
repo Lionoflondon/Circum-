@@ -108,6 +108,33 @@ function dispatchRequirementsDecision({profile = {}, presence = {}, now = Date.n
   return {allowed: true, presenceState: state, reason: null};
 }
 
+function computeRiderOperationalState({profile = {}, presence = {}, now = Date.now()}) {
+  const terminal = terminalBlockedReason(profile);
+  const onlineIntent = terminal ? false : presence.onlineIntent === true || presence.isOnline === true;
+  const candidate = {
+    ...presence,
+    onlineIntent,
+    isOnline: onlineIntent,
+  };
+  const decision = dispatchRequirementsDecision({profile, presence: candidate, now});
+  const state = terminal ? PRESENCE_STATES.OFFLINE : decision.presenceState;
+  return {
+    onlineIntent,
+    isOnline: onlineIntent,
+    shouldForceOffline: Boolean(terminal),
+    dispatchEligible: terminal ? false : decision.allowed,
+    dispatchReason: terminal ? "account_blocked" : decision.reason,
+    presenceState: state,
+    connectionStatus: terminal ? "blocked" : lower(candidate.connectionStatus) ||
+      (state === PRESENCE_STATES.STALE ? "stale" : onlineIntent ? "connected" : "offline"),
+    ...(terminal ? {availabilityStatus: "offline", busy: false} : {}),
+  };
+}
+
+function semanticPatch(current = {}, desired = {}) {
+  return Object.fromEntries(Object.entries(desired).filter(([key, value]) => current[key] !== value));
+}
+
 function dispatchDecision(args) {
   const decision = dispatchRequirementsDecision(args);
   if (!decision.allowed) return decision;
@@ -178,6 +205,7 @@ module.exports = {
   STALE_HEARTBEAT_MS,
   blockedReason,
   blockedReasonForAccess,
+  computeRiderOperationalState,
   canGoOnline,
   canReceiveDispatch,
   dispatchDecision,
@@ -186,6 +214,7 @@ module.exports = {
   nextPresenceOnDelivery,
   presenceState,
   riderApproved,
+  semanticPatch,
   readinessReason,
   terminalBlockedReason,
   vehicleVerified,
