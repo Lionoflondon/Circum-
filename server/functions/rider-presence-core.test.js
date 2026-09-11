@@ -61,6 +61,41 @@ test("founder access never bypasses terminal account controls", () => {
   }
 });
 
+test("legacy active Admin suspension and account closure aliases remain terminal", () => {
+  assert.equal(core.terminalBlockedReason({driverStatus: "suspended"}), "Account suspended.");
+  assert.equal(core.terminalBlockedReason({accountClosed: true}), "Account closed.");
+  const presence = {onlineIntent: true, isOnline: true, availabilityStatus: "available", busy: true};
+  for (const profile of [{driverStatus: "suspended"}, {accountClosed: true}]) {
+    const state = core.computeRiderOperationalState({profile, presence});
+    assert.equal(state.onlineIntent, false);
+    assert.equal(state.dispatchEligible, false);
+    assert.equal(state.availabilityStatus, "offline");
+    assert.equal(state.busy, false);
+  }
+});
+
+test("Admin eligibility review blocks dispatch without clearing non-terminal online intent", () => {
+  const now = Date.now();
+  const presence = {
+    onlineIntent: true,
+    isOnline: true,
+    availabilityStatus: "available",
+    connectionStatus: "connected",
+    lastHeartbeatAt: now,
+    currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, updatedAt: now},
+  };
+  for (const eligibilityState of ["ineligible", "under_review"]) {
+    const state = core.computeRiderOperationalState({
+      profile: {approvalStatus: "approved", vehicleApproved: true, eligibilityState},
+      presence,
+      now,
+    });
+    assert.equal(state.onlineIntent, true);
+    assert.equal(state.dispatchEligible, false);
+    assert.equal(state.dispatchReason, "eligibility_required");
+  }
+});
+
 test("goOnline never leaks raw internal failures to riders", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const goOnlineStart = source.indexOf("exports.goOnline = riderCallable");
