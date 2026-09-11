@@ -5,8 +5,26 @@ const assert = require("node:assert/strict");
 const {
   assertStripeEventMode,
   keyMode,
+  resolveFirebaseProjectId,
   resolveStripeRuntimeConfig,
 } = require("./stripe-config");
+
+test("Firebase project identity uses explicit environment before Admin app metadata", () => {
+  const firebaseApp = {options: {projectId: "admin-project"}};
+  assert.equal(resolveFirebaseProjectId({env: {GCLOUD_PROJECT: "gcloud-project", GOOGLE_CLOUD_PROJECT: "google-project"}, firebaseApp}), "gcloud-project");
+  assert.equal(resolveFirebaseProjectId({env: {GOOGLE_CLOUD_PROJECT: "google-project"}, firebaseApp}), "google-project");
+  assert.equal(resolveFirebaseProjectId({env: {GCP_PROJECT: "legacy-project"}, firebaseApp}), "legacy-project");
+  assert.equal(resolveFirebaseProjectId({env: {}, firebaseApp}), "admin-project");
+  assert.equal(resolveFirebaseProjectId({env: {}, firebaseApp: {options: {}}}), "");
+});
+
+test("live project allow-list accepts only a detected exact match", () => {
+  const base = {STRIPE_MODE: "live", STRIPE_SECRET_KEY: "sk_live_example", STRIPE_LIVE_MODE_ENABLED: "true"};
+  assert.equal(resolveStripeRuntimeConfig({env: {...base, GCLOUD_PROJECT: "circum-2797c", STRIPE_LIVE_FIREBASE_PROJECT: "circum-2797c"}, firebaseProject: "circum-2797c"}).mode, "live");
+  assert.throws(() => resolveStripeRuntimeConfig({env: {...base, STRIPE_LIVE_FIREBASE_PROJECT: "circum-2797c"}, firebaseProject: ""}), /not explicitly allowed/);
+  assert.throws(() => resolveStripeRuntimeConfig({env: {...base, STRIPE_LIVE_FIREBASE_PROJECT: "other"}, firebaseProject: "circum-2797c"}), /not explicitly allowed/);
+  assert.throws(() => resolveStripeRuntimeConfig({env: base, firebaseProject: "circum-2797c"}), /not explicitly allowed/);
+});
 
 test("test mode accepts only test secret keys", () => {
   const config = resolveStripeRuntimeConfig({

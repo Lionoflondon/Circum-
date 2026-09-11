@@ -20,6 +20,15 @@ function secretMode(value) {
   return "missing";
 }
 
+function resolveFirebaseProjectId({env = process.env, firebaseApp} = {}) {
+  return text(
+      env.GCLOUD_PROJECT ||
+      env.GOOGLE_CLOUD_PROJECT ||
+      env.GCP_PROJECT ||
+      (firebaseApp && firebaseApp.options && firebaseApp.options.projectId),
+  );
+}
+
 function explicitLiveEnabled(config = {}, env = process.env) {
   return env.STRIPE_LIVE_MODE_ENABLED === "true" ||
     config.live_mode_enabled === true ||
@@ -29,7 +38,7 @@ function explicitLiveEnabled(config = {}, env = process.env) {
 function resolveStripeRuntimeConfig({
   config = {},
   env = process.env,
-  firebaseProject = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "",
+  firebaseProject = resolveFirebaseProjectId(),
   webhookSecret = "",
   requireWebhookSecret = false,
 } = {}) {
@@ -83,5 +92,6 @@ function assertStripeEventMode(event, runtimeConfig) {
 module.exports = {
   assertStripeEventMode,
   keyMode,
+  resolveFirebaseProjectId,
   resolveStripeRuntimeConfig,
 };

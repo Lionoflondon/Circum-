@@ -69,3 +69,43 @@ test("webhook rejects wrong method, path and content type before processor invoc
   });
   assert.equal(calls, 0);
 });
+
+test("20 simultaneous first requests initialize one shared processor", async () => {
+  let factoryCalls = 0;
+  const server = createServer({processorFactory: async () => {
+    factoryCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return async () => ({status: 200, body: {received: true}});
+  }});
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const port = server.address().port;
+    const raw = Buffer.from("{}");
+    const responses = await Promise.all(Array.from({length: 20}, () => request(port, {method: "POST", path: "/stripe/webhook", headers: {"content-type": "application/json", "stripe-signature": "sig_fixture", "content-length": raw.length}, body: raw})));
+    assert.deepEqual(new Set(responses.map((response) => response.status)), new Set([200]));
+    assert.equal(factoryCalls, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("failed initialization is retained without poisoning later requests", async () => {
+  let factoryCalls = 0;
+  const originalError = new Error("controlled initialization failure");
+  const server = createServer({processorFactory: () => {
+    factoryCalls += 1;
+    throw originalError;
+  }});
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const port = server.address().port;
+    const raw = Buffer.from("{}");
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await request(port, {method: "POST", path: "/stripe/webhook", headers: {"content-type": "application/json", "stripe-signature": "sig_fixture", "content-length": raw.length}, body: raw});
+      assert.equal(response.status, 500);
+    }
+    assert.equal(factoryCalls, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

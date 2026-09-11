@@ -3,19 +3,24 @@
 
 const http = require("node:http");
 const crypto = require("node:crypto");
-const {initializeApp} = require("firebase-admin/app");
+const {getApp, getApps, initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {resolveStripeRuntimeConfig, assertStripeEventMode} = require("./stripe-config");
+const {resolveFirebaseProjectId, resolveStripeRuntimeConfig, assertStripeEventMode} = require("./stripe-config");
 const {createStripeWebhookProcessor} = require("./stripe-webhook-core");
 
 const MAX_BODY_BYTES = 1024 * 1024;
+let firestoreSettingsApplied = false;
 
 function createProductionProcessor() {
-  initializeApp();
-  const db = getFirestore();
-  db.settings({ignoreUndefinedProperties: true});
-  const runtimeConfig = resolveStripeRuntimeConfig({requireWebhookSecret: true});
+  const firebaseApp = getApps().length ? getApp() : initializeApp();
+  const firebaseProject = resolveFirebaseProjectId({firebaseApp});
+  const runtimeConfig = resolveStripeRuntimeConfig({firebaseProject, requireWebhookSecret: true});
+  const db = getFirestore(firebaseApp);
+  if (!firestoreSettingsApplied) {
+    db.settings({ignoreUndefinedProperties: true});
+    firestoreSettingsApplied = true;
+  }
   const stripe = require("stripe")(runtimeConfig.secretKey);
   return createStripeWebhookProcessor({
     stripe,
@@ -43,7 +48,11 @@ function json(response, status, body) {
 
 function createServer(options = {}) {
   const processorFactory = options.processorFactory || createProductionProcessor;
-  let processor;
+  let processorPromise;
+  const getProcessor = () => {
+    if (!processorPromise) processorPromise = Promise.resolve().then(processorFactory);
+    return processorPromise;
+  };
   return http.createServer((request, response) => {
     if (request.method === "GET" && request.url === "/health") return json(response, 200, {status: "ok", runtime: "node22", version: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (request.url !== "/stripe/webhook") return json(response, 404, {error: "Not found"});
@@ -64,7 +73,7 @@ function createServer(options = {}) {
       if (response.headersSent) return;
       if (tooLarge) return json(response, 413, {error: "Request too large"});
       try {
-        if (!processor) processor = processorFactory();
+        const processor = await getProcessor();
         const result = await processor({
           rawBody: Buffer.concat(chunks),
           signature: request.headers["stripe-signature"],
