@@ -1,0 +1,13 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - Dockerfile.rider-policy-worker
+      - --build-arg
+      - CIRCUM_SOURCE_SHA=${_CIRCUM_SOURCE_SHA}
+      - --tag
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
