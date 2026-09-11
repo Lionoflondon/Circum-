@@ -46,14 +46,16 @@ function blockedReason(profile = {}) {
 }
 
 function terminalBlockedReason(profile = {}) {
-  const status = lower(profile.accountStatus || profile.riderStatus);
+  const status = lower(profile.accountStatus || profile.riderStatus || profile.driverStatus);
   if (profile.isFrozen === true || status === "frozen") return "Account frozen.";
   if (profile.isSuspended === true || status === "suspended") return "Account suspended.";
-  if (profile.isClosed === true || status === "closed") return "Account closed.";
+  if (profile.isClosed === true || profile.accountClosed === true || status === "closed") return "Account closed.";
   return "";
 }
 
 function readinessReason(profile = {}) {
+  const eligibility = lower(profile.riderEligibilityState || profile.eligibilityState);
+  if (["ineligible", "under_review"].includes(eligibility)) return "eligibility_required";
   if (!riderApproved(profile)) return "approval_required";
   if (!vehicleVerified(profile)) return "vehicle_required";
   return null;
