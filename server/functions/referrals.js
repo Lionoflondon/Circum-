@@ -266,6 +266,52 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   }
 }
 
+async function handleDeliveryCompletedReferral({delivery = {}, deliveryId}) {
+  const id = `${deliveryId || delivery.deliveryId || ""}`;
+  if (!id) return {status: "not_qualifying"};
+  const senderId = `${delivery.senderId || delivery.userId || ""}`;
+  const riderId = `${delivery.riderId || delivery.assignedRiderId || ""}`;
+  const results = await Promise.all([
+    senderId ? activateReferralForUser({
+      referredUserId: senderId,
+      activityType: "sender_completed_paid_booking",
+      activityId: id,
+      userEmail: delivery.senderEmail,
+    }) : {status: "none"},
+    riderId ? activateReferralForUser({
+      referredUserId: riderId,
+      activityType: "rider_completed_delivery",
+      activityId: id,
+      userEmail: delivery.riderEmail,
+    }) : {status: "none"},
+  ]);
+  return {sender: results[0], rider: results[1]};
+}
+
+async function handleGiftCompletedReferral({giftId, senderId, senderEmail}) {
+  if (!giftId || !senderId) return {status: "not_qualifying"};
+  return activateReferralForUser({
+    referredUserId: `${senderId}`,
+    activityType: "gift_request_completed",
+    activityId: `${giftId}`,
+    userEmail: senderEmail,
+  });
+}
+
+async function handleHealthPlusCompletedReferral({pickupId, userId, email}) {
+  if (!pickupId || !userId) return {status: "not_qualifying"};
+  return activateReferralForUser({
+    referredUserId: `${userId}`,
+    activityType: "health_plus_completed",
+    activityId: `${pickupId}`,
+    userEmail: email,
+  });
+}
+
+exports.handleDeliveryCompletedReferral = handleDeliveryCompletedReferral;
+exports.handleGiftCompletedReferral = handleGiftCompletedReferral;
+exports.handleHealthPlusCompletedReferral = handleHealthPlusCompletedReferral;
+
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
   const now = `${after.status || after.giftStatus || ""}`.toLowerCase();

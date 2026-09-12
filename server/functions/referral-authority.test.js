@@ -31,3 +31,17 @@ test("all completion triggers route through the same authority", () => {
   ]) assert.match(source, new RegExp(`exports\\.${trigger}`));
   assert.match(source, /return activateReferralForUser\(/);
 });
+
+test("platform completion handlers preserve Rider, Gift, and Health+ referral authority", () => {
+  for (const handler of [
+    "handleDeliveryCompletedReferral",
+    "handleGiftCompletedReferral",
+    "handleHealthPlusCompletedReferral",
+  ]) {
+    assert.match(source, new RegExp(`exports\\.${handler} = ${handler}`));
+  }
+  assert.match(source, /activityType: "rider_completed_delivery"/);
+  assert.match(source, /activityType: "gift_request_completed"/);
+  assert.match(source, /activityType: "health_plus_completed"/);
+  assert.match(source, /const DEFAULT_REWARD = DEFAULT_REFERRAL_REWARD_ROTH/);
+});
