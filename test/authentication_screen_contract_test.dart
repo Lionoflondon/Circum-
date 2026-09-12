@@ -50,8 +50,29 @@ void main() {
   test('sender app auth disables busy submit and validates account password',
       () {
     final content = source('lib/app/sender_mobile/sender_mobile_home.dart');
-    expect(content, contains('onTap: _busy ? null : () => _submit()'));
+    expect(
+        content, contains('onTap: _busy || providerBusy ? null : () => _submit()'));
     expect(content, contains("_password.text.length >= 6"));
     expect(content, contains("'Use at least 6 characters'"));
+  });
+
+  test('active Sender auth is email-only and exposes guarded providers', () {
+    final content = source('lib/app/sender_mobile/sender_mobile_home.dart');
+    expect(content, contains("label: 'EMAIL'"));
+    expect(content, isNot(contains("label: 'EMAIL OR PHONE'")));
+    expect(content, contains('isValidSenderAuthEmail(_identity.text)'));
+    expect(content, contains("Key('senderGoogleSignInButton')"));
+    expect(content, contains("Key('senderAppleSignInButton')"));
+    expect(content, contains('add(SignInWithGoogle())'));
+    expect(content, contains('add(SignInWithAppleAuth())'));
+  });
+
+  test('Sender create mode never falls back to signing in an existing email',
+      () {
+    final auth = source('lib/app/authentication/sender_email_auth.dart');
+    expect(auth, contains('createUserWithEmailAndPassword'));
+    expect(auth, contains('signInWithEmailAndPassword'));
+    expect(auth, isNot(contains("error.code == 'email-already-in-use'")));
+    expect(auth, isNot(contains('catchError')));
   });
 }
