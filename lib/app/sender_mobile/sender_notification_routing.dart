@@ -90,11 +90,16 @@ Map<String, dynamic> parseSenderNotificationDestination(
     payload['deliveryId'],
     parsedData['deliveryId'],
   ]);
+  final giftId = _firstText([
+    payload['giftId'],
+    parsedData['giftId'],
+  ]);
 
   return {
     if (route.isNotEmpty) 'route': route,
     if (chatId.isNotEmpty) 'chatId': chatId,
     if (deliveryId.isNotEmpty) 'deliveryId': deliveryId,
+    if (giftId.isNotEmpty) 'giftId': giftId,
   };
 }
 
@@ -181,7 +186,7 @@ String _routeForNotificationType(String type) => switch (type) {
       'delivery-completed' ||
       'delivery' =>
         'tracking',
-      'gift' || 'gifts' => 'gift',
+      'gift' || 'gifts' || 'gift_story_ready' => 'gift',
       'health' || 'health_plus' => 'health',
       'business' => 'business',
       _ => 'notifications',
