@@ -39,6 +39,25 @@ void main() {
     expect(destination, {'route': 'wallet'});
   });
 
+  test('routes Gift Story ready notification to the referenced Gift', () {
+    final destination = parseSenderNotificationDestination({
+      'type': 'gift_story_ready',
+      'giftId': 'gift-1',
+    });
+
+    expect(destination, {'route': 'gift', 'giftId': 'gift-1'});
+  });
+
+  test('foreground Gift Story handling uses a normal local notification', () {
+    final messaging = File('lib/messaging.dart').readAsStringSync();
+    final giftHandler = messaging.substring(
+      messaging.indexOf("message.data['type'] == 'gift_story_ready'"),
+    );
+    expect(giftHandler, contains('notifyUser('));
+    expect(giftHandler, isNot(contains('time-sensitive')));
+    expect(giftHandler, isNot(contains('critical')));
+  });
+
   test('falls back unknown payloads to Notification Centre', () {
     final destination = parseSenderNotificationDestination({
       'type': 'unknown',

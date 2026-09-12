@@ -6,6 +6,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
+const communicationEngine = require("./communication-engine");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -533,26 +534,15 @@ async function queueSenderStoryAppNotification(db, {giftId, userId, token, retry
     priority: 1,
     secureStoryUrl: url,
   });
-  await db.collection("notifications").doc(notificationId).set({
-    notificationId,
+  await communicationEngine.emitNotification({
     recipientId: uid,
     recipientRole: "sender",
     type: "gift_story_ready",
     title: "Your Gift Story is ready",
     body: "Your Circum Gift Story is ready.",
-    message: "Your Circum Gift Story is ready.",
-    category: "gifts",
-    giftId,
-    data: {giftId, secureStoryUrl: url, destination: {route: "gift", giftId}},
-    read: false,
-    archived: false,
-    deliveryStatus: "persisted",
-    pushDeliveryStatus: "pending",
-    pushProvider: "fcm",
-    retryCount: 0,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+    data: {category: "gifts", giftId, secureStoryUrl: url, route: "gift"},
+    dedupeKey: `gift_story_ready:${giftId}:${uid}`,
+  });
   return true;
 }
 
