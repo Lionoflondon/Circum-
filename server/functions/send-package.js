@@ -1,10 +1,10 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
 const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
 const {timing, start: startLatency} = require("./latency-observability");
+const communicationEngine = require("./communication-engine");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -12,7 +12,6 @@ function senderOwnsRequest(delivery, uid) {
 
 async function dispatchDeliveryRequest({
   db = getFirestore(),
-  messaging = getMessaging(),
   requestId,
   uid,
   authToken = {},
@@ -192,35 +191,30 @@ async function dispatchDeliveryRequest({
   timing("ELIGIBILITY_COMPLETE", {correlationId: requestId, workloadCount: closestRiders.length});
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
-    if (!rider.fcmToken) {
-      return {riderId: rider.id, sent: false, reason: "missing_fcm_token"};
-    }
-    const message = {
-      apns: {
-        payload: {
-          aps: {
-            "content-available": 1,
-          },
-        },
-      },
-      data: {
-        "type": "broadcast-request",
-        "requestId": requestId,
-        "deliveryId": deliveryRequest[0].id,
-        "data": JSON.stringify({
+    try {
+      const notificationId = await communicationEngine.emitNotification({
+        recipientId: rider.id,
+        recipientRole: "rider",
+        type: "new_delivery",
+        title: "New delivery available",
+        body: "A delivery matching your vehicle is ready to review.",
+        data: {
+          category: "jobs",
+          route: "jobs",
           deliveryId: deliveryRequest[0].id,
           requestId,
-          riderId: rider.id,
-          distanceFromPickup: rider.distanceFromPickup,
-        }),
-      },
-      token: rider.fcmToken,
-
-    };
-
-    try {
-      const response = await messaging.send(message);
-      return {riderId: rider.id, sent: true, response};
+          distanceFromPickup: `${rider.distanceFromPickup}`,
+        },
+        dedupeKey: `delivery_offer:${deliveryRequest[0].id}:${rider.id}`,
+      });
+      const notification = await db.collection("notifications").doc(notificationId).get();
+      const pushStatus = notification.exists ? `${notification.data().pushDeliveryStatus || "pending"}` : "pending";
+      return {
+        riderId: rider.id,
+        notificationId,
+        sent: pushStatus === "sent",
+        reason: pushStatus === "sent" ? null : pushStatus,
+      };
     } catch (err) {
       console.warn("rider_broadcast_push_failed", {
         requestId,

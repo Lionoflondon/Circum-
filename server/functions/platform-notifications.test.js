@@ -126,7 +126,20 @@ test("delivery creation notifies merged online rider candidates", () => {
   assert.match(source, /where\("availabilityStatus", "in", \["online", "available"\]\)/);
   assert.match(source, /const riders = await onlineCandidateRiderRecords\(db\);/);
   assert.match(source, /collection\("dispatchInspections"\)/);
+  assert.match(source, /type: "new_delivery"/);
+  assert.match(source, /deliveryId: snapshot\.id/);
+  assert.match(source, /route: "jobs"/);
+  assert.match(source, /dedupeKey: `delivery_offer:\$\{snapshot\.id\}:\$\{decision\.riderId\}`/);
   assert.doesNotMatch(source, /const riders = await getFirestore\(\)\.collection\("riderProfiles"\)\.get\(\);/);
+});
+
+test("all dispatch entry points share one Rider job notification identity", () => {
+  const platform = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  const dispatch = fs.readFileSync(path.join(__dirname, "send-package.js"), "utf8");
+  assert.match(platform, /dedupeKey: `delivery_offer:\$\{snapshot\.id\}:\$\{decision\.riderId\}`/);
+  assert.match(dispatch, /dedupeKey: `delivery_offer:\$\{deliveryRequest\[0\]\.id\}:\$\{rider\.id\}`/);
+  assert.match(dispatch, /communicationEngine\.emitNotification/);
+  assert.match(dispatch, /rider_broadcast_push_failed/);
 });
 
 test("dispatch candidate decision rejects offline presence even when profile is stale online", () => {

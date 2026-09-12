@@ -1,9 +1,57 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const test = require("node:test");
+const {destinationFor, pushMessageFor} = require("./communication-engine");
 
 const source = fs.readFileSync("communication-engine.js", "utf8");
 const indexSource = fs.readFileSync("index.js", "utf8");
+
+test("Rider job pushes use the native job contract and attention configuration", () => {
+  assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1"}), {
+    route: "jobs",
+    bookingId: "delivery-1",
+  });
+  const message = pushMessageFor({
+    token: "rider-token",
+    payload: {
+      notificationId: "notification-1",
+      recipientRole: "rider",
+      type: "new_delivery",
+      title: "New delivery available",
+      body: "Review the offer.",
+      data: {deliveryId: "delivery-1", requestId: "request-1"},
+    },
+    destination: {route: "jobs", bookingId: "request-1"},
+  });
+  assert.equal(message.data.type, "broadcast-request");
+  assert.equal(message.data.notificationType, "new_delivery");
+  assert.equal(message.data.deliveryId, "delivery-1");
+  assert.equal(message.data.requestId, "request-1");
+  assert.equal(message.data.route, "jobs");
+  assert.equal(message.android.notification.channelId, "notifications_updates");
+  assert.equal(message.apns.headers["apns-priority"], "10");
+  assert.equal(message.apns.payload.aps["interruption-level"], "time-sensitive");
+});
+
+test("Gift Story pushes remain normal and never inherit Rider urgency", () => {
+  const message = pushMessageFor({
+    token: "sender-token",
+    payload: {
+      notificationId: "notification-2",
+      recipientRole: "sender",
+      type: "gift_story_ready",
+      title: "Your Gift Story is ready",
+      body: "Your Circum Gift Story is ready.",
+      data: {giftId: "gift-1"},
+    },
+    destination: {route: "gift", giftId: "gift-1"},
+  });
+  assert.equal(message.data.type, "gift_story_ready");
+  assert.equal(message.data.route, "gift");
+  assert.equal(message.data.giftId, "gift-1");
+  assert.equal("apns" in message, false);
+  assert.equal("android" in message, false);
+});
 
 test("announcement recipients use JavaScript arrays correctly", () => {
   assert.equal(source.includes("recipients.add("), false);

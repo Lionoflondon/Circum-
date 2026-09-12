@@ -60,6 +60,7 @@ function destinationFor(type, data = {}) {
   const healthId = clean(data.healthPickupId || data.pickupId);
   const businessId = clean(data.businessId);
   const chatId = clean(data.chatId);
+  if (type === "new_delivery") return {route: "jobs", bookingId};
   if (chatId || type === "chat_message" || type === "admin_message") {
     return {route: "conversation", chatId, bookingId};
   }
@@ -71,6 +72,55 @@ function destinationFor(type, data = {}) {
   if (type.startsWith("business_") || businessId) return {route: "business", businessId};
   if (bookingId) return {route: "tracking", bookingId};
   return {route: "notifications"};
+}
+
+function pushMessageFor({token, payload, destination}) {
+  const riderJob = payload.recipientRole === "rider" && payload.type === "new_delivery";
+  const data = {
+    type: riderJob ? "broadcast-request" : payload.type,
+    notificationType: payload.type,
+    notificationId: payload.notificationId,
+    route: destination.route || "notifications",
+    bookingId: clean(destination.bookingId),
+    deliveryId: clean(payload.data && payload.data.deliveryId || destination.bookingId),
+    requestId: clean(payload.data && payload.data.requestId || destination.bookingId),
+    chatId: clean(destination.chatId),
+    giftId: clean(destination.giftId),
+    healthPickupId: clean(destination.healthPickupId),
+    businessId: clean(destination.businessId),
+  };
+  if (riderJob) {
+    data.data = JSON.stringify({
+      deliveryId: data.deliveryId,
+      requestId: data.requestId,
+      route: "jobs",
+    });
+  }
+  const message = {
+    token,
+    notification: {title: payload.title, body: payload.body},
+    data,
+  };
+  if (riderJob) {
+    message.android = {
+      priority: "high",
+      notification: {
+        channelId: "notifications_updates",
+        priority: "high",
+        defaultSound: true,
+      },
+    };
+    message.apns = {
+      headers: {"apns-priority": "10"},
+      payload: {aps: {
+        alert: {title: payload.title, body: payload.body},
+        sound: "default",
+        category: "RIDER_JOB_OFFER",
+        "interruption-level": "time-sensitive",
+      }},
+    };
+  }
+  return message;
 }
 
 async function profileToken(uid, role) {
@@ -166,20 +216,7 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   } else {
-    await getMessaging().send({
-      token,
-      notification: {title: payload.title, body: payload.body},
-      data: {
-        type: payload.type,
-        notificationId: ref.id,
-        route: destination.route || "notifications",
-        bookingId: clean(destination.bookingId),
-        chatId: clean(destination.chatId),
-        giftId: clean(destination.giftId),
-        healthPickupId: clean(destination.healthPickupId),
-        businessId: clean(destination.businessId),
-      },
-    }).then((messageId) => ref.set({
+    await getMessaging().send(pushMessageFor({token, payload, destination})).then((messageId) => ref.set({
       pushDeliveryStatus: "sent",
       deliveryStatus: "sent",
       deliveryState: "sent",
@@ -480,23 +517,17 @@ async function retryStoredNotification(notificationId, actorId = "system:cancell
   }
   const destination = notification.destination || {};
   try {
-    const messageId = await getMessaging().send({
+    const messageId = await getMessaging().send(pushMessageFor({
       token,
-      notification: {
+      payload: {
+        ...notification,
+        notificationId,
         title: clean(notification.title) || "Circum update",
         body: clean(notification.body || notification.message),
-      },
-      data: {
         type: clean(notification.type) || "system",
-        notificationId,
-        route: clean(destination.route) || "notifications",
-        bookingId: clean(destination.bookingId),
-        chatId: clean(destination.chatId),
-        giftId: clean(destination.giftId),
-        healthPickupId: clean(destination.healthPickupId),
-        businessId: clean(destination.businessId),
       },
-    });
+      destination,
+    }));
     await ref.set({
       pushDeliveryStatus: "sent",
       deliveryStatus: "sent",
@@ -784,6 +815,7 @@ async function markConversationRead(data, context) {
 
 exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
+exports.pushMessageFor = pushMessageFor;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
 exports.startAdminConversation = adminCallable(startAdminConversation);

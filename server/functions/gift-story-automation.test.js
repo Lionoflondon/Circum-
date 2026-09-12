@@ -388,6 +388,13 @@ test("Gift Story selects one recipient phone channel instead of duplicating What
   assert.match(source, /queueSenderStoryAppNotification/);
   assert.match(source, /channel: "sender_app"/);
   assert.match(source, /storyNotificationId\(giftId, "sender_app"/);
+  assert.match(source, /communicationEngine\.emitNotification/);
+  assert.match(source, /dedupeKey: `gift_story_ready:\$\{giftId\}:\$\{uid\}`/);
+  const senderAppNotification = source.slice(
+      source.indexOf("async function queueSenderStoryAppNotification"),
+      source.indexOf("async function queueRecipientLinkNotification"),
+  );
+  assert.doesNotMatch(senderAppNotification, /time-sensitive|critical|apns-priority/);
   assert.doesNotMatch(source, /role: "recipient", userId: text\(gift\.recipientUserId\)/);
   assert.doesNotMatch(source, /whatsappQueue[\s\S]*imessageQueue[\s\S]*return null;\n}\);/);
 });

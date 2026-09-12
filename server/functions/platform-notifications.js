@@ -408,8 +408,10 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
       category: "jobs",
       route: "jobs",
       deliveryId: snapshot.id,
+      requestId: ids.bookingId || snapshot.id,
       dispatchInspectionId: ids.bookingId || snapshot.id,
     },
+    dedupeKey: `delivery_offer:${snapshot.id}:${decision.riderId}`,
   })));
   if (eligible.length === 0) {
     console.warn("delivery_dispatch_no_eligible_riders", {
