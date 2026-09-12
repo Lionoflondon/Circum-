@@ -3171,10 +3171,87 @@ class _RiderEarningsTab extends StatelessWidget {
   }
 }
 
-class _RiderReferralsTab extends StatelessWidget {
+class _RiderReferralsTab extends StatefulWidget {
   final _CircumColors colors;
+  final User? user;
+  final bool eligible;
 
-  const _RiderReferralsTab({required this.colors});
+  const _RiderReferralsTab({
+    required this.colors,
+    required this.user,
+    required this.eligible,
+  });
+
+  @override
+  State<_RiderReferralsTab> createState() => _RiderReferralsTabState();
+}
+
+class _RiderReferralsTabState extends State<_RiderReferralsTab> {
+  bool _loading = false;
+  String? _code;
+  String? _link;
+  String? _error;
+  int _pending = 0;
+  int _completed = 0;
+
+  _CircumColors get colors => widget.colors;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.user != null && widget.eligible) _load();
+  }
+
+  Future<void> _load() async {
+    if (_loading || widget.user == null || !widget.eligible) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final result = await functions.httpsCallable('ensureReferralCode').call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final referrals = await FirebaseFirestore.instance
+          .collection('referrals')
+          .where('referrerUserId', isEqualTo: widget.user!.uid)
+          .get();
+      var pending = 0;
+      var completed = 0;
+      for (final document in referrals.docs) {
+        final status = '${document.data()['status'] ?? ''}'.toLowerCase();
+        if (status == 'roth_awarded' || status == 'rewarded') {
+          completed++;
+        } else if (status != 'rejected') {
+          pending++;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _code = '${data['referralCode'] ?? ''}'.trim();
+        _link = '${data['referralLink'] ?? ''}'.trim();
+        _pending = pending;
+        _completed = completed;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error =
+            'Your referral details could not be loaded. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _copyLink() async {
+    final value = (_link?.isNotEmpty ?? false) ? _link! : _code ?? '';
+    if (value.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Rider referral link copied.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3189,7 +3266,7 @@ class _RiderReferralsTab extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Referrals'),
               const SizedBox(height: 10),
               Text(
-                'Earn £10 for every verified rider you refer.',
+                'Earn 5 Roth when a rider you invite completes their first paid delivery.',
                 style: TextStyle(
                   color: colors.text,
                   fontSize: 21,
@@ -3219,7 +3296,15 @@ class _RiderReferralsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Available after rider verification',
+                      widget.user == null
+                          ? 'Sign in to view your referral code'
+                          : !widget.eligible
+                              ? 'Available after Rider approval'
+                              : _loading
+                                  ? 'Loading your referral code…'
+                                  : (_code?.isNotEmpty ?? false)
+                                      ? _code!
+                                      : 'Generate your referral code',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 18,
@@ -3230,14 +3315,39 @@ class _RiderReferralsTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              Text(
-                'Referral sharing becomes available after rider verification.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
+              if (widget.user != null && widget.eligible) ...[
+                Row(
+                  children: [
+                    Expanded(child: Text('Pending: $_pending  •  Completed: $_completed')),
+                    TextButton.icon(
+                      onPressed: _loading
+                          ? null
+                          : (_link?.isNotEmpty ?? false)
+                              ? _copyLink
+                              : _load,
+                      icon: Icon((_link?.isNotEmpty ?? false)
+                          ? Icons.copy_rounded
+                          : Icons.refresh_rounded),
+                      label: Text((_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
+                    ),
+                  ],
                 ),
-              ),
+                if ((_link?.isNotEmpty ?? false)) SelectableText(_link!),
+              ] else
+                Text(
+                  widget.user == null
+                      ? 'Sign in to access Rider referrals.'
+                      : 'Referral sharing becomes available after Rider approval.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: Color(0xfffca5a5))),
+              ],
             ],
           ),
         ),
@@ -5592,6 +5702,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                       ),
                     _RiderPortalTab.referrals => _RiderReferralsTab(
                         colors: colors,
+                        user: _riderUser,
+                        eligible: _riderApprovalStatus() == 'approved',
                       ),
                     _RiderPortalTab.overview => _riderUser == null
                         ? ListView(
