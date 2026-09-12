@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../authentication/bloc/auth_bloc.dart';
 import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
@@ -39,6 +40,8 @@ import 'sender_wallet.dart';
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
 const senderMobileHeroSubtitle =
     'From collection to delivery, every step protected by IRIS.';
+bool isValidSenderAuthEmail(String value) =>
+    RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
 const senderMobileDashboardServiceSubtitles = {
   'Health+': 'Trusted medical deliveries',
   'Business': 'Business deliveries',
@@ -751,13 +754,19 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
 
   @override
   Widget build(BuildContext context) {
+    final providerAuthState = context.watch<AuthBloc>().state;
+    final providerBusy = providerAuthState.status == Status.loading;
+    final visibleAuthMessage = _authMessage ??
+        (providerAuthState.status == Status.failure
+            ? providerAuthState.errorMessage
+            : null);
     final identityText = _identity.text.trim();
     final identityError = !_showErrors
         ? null
         : identityText.isEmpty
-            ? 'Email or phone is required'
-            : widget.senderAuthEnabled && !identityText.contains('@')
-                ? 'Use an email address'
+            ? 'Email is required'
+            : widget.senderAuthEnabled && !isValidSenderAuthEmail(identityText)
+                ? 'Enter a valid email address'
                 : null;
     return Stack(
       children: [
@@ -820,7 +829,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             ],
             _AuthField(
               controller: _identity,
-              label: 'EMAIL OR PHONE',
+              label: 'EMAIL',
               hint: 'you@email.com',
               keyboardType: TextInputType.emailAddress,
               errorText: identityError,
@@ -871,12 +880,33 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                       ? 'Sign in'
                       : 'Create account',
               semanticLabel: _isSignIn ? 'Sign in' : 'Create account',
-              onTap: _busy ? null : () => _submit(),
+              onTap: _busy || providerBusy ? null : () => _submit(),
             ),
-            if (_authMessage != null) ...[
+            const SizedBox(height: 14),
+            _SenderProviderAction(
+              key: const Key('senderGoogleSignInButton'),
+              label: 'Continue with Google',
+              icon: Icons.g_mobiledata_rounded,
+              onTap: _busy || providerBusy
+                  ? null
+                  : () => context.read<AuthBloc>().add(SignInWithGoogle()),
+            ),
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) ...[
+              const SizedBox(height: 10),
+              _SenderProviderAction(
+                key: const Key('senderAppleSignInButton'),
+                label: 'Continue with Apple',
+                icon: Icons.apple_rounded,
+                onTap: _busy || providerBusy
+                    ? null
+                    : () =>
+                        context.read<AuthBloc>().add(SignInWithAppleAuth()),
+              ),
+            ],
+            if (visibleAuthMessage != null) ...[
               const SizedBox(height: 10),
               Text(
-                _authMessage!,
+                visibleAuthMessage,
                 style: GoogleFonts.inter(
                   color: _SenderTokens.muted,
                   fontSize: 12,
@@ -913,11 +943,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   Future<void> _submit() async {
     final firstName = normalizeSenderFirstName(_firstName.text);
     final validFirstName = _isSignIn || firstName.isNotEmpty;
-    final validIdentity = _identity.text.trim().isNotEmpty;
+    final validIdentity = isValidSenderAuthEmail(_identity.text);
     final validPassword =
         _isSignIn ? _password.text.isNotEmpty : _password.text.length >= 6;
     final validSenderEmail =
-        !widget.senderAuthEnabled || _identity.text.trim().contains('@');
+        !widget.senderAuthEnabled || isValidSenderAuthEmail(_identity.text);
     setState(() {
       _showErrors = true;
       _authMessage = null;
@@ -1271,6 +1301,39 @@ class _SenderPrimaryAction extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SenderProviderAction extends StatelessWidget {
+  const _SenderProviderAction({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 22),
+          label: Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 14, fontWeight: FontWeight.w700)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: _SenderTokens.glassBorder),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+      );
 }
 
 class _TrustHighlightGrid extends StatelessWidget {
