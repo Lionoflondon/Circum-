@@ -69,6 +69,13 @@ foregoundMessage() {
         notifyUser(title: 'Delivery completed!', body: '');
       }
     }
+
+    if (message.data['type'] == 'gift_story_ready') {
+      notifyUser(
+        title: message.notification?.title ?? 'Your Gift Story is ready',
+        body: message.notification?.body ?? 'Your Circum Gift Story is ready.',
+      );
+    }
   });
 }
 
