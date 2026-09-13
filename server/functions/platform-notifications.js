@@ -365,7 +365,7 @@ function customerWaitingCharge(data) {
   };
 }
 
-exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(async (snapshot) => {
+async function handleDeliveryCreated(snapshot) {
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
   if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
@@ -426,7 +426,10 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
   }
   const highValue = delivery.vanguardEnabled === true || Number(delivery.declaredValue || 0) > 250;
   if (highValue) await notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId});
-});
+}
+
+exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(handleDeliveryCreated);
+exports.handleDeliveryCreated = handleDeliveryCreated;
 
 exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change) => {
   const before = change.before.data();

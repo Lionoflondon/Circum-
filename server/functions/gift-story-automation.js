@@ -755,7 +755,7 @@ async function markAutomationFailure(db, deliveryId, giftId, error) {
   await batch.commit();
 }
 
-exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change, context) => {
+async function handleGiftDeliveryCompleted(change, context) {
   const before = change.before.data() || {};
   const after = change.after.data() || {};
   if (!isGiftDelivery(after) || isComplete(before.status) || !isComplete(after.status)) return null;
@@ -773,7 +773,10 @@ exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests
     await markAutomationFailure(db, context.params.deliveryId, giftSnap && giftSnap.id, error);
   }
   return null;
-});
+}
+
+exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(handleGiftDeliveryCompleted);
+exports.handleGiftDeliveryCompleted = handleGiftDeliveryCompleted;
 
 exports.getSenderGiftStory = functions.https.onCall(async (data, context) => {
   const uid = context.auth && context.auth.uid ? context.auth.uid : "";
