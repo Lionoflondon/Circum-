@@ -6,8 +6,8 @@ const source = fs.readFileSync("referrals.js", "utf8");
 const index = fs.readFileSync("index.js", "utf8");
 
 test("direct referral activation is denied and not a reward path", () => {
-  const callable = source.slice(source.indexOf("exports.activateReferral ="), source.indexOf("const QUALIFYING_TERMINAL_STATES"));
-  assert.match(callable, /exports\.activateReferral = functions\.https\.onCall\(async \(_, context\) =>/);
+  const callable = source.slice(source.indexOf("async function activateReferralHandler"), source.indexOf("const QUALIFYING_TERMINAL_STATES"));
+  assert.match(callable, /exports\.activateReferral = functions\.https\.onCall\(activateReferralHandler\)/);
   assert.match(callable, /Referral activation is only available from verified backend completion events/);
   assert.doesNotMatch(callable, /activateReferralForUser/);
   assert.match(index, /exports\.activateReferral = referrals\.activateReferral;/);
