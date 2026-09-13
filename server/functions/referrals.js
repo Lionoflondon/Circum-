@@ -41,7 +41,7 @@ function codeFromUser(user) {
   return `${source || "CIRCUM"}${user.uid.slice(0, 4).toUpperCase()}`.slice(0, 12);
 }
 
-exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
+async function ensureReferralCodeHandler(data, context) {
   requireAuth(context);
   const db = getFirestore();
   const uid = context.auth.uid;
@@ -77,9 +77,11 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
     }
   }
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
-});
+}
 
-exports.attachReferralCode = functions.https.onCall(async (data, context) => {
+exports.ensureReferralCode = functions.https.onCall(ensureReferralCodeHandler);
+
+async function attachReferralCodeHandler(data, context) {
   requireAuth(context);
   if (!data || typeof data !== "object" || typeof data.referralCode !== "string" || data.referralCode.length > 256) {
     throw new functions.https.HttpsError("invalid-argument", "Supply a referral code string.");
@@ -132,15 +134,19 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
     }, {merge: true});
     return {status: "applied"};
   });
-});
+}
 
-exports.activateReferral = functions.https.onCall(async (_, context) => {
+exports.attachReferralCode = functions.https.onCall(attachReferralCodeHandler);
+
+async function activateReferralHandler(_, context) {
   requireAuth(context);
   throw new functions.https.HttpsError(
       "permission-denied",
       "Referral activation is only available from verified backend completion events.",
   );
-});
+}
+
+exports.activateReferral = functions.https.onCall(activateReferralHandler);
 
 const QUALIFYING_TERMINAL_STATES = new Set(["completed", "delivered"]);
 const PAID_STATES = new Set(["paid", "succeeded", "success"]);
@@ -311,6 +317,15 @@ async function handleHealthPlusCompletedReferral({pickupId, userId, email}) {
 exports.handleDeliveryCompletedReferral = handleDeliveryCompletedReferral;
 exports.handleGiftCompletedReferral = handleGiftCompletedReferral;
 exports.handleHealthPlusCompletedReferral = handleHealthPlusCompletedReferral;
+exports.cloudRunHandlers = Object.freeze({
+  ensureReferralCode: ensureReferralCodeHandler,
+  attachReferralCode: attachReferralCodeHandler,
+  activateReferral: activateReferralHandler,
+  handleDeliveryCompletedReferral,
+  handleGiftCompletedReferral,
+  handleHealthPlusCompletedReferral,
+  becameCompleted,
+});
 
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
