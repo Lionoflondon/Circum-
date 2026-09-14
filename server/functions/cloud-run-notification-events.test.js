@@ -25,7 +25,9 @@ test("Gen 1 delivery create path delegates to the Cloud Run durable claim", asyn
       await input.run();
       return {status: "completed"};
     },
-    run: async () => { effects += 1; },
+    run: async () => {
+      effects += 1;
+    },
   });
   assert.deepEqual(result, {status: "completed"});
   assert.equal(effects, 1);
