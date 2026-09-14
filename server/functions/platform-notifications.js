@@ -5,6 +5,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
 const communicationEngine = require("./communication-engine");
+const {processOnce} = require("./cloud-run-notification-events");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -428,8 +429,30 @@ async function handleDeliveryCreated(snapshot) {
   if (highValue) await notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId});
 }
 
-exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(handleDeliveryCreated);
+async function processDeliveryCreatedOnce(snapshot, eventId, options = {}) {
+  const deliveryId = text(snapshot && snapshot.id);
+  if (!deliveryId) throw new Error("delivery_id_required");
+  const processor = options.processOnce || processOnce;
+  const run = options.run || (async () => handleDeliveryCreated(snapshot));
+  return processor({
+    db: options.db || getFirestore(),
+    kind: "delivery_created",
+    eventId: text(eventId) || `gen1:${deliveryId}`,
+    deliveryId,
+    before: null,
+    after: snapshot.data() || {},
+    run,
+  });
+}
+
+// The Gen 1 owner and Cloud Run/Eventarc owner deliberately share this durable
+// claim. During the eventual handoff, one delivery create can produce only one
+// notification/dispatch side-effect even if both transports briefly receive it.
+exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate((snapshot, context) =>
+  processDeliveryCreatedOnce(snapshot, context && context.eventId),
+);
 exports.handleDeliveryCreated = handleDeliveryCreated;
+exports.processDeliveryCreatedOnce = processDeliveryCreatedOnce;
 
 exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change) => {
   const before = change.before.data();
