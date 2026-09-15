@@ -129,7 +129,9 @@ test("delivery creation notifies merged online rider candidates", () => {
   assert.match(source, /type: "new_delivery"/);
   assert.match(source, /deliveryId: snapshot\.id/);
   assert.match(source, /route: "jobs"/);
+  assert.match(source, /dedupeKey: `delivery_created_sender_notification:\$\{snapshot\.id\}:\$\{ids\.senderId\}`/);
   assert.match(source, /dedupeKey: `delivery_offer:\$\{snapshot\.id\}:\$\{decision\.riderId\}`/);
+  assert.match(source, /dedupeKey: `delivery_created_admin_high_value:\$\{snapshot\.id\}`/);
   assert.doesNotMatch(source, /const riders = await getFirestore\(\)\.collection\("riderProfiles"\)\.get\(\);/);
 });
 

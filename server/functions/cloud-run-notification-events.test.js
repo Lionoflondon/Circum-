@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
-const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId} = require("./cloud-run-notification-events");
+const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce} = require("./cloud-run-notification-events");
 const {processDeliveryCreatedOnce} = require("./platform-notifications");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
@@ -40,6 +40,47 @@ test("extracts only deliveryRequests document ids", () => {
 test("business claim is stable per handler and delivery", () => {
   assert.equal(claimId("delivery_created", "d1"), claimId("delivery_created", "d1"));
   assert.notEqual(claimId("delivery_created", "d1"), claimId("gift_delivery_completed", "d1"));
+});
+
+function claimDb(initial = {}) {
+  let data = {...initial};
+  const ref = {
+    set: async (value) => {
+      data = {...data, ...value};
+    },
+  };
+  return {
+    collection: () => ({doc: () => ref}),
+    runTransaction: async (callback) => {
+      const tx = {
+        get: async () => ({exists: Object.keys(data).length > 0, data: () => data}),
+        set: (_ref, value) => {
+          data = {...data, ...value};
+        },
+      };
+      return callback(tx);
+    },
+    read: () => data,
+  };
+}
+
+test("expired processing claim can be reclaimed by a retry with a new event id", async () => {
+  const db = claimDb({status: "processing", eventId: "crashed-event", leaseUntil: {toMillis: () => Date.now() - 1}});
+  let effects = 0;
+  const result = await processOnce({db, kind: "delivery_created", eventId: "retry-event", deliveryId: "d1", run: async () => {
+    effects += 1;
+  }});
+  assert.deepEqual(result, {status: "completed"});
+  assert.equal(effects, 1);
+  assert.equal(db.read().status, "completed");
+});
+
+test("active processing claim rejects a competing event id", async () => {
+  const db = claimDb({status: "processing", eventId: "active-event", leaseUntil: {toMillis: () => Date.now() + 60000}});
+  await assert.rejects(
+      processOnce({db, kind: "delivery_created", eventId: "other-event", deliveryId: "d1", run: async () => {}}),
+      (error) => error.statusCode === 503,
+  );
 });
 
 test("unwraps Eventarc Pub/Sub push bodies before decoding Firestore protobuf", () => {

@@ -3,10 +3,11 @@
 
 const http = require("node:http");
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {decodeEventData} = require("./rider-policy-firestore-event");
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const handlers = {
   delivery_created: {
     eventType: "google.cloud.firestore.document.v1.created",
@@ -118,8 +119,18 @@ async function processOnce({db, kind, eventId, deliveryId, before, after, run}) 
     const snap = await tx.get(ref);
     const current = snap.exists ? snap.data() || {} : {};
     if (current.status === "completed") return "duplicate";
-    if (current.status === "processing" && current.eventId !== eventId) return "busy";
-    tx.set(ref, {handler: kind, deliveryId, eventId, status: "processing", startedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    const leaseUntil = current.leaseUntil && typeof current.leaseUntil.toMillis === "function" ? current.leaseUntil.toMillis() : 0;
+    if (current.status === "processing" && current.eventId !== eventId && leaseUntil > Date.now()) return "busy";
+    const now = Date.now();
+    tx.set(ref, {
+      handler: kind,
+      deliveryId,
+      eventId,
+      status: "processing",
+      startedAt: current.startedAt || FieldValue.serverTimestamp(),
+      leaseUntil: Timestamp.fromMillis(now + CLAIM_LEASE_MS),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
     return "claimed";
   });
   if (state === "duplicate") return {status: "duplicate"};
@@ -129,7 +140,7 @@ async function processOnce({db, kind, eventId, deliveryId, before, after, run}) 
     await ref.set({status: "completed", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
     return {status: "completed"};
   } catch (error) {
-    await ref.set({status: "failed", failureReason: String(error && error.message || error).slice(0, 500), updatedAt: FieldValue.serverTimestamp()}, {merge: true}).catch(() => {});
+    await ref.set({status: "failed", failureReason: String(error && error.message || error).slice(0, 500), leaseUntil: Timestamp.fromMillis(Date.now()), updatedAt: FieldValue.serverTimestamp()}, {merge: true}).catch(() => {});
     throw error;
   }
 }

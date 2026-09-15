@@ -369,7 +369,7 @@ function customerWaitingCharge(data) {
 async function handleDeliveryCreated(snapshot) {
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
-  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
+  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`});
   const db = getFirestore();
   const riders = await onlineCandidateRiderRecords(db);
   const decisions = riders.map((record) => ({
@@ -426,7 +426,7 @@ async function handleDeliveryCreated(snapshot) {
     });
   }
   const highValue = delivery.vanguardEnabled === true || Number(delivery.declaredValue || 0) > 250;
-  if (highValue) await notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId});
+  if (highValue) await notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId, dedupeKey: `delivery_created_admin_high_value:${snapshot.id}`});
 }
 
 async function processDeliveryCreatedOnce(snapshot, eventId, options = {}) {
