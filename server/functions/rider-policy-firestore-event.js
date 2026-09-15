@@ -70,8 +70,9 @@ function valueToJs(value) {
   return undefined;
 }
 
-function documentFields(document = {}) {
-  return Object.fromEntries(Object.entries(document.fields || {}).map(([key, value]) => [key, valueToJs(value)]));
+function documentFields(document) {
+  return Object.fromEntries(Object.entries((document || {}).fields || {})
+      .map(([key, value]) => [key, valueToJs(value)]));
 }
 
 function decodeEventData(buffer) {
