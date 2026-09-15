@@ -11,9 +11,9 @@ const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const handlers = {
   delivery_created: {
     eventType: "google.cloud.firestore.document.v1.created",
-    run: async ({db, deliveryId, after}) => {
+    run: async ({db, deliveryId, after, effects}) => {
       const {handleDeliveryCreated} = require("./platform-notifications");
-      return handleDeliveryCreated({id: deliveryId, data: () => after, ref: db.collection("deliveryRequests").doc(deliveryId)});
+      return handleDeliveryCreated({id: deliveryId, data: () => after, ref: db.collection("deliveryRequests").doc(deliveryId)}, {effects});
     },
   },
   gift_delivery_completed: {
@@ -115,32 +115,72 @@ function decodeEventarcPayload(body) {
 
 async function processOnce({db, kind, eventId, deliveryId, before, after, run}) {
   const ref = db.collection("eventHandlerClaims").doc(claimId(kind, deliveryId));
-  const state = await db.runTransaction(async (tx) => {
+  const lease = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const current = snap.exists ? snap.data() || {} : {};
     if (current.status === "completed") return "duplicate";
-    const leaseUntil = current.leaseUntil && typeof current.leaseUntil.toMillis === "function" ? current.leaseUntil.toMillis() : 0;
+    const leaseUntil = current.leaseExpiresAt && typeof current.leaseExpiresAt.toMillis === "function" ? current.leaseExpiresAt.toMillis() : 0;
     if (current.status === "processing" && current.eventId !== eventId && leaseUntil > Date.now()) return "busy";
     const now = Date.now();
+    const leaseOwner = `${eventId}:${now}`;
     tx.set(ref, {
+      operation: kind,
       handler: kind,
       deliveryId,
       eventId,
+      lastEventId: eventId,
       status: "processing",
+      leaseOwner,
+      leaseAcquiredAt: Timestamp.fromMillis(now),
+      leaseExpiresAt: Timestamp.fromMillis(now + CLAIM_LEASE_MS),
+      attemptCount: Number(current.attemptCount || 0) + 1,
+      createdAt: current.createdAt || FieldValue.serverTimestamp(),
       startedAt: current.startedAt || FieldValue.serverTimestamp(),
-      leaseUntil: Timestamp.fromMillis(now + CLAIM_LEASE_MS),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    return "claimed";
+    return {leaseOwner};
   });
-  if (state === "duplicate") return {status: "duplicate"};
-  if (state === "busy") throw Object.assign(new Error("event_already_processing"), {statusCode: 503});
+  if (lease === "duplicate") return {status: "duplicate"};
+  if (lease === "busy") throw Object.assign(new Error("event_already_processing"), {statusCode: 503});
+  const effects = {
+    run: async (effectId, execute) => {
+      const mayRun = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const current = snap.exists ? snap.data() || {} : {};
+        const expiresAt = current.leaseExpiresAt && typeof current.leaseExpiresAt.toMillis === "function" ? current.leaseExpiresAt.toMillis() : 0;
+        if (current.status !== "processing" || current.leaseOwner !== lease.leaseOwner || expiresAt <= Date.now()) throw Object.assign(new Error("lease_lost"), {statusCode: 503});
+        const effect = current.effects && current.effects[effectId];
+        return !(effect && effect.status === "completed");
+      });
+      if (!mayRun) return {status: "duplicate"};
+      const result = await execute();
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const current = snap.exists ? snap.data() || {} : {};
+        const expiresAt = current.leaseExpiresAt && typeof current.leaseExpiresAt.toMillis === "function" ? current.leaseExpiresAt.toMillis() : 0;
+        if (current.status !== "processing" || current.leaseOwner !== lease.leaseOwner || expiresAt <= Date.now()) throw Object.assign(new Error("lease_lost"), {statusCode: 503});
+        tx.update(ref, {[`effects.${effectId}`]: {status: "completed", completedAt: FieldValue.serverTimestamp()}});
+      });
+      return {status: "completed", result};
+    },
+  };
   try {
-    await run({db, deliveryId, before, after});
-    await ref.set({status: "completed", completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await run({db, deliveryId, before, after, effects});
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? snap.data() || {} : {};
+      const expiresAt = current.leaseExpiresAt && typeof current.leaseExpiresAt.toMillis === "function" ? current.leaseExpiresAt.toMillis() : 0;
+      if (current.status !== "processing" || current.leaseOwner !== lease.leaseOwner || expiresAt <= Date.now()) throw Object.assign(new Error("lease_lost"), {statusCode: 503});
+      tx.update(ref, {status: "completed", completedAt: FieldValue.serverTimestamp(), leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(Date.now()), updatedAt: FieldValue.serverTimestamp()});
+    });
     return {status: "completed"};
   } catch (error) {
-    await ref.set({status: "failed", failureReason: String(error && error.message || error).slice(0, 500), leaseUntil: Timestamp.fromMillis(Date.now()), updatedAt: FieldValue.serverTimestamp()}, {merge: true}).catch(() => {});
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? snap.data() || {} : {};
+      if (current.leaseOwner !== lease.leaseOwner) return;
+      tx.update(ref, {status: "retryable_failed", lastError: String(error && error.message || error).slice(0, 500), leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(Date.now()), updatedAt: FieldValue.serverTimestamp()});
+    }).catch(() => {});
     throw error;
   }
 }
