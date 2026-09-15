@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
-const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId} = require("./cloud-run-notification-events");
+const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce} = require("./cloud-run-notification-events");
 const {processDeliveryCreatedOnce} = require("./platform-notifications");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
@@ -40,6 +40,156 @@ test("extracts only deliveryRequests document ids", () => {
 test("business claim is stable per handler and delivery", () => {
   assert.equal(claimId("delivery_created", "d1"), claimId("delivery_created", "d1"));
   assert.notEqual(claimId("delivery_created", "d1"), claimId("gift_delivery_completed", "d1"));
+});
+
+function claimDb(initial = {}) {
+  let data = {...initial};
+  let transactionQueue = Promise.resolve();
+  const ref = {
+    set: async (value) => {
+      data = {...data, ...value};
+    },
+  };
+  return {
+    collection: () => ({doc: () => ref}),
+    runTransaction: (callback) => {
+      const run = async () => {
+        const tx = {
+        get: async () => ({exists: Object.keys(data).length > 0, data: () => data}),
+        set: (_ref, value) => {
+          data = {...data, ...value};
+        },
+        update: (_ref, value) => {
+          for (const [path, valueAtPath] of Object.entries(value)) {
+            const keys = path.split(".");
+            let target = data;
+            while (keys.length > 1) {
+              const key = keys.shift();
+              target[key] = target[key] || {};
+              target = target[key];
+            }
+            target[keys[0]] = valueAtPath;
+          }
+        },
+        };
+        return callback(tx);
+      };
+      const pending = transactionQueue.then(run);
+      transactionQueue = pending.catch(() => {});
+      return pending;
+    },
+    read: () => data,
+    write: (value) => {
+      data = {...data, ...value};
+    },
+  };
+}
+
+test("expired processing claim can be reclaimed by a retry with a new event id", async () => {
+  const db = claimDb({status: "processing", eventId: "crashed-event", leaseExpiresAt: {toMillis: () => Date.now() - 1}});
+  let effects = 0;
+  const result = await processOnce({db, kind: "delivery_created", eventId: "retry-event", deliveryId: "d1", run: async () => {
+    effects += 1;
+  }});
+  assert.deepEqual(result, {status: "completed"});
+  assert.equal(effects, 1);
+  assert.equal(db.read().status, "completed");
+});
+
+test("active processing claim rejects a competing event id", async () => {
+  const db = claimDb({status: "processing", eventId: "active-event", leaseExpiresAt: {toMillis: () => Date.now() + 60000}});
+  await assert.rejects(
+      processOnce({db, kind: "delivery_created", eventId: "other-event", deliveryId: "d1", run: async () => {}}),
+      (error) => error.statusCode === 503,
+  );
+});
+
+test("retry after the first durable effect skips it and finishes only missing effects", async () => {
+  const db = claimDb();
+  let first = 0;
+  let second = 0;
+  await assert.rejects(processOnce({
+    db, kind: "delivery_created", eventId: "event-1", deliveryId: "d1",
+    run: async ({effects}) => {
+      await effects.run("first", async () => {
+        first += 1;
+      });
+      throw new Error("simulated_crash");
+    },
+  }));
+  const result = await processOnce({
+    db, kind: "delivery_created", eventId: "event-2", deliveryId: "d1",
+    run: async ({effects}) => {
+      await effects.run("first", async () => {
+        first += 1;
+      });
+      await effects.run("second", async () => {
+        second += 1;
+      });
+    },
+  });
+  assert.deepEqual(result, {status: "completed"});
+  assert.equal(first, 1);
+  assert.equal(second, 1);
+});
+
+test("20 concurrent copies produce one logical effect", async () => {
+  const db = claimDb();
+  let effects = 0;
+  const results = await Promise.allSettled(Array.from({length: 20}, (_, index) => processOnce({
+    db, kind: "delivery_created", eventId: `event-${index}`, deliveryId: "d1",
+    run: async ({effects: manifest}) => {
+      await manifest.run("dispatch_inspection", async () => {
+        effects += 1;
+      });
+    },
+  })));
+  assert.equal(effects, 1);
+  assert.equal(results.filter((result) => result.status === "fulfilled" && result.value.status === "completed").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected" && result.reason.statusCode === 503).length, 19);
+});
+
+test("a stale worker cannot complete after another worker reclaims the lease", async () => {
+  const db = claimDb();
+  let first = 0;
+  let second = 0;
+  let releaseFirst;
+  const firstPaused = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let effectCommitted;
+  const effectStarted = new Promise((resolve) => {
+    effectCommitted = resolve;
+  });
+  const workerA = processOnce({
+    db, kind: "delivery_created", eventId: "event-a", deliveryId: "d1",
+    run: async ({effects}) => {
+      await effects.run("first", async () => {
+        first += 1;
+      });
+      effectCommitted();
+      await firstPaused;
+    },
+  });
+  await effectStarted;
+  db.write({leaseExpiresAt: {toMillis: () => Date.now() - 1}});
+  const workerB = await processOnce({
+    db, kind: "delivery_created", eventId: "event-b", deliveryId: "d1",
+    run: async ({effects}) => {
+      await effects.run("first", async () => {
+        first += 1;
+      });
+      await effects.run("second", async () => {
+        second += 1;
+      });
+    },
+  });
+  releaseFirst();
+  await assert.rejects(workerA, (error) => error.statusCode === 503);
+  assert.deepEqual(workerB, {status: "completed"});
+  assert.equal(first, 1);
+  assert.equal(second, 1);
+  assert.equal(db.read().status, "completed");
 });
 
 test("unwraps Eventarc Pub/Sub push bodies before decoding Firestore protobuf", () => {
