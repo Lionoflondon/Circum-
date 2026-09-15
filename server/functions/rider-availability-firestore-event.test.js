@@ -28,3 +28,14 @@ test("metadata-only rider events are ignored", () => {
   assert.equal(event.relevant, false);
   assert.deepEqual(event.changedFields, []);
 });
+
+test("fixture events accept only the dedicated certification path", () => {
+  const {parseFixtureAvailabilityEvent} = require("./rider-availability-firestore-event");
+  const name = "projects/circum-2797c/databases/(default)/documents/_runtimeFixtures/riderAvailability/events/cert-1";
+  const body = Buffer.from(DocumentEventData.encode(DocumentEventData.fromObject({oldValue: {name, fields: {approvalStatus: {stringValue: "pending"}}}, value: {name, fields: {approvalStatus: {stringValue: "approved"}}}, updateMask: {paths: ["approvalStatus"]}})).finish());
+  const event = parseFixtureAvailabilityEvent({headers: {"ce-type": "google.cloud.firestore.document.v1.updated", "ce-id": "fixture-event-1", "ce-document": "_runtimeFixtures/riderAvailability/events/cert-1"}, body});
+  assert.equal(event.fixture, true);
+  assert.equal(event.fixtureId, "cert-1");
+  assert.equal(event.relevant, true);
+  assert.throws(() => parseFixtureAvailabilityEvent({headers: {"ce-type": "google.cloud.firestore.document.v1.updated", "ce-id": "fixture-event-2", "ce-document": "riderProfiles/qa-rider"}, body}), /invalid_fixture_document/);
+});

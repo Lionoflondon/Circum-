@@ -6,7 +6,7 @@ const {claimId, processAvailabilityEvent} = require("./rider-availability-worker
 function fakeDb(seed = {}) {
   const docs = new Map(Object.entries(seed));
   const writes = [];
-  const ref = (path) => ({path});
+  const ref = (path) => ({path, collection: (name) => ({doc: (id) => ref(`${path}/${name}/${id}`)})});
   let transactionTail = Promise.resolve();
   const db = {
     collection: (name) => ({doc: (id) => ref(`${name}/${id}`)}),
@@ -57,4 +57,17 @@ test("one hundred duplicate deliveries create one claim and one bounded state up
   assert.equal(results.filter((result) => result.outcome === "DUPLICATE").length, 99);
   assert.equal(writes.filter((write) => write.kind === "create").length, 1);
   assert.ok(writes.filter((write) => write.kind === "set").length <= 1);
+});
+
+test("fixture certification is confined to fixture claims and is concurrency safe", async () => {
+  const {processFixtureAvailabilityEvent, fixtureClaimId} = require("./rider-availability-worker-core");
+  const fixtureEvent = {eventId: "fixture-event-20", fixtureId: "cert-20", sourceCollection: "_runtimeFixtures", fixture: true, changedFields: ["approvalStatus"]};
+  const {db, docs, writes} = fakeDb();
+  const results = await Promise.all(Array.from({length: 20}, () => processFixtureAvailabilityEvent({db, event: fixtureEvent, fieldValue})));
+  assert.equal(results.filter((result) => result.outcome === "CERTIFIED").length, 1);
+  assert.equal(results.filter((result) => result.outcome === "DUPLICATE").length, 19);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, `_runtimeFixtures/riderAvailability/claims/${fixtureClaimId(fixtureEvent)}`);
+  assert.equal(docs.has(`_runtimeFixtures/riderAvailability/claims/${fixtureClaimId(fixtureEvent)}`), true);
+  assert.equal(writes.some((write) => /^(riderProfiles|riders|riderPresence|eventHandlerClaims)\//.test(write.path)), false);
 });
