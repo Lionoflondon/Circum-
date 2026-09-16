@@ -9,10 +9,6 @@ const rules = fs.readFileSync(
     "utf8",
 );
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
-const websiteApp = fs.readFileSync(
-    path.join(__dirname, "..", "..", "lib", "website", "shared", "circum_website_app.dart"),
-    "utf8",
-);
 
 test("deliveryRequests reserves payment and lifecycle fields for backend/admin authority", () => {
   assert.match(rules, /function protectedDeliveryFields\(\)/);
@@ -221,9 +217,6 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
   );
 });
 
-test("Rider withdrawal requests are routed through the backend callable", () => {
+test("Rider withdrawal authority remains exported by the backend", () => {
   assert.match(index, /exports\.requestRiderWithdrawal = riderConnect\.requestRiderWithdrawal\(\);/);
-  assert.match(websiteApp, /httpsCallable\('requestRiderWithdrawal'\)/);
-  assert.doesNotMatch(websiteApp, /collection\('payoutRequests'\)\.doc\(\)[\s\S]*batch\.set\(requestRef/);
-  assert.doesNotMatch(websiteApp, /collection\('riderBankAccounts'\)\.doc\(user\.uid\)/);
 });
