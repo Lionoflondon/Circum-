@@ -99,6 +99,21 @@ void main() {
     expect(handler, contains("'Profile could not be updated.'"));
   });
 
+  test('Sender OTP request resolves every callback path', () {
+    final handler = authBloc.substring(
+      authBloc.indexOf('void _handleRequestForOTP'),
+      authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
+    );
+    expect(handler, contains('final completer = Completer<bool>()'));
+    expect(handler, contains('if (!completer.isCompleted)'));
+    expect(handler, contains('completer.completeError(error)'));
+    expect(handler, contains("TimeoutException('phone_otp_request')"));
+    expect(
+        handler, contains('completer.future.timeout(_authOperationTimeout)'));
+    expect(handler, isNot(contains("throw 'Verification failed'")));
+    expect(handler, isNot(contains("throw 'Code timed out'")));
+  });
+
   test('Sender OAuth, location, and profile photo paths terminate safely', () {
     expect(authBloc, contains("Google sign-in could not be completed."));
     expect(authBloc, contains('displayName?.trim()'));
@@ -112,14 +127,19 @@ void main() {
     expect(authBloc, contains("updatePhotoURL(downloadUrl).timeout"));
   });
 
-  test('SOURCE CONTRACT: Google and Apple paths are terminal', () {
+  test('SOURCE CONTRACT: Google, Apple, and phone provider paths are terminal',
+      () {
     final apple = authBloc.substring(
       authBloc.indexOf('Future<void> _handleSignInWithAppleAuth'),
-      authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
+      authBloc.indexOf('void _handleRequestForOTP'),
     );
     final google = authBloc.substring(
       authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
-      authBloc.indexOf('Future<void> _handleSubmitOTP'),
+      authBloc.indexOf('Future<void> _handleVerifySentCode'),
+    );
+    final phone = authBloc.substring(
+      authBloc.indexOf('void _handleRequestForOTP'),
+      authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
     );
 
     expect(apple, contains('getAppleIDCredential'));
@@ -133,11 +153,26 @@ void main() {
     expect(google, contains('if (googleSignInAccount == null)'));
     expect(google, contains('_hydrateSenderSessionRecoverably'));
     expect(google, contains('status: Status.failure'));
-    expect(authBloc, isNot(contains('auth.verifyPhoneNumber')));
-    expect(authBloc, isNot(contains('PhoneAuthProvider.credential')));
+    expect(phone, contains('verificationCompleted'));
+    expect(phone, contains('verificationFailed'));
+    expect(phone, contains('codeSent'));
+    expect(phone, contains('codeAutoRetrievalTimeout'));
+    expect(phone, contains('if (!completer.isCompleted)'));
+    expect(phone, contains('completer.future.timeout(_authOperationTimeout)'));
   });
 
   test('Sender verification and account-exit operations are bounded', () {
+    final verificationHandler = authBloc.substring(
+      authBloc.indexOf('Future<void> _handleVerifySentCode'),
+      authBloc.indexOf('Future<void> _handleSubmitOTP'),
+    );
+    expect(verificationHandler, contains('linkWithCredential(credential)'));
+    expect(verificationHandler, contains('timeout(_authOperationTimeout)'));
+    expect(verificationHandler, contains('signInWithCredential(credential)'));
+    expect(verificationHandler, contains('status: Status.failure'));
+    expect(verificationHandler,
+        contains("'Verification could not be completed.'"));
+
     final signOutHandler = authBloc.substring(
       authBloc.indexOf('void _handleSignOut'),
       authBloc.indexOf('void _handleResetPassword'),
@@ -154,9 +189,7 @@ void main() {
     expect(accountClosure, contains('getIdToken(true)'));
     expect(accountClosure, contains('rawNonce: rawNonce'));
     expect(profile, contains('SenderAccountClosure'));
-    expect(accountClosure, isNot(contains('closeWithPhoneCredential')));
-    expect(accountClosure,
-        isNot(contains('SenderReauthenticationProvider.phone')));
+    expect(accountClosure, contains('closeWithPhoneCredential'));
   });
 
   test('Sender profile field operations fail visibly and safely', () {
@@ -164,8 +197,7 @@ void main() {
       authBloc.indexOf('void _handleUpdatePhoneNumber'),
       authBloc.indexOf('void _handleUpdateUserProfilePhoto'),
     );
-    expect(phoneHandler,
-        isNot(contains("_updateSenderProfile(phone: event.value)")));
+    expect(phoneHandler, contains("_updateSenderProfile(phone: event.value)"));
     expect(phoneHandler, contains("write(key: 'phone', value: event.value)"));
     expect(phoneHandler, contains('timeout(_authOperationTimeout)'));
     expect(phoneHandler, contains('status: Status.failure'));
