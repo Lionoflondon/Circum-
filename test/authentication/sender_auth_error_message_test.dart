@@ -22,8 +22,8 @@ void main() {
       SenderAuthAction.createAccount,
       FirebaseAuthException(code: 'email-already-in-use'),
     );
-    expect(message, contains('already exists'));
-    expect(message, contains('Sign in'));
+    expect(message, contains('already have an account'));
+    expect(message, contains('sign in'));
   });
 
   test('create and sign-in timeouts are action aware', () {
@@ -56,7 +56,7 @@ void main() {
         SenderAuthAction.signIn,
         FirebaseAuthException(code: 'invalid-credential'),
       ),
-      'Sign in failed. Check the email and password.',
+      'Email or password is incorrect.',
     );
   });
 }

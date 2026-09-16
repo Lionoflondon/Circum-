@@ -192,7 +192,7 @@ class SignupFormState extends State<SignupForm> {
           const SizedBox(height: 12),
           AppTextInput.input(
               obscureText: !state.showPassword,
-              hintText: '(8+ characters)',
+              hintText: '(10+ characters)',
               maxLines: 1,
               minLines: 1,
               controller: passwordController,
@@ -240,21 +240,18 @@ class SignupFormState extends State<SignupForm> {
           child: AppButton.button(
             backgroundColor: state.isEmailValid == true &&
                     state.password != null &&
-                    state.password!.length >= 8
+                    state.password!.length >= 10
                 ? null
                 : Colors.white.withValues(alpha: 0.3),
             onPressed: () {
               if (state.status == Status.loading || state.isLoading) return;
-              // if (state.isPhoneNumberValid == true) {
-              //   context.read<AuthBloc>().add(RequestForOTP());
-              // }
               if (state.isEmailValid == false) {
                 // print(state.isEmailValid);
                 context.read<AuthBloc>().add(const SetErrorMessage(
                     errorMessage: 'Invalid email address'));
                 return;
               }
-              if (state.password != null && state.password!.length >= 8) {
+              if (state.password != null && state.password!.length >= 10) {
                 context.read<AuthBloc>().add(SignUpWithEmail(
                     email: state.email!, password: state.password!));
               }

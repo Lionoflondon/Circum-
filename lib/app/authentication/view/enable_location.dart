@@ -26,11 +26,6 @@ class EnableLocation extends StatelessWidget {
                 context.read<AuthBloc>().add(ResetStatus());
                 locationAllowed();
                 Navigator.popUntil(context, (route) => route.isFirst);
-                // context.read<AuthBloc>().add(StartCountDown());
-                // Navigator.pushReplacement(
-                //   context,
-                //   MaterialPageRoute(builder: (_) => AppNavView()),
-                // );
               }
             },
             child: PopScope(

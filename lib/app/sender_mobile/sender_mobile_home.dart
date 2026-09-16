@@ -843,8 +843,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               obscureText: !_showPassword,
               errorText: _showErrors && _password.text.isEmpty
                   ? 'Password is required'
-                  : _showErrors && !_isSignIn && _password.text.length < 6
-                      ? 'Use at least 6 characters'
+                  : _showErrors && !_isSignIn && _password.text.length < 10
+                      ? 'Use at least 10 characters'
                       : null,
               suffix: IconButton(
                 tooltip: _showPassword ? 'Hide password' : 'Show password',
@@ -899,8 +899,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 icon: Icons.apple_rounded,
                 onTap: _busy || providerBusy
                     ? null
-                    : () =>
-                        context.read<AuthBloc>().add(SignInWithAppleAuth()),
+                    : () => context.read<AuthBloc>().add(SignInWithAppleAuth()),
               ),
             ],
             if (visibleAuthMessage != null) ...[
@@ -1323,8 +1322,8 @@ class _SenderProviderAction extends StatelessWidget {
           onPressed: onTap,
           icon: Icon(icon, size: 22),
           label: Text(label,
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.w700)),
+              style:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
             side: const BorderSide(color: _SenderTokens.glassBorder),

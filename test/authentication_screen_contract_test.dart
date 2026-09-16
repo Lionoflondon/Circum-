@@ -50,10 +50,10 @@ void main() {
   test('sender app auth disables busy submit and validates account password',
       () {
     final content = source('lib/app/sender_mobile/sender_mobile_home.dart');
-    expect(
-        content, contains('onTap: _busy || providerBusy ? null : () => _submit()'));
-    expect(content, contains("_password.text.length >= 6"));
-    expect(content, contains("'Use at least 6 characters'"));
+    expect(content,
+        contains('onTap: _busy || providerBusy ? null : () => _submit()'));
+    expect(content, contains("_password.text.length < 10"));
+    expect(content, contains("'Use at least 10 characters'"));
   });
 
   test('active Sender auth is email-only and exposes guarded providers', () {

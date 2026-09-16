@@ -122,13 +122,6 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                   : Colors.white.withValues(alpha: 0.3),
               onPressed: () async {
                 if (state.status == Status.loading || state.isLoading) return;
-                // Navigator.push(
-                //     context,
-                //     MaterialPageRoute(
-                //         builder: (_) =>
-                //             EnterOTPView(authBlocContext: authBlocContext)));
-                // context.read<AuthBloc>().add(RequestForOTP());
-                // context.read<AuthBloc>().add(RequestForOTP());
                 if (state.isEmailValid == false) {
                   // print(state.isEmailValid);
                   context.read<AuthBloc>().add(const SetErrorMessage(

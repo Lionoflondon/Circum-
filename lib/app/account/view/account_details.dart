@@ -353,17 +353,6 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget deleteAccount() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      // if (state.status == Status.success) {
-      //   context.read<AuthBloc>().add(ResetStatus());
-      //   SchedulerBinding.instance.addPostFrameCallback((_) {
-      //     Navigator.push(
-      //         context,
-      //         MaterialPageRoute(
-      //             builder: (_) => EnterOTPView(
-      //                   deleteAccount: true,
-      //                 )));
-      //   });
-      // }
       return Padding(
           padding: const EdgeInsets.only(bottom: 0),
           child: TextButton(

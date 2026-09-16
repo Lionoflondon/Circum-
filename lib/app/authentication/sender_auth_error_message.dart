@@ -18,7 +18,9 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
   }
   switch (error.code) {
     case 'email-already-in-use':
-      return 'An account already exists for this email. Sign in to continue.';
+      return creating
+          ? 'Account creation could not be completed. If you already have an account, sign in or reset your password.'
+          : 'Email or password is incorrect.';
     case 'invalid-email':
       return 'Enter a valid email address.';
     case 'weak-password':
@@ -27,8 +29,8 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
     case 'wrong-password':
     case 'user-not-found':
       return creating
-          ? 'An account already exists for this email. Sign in to continue.'
-          : 'Sign in failed. Check the email and password.';
+          ? 'Account creation could not be completed. Please try again.'
+          : 'Email or password is incorrect.';
     case 'network-request-failed':
       return creating
           ? 'Connection is slow. Account creation could not finish. Try again when your network improves.'

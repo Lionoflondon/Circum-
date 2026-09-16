@@ -16,9 +16,6 @@ class SignupView extends StatelessWidget {
             listener: (context, state) {
               if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
-                // context.read<AuthBloc>().add(StartCountDown());
-                // Navigator.push(context,
-                //     MaterialPageRoute(builder: (_) => const EnterOTPView()));
               }
 
               if (state.status == Status.unverifiedEmail) {
