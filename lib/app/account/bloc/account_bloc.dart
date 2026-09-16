@@ -128,8 +128,11 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       'selectedSpeed': selectedSpeed ?? 'standard',
     });
     final quote = Map<String, dynamic>.from(quoteResponse.data as Map);
-    final sessionResponse =
-        await functions.httpsCallable('createSenderPaymentSession').call({
+    final sessionResponse = await functions
+        .httpsCallableFromUrl(
+          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+        )
+        .call({
       'quoteId': quote['quoteId'],
       'fallbackMethod': 'card',
       'saveCard': saveCard,

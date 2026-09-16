@@ -1056,8 +1056,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     String name,
     Map<String, dynamic> payload,
   ) async {
-    final result = await FirebaseFunctions.instance
-        .httpsCallable(name)
+    const senderDeliveryPaymentRoutes = {
+      'getSenderPaymentMode',
+      'createSenderPaymentSession',
+      'createSenderPaidDelivery',
+      'finalizeSenderWebCheckout',
+    };
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+    final callable = senderDeliveryPaymentRoutes.contains(name)
+        ? functions.httpsCallableFromUrl(
+            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/$name',
+          )
+        : functions.httpsCallable(name);
+    final result = await callable
         .call(payload)
         .timeout(_senderCallableTimeout);
     return result.data is Map
