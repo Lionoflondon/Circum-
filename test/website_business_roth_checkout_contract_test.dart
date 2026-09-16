@@ -19,5 +19,11 @@ void main() {
       ),
     );
     expect(source, contains("'amount': rawAmount"));
+    expect(source, contains('.timeout(const Duration(seconds: 20))'));
+    expect(source, contains('Roth checkout timed out. Try again safely'));
+    expect(source, contains('payment provider is temporarily unavailable'));
+    expect(source, contains('Business Roth purchases are non-refundable.'));
+    expect(source, contains('finally {'));
+    expect(source, contains('_businessBusy = false'));
   });
 }
