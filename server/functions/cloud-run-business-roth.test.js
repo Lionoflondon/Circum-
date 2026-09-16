@@ -27,6 +27,8 @@ test("Business Roth Cloud Run wrapper exposes health without invoking payment co
 test("Business Roth Cloud Run wrapper preserves callable request headers and body", async () => {
   await withServer((req, res) => {
     assert.equal(req.headers.authorization, "Bearer test-token");
+    assert.equal(req.header("Authorization"), "Bearer test-token");
+    assert.equal(req.get("Content-Type"), "application/json");
     assert.deepEqual(req.body, {data: {businessId: "business_1", amount: 25000}});
     res.status(200).send({data: {accepted: true}});
   }, async (url) => {
