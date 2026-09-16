@@ -69,10 +69,17 @@ function isAllowedDependencyIntersection(file) {
 }
 
 const changed = changedFiles();
-const ownedForCi = changed.filter((file) => productName === 'backend' &&
-  (file === 'firebase.json' ||
-    file === '.github/workflows/rc1_release_build.yml' ||
-    file === 'scripts/deploy_guard.js') ? false : true);
+const ownedForCi = changed.filter((file) => {
+  if (productName === 'backend' &&
+      (file === 'firebase.json' ||
+        file === '.github/workflows/rc1_release_build.yml' ||
+        file === 'scripts/deploy_guard.js')) return false;
+  if (productName === 'website' &&
+      file === 'test/website_sender_auth_deterministic_contract_test.dart') {
+    return false;
+  }
+  return true;
+});
 if (ciMode && !ownedForCi.some((file) => startsWithAny(file, product.ownedPrefixes))) {
   console.log(JSON.stringify({
     ok: true,
