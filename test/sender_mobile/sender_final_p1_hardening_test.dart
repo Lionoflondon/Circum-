@@ -17,8 +17,15 @@ void main() {
       File('lib/app/authentication/view/signin_form.dart').readAsStringSync();
 
   test('native Business Roth uses authoritative bounded checkout', () {
-    expect(businessRepository,
-        contains("httpsCallable('createBusinessRothCheckout')"));
+    expect(businessRepository, contains('httpsCallableFromUrl('));
+    expect(
+      businessRepository,
+      contains('circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app'),
+    );
+    expect(
+      businessRepository,
+      isNot(contains("httpsCallable('createBusinessRothCheckout')")),
+    );
     expect(businessRepository, contains("'idempotencyKey': requestKey"));
     expect(businessRepository, contains('businessOperationTimeout'));
     expect(businessView, contains("label: 'Buy Roth'"));
