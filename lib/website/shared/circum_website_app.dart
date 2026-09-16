@@ -5332,9 +5332,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('requestRiderWithdrawal').call({'amount': amount});
+      await WebsiteProductionPaymentApi.call(
+        'rider_payouts',
+        'requestRiderWithdrawal',
+        {'amount': amount},
+      );
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
