@@ -442,7 +442,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
         ? const Uuid().v4()
         : idempotencyKey.trim();
     final result = await _bounded(
-      functions.httpsCallable('createBusinessRothCheckout').call({
+      functions
+          .httpsCallableFromUrl(
+            'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
+          )
+          .call({
         'businessId': account.id,
         'amount': amount,
         'idempotencyKey': requestKey,
