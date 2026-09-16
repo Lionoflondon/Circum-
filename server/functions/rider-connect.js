@@ -12,7 +12,7 @@ const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
 const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
-const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
+const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_CONNECT_WEBHOOK_SECRET"]});
 const riderStripeCallable = (handler) => functions.runWith({
   secrets: ["STRIPE_SECRET_KEY"],
   enforceAppCheck: true,
@@ -1219,7 +1219,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
     const signature = req.headers["stripe-signature"];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
     let event;
     try {
       if (!webhookSecret) {
