@@ -1148,7 +1148,7 @@ class _BusinessViewState extends State<BusinessView>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Roth is Circum credit. Your secure checkout may offer a saved card, Apple Pay or Google Pay when supported.',
+              'Roth is Circum credit. Business Roth purchases are non-refundable. Your secure checkout may offer a saved card, Apple Pay or Google Pay when supported.',
               style: TextStyle(color: _muted, height: 1.4),
             ),
             const SizedBox(height: 16),
@@ -1159,12 +1159,12 @@ class _BusinessViewState extends State<BusinessView>
                   const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(
-                    RegExp(r'^\d{0,5}(\.\d{0,2})?')),
+                    RegExp(r'^\d{0,7}(\.\d{0,2})?')),
               ],
               decoration: const InputDecoration(
                 labelText: 'Amount',
                 prefixText: '£',
-                helperText: 'Minimum £1 · Maximum £10,000',
+                helperText: 'Minimum £1 · Maximum £1,000,000',
               ),
             ),
           ],
@@ -1177,7 +1177,7 @@ class _BusinessViewState extends State<BusinessView>
           FilledButton(
             onPressed: () {
               final parsed = double.tryParse(controller.text.trim());
-              if (parsed == null || parsed < 1 || parsed > 10000) return;
+              if (parsed == null || parsed < 1 || parsed > 1000000) return;
               Navigator.pop(dialogContext, parsed);
             },
             child: const Text('Continue securely'),
