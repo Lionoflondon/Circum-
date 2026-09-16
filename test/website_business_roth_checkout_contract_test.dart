@@ -7,7 +7,12 @@ void main() {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
-    expect(source, contains("httpsCallable('createBusinessRothCheckout')"));
+    expect(source, contains('httpsCallableFromUrl('));
+    expect(
+      source,
+      contains('circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app'),
+    );
+    expect(source, isNot(contains("httpsCallable('createBusinessRothCheckout')")));
     expect(source, contains("'idempotencyKey': _businessRothCheckoutKey"));
     expect(source, contains('_businessRothCheckoutKey ??='));
     expect(source, contains("replaceAll(',', '')"));
