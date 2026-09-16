@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
-import '../payment/production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 
 import 'business_models.dart';
 

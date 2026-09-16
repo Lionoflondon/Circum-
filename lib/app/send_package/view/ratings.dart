@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../../env/env.dart';
-import '../../payment/production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 
 const _senderTipSheetInitTimeout = Duration(seconds: 20);
 const _senderTipSheetPresentTimeout = Duration(seconds: 90);

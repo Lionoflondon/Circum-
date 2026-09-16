@@ -11,7 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../env/env.dart';
-import '../payment/production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 import 'native_payment_identity.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
