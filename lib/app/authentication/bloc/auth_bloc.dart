@@ -24,7 +24,6 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../sender_mobile/sender_profile_authority.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
-import '../phone_verification_deadline.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -71,8 +70,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SetPin>(_handleSetPin);
     on<SignInWithAppleAuth>(_handleSignInWithAppleAuth);
     on<SignInWithGoogle>(_handleSignInWithGoogle);
-    on<RequestForOTP>(_handleRequestForOTP);
-    on<VerifySentCode>(_handleVerifySentCode);
     on<SubmitOTP>(_handleSubmitOTP);
     on<FirstNameChanged>(_handleFirstNameChanged);
     on<LastNameChanged>(_handleLastNameChanged);
@@ -101,14 +98,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _updateSenderProfile({
     String? displayName,
     String? username,
-    String? phone,
   }) async {
     final payload = <String, dynamic>{
       if (displayName != null && displayName.trim().isNotEmpty)
         'displayName': displayName.trim(),
       if (username != null && username.trim().isNotEmpty)
         'username': username.trim(),
-      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
     };
     await functions
         .httpsCallable('updateSenderProfile')
@@ -351,50 +346,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  void _handleRequestForOTP(
-      RequestForOTP event, Emitter<AuthState> emit) async {
-    final completer = Completer<bool>();
-
-    String? verificationIdValue;
-    int? resendTokenValue;
-
-    try {
-      emit(state.copyWith(status: Status.loading));
-      await awaitPhoneVerification(
-        start: () => auth.verifyPhoneNumber(
-          phoneNumber: state.phoneNumber,
-          verificationCompleted: (_) {},
-          verificationFailed: (error) {
-            if (!completer.isCompleted) completer.completeError(error);
-          },
-          codeSent: (String verificationId, int? resendToken) async {
-            verificationIdValue = verificationId;
-            resendTokenValue = resendToken;
-            if (!completer.isCompleted) completer.complete(true);
-          },
-          codeAutoRetrievalTimeout: (_) {
-            if (!completer.isCompleted) {
-              completer.completeError(TimeoutException('phone_otp_request'));
-            }
-          },
-        ),
-        completion: completer.future.timeout(_authOperationTimeout),
-        timeout: _authOperationTimeout,
-      );
-
-      emit(state.copyWith(
-          verificationId: verificationIdValue,
-          resendToken: resendTokenValue,
-          status: Status.success));
-    } catch (e, stack) {
-      _logRecoverableAuthError('request_phone_otp', e, stack);
-      emit(state.copyWith(
-          errorMessage: 'Verification code could not be sent. Please retry.',
-          isLoading: false,
-          status: Status.failure));
-    }
-  }
-
   Future<void> _handleSignInWithGoogle(
       SignInWithGoogle event, Emitter<AuthState> emit) async {
     try {
@@ -453,68 +404,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         errorMessage:
             'Google sign-in could not be completed. Please try again.',
       ));
-    }
-  }
-
-  Future<void> _handleVerifySentCode(
-      VerifySentCode event, Emitter<AuthState> emit) async {
-    try {
-      // Create a PhoneAuthCredential with the code
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-          verificationId: state.verificationId!, smsCode: '${state.otp}');
-
-      // if user is already signed in by other means, link the credentials
-      // else, sign user in
-
-      User? user = auth.currentUser;
-      if (user != null) {
-        await user
-            .linkWithCredential(credential)
-            .timeout(_authOperationTimeout);
-      } else {
-        final UserCredential userCredential = await auth
-            .signInWithCredential(credential)
-            .timeout(_authOperationTimeout);
-        user = userCredential.user;
-      }
-      if (user == null) {
-        emit(state.copyWith(
-          status: Status.failure,
-          errorMessage: 'Verification could not be completed.',
-        ));
-        return;
-      }
-      final phone =
-          await _hydrateSenderSessionRecoverably(user, 'auth.phone.profile');
-      final isIncomplete = user.displayName == null;
-      emit(state.copyWith(
-        status: isIncomplete ? Status.initial : Status.success,
-        username: user.displayName,
-        profilePhoto: user.photoURL,
-        email: user.email,
-        verificationId: '',
-        otp: '',
-        phoneNumber: phone,
-        authenticatedStatus: isIncomplete
-            ? AuthenticatedStatus.incompleteData
-            : AuthenticatedStatus.authenticated,
-        currentState: AppState.authenticated,
-      ));
-    } on FirebaseException catch (e) {
-      if (e.code == 'invalid-verification-code') {
-        emit(state.copyWith(
-            status: Status.failure, errorMessage: 'Invalid verification code'));
-      } else {
-        _logRecoverableAuthError('verify_sent_code', e);
-        emit(state.copyWith(
-            status: Status.failure,
-            errorMessage: 'Verification could not be completed.'));
-      }
-    } catch (e, stack) {
-      _logRecoverableAuthError('verify_sent_code', e, stack);
-      emit(state.copyWith(
-          status: Status.failure,
-          errorMessage: 'Verification could not be completed.'));
     }
   }
 
@@ -720,8 +609,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       FlutterSecureStorage storage = const FlutterSecureStorage();
 
       if (user != null) {
-        await _updateSenderProfile(phone: event.value);
-
         await storage
             .write(key: 'phone', value: event.value)
             .timeout(_authOperationTimeout);
@@ -868,7 +755,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       await _updateSenderProfile(
         displayName: event.username,
-        phone: user?.phoneNumber,
       );
 
       // print(user);

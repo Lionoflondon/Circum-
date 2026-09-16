@@ -9,7 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-enum SenderReauthenticationProvider { emailPassword, google, apple, phone }
+enum SenderReauthenticationProvider { emailPassword, google, apple }
 
 class SenderAccountClosureException implements Exception {
   final String message;
@@ -84,9 +84,6 @@ class SenderAccountClosure {
     if (providers.contains('apple.com')) {
       available.add(SenderReauthenticationProvider.apple);
     }
-    if (providers.contains('phone')) {
-      available.add(SenderReauthenticationProvider.phone);
-    }
     return available;
   }
 
@@ -141,10 +138,6 @@ class SenderAccountClosure {
         accessToken: authorization.authorizationCode,
       ),
     );
-  }
-
-  Future<void> closeWithPhoneCredential(PhoneAuthCredential credential) {
-    return _closeAfterReauthentication(credential);
   }
 
   Future<void> _closeAfterReauthentication(AuthCredential credential) async {
