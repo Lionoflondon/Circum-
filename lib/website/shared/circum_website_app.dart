@@ -10788,7 +10788,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         '${_senderUser?.uid ?? 'sender'}:${DateTime.now().microsecondsSinceEpoch}';
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('createBusinessRothCheckout')
+          .httpsCallableFromUrl(
+            'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
+          )
           .call({
         'businessId': businessId,
         'amount': rawAmount,
