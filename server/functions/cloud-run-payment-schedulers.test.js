@@ -17,3 +17,12 @@ test("payment scheduler container binds to Cloud Run PORT", () => {
   assert.match(source, /process\.env\.PORT \|\| 8080/);
   assert.match(source, /"0\.0\.0\.0"/);
 });
+
+test("Pub/Sub Eventarc envelopes select only an explicit scheduler handler", () => {
+  const {eventHandlerName} = require("./cloud-run-payment-schedulers");
+  const wrap = (payload) => ({message: {data: Buffer.from(JSON.stringify(payload)).toString("base64")}});
+  assert.equal(eventHandlerName(wrap({handler: "health"})), "health");
+  assert.equal(eventHandlerName({data: wrap({handler: "scheduledRiderStripeStatusSync"})}), "scheduledRiderStripeStatusSync");
+  assert.equal(eventHandlerName(wrap({handler: 42})), "");
+  assert.equal(eventHandlerName({message: {data: "%%%"}}), "");
+});

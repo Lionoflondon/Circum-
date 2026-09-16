@@ -25,6 +25,24 @@ const handlers = Object.freeze({
     riderConnect.scheduledRiderStripeStatusSyncCore(stripeClient()),
 });
 
+function eventHandlerName(body) {
+  const envelope = body && body.message ? body : body && body.data && body.data.message ? body.data : null;
+  const encoded = envelope && envelope.message && envelope.message.data;
+  if (!encoded) return "";
+  try {
+    const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+    return typeof decoded.handler === "string" ? decoded.handler : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
 const server = http.createServer(async (req, res) => {
   const path = new URL(req.url, "http://localhost").pathname;
   if (req.method === "GET" && path === "/healthz") {
@@ -32,7 +50,15 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ok: true, service: "payment-schedulers"}));
     return;
   }
-  const name = path.slice(1);
+  let name = path.slice(1);
+  if (req.method === "POST" && (path === "/" || path === "/events")) {
+    name = eventHandlerName(await readJson(req));
+    if (name === "health") {
+      console.log("payment_scheduler_health_event");
+      res.writeHead(204).end();
+      return;
+    }
+  }
   if (req.method !== "POST" || !handlers[name]) {
     res.writeHead(404).end();
     return;
@@ -52,4 +78,4 @@ if (require.main === module) {
   server.listen(Number(process.env.PORT || 8080), "0.0.0.0");
 }
 
-module.exports = {handlers, server};
+module.exports = {eventHandlerName, handlers, server};
