@@ -17,6 +17,20 @@ void main() {
       bloc.indexOf('Future<void> _dispatchPaidDelivery'),
     );
     expect(callableMap, contains('.timeout(_senderCallableTimeout)'));
+    expect(
+      callableMap,
+      contains(
+        'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/\$name',
+      ),
+    );
+    for (final route in [
+      'getSenderPaymentMode',
+      'createSenderPaymentSession',
+      'createSenderPaidDelivery',
+      'finalizeSenderWebCheckout',
+    ]) {
+      expect(callableMap, contains("'$route'"));
+    }
   });
 
   test('post-payment dispatch is bounded and recoverable', () {

@@ -66,7 +66,7 @@ test("legacy standard delivery payment HTTP endpoints are retired", () => {
 
 test("Sender mobile uses canonical quote, payment session, and paid delivery callables", () => {
   assert.match(accountBlocSource, /httpsCallable\('createSenderBookingQuote'\)/);
-  assert.match(accountBlocSource, /circum-sender-delivery-payments-[^']+\/createSenderPaymentSession/);
+  assert.match(accountBlocSource, /httpsCallable\('createSenderPaymentSession'\)/);
   assert.match(sendBlocSource, /_callableMap\('createSenderPaidDelivery'/);
   assert.doesNotMatch(sendBlocSource, /collection\("deliveryRequests"\)\.doc\(user\?\.uid\)\.set/);
   assert.match(accountStateSource, /final String\? quoteId/);
