@@ -672,6 +672,9 @@ exports.listBusinessRothTransactions = functions
   });
 
 async function createBusinessInvoiceCheckoutHandler(stripe, data, context, dependencies = {}) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to pay a Business invoice.");
+  }
   const invoiceId = text(data && data.invoiceId, 160);
   if (!invoiceId) throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
   const db = dependencies.db || getFirestore();
@@ -686,6 +689,9 @@ async function createBusinessInvoiceCheckoutHandler(stripe, data, context, depen
 exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall((data, context) => createBusinessInvoiceCheckoutHandler(stripe, data, context));
 
 async function cancelBusinessInvoiceCheckoutHandler(stripe, data, context, dependencies = {}) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to manage a Business invoice checkout.");
+  }
   const id = text(data && (data.checkoutReservationId || data.paymentId), 160);
   if (!id) throw new functions.https.HttpsError("invalid-argument", "Choose a checkout reservation.");
   const db = dependencies.db || getFirestore();
