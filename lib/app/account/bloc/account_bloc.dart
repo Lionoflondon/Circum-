@@ -23,17 +23,11 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     on<SaveCard>(_onSaveCard);
   }
 
-  void _onSaveCard(
-    SaveCard event,
-    Emitter<AccountState> emit,
-  ) {
+  void _onSaveCard(SaveCard event, Emitter<AccountState> emit) {
     emit(state.copyWith(saveCard: event.val));
   }
 
-  void _onPaymentStart(
-    PaymentStart event,
-    Emitter<AccountState> emit,
-  ) {
+  void _onPaymentStart(PaymentStart event, Emitter<AccountState> emit) {
     emit(state.copyWith(status: PaymentStatus.initial));
   }
 
@@ -53,13 +47,14 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       // );
 
       final paymentIntentResult = await _createSenderPaymentSession(
-          currency: 'gbp',
-          clientDisplayAmount: event.amount,
-          distanceMiles: event.distanceMiles,
-          weightKg: event.weightKg,
-          selectedSpeed: event.selectedSpeed,
-          paymentRequestId: event.paymentRequestId,
-          saveCard: event.saveCard);
+        currency: 'gbp',
+        clientDisplayAmount: event.amount,
+        distanceMiles: event.distanceMiles,
+        weightKg: event.weightKg,
+        selectedSpeed: event.selectedSpeed,
+        paymentRequestId: event.paymentRequestId,
+        saveCard: event.saveCard,
+      );
 
       if (paymentIntentResult['error'] != null) {
         // Error creating or confirming the payment intent.
@@ -69,22 +64,26 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
       if (paymentIntentResult['clientSecret'] != null) {
         await processPayment(
-            clientIntentSecret: paymentIntentResult['clientSecret'],
-            ephemeralKeySecret: paymentIntentResult['ephemeralKeySecret'],
-            customerId: paymentIntentResult['customerId'],
-            saveCard: event.saveCard);
+          clientIntentSecret: paymentIntentResult['clientSecret'],
+          ephemeralKeySecret: paymentIntentResult['ephemeralKeySecret'],
+          customerId: paymentIntentResult['customerId'],
+          saveCard: event.saveCard,
+        );
       }
 
       if (paymentIntentResult['paymentSessionId'] != null) {
-        emit(state.copyWith(
+        emit(
+          state.copyWith(
             status: PaymentStatus.success,
             paymentIntentId:
                 paymentIntentResult['stripePaymentIntentId'] as String?,
             quoteId: paymentIntentResult['quoteId'] as String?,
             paymentSessionId:
                 paymentIntentResult['paymentSessionId'] as String?,
-            authoritativeAmount:
-                (paymentIntentResult['amountDue'] as num?)?.toDouble()));
+            authoritativeAmount: (paymentIntentResult['amountDue'] as num?)
+                ?.toDouble(),
+          ),
+        );
       }
     } catch (_) {
       emit(state.copyWith(status: PaymentStatus.failure));
@@ -92,7 +91,9 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   }
 
   void _updatePaymentStatus(
-      UpdatePaymentStatus event, Emitter<AccountState> emit) {
+    UpdatePaymentStatus event,
+    Emitter<AccountState> emit,
+  ) {
     if (event.data['success'] == true) {
       emit(state.copyWith(status: PaymentStatus.success));
     }
@@ -108,32 +109,37 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     String? paymentRequestId,
   }) async {
     final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-    final quoteResponse =
-        await functions.httpsCallable('createSenderBookingQuote').call({
-      'quoteId': paymentRequestId,
-      'currency': currency.toUpperCase(),
-      'clientDisplayQuote': {
-        'amountPence': clientDisplayAmount,
-        'amount':
-            clientDisplayAmount == null ? null : clientDisplayAmount / 100,
-        'currency': currency.toUpperCase(),
-      },
-      'pricingInput': {
-        'distanceMiles': distanceMiles,
-        'weightKg': weightKg,
-        'selectedSpeed': selectedSpeed ?? 'standard',
-      },
-      'distanceMiles': distanceMiles,
-      'weightKg': weightKg,
-      'selectedSpeed': selectedSpeed ?? 'standard',
-    });
+    final quoteResponse = await functions
+        .httpsCallable('createSenderBookingQuote')
+        .call({
+          'quoteId': paymentRequestId,
+          'currency': currency.toUpperCase(),
+          'clientDisplayQuote': {
+            'amountPence': clientDisplayAmount,
+            'amount': clientDisplayAmount == null
+                ? null
+                : clientDisplayAmount / 100,
+            'currency': currency.toUpperCase(),
+          },
+          'pricingInput': {
+            'distanceMiles': distanceMiles,
+            'weightKg': weightKg,
+            'selectedSpeed': selectedSpeed ?? 'standard',
+          },
+          'distanceMiles': distanceMiles,
+          'weightKg': weightKg,
+          'selectedSpeed': selectedSpeed ?? 'standard',
+        });
     final quote = Map<String, dynamic>.from(quoteResponse.data as Map);
-    final sessionResponse =
-        await functions.httpsCallable('createSenderPaymentSession').call({
-      'quoteId': quote['quoteId'],
-      'fallbackMethod': 'card',
-      'saveCard': saveCard,
-    });
+    final sessionResponse = await functions
+        .httpsCallableFromUrl(
+          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+        )
+        .call({
+          'quoteId': quote['quoteId'],
+          'fallbackMethod': 'card',
+          'saveCard': saveCard,
+        });
     final session = Map<String, dynamic>.from(sessionResponse.data as Map);
     return {
       ...session,
@@ -168,9 +174,9 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           )
           .timeout(_accountPaymentSheetInitTimeout);
 
-      await Stripe.instance
-          .presentPaymentSheet()
-          .timeout(_accountPaymentSheetPresentTimeout);
+      await Stripe.instance.presentPaymentSheet().timeout(
+        _accountPaymentSheetPresentTimeout,
+      );
     } catch (e) {
       throw Exception(e.toString());
     }
