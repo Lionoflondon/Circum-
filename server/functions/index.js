@@ -113,6 +113,8 @@ exports.setConversationTyping = communicationEngine.setConversationTyping;
 exports.sendRiderUpdate = sendRiderUpdate;
 exports.createHealthPlusCheckoutSession =
   healthPlus.createHealthPlusCheckoutSession;
+exports.createHealthPlusBillingPortalSession =
+  healthPlus.createHealthPlusBillingPortalSession;
 exports.createHealthPlusBooking = healthPlus.createHealthPlusBooking;
 exports.updateSenderHealthPlusBooking =
   healthPlus.updateSenderHealthPlusBooking;

@@ -897,6 +897,58 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
 }
 exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onRequest((req, res) => createHealthPlusCheckoutHandler(req, res));
 
+const HEALTH_PLUS_PORTAL_RETURN_URL =
+  "https://circum-app-2797c.web.app/?app=health";
+
+async function createHealthPlusBillingPortalHandler(req, res, dependencies = {}) {
+  allowCors(res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).send({error: "method_not_allowed"});
+  try {
+    const sender = await (dependencies.verifySenderRequest || verifySenderRequest)(req);
+    const db = dependencies.db || getFirestore();
+    const provider = dependencies.stripe || stripe;
+    const [membershipSnap, userSnap, profileSnap] = await Promise.all([
+      db.collection("healthPlusMemberships").doc(sender.uid).get(),
+      db.collection("users").doc(sender.uid).get(),
+      db.collection("senderProfiles").doc(sender.uid).get(),
+    ]);
+    const membership = membershipSnap.exists ? membershipSnap.data() || {} : {};
+    const user = userSnap.exists ? userSnap.data() || {} : {};
+    const profile = profileSnap.exists ? profileSnap.data() || {} : {};
+    const customerId = text(
+        membership.stripeCustomerId || user.stripeCustomerId ||
+        user.customerId || profile.stripeCustomerId || profile.customerId,
+    );
+    if (!customerId) {
+      return res.status(409).send({
+        error: "health_plus_customer_missing",
+        message: "Start a Health+ subscription before managing billing.",
+      });
+    }
+    if (membership.senderId && membership.senderId !== sender.uid) {
+      return res.status(403).send({error: "membership_owner_mismatch"});
+    }
+    const customer = await provider.customers.retrieve(customerId);
+    if (!customer || customer.deleted === true) {
+      return res.status(409).send({error: "health_plus_customer_unavailable"});
+    }
+    const session = await provider.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: HEALTH_PLUS_PORTAL_RETURN_URL,
+    });
+    return res.status(200).send({url: session.url, expiresAt: session.expires_at || null});
+  } catch (error) {
+    if (sendHttpsError(res, error)) return;
+    console.error("Health+ billing portal session error", error);
+    return res.status(500).send({error: "health_plus_billing_portal_unavailable"});
+  }
+}
+
+exports.createHealthPlusBillingPortalSession =
+  functions.runWith({secrets: ["STRIPE_SECRET_KEY"]})
+      .https.onRequest((req, res) => createHealthPlusBillingPortalHandler(req, res));
+
 async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = null, dependencies = {}) {
   const metadata = sessionData.metadata || {};
   const bookingId = `${metadata.bookingId || ""}`.trim();
@@ -1001,4 +1053,9 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
 });
 
 // Explicit dependencies are used only by the allowlisted private QA callable.
-exports._qaHandlers = {createHealthPlusBookingHandler, createHealthPlusCheckoutHandler, handleHealthPlusCheckoutSessionHandler};
+exports._qaHandlers = {
+  createHealthPlusBookingHandler,
+  createHealthPlusCheckoutHandler,
+  createHealthPlusBillingPortalHandler,
+  handleHealthPlusCheckoutSessionHandler,
+};
