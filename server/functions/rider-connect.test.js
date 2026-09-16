@@ -113,6 +113,8 @@ test("Admin payout review is backend authoritative and auditable", () => {
 
 test("Stripe Connect webhook money events are replay-safe", () => {
   const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /secrets: \["STRIPE_SECRET_KEY", "STRIPE_CONNECT_WEBHOOK_SECRET"\]/);
+  assert.match(source, /const webhookSecret = process\.env\.STRIPE_CONNECT_WEBHOOK_SECRET/);
   assert.match(source, /function processStripeConnectEventOnce/);
   assert.match(source, /collection\("stripeConnectWebhookEvents"\)\.doc\(eventId\)/);
   assert.match(source, /const existingEvent = await transaction\.get\(eventRef\)/);

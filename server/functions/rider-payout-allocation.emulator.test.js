@@ -12,10 +12,10 @@ after(async () => {
 await deleteApp(app);
 });
 test("bank payout events match exact earning sources and cannot recredit failed bank payouts", async (t) => {
-  const oldSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  process.env.STRIPE_WEBHOOK_SECRET = "emulator-only";
+  const oldSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "emulator-only";
   t.after(() => {
-if (oldSecret === undefined) delete process.env.STRIPE_WEBHOOK_SECRET; else process.env.STRIPE_WEBHOOK_SECRET = oldSecret;
+if (oldSecret === undefined) delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET; else process.env.STRIPE_CONNECT_WEBHOOK_SECRET = oldSecret;
 });
   await db.doc("riderEarnings/r1").set({availableBalance: 0, pendingWithdrawal: 5});
   await db.doc("payoutRequests/p1").set({riderId: "r1", amount: 5, status: "processing", stripeAccountId: "acct_1", destinationPaymentId: "py_1", fundsReserved: true, allocationVersion: 1});
