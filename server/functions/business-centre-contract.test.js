@@ -189,6 +189,7 @@ test("Business Roth purchase is attested, bounded, and retry-idempotent", () => 
   assert.match(businessPaymentsSource, /return \{[\s\S]*idempotent:\s*true/);
   const decide = businessPayments._private.businessRothAmountDecision;
   assert.equal(decide("25000").allowed, true);
+  assert.equal(decide("50000").allowed, true);
   assert.equal(decide("1000000").allowed, true);
   assert.deepEqual(decide("1000000.01"), {
     allowed: false,
@@ -196,6 +197,9 @@ test("Business Roth purchase is attested, bounded, and retry-idempotent", () => 
     amount: 1000000.01,
   });
   assert.equal(decide("1.001").reason, "invalid_amount");
+  assert.match(businessPaymentsSource, /businessRothCheckoutRequests/);
+  assert.match(businessPaymentsSource, /businessRothCheckoutIntents/);
+  assert.match(businessPaymentsSource, /checkoutIntentId/);
 });
 
 test("Business invoices expose printable PDF records without client-side invoice generation", () => {

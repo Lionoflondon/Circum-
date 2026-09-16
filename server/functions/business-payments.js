@@ -13,6 +13,7 @@ const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions"
 const communicationEngine = require("./communication-engine");
 const checkoutReservations = require("./business-checkout-reservations");
 const BUSINESS_ROTH_SELF_SERVE_CAP_GBP = 1000000;
+const BUSINESS_ROTH_CHECKOUT_TTL_MS = 24 * 60 * 60 * 1000;
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -30,6 +31,64 @@ function businessRothAmountDecision(value) {
     return {allowed: false, reason: "review_required", amount};
   }
   return {allowed: true, reason: "allowed", amount};
+}
+
+function businessRothCheckoutIdentity({uid, businessId, amount}) {
+  return crypto.createHash("sha256")
+    .update(`${uid}:${businessId}:GBP:${money(amount)}`)
+    .digest("hex");
+}
+
+async function reserveBusinessRothCheckout({db, uid, businessId, amount, idempotencyKey, nowMs = Date.now()}) {
+  const requestId = crypto.createHash("sha256").update(`${uid}:${idempotencyKey}`).digest("hex");
+  const intentId = businessRothCheckoutIdentity({uid, businessId, amount});
+  const requestRef = db.collection("businessRothCheckoutRequests").doc(requestId);
+  const intentRef = db.collection("businessRothCheckoutIntents").doc(intentId);
+  return db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    const intentSnap = await transaction.get(intentRef);
+    const request = requestSnap.exists ? requestSnap.data() || {} : null;
+    const intent = intentSnap.exists ? intentSnap.data() || {} : null;
+    if (request && (request.businessId !== businessId || money(request.amountGbp) !== amount || request.createdByUserId !== uid)) {
+      throw new functions.https.HttpsError("already-exists", "This checkout request was already used.");
+    }
+    let generation = Number(intent && intent.generation || 0);
+    const active = intent && ["creating", "pending_verification"].includes(text(intent.status, 40)) &&
+      Number(intent.activeUntilMs || 0) > nowMs;
+    const completedReplay = request && intent && text(intent.status, 40) === "completed" &&
+      text(intent.purchaseId, 160) === text(request.purchaseId, 160);
+    let purchaseId = request && (active || completedReplay) ? text(request.purchaseId, 160) : "";
+    if (!purchaseId && active) purchaseId = text(intent.purchaseId, 160);
+    if (!purchaseId) {
+      generation += 1;
+      purchaseId = crypto.createHash("sha256")
+        .update(`${intentId}:${generation}`)
+        .digest("hex");
+    }
+    const common = {
+      businessId,
+      amountGbp: amount,
+      currency: "GBP",
+      createdByUserId: uid,
+      purchaseId,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    transaction.set(requestRef, {
+      ...common,
+      requestId,
+      idempotencyKey,
+      createdAt: request && request.createdAt || FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(intentRef, {
+      ...common,
+      intentId,
+      generation,
+      status: active ? intent.status : "creating",
+      activeUntilMs: active ? intent.activeUntilMs : nowMs + BUSINESS_ROTH_CHECKOUT_TTL_MS,
+      createdAt: active && intent.createdAt || FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {purchaseId, intentId, reused: Boolean(request || active)};
+  });
 }
 
 function text(value, max = 500) {
@@ -510,9 +569,14 @@ exports.createBusinessRothCheckout = (stripe) => functions
   }
   const account = await requireBusinessMember(businessId, context);
   const db = getFirestore();
-  const purchaseId = crypto.createHash("sha256")
-    .update(`${context.auth.uid}:${businessId}:${idempotencyKey}`)
-    .digest("hex");
+  const reservation = await reserveBusinessRothCheckout({
+    db,
+    uid: context.auth.uid,
+    businessId,
+    amount,
+    idempotencyKey,
+  });
+  const {purchaseId, intentId} = reservation;
   const purchaseRef = db.collection("businessRothPurchases").doc(purchaseId);
   const existing = await purchaseRef.get();
   if (existing.exists) {
@@ -552,6 +616,7 @@ exports.createBusinessRothCheckout = (stripe) => functions
       type: "business_roth_purchase",
       businessId,
       purchaseRequestId: purchaseRef.id,
+      checkoutIntentId: intentId,
       amountGbp: `${amount}`,
       createdByUserId: context.auth.uid,
     },
@@ -573,7 +638,17 @@ exports.createBusinessRothCheckout = (stripe) => functions
     paidAt: null,
     creditedAt: null,
     createdByUserId: context.auth.uid,
+    checkoutIntentId: intentId,
+    updatedAt: FieldValue.serverTimestamp(),
   });
+  await db.collection("businessRothCheckoutIntents").doc(intentId).set({
+    status: "pending_verification",
+    purchaseId: purchaseRef.id,
+    stripeSessionId: session.id,
+    checkoutUrl: session.url,
+    activeUntilMs: Number(session.expires_at || 0) > 0 ? Number(session.expires_at) * 1000 : Date.now() + BUSINESS_ROTH_CHECKOUT_TTL_MS,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   await db.collection("businessAccounts").doc(businessId).set({
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
@@ -707,6 +782,15 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
       rothAmount: verifiedPurchase.rothIssued,
       currency: verifiedPurchase.currency,
     }, {merge: true});
+    if (metadata.checkoutIntentId) {
+      await getFirestore().collection("businessRothCheckoutIntents").doc(metadata.checkoutIntentId).set({
+        status: "completed",
+        purchaseId,
+        stripeSessionId: sessionData.id,
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     if (metadata.createdByUserId) {
       try {
         await communicationEngine.emitNotification({
@@ -776,6 +860,8 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
 exports._private = {
   BUSINESS_ROTH_SELF_SERVE_CAP_GBP,
   businessRothAmountDecision,
+  businessRothCheckoutIdentity,
+  reserveBusinessRothCheckout,
   creditBusinessRoth,
   debitBusinessRoth,
   markInvoicePaid,
