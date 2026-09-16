@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:circum/app/delivery/cancellation_contract.dart';
-import 'package:circum/app/payment/production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
