@@ -432,9 +432,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
   }) async {
     if (!amount.isFinite ||
         amount < 1 ||
-        amount > 10000 ||
+        amount > 1000000 ||
         (amount * 100).roundToDouble() != amount * 100) {
-      throw ArgumentError('Enter a Roth amount between £1 and £10,000.');
+      throw ArgumentError(
+        'Enter a Roth amount between £1 and £1,000,000. Larger purchases require Circum review.',
+      );
     }
     final requestKey = idempotencyKey.trim().isEmpty
         ? const Uuid().v4()
