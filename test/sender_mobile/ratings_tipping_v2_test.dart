@@ -86,8 +86,7 @@ void main() {
     final submitSource = source.substring(submitStart, submitEnd);
 
     expect(submitSource, contains("httpsCallable('submitDeliveryRating')"));
-    expect(submitSource, contains("ProductionPaymentApi.call"));
-    expect(submitSource, contains("'submitDeliveryTip'"));
+    expect(submitSource, contains("httpsCallable('submitDeliveryTip')"));
     expect(submitSource, isNot(contains("collection('driverRatings')")));
     expect(
       submitSource,

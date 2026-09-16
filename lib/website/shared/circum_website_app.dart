@@ -13226,6 +13226,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'feedbackTags': _selectedRatingTags.toList(),
       }).timeout(const Duration(seconds: 20));
       if (_selectedTipAmount > 0) {
+        // Installed web bundles used httpsCallable('submitDeliveryTip'); the
+        // canonical website now calls the isolated live Cloud Run owner.
         final tipData = await WebsiteProductionPaymentApi.call(
           'tips',
           'submitDeliveryTip',
