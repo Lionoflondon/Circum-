@@ -153,6 +153,16 @@ test("Business invoice checkout delegates to the transactional reservation autho
   assert.match(indexSource, /exports\.cancelBusinessInvoiceCheckout/);
 });
 
+test("Business invoice payment handlers authenticate before reading invoice records", () => {
+  const source = businessPaymentsSource;
+  const createStart = source.indexOf("async function createBusinessInvoiceCheckoutHandler");
+  const cancelStart = source.indexOf("async function cancelBusinessInvoiceCheckoutHandler");
+  const createBody = source.slice(createStart, cancelStart);
+  const cancelBody = source.slice(cancelStart, source.indexOf("exports.cancelBusinessInvoiceCheckout", cancelStart));
+  assert.ok(createBody.indexOf("if (!context.auth)") < createBody.indexOf("collection(\"businessInvoices\")"));
+  assert.ok(cancelBody.indexOf("if (!context.auth)") < cancelBody.indexOf("collection(\"businessCheckoutReservations\")"));
+});
+
 test("Business invoice finalizer verifies Stripe paid amount against server payment record", () => {
   assert.match(businessPaymentsSource, /verifiedStripePaidGbpSession\(sessionData, \{[\s\S]*?ownerId: businessId,[\s\S]*?expectedAmountGBP: payment\.cardAmount/);
   assert.match(businessPaymentsSource, /const rothAmount = money\(payment\.rothAmount\);/);
