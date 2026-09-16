@@ -17,6 +17,7 @@ class WebsiteProductionPaymentApi {
         'https://circum-delivery-adjustment-payments-j2b7cicfwq-uc.a.run.app',
     'sender_cancellation':
         'https://circum-sender-cancellation-requests-j2b7cicfwq-uc.a.run.app',
+    'rider_payouts': 'https://circum-rider-payouts-j2b7cicfwq-uc.a.run.app',
   };
 
   static Future<Map<String, dynamic>> call(
