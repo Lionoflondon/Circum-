@@ -7,6 +7,9 @@ const MAX_BODY_BYTES = 1024 * 1024;
 function createBusinessRothServer(callable) {
   if (typeof callable !== "function") throw new TypeError("callable is required");
   return http.createServer((req, res) => {
+    // Firebase callable handlers expect the Express request header helpers.
+    req.header = (name) => req.headers[String(name).toLowerCase()];
+    req.get = req.header;
     res.status = (code) => {
       res.statusCode = code;
       return res;
