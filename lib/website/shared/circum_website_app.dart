@@ -29006,7 +29006,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             _LiveChatField(
                               colors: colors,
                               controller: _email,
-                              label: 'Email or phone',
+                              label: 'Email',
                               icon: Icons.alternate_email,
                             ),
                             const SizedBox(height: 14),
