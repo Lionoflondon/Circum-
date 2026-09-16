@@ -3318,7 +3318,9 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
               if (widget.user != null && widget.eligible) ...[
                 Row(
                   children: [
-                    Expanded(child: Text('Pending: $_pending  •  Completed: $_completed')),
+                    Expanded(
+                        child: Text(
+                            'Pending: $_pending  •  Completed: $_completed')),
                     TextButton.icon(
                       onPressed: _loading
                           ? null
@@ -3328,7 +3330,8 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                       icon: Icon((_link?.isNotEmpty ?? false)
                           ? Icons.copy_rounded
                           : Icons.refresh_rounded),
-                      label: Text((_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
+                      label: Text(
+                          (_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
                     ),
                   ],
                 ),
@@ -10791,12 +10794,37 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'amount': rawAmount,
         'idempotencyKey': _businessRothCheckoutKey,
         'returnUrl': 'https://circumuk.com/?app=business',
-      });
+      }).timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
         await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
         _businessRothCheckoutKey = null;
+      } else {
+        throw StateError('Secure checkout is unavailable.');
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _businessMessage =
+            'Roth checkout timed out. Try again safely; your pending checkout will be reused.');
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = switch (error.code) {
+        'unauthenticated' => 'Sign in again to buy Business Roth.',
+        'permission-denied' =>
+          'You do not have access to buy Roth for this Business.',
+        'unavailable' =>
+          'The payment provider is temporarily unavailable. Try again safely.',
+        'deadline-exceeded' =>
+          'Roth checkout timed out. Try again safely; your pending checkout will be reused.',
+        _ => 'Roth checkout could not start. Please try again safely.',
+      };
+      setState(() => _businessMessage = message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _businessMessage =
+            'Roth checkout could not start. Check your connection and try again safely.');
       }
     } finally {
       if (mounted) setState(() => _businessBusy = false);
@@ -16158,22 +16186,36 @@ class _BusinessSuiteOverviewPanel extends StatelessWidget {
         _BusinessSurface(
           colors: colors,
           padding: const EdgeInsets.all(14),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 110,
-                child: _InputBox(
-                  colors: colors,
-                  controller: rothAmount,
-                  hint: 'Roth £',
-                ),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: _InputBox(
+                      colors: colors,
+                      controller: rothAmount,
+                      hint: 'Roth £',
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: busy ? null : onBuyRoth,
+                      icon: const Icon(Icons.account_balance_wallet_outlined),
+                      label: const Text('Add Business Roth'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: busy ? null : onBuyRoth,
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Add Business Roth'),
+              const SizedBox(height: 8),
+              Text(
+                'Business Roth is Circum credit. Business Roth purchases are non-refundable.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
