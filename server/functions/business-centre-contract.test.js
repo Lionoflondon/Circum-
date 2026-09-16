@@ -114,7 +114,7 @@ test("Sender Web exposes the Business Centre without placeholder routes", () => 
   assert.match(senderWebSource, /httpsCallable\('updateBusinessProfile'\)/);
   assert.match(senderWebSource, /httpsCallable\('updateBusinessMemberRole'\)/);
   assert.match(senderWebSource, /httpsCallable\('removeBusinessMember'\)/);
-  assert.match(senderWebSource, /httpsCallable\('createBusinessInvoiceCheckout'\)/);
+  assert.match(senderWebSource, /WebsiteProductionPaymentApi\.call\([\s\S]*?'business_invoices'[\s\S]*?'createBusinessInvoiceCheckout'/);
   assert.match(
     senderWebSource,
     /httpsCallable\('createBusinessRothCheckout'\)|httpsCallableFromUrl\(/,
