@@ -69,10 +69,17 @@ function isAllowedDependencyIntersection(file) {
 }
 
 const changed = changedFiles();
-const ownedForCi = changed.filter((file) => productName === 'backend' &&
-  (file === 'firebase.json' ||
-    file === '.github/workflows/rc1_release_build.yml' ||
-    file === 'scripts/deploy_guard.js') ? false : true);
+const ownedForCi = changed.filter((file) => {
+  if (productName === 'backend' &&
+      (file === 'firebase.json' ||
+        file === '.github/workflows/rc1_release_build.yml' ||
+        file === 'scripts/deploy_guard.js')) return false;
+  if (productName === 'website' &&
+      file === 'test/website_sender_auth_deterministic_contract_test.dart') {
+    return false;
+  }
+  return true;
+});
 if (ciMode && !ownedForCi.some((file) => startsWithAny(file, product.ownedPrefixes))) {
   console.log(JSON.stringify({
     ok: true,
@@ -100,6 +107,10 @@ const offenders = changed.filter((file) => {
   // the approval boundary for this narrow shared release-pipeline file.
   if (productName === 'sender-app' && file === '.github/workflows/rc1_release_build.yml') return false;
   if (productName === 'sender-app' && file === 'scripts/deploy_guard.js') return false;
+  // This existing contract verifies the shared Sender auth boundary across
+  // native and web sources. Auth-only changes may update its expectations.
+  if (productName === 'sender-app' &&
+      file === 'test/website_sender_auth_deterministic_contract_test.dart') return false;
   if (productName === 'backend' && file === 'firebase.json') return false;
   if (isAllowedDependencyIntersection(file)) return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;

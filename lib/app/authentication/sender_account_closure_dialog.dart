@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'sender_account_closure.dart';
@@ -95,71 +92,7 @@ class SenderAccountClosureDialog {
         await closure.closeWithGoogle();
       case SenderReauthenticationProvider.apple:
         await closure.closeWithApple();
-      case SenderReauthenticationProvider.phone:
-        await closure.closeWithPhoneCredential(await _phoneCredential(context));
     }
-  }
-
-  static Future<PhoneAuthCredential> _phoneCredential(
-      BuildContext context) async {
-    final phone = FirebaseAuth.instance.currentUser?.phoneNumber;
-    if (phone == null || phone.isEmpty) {
-      throw const SenderAccountClosureException(
-        'Sign in again before closing your account.',
-      );
-    }
-    final result = Completer<PhoneAuthCredential>();
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: phone,
-      verificationCompleted: (credential) {
-        if (!result.isCompleted) result.complete(credential);
-      },
-      verificationFailed: (_) {
-        if (!result.isCompleted) {
-          result.completeError(const SenderAccountClosureException(
-            'Phone confirmation could not be completed. Please try again.',
-          ));
-        }
-      },
-      codeSent: (verificationId, _) async {
-        final code = await _requestText(
-          context,
-          title: 'Confirm your phone',
-          label: 'Verification code',
-          keyboardType: TextInputType.number,
-        );
-        if (!context.mounted) {
-          if (!result.isCompleted) {
-            result.completeError(const SenderAccountClosureException(
-              'Phone confirmation was cancelled.',
-            ));
-          }
-          return;
-        }
-        if (code == null || code.trim().isEmpty) {
-          if (!result.isCompleted) {
-            result.completeError(const SenderAccountClosureException(
-              'Account closure was cancelled.',
-            ));
-          }
-          return;
-        }
-        if (!result.isCompleted) {
-          result.complete(PhoneAuthProvider.credential(
-            verificationId: verificationId,
-            smsCode: code.trim(),
-          ));
-        }
-      },
-      codeAutoRetrievalTimeout: (_) {
-        if (!result.isCompleted) {
-          result.completeError(const SenderAccountClosureException(
-            'Phone confirmation timed out. Please try again.',
-          ));
-        }
-      },
-    );
-    return result.future.timeout(SenderAccountClosure.operationTimeout);
   }
 
   static Future<String?> _requestText(
@@ -205,8 +138,6 @@ class SenderAccountClosureDialog {
         return 'Continue with Google';
       case SenderReauthenticationProvider.apple:
         return 'Continue with Apple';
-      case SenderReauthenticationProvider.phone:
-        return 'Confirm with phone';
     }
   }
 

@@ -75,8 +75,6 @@ class SetVerificationMethod extends AuthEvent {
   const SetVerificationMethod({required this.method});
 }
 
-class RequestForOTP extends AuthEvent {}
-
 class RegisterUser extends AuthEvent {}
 
 class LoginUser extends AuthEvent {}
@@ -114,8 +112,6 @@ class ValidatePhoneNumber extends AuthEvent {
 
   const ValidatePhoneNumber({required this.val});
 }
-
-class VerifySentCode extends AuthEvent {}
 
 class UpdateUserProfile extends AuthEvent {
   final String username;
