@@ -687,8 +687,14 @@ void main() {
       expect(source, contains("httpsCallable('debitRothCredit')"));
       expect(source, contains("httpsCallable('setWalletFrozen')"));
       expect(source, isNot(contains("httpsCallable('issueRothToWallets')")));
-      expect(source, contains("httpsCallable('createRiderTransferOrPayout')"));
-      expect(source, contains("httpsCallable('adminReviewRiderWithdrawal')"));
+      expect(
+        source,
+        contains("AdminProductionPaymentApi.call(\n          'createRiderTransferOrPayout'"),
+      );
+      expect(
+        source,
+        contains("AdminProductionPaymentApi.call(\n          'adminReviewRiderWithdrawal'"),
+      );
       expect(source, isNot(contains('stripeSecretKey')));
       expect(source, isNot(contains('sk_live_')));
     });
@@ -705,8 +711,14 @@ void main() {
       expect(methodEnd, greaterThan(methodStart));
       final method = source.substring(methodStart, methodEnd);
 
-      expect(method, contains("httpsCallable('adminReviewRiderWithdrawal')"));
-      expect(method, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(
+        method,
+        contains("AdminProductionPaymentApi.call(\n          'adminReviewRiderWithdrawal'"),
+      );
+      expect(
+        method,
+        contains("AdminProductionPaymentApi.call(\n          'createRiderTransferOrPayout'"),
+      );
       expect(method, isNot(contains("collection('payoutRequests').doc")));
       expect(method, isNot(contains("'status': 'rejected'")));
     });

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_operations.dart';
+import 'admin_production_payment_api.dart';
 import 'roth_grant_campaigns.dart';
 
 enum AdminModule {
@@ -2529,22 +2530,24 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     try {
       if (nextStatus == 'approved') {
-        await FirebaseFunctions.instanceFor(
-          region: 'us-central1',
-        ).httpsCallable('createRiderTransferOrPayout').call({
-          'requestId': requestId,
-          'riderId': riderId,
-          'amount': amount,
-        });
+        await AdminProductionPaymentApi.call(
+          'createRiderTransferOrPayout',
+          {
+            'requestId': requestId,
+            'riderId': riderId,
+            'amount': amount,
+          },
+        );
       } else {
-        await FirebaseFunctions.instanceFor(
-          region: 'us-central1',
-        ).httpsCallable('adminReviewRiderWithdrawal').call({
-          'requestId': requestId,
-          'riderId': riderId,
-          'action': 'rejected',
-          'reason': 'Rider payout rejected from Admin finance review',
-        });
+        await AdminProductionPaymentApi.call(
+          'adminReviewRiderWithdrawal',
+          {
+            'requestId': requestId,
+            'riderId': riderId,
+            'action': 'rejected',
+            'reason': 'Rider payout rejected from Admin finance review',
+          },
+        );
       }
       await _writeAudit(
         AdminAuditEntry(
@@ -2566,6 +2569,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Payout action failed.');
+    } catch (_) {
+      setState(() => _message = 'Payout action failed.');
     }
   }
 
