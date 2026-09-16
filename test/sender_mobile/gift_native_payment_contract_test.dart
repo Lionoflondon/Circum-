@@ -23,7 +23,8 @@ void main() {
   });
 
   test('Gift payment calls are bounded and reconcile with backend', () {
-    expect(source, contains(".httpsCallable('finalizeGiftPayment')"));
+    expect(source, contains("'finalizeGiftPayment'"));
+    expect(source, contains("ProductionPaymentApi.call"));
     expect(source, contains('.timeout(_backendTimeout)'));
     expect(source, contains('.timeout(_paymentSheetPresentTimeout)'));
     expect(source,

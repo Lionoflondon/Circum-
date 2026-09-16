@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../env/env.dart';
+import '../payment/production_payment_api.dart';
 import 'native_payment_identity.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
@@ -91,7 +92,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         .doc()
         .id;
     final uri = Uri.base;
-    final cancelled = uri.queryParameters['payment'] == 'cancelled' ||
+    final cancelled =
+        uri.queryParameters['payment'] == 'cancelled' ||
         uri.fragment.contains('payment=cancelled');
     if (cancelled) {
       _message =
@@ -109,8 +111,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       final platformPay = kIsWeb
           ? false
           : await Stripe.instance.isPlatformPaySupported().timeout(
-                const Duration(seconds: 4),
-              );
+              const Duration(seconds: 4),
+            );
       if (!mounted) return;
       setState(() {
         _savedMethods = profile.methods;
@@ -240,8 +242,9 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         ..._savedMethods.expand(
           (method) => [
             _PaymentMethodTile(
-              label:
-                  method.isDefault ? '${method.title} · Default' : method.title,
+              label: method.isDefault
+                  ? '${method.title} · Default'
+                  : method.title,
               selected: _selectedPaymentMethodId == method.id,
               onTap: () => setState(() {
                 _paymentMethod = 'Saved card';
@@ -334,8 +337,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       paymentMethod: _verifiedPaymentMethod == 'roth'
           ? 'Roth'
           : _verifiedPaymentMethod == 'roth_card'
-              ? 'Roth and card'
-              : (_paymentMethod ?? 'card'),
+          ? 'Roth and card'
+          : (_paymentMethod ?? 'card'),
       amount: '£${widget.draft.budget.toStringAsFixed(2)}',
     );
     if (!confirmed || !mounted || _submitting) return;
@@ -381,22 +384,23 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       if (parsedDeliveryDate != null) {
         payload['deliveryDate'] = Timestamp.fromDate(parsedDeliveryDate);
       }
-      final payment = await FirebaseFunctions.instance
-          .httpsCallable(senderGiftPaymentCallableName)
-          .call({
-        'giftDraftId': _giftDraftId,
-        'giftDraft': payload,
-        'source': 'sender_mobile',
-        'applyRoth': _applyRoth && _rothBalance > 0,
-        'paymentMethod': _verifiedPaymentMethod,
-        if (_selectedPaymentMethodId != null)
-          'paymentMethodId': _selectedPaymentMethodId,
-        'checkoutMode': kIsWeb ? 'web_checkout' : 'payment_intent',
-        'idempotencyKey': 'gift_${user.uid}_$_giftDraftId',
-        'returnOrigin': Uri.base.origin,
-      }).timeout(_backendTimeout);
+      final paymentData = await ProductionPaymentApi.call(
+        'gifts',
+        senderGiftPaymentCallableName,
+        {
+          'giftDraftId': _giftDraftId,
+          'giftDraft': payload,
+          'source': 'sender_mobile',
+          'applyRoth': _applyRoth && _rothBalance > 0,
+          'paymentMethod': _verifiedPaymentMethod,
+          if (_selectedPaymentMethodId != null)
+            'paymentMethodId': _selectedPaymentMethodId,
+          'checkoutMode': kIsWeb ? 'web_checkout' : 'payment_intent',
+          'idempotencyKey': 'gift_${user.uid}_$_giftDraftId',
+          'returnOrigin': Uri.base.origin,
+        },
+      ).timeout(_backendTimeout);
       if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
-      final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true ||
           (!kIsWeb && paymentData['paymentStatus'] == 'paid')) {
         if (!kIsWeb) {
@@ -422,13 +426,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           await _confirmNativeGiftPayment(paymentData);
         }
         if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
-        final finalized = await FirebaseFunctions.instance
-            .httpsCallable('finalizeGiftPayment')
-            .call({
-          'giftDraftId': _giftDraftId,
-          'paymentIntentId': paymentData['paymentIntentId'],
-        }).timeout(_backendTimeout);
-        final finalData = Map<String, dynamic>.from(finalized.data as Map);
+        final finalData =
+            await ProductionPaymentApi.call('gifts', 'finalizeGiftPayment', {
+              'giftDraftId': _giftDraftId,
+              'paymentIntentId': paymentData['paymentIntentId'],
+            }).timeout(_backendTimeout);
         if (finalData['paymentStatus'] != 'paid') {
           throw StateError('Gift payment is still being verified.');
         }
@@ -489,7 +491,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         .timeout(_backendTimeout);
     final completed = await owned('giftRequests');
     if (FirebaseAuth.instance.currentUser?.uid != user.uid) return true;
-    var paid = completed.docs.isNotEmpty &&
+    var paid =
+        completed.docs.isNotEmpty &&
         completed.docs.single.data()['paymentStatus'] == 'paid';
     if (!paid) {
       final drafts = await owned(senderGiftPaymentDraftCollectionName);
@@ -499,13 +502,12 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         final intent = '${stored['stripePaymentIntentId'] ?? ''}';
         if (intent.isNotEmpty) {
           try {
-            final result = await FirebaseFunctions.instance
-                .httpsCallable('finalizeGiftPayment')
-                .call({
-              'giftDraftId': _giftDraftId,
-              'paymentIntentId': intent,
-            }).timeout(_backendTimeout);
-            paid = (result.data as Map)['paymentStatus'] == 'paid';
+            final result = await ProductionPaymentApi.call(
+              'gifts',
+              'finalizeGiftPayment',
+              {'giftDraftId': _giftDraftId, 'paymentIntentId': intent},
+            ).timeout(_backendTimeout);
+            paid = result['paymentStatus'] == 'paid';
           } on FirebaseFunctionsException catch (error) {
             if (error.code != 'failed-precondition') rethrow;
           }
@@ -586,8 +588,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         )
         .timeout(_paymentSheetInitTimeout);
     await Stripe.instance.presentPaymentSheet().timeout(
-          _paymentSheetPresentTimeout,
-        );
+      _paymentSheetPresentTimeout,
+    );
   }
 }
 
@@ -637,8 +639,9 @@ class _PaymentMethodTile extends StatelessWidget {
               selected
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_off_rounded,
-              color:
-                  selected ? const Color(0xFFC9B8FF) : const Color(0xFFB8AAB8),
+              color: selected
+                  ? const Color(0xFFC9B8FF)
+                  : const Color(0xFFB8AAB8),
               size: 18,
             ),
           ],
@@ -731,8 +734,8 @@ class _RothBalanceSummary extends StatelessWidget {
     final balanceText = loading
         ? 'Loading...'
         : unavailable
-            ? 'Unavailable'
-            : '£${balance.toStringAsFixed(0)}';
+        ? 'Unavailable'
+        : '£${balance.toStringAsFixed(0)}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),

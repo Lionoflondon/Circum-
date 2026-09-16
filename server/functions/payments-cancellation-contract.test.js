@@ -33,7 +33,7 @@ test("canonical cancellation is exported, auditable and refund-review aware", ()
 });
 
 test("Sender clients wait for the cancellation callable and never delete the delivery", () => {
-  assert.match(mobile, /httpsCallable\('requestSenderCancellation'\)/);
+  assert.match(mobile, /ProductionPaymentApi\.call\([\s\S]*?'sender_cancellation'[\s\S]*?'requestSenderCancellation'/);
   assert.doesNotMatch(mobile, /data\?\['status'\] == 'requested'[\s\S]{0,100}delete\(\)/);
   assert.match(web, /httpsCallable\('cancelDelivery'\)/);
   assert.doesNotMatch(web, /transaction\.update\(reference,[\s\S]{0,200}'cancelled_by_sender'/);

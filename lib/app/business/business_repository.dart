@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
+import '../payment/production_payment_api.dart';
 
 import 'business_models.dart';
 
@@ -10,7 +11,8 @@ abstract class BusinessRepository {
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account);
   Future<BusinessRequestHistory> loadRequestHistory(BusinessAccount account);
   Future<BusinessCreatedResult> createBusinessAccount(
-      BusinessCreateDraft draft);
+    BusinessCreateDraft draft,
+  );
   Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode);
   Future<String> requestBusinessAccess({
     required BusinessCodeLookupResult business,
@@ -20,7 +22,8 @@ abstract class BusinessRepository {
     bool rotate = false,
   });
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
-      BusinessAccount account);
+    BusinessAccount account,
+  );
   Future<void> reviewAccessRequest({
     required BusinessAccount account,
     required BusinessAccessRequest request,
@@ -89,10 +92,10 @@ class FirebaseBusinessRepository implements BusinessRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance,
-        functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+  }) : auth = auth ?? FirebaseAuth.instance,
+       firestore = firestore ?? FirebaseFirestore.instance,
+       functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   User get _user {
     final user = auth.currentUser;
@@ -107,21 +110,23 @@ class FirebaseBusinessRepository implements BusinessRepository {
   Future<List<BusinessAccount>> loadAccounts() async {
     final user = _user;
     final email = (user.email ?? '').trim().toLowerCase();
-    final snapshots = await _bounded(Future.wait([
-      firestore
-          .collection('businessAccounts')
-          .where('createdByUserId', isEqualTo: user.uid)
-          .limit(20)
-          .get(),
-      firestore
-          .collection('businessAccounts')
-          .where(
-            'teamMemberIds',
-            arrayContainsAny: [user.uid, if (email.isNotEmpty) email],
-          )
-          .limit(20)
-          .get(),
-    ]));
+    final snapshots = await _bounded(
+      Future.wait([
+        firestore
+            .collection('businessAccounts')
+            .where('createdByUserId', isEqualTo: user.uid)
+            .limit(20)
+            .get(),
+        firestore
+            .collection('businessAccounts')
+            .where(
+              'teamMemberIds',
+              arrayContainsAny: [user.uid, if (email.isNotEmpty) email],
+            )
+            .limit(20)
+            .get(),
+      ]),
+    );
     final byId = <String, BusinessAccount>{};
     for (final snapshot in snapshots) {
       for (final doc in snapshot.docs) {
@@ -135,33 +140,43 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account) async {
-    final results = await _bounded(Future.wait<dynamic>([
-      firestore
-          .collection('deliveryRequests')
-          .where('businessId', isEqualTo: account.id)
-          .limit(25)
-          .get(),
-      firestore
-          .collection('businessInvoices')
-          .where('businessId', isEqualTo: account.id)
-          .limit(25)
-          .get(),
-      firestore.collection('business_wallets').doc(account.id).get(),
-    ]));
+    final results = await _bounded(
+      Future.wait<dynamic>([
+        firestore
+            .collection('deliveryRequests')
+            .where('businessId', isEqualTo: account.id)
+            .limit(25)
+            .get(),
+        firestore
+            .collection('businessInvoices')
+            .where('businessId', isEqualTo: account.id)
+            .limit(25)
+            .get(),
+        firestore.collection('business_wallets').doc(account.id).get(),
+      ]),
+    );
     final deliveryDocs = results[0] as QuerySnapshot<Map<String, dynamic>>;
     final invoiceDocs = results[1] as QuerySnapshot<Map<String, dynamic>>;
     final walletDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
 
-    final deliveries = deliveryDocs.docs
-        .map((doc) => BusinessDelivery.fromMap(doc.id, doc.data()))
-        .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
-    final invoices = invoiceDocs.docs
-        .map((doc) => BusinessInvoice.fromMap(doc.id, doc.data()))
-        .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
+    final deliveries =
+        deliveryDocs.docs
+            .map((doc) => BusinessDelivery.fromMap(doc.id, doc.data()))
+            .toList(growable: false)
+          ..sort(
+            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+              a.createdAt ?? DateTime(1970),
+            ),
+          );
+    final invoices =
+        invoiceDocs.docs
+            .map((doc) => BusinessInvoice.fromMap(doc.id, doc.data()))
+            .toList(growable: false)
+          ..sort(
+            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+              a.createdAt ?? DateTime(1970),
+            ),
+          );
     return BusinessWorkspaceData(
       account: account,
       deliveries: deliveries,
@@ -182,64 +197,76 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<BusinessRequestHistory> loadRequestHistory(
-      BusinessAccount account) async {
-    final results = await _bounded(Future.wait([
-      firestore
-          .collection('prescriptionPickups')
-          .where('businessId', isEqualTo: account.id)
-          .limit(25)
-          .get(),
-      firestore
-          .collection('giftRequests')
-          .where('businessId', isEqualTo: account.id)
-          .limit(25)
-          .get(),
-      functions.httpsCallable('listBusinessRothTransactions').call({
-        'businessId': account.id,
-      }),
-    ]));
+    BusinessAccount account,
+  ) async {
+    final results = await _bounded(
+      Future.wait([
+        firestore
+            .collection('prescriptionPickups')
+            .where('businessId', isEqualTo: account.id)
+            .limit(25)
+            .get(),
+        firestore
+            .collection('giftRequests')
+            .where('businessId', isEqualTo: account.id)
+            .limit(25)
+            .get(),
+        functions.httpsCallable('listBusinessRothTransactions').call({
+          'businessId': account.id,
+        }),
+      ]),
+    );
     final healthDocs = results[0] as QuerySnapshot<Map<String, dynamic>>;
     final giftDocs = results[1] as QuerySnapshot<Map<String, dynamic>>;
     final rothResult = results[2] as HttpsCallableResult<dynamic>;
     final rothData = Map<String, dynamic>.from(rothResult.data as Map);
     return BusinessRequestHistory(
       healthRequests: healthDocs.docs
-          .map((doc) => BusinessRequestSummary(
-                id: doc.id,
-                title: '${doc.data()['patientName'] ?? 'Health+ request'}',
-                status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
-                createdAt: _timestamp(doc.data()['createdAt']),
-              ))
+          .map(
+            (doc) => BusinessRequestSummary(
+              id: doc.id,
+              title: '${doc.data()['patientName'] ?? 'Health+ request'}',
+              status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
+              createdAt: _timestamp(doc.data()['createdAt']),
+            ),
+          )
           .toList(growable: false),
       giftRequests: giftDocs.docs
-          .map((doc) => BusinessRequestSummary(
-                id: doc.id,
-                title: '${doc.data()['occasion'] ?? 'Corporate gift'}',
-                status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
-                createdAt: _timestamp(doc.data()['createdAt']),
-              ))
+          .map(
+            (doc) => BusinessRequestSummary(
+              id: doc.id,
+              title: '${doc.data()['occasion'] ?? 'Corporate gift'}',
+              status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
+              createdAt: _timestamp(doc.data()['createdAt']),
+            ),
+          )
           .toList(growable: false),
       rothTransactions: (rothData['transactions'] as List? ?? const [])
-          .map((item) => BusinessRothTransaction.fromMap(
-              Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) => BusinessRothTransaction.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList(growable: false),
     );
   }
 
   @override
   Future<BusinessCreatedResult> createBusinessAccount(
-      BusinessCreateDraft draft) async {
-    final result =
-        await _bounded(functions.httpsCallable('createBusinessAccount').call({
-      'companyName': draft.companyName,
-      'businessType': draft.businessType,
-      'businessEmail': draft.businessEmail,
-      'businessPhone': draft.businessPhone,
-      'businessAddress': draft.businessAddress,
-      'vatNumber': draft.vatNumber,
-      'businessSize': draft.businessSize,
-      'acceptTerms': draft.acceptTerms,
-    }));
+    BusinessCreateDraft draft,
+  ) async {
+    final result = await _bounded(
+      functions.httpsCallable('createBusinessAccount').call({
+        'companyName': draft.companyName,
+        'businessType': draft.businessType,
+        'businessEmail': draft.businessEmail,
+        'businessPhone': draft.businessPhone,
+        'businessAddress': draft.businessAddress,
+        'vatNumber': draft.vatNumber,
+        'businessSize': draft.businessSize,
+        'acceptTerms': draft.acceptTerms,
+      }),
+    );
     return BusinessCreatedResult.fromMap(
       Map<String, dynamic>.from(result.data as Map),
     );
@@ -248,9 +275,10 @@ class FirebaseBusinessRepository implements BusinessRepository {
   @override
   Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode) async {
     final result = await _bounded(
-        functions.httpsCallable('lookupBusinessByCompanyCode').call({
-      'companyCode': companyCode,
-    }));
+      functions.httpsCallable('lookupBusinessByCompanyCode').call({
+        'companyCode': companyCode,
+      }),
+    );
     return BusinessCodeLookupResult.fromMap(
       Map<String, dynamic>.from(result.data as Map),
     );
@@ -260,11 +288,12 @@ class FirebaseBusinessRepository implements BusinessRepository {
   Future<String> requestBusinessAccess({
     required BusinessCodeLookupResult business,
   }) async {
-    final result =
-        await _bounded(functions.httpsCallable('requestBusinessAccess').call({
-      'businessId': business.businessId,
-      'role': business.roleRequested,
-    }));
+    final result = await _bounded(
+      functions.httpsCallable('requestBusinessAccess').call({
+        'businessId': business.businessId,
+        'role': business.roleRequested,
+      }),
+    );
     final data = Map<String, dynamic>.from(result.data as Map);
     return '${data['status'] ?? 'pending'}';
   }
@@ -275,17 +304,19 @@ class FirebaseBusinessRepository implements BusinessRepository {
     bool rotate = false,
   }) async {
     final result = await _bounded(
-        functions.httpsCallable('ensureBusinessCompanyCode').call({
-      'businessId': account.id,
-      'rotate': rotate,
-    }));
+      functions.httpsCallable('ensureBusinessCompanyCode').call({
+        'businessId': account.id,
+        'rotate': rotate,
+      }),
+    );
     final data = Map<String, dynamic>.from(result.data as Map);
     return '${data['companyCode'] ?? ''}'.trim();
   }
 
   @override
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
-      BusinessAccount account) async {
+    BusinessAccount account,
+  ) async {
     final snapshot = await firestore
         .collection('businessJoinRequests')
         .where('businessId', isEqualTo: account.id)
@@ -296,8 +327,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
     return snapshot.docs
         .map((doc) => BusinessAccessRequest.fromMap(doc.id, doc.data()))
         .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
+        ),
+      );
   }
 
   @override
@@ -306,31 +340,35 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required BusinessAccessRequest request,
     required bool approved,
   }) async {
-    await _bounded(functions.httpsCallable('reviewBusinessAccessRequest').call({
-      'requestId': request.id,
-      'businessId': account.id,
-      'approved': approved,
-    }));
+    await _bounded(
+      functions.httpsCallable('reviewBusinessAccessRequest').call({
+        'requestId': request.id,
+        'businessId': account.id,
+        'approved': approved,
+      }),
+    );
   }
 
   @override
   Future<void> saveAccount(BusinessAccount account) async {
-    await _bounded(functions.httpsCallable('updateBusinessProfile').call({
-      'businessId': account.id,
-      'businessName': account.name,
-      'contactName': account.contactName,
-      'contactEmail': account.contactEmail.toLowerCase(),
-      'phone': account.phone,
-      'billingEmail': account.billingEmail.toLowerCase(),
-      'businessAddress': account.businessAddress,
-      'companyNumber': account.companyNumber,
-      'defaultPickupAddresses': [
-        if (account.defaultPickupAddress.isNotEmpty)
-          account.defaultPickupAddress,
-      ],
-      'notificationPreferences': account.notificationPreferences,
-      'paymentPreferences': account.paymentPreferences,
-    }));
+    await _bounded(
+      functions.httpsCallable('updateBusinessProfile').call({
+        'businessId': account.id,
+        'businessName': account.name,
+        'contactName': account.contactName,
+        'contactEmail': account.contactEmail.toLowerCase(),
+        'phone': account.phone,
+        'billingEmail': account.billingEmail.toLowerCase(),
+        'businessAddress': account.businessAddress,
+        'companyNumber': account.companyNumber,
+        'defaultPickupAddresses': [
+          if (account.defaultPickupAddress.isNotEmpty)
+            account.defaultPickupAddress,
+        ],
+        'notificationPreferences': account.notificationPreferences,
+        'paymentPreferences': account.paymentPreferences,
+      }),
+    );
   }
 
   @override
@@ -341,11 +379,13 @@ class FirebaseBusinessRepository implements BusinessRepository {
   }) async {
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty) throw ArgumentError('Enter an email address.');
-    await _bounded(functions.httpsCallable('inviteBusinessMember').call({
-      'businessId': account.id,
-      'email': normalized,
-      'role': role,
-    }));
+    await _bounded(
+      functions.httpsCallable('inviteBusinessMember').call({
+        'businessId': account.id,
+        'email': normalized,
+        'role': role,
+      }),
+    );
   }
 
   @override
@@ -358,26 +398,31 @@ class FirebaseBusinessRepository implements BusinessRepository {
   }) async {
     final memberId = '${member['userId'] ?? member['email'] ?? ''}'.trim();
     if (remove) {
-      await _bounded(functions.httpsCallable('removeBusinessMember').call({
-        'businessId': account.id,
-        'memberUserId': memberId,
-      }));
+      await _bounded(
+        functions.httpsCallable('removeBusinessMember').call({
+          'businessId': account.id,
+          'memberUserId': memberId,
+        }),
+      );
       return;
     }
     if (role != null) {
-      await _bounded(functions.httpsCallable('updateBusinessMemberRole').call({
-        'businessId': account.id,
-        'memberUserId': memberId,
-        'role': role,
-      }));
+      await _bounded(
+        functions.httpsCallable('updateBusinessMemberRole').call({
+          'businessId': account.id,
+          'memberUserId': memberId,
+          'role': role,
+        }),
+      );
     }
     if (status != null) {
       await _bounded(
-          functions.httpsCallable('updateBusinessMemberStatus').call({
-        'businessId': account.id,
-        'memberUserId': memberId,
-        'status': status,
-      }));
+        functions.httpsCallable('updateBusinessMemberStatus').call({
+          'businessId': account.id,
+          'memberUserId': memberId,
+          'status': status,
+        }),
+      );
     }
   }
 
@@ -386,10 +431,12 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required BusinessAccount account,
     required Map<String, dynamic> moment,
   }) async {
-    await _bounded(functions.httpsCallable('recordBusinessIrisMoment').call({
-      'businessId': account.id,
-      'moment': moment,
-    }));
+    await _bounded(
+      functions.httpsCallable('recordBusinessIrisMoment').call({
+        'businessId': account.id,
+        'moment': moment,
+      }),
+    );
   }
 
   @override
@@ -399,15 +446,17 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required bool useRoth,
     required String paymentMethod,
   }) async {
-    final result = await _bounded(
-        functions.httpsCallable('createBusinessInvoiceCheckout').call({
-      'businessId': account.id,
-      'invoiceId': invoice.id,
-      'paymentAmount': invoice.balanceDue,
-      'useRoth': useRoth,
-      'paymentMethod': paymentMethod,
-    }));
-    final data = Map<String, dynamic>.from(result.data as Map);
+    final data = await ProductionPaymentApi.call(
+      'business_invoices',
+      'createBusinessInvoiceCheckout',
+      {
+        'businessId': account.id,
+        'invoiceId': invoice.id,
+        'paymentAmount': invoice.balanceDue,
+        'useRoth': useRoth,
+        'paymentMethod': paymentMethod,
+      },
+    );
     final uri = Uri.tryParse('${data['url'] ?? data['checkoutUrl'] ?? ''}');
     final paid = data['paid'] == true;
     if (!paid && (uri == null || !uri.hasScheme)) {
@@ -447,11 +496,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
             'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
           )
           .call({
-        'businessId': account.id,
-        'amount': amount,
-        'idempotencyKey': requestKey,
-        'returnUrl': 'https://circumuk.com/?app=business&section=finance',
-      }),
+            'businessId': account.id,
+            'amount': amount,
+            'idempotencyKey': requestKey,
+            'returnUrl': 'https://circumuk.com/?app=business&section=finance',
+          }),
     );
     final data = Map<String, dynamic>.from(result.data as Map);
     final checkoutUrl = Uri.tryParse('${data['checkoutUrl'] ?? ''}');

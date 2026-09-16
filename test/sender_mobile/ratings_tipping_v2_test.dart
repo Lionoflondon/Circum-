@@ -57,9 +57,10 @@ void main() {
     final source =
         File('lib/app/send_package/view/ratings.dart').readAsStringSync();
     expect(source, contains("httpsCallable('submitDeliveryRating')"));
-    expect(source, contains("httpsCallable('submitDeliveryTip')"));
+    expect(source, contains("ProductionPaymentApi.call"));
+    expect(source, contains("'submitDeliveryTip'"));
     expect(source, contains('.presentPaymentSheet()'));
-    expect(source, contains('.timeout(_senderTipSheetPresentTimeout)'));
+    expect(source, contains('_senderTipSheetPresentTimeout'));
     expect(source, contains('Submit Appreciation'));
     expect(source,
         contains('100% of your tip goes directly to your Circum Rider.'));
