@@ -2,6 +2,7 @@ import 'policies/web_auth_terminal.dart';
 import 'rider_onboarding/application_policy.dart';
 import 'rider_onboarding/file_picker.dart';
 import 'rider_onboarding/document_transport.dart';
+import 'production_payment_api.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'policies/signup_referral.dart';
 import 'dart:async';
@@ -76,8 +77,9 @@ const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web)
-        .timeout(webAuthOperationTimeout);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.web,
+    ).timeout(webAuthOperationTimeout);
   }
 }
 
@@ -3235,8 +3237,10 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
       });
     } catch (_) {
       if (mounted) {
-        setState(() => _error =
-            'Your referral details could not be loaded. Please try again.');
+        setState(
+          () => _error =
+              'Your referral details could not be loaded. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -3319,19 +3323,24 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                 Row(
                   children: [
                     Expanded(
-                        child: Text(
-                            'Pending: $_pending  •  Completed: $_completed')),
+                      child: Text(
+                        'Pending: $_pending  •  Completed: $_completed',
+                      ),
+                    ),
                     TextButton.icon(
                       onPressed: _loading
                           ? null
                           : (_link?.isNotEmpty ?? false)
                               ? _copyLink
                               : _load,
-                      icon: Icon((_link?.isNotEmpty ?? false)
-                          ? Icons.copy_rounded
-                          : Icons.refresh_rounded),
+                      icon: Icon(
+                        (_link?.isNotEmpty ?? false)
+                            ? Icons.copy_rounded
+                            : Icons.refresh_rounded,
+                      ),
                       label: Text(
-                          (_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
+                        (_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load',
+                      ),
                     ),
                   ],
                 ),
@@ -3480,8 +3489,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _message =
-            'Older feedback could not be loaded. Please try again later.');
+        setState(
+          () => _message =
+              'Older feedback could not be loaded. Please try again later.',
+        );
       }
     }
   }
@@ -3583,8 +3594,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _authMessage =
-          'Could not restore your Rider session. Sign in to retry.');
+      setState(
+        () => _authMessage =
+            'Could not restore your Rider session. Sign in to retry.',
+      );
     }
   }
 
@@ -3618,10 +3631,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               )
               .timeout(const Duration(seconds: 25))
           : await auth
-              .signInWithEmailAndPassword(
-                email: email,
-                password: password,
-              )
+              .signInWithEmailAndPassword(email: email, password: password)
               .timeout(const Duration(seconds: 25));
       final user = credential.user!;
       if (_signupMode) {
@@ -3631,8 +3641,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         await _saveRiderProfile(user);
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
-      } else if (!await _allowRiderUser(user)
-          .timeout(const Duration(seconds: 25))) {
+      } else if (!await _allowRiderUser(
+        user,
+      ).timeout(const Duration(seconds: 25))) {
         await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         if (!mounted) return;
         setState(
@@ -3706,12 +3717,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       );
     } on TimeoutException {
       if (!mounted) return;
-      setState(() => _authMessage =
-          'Password reset took too long. Check your email before trying again.');
+      setState(
+        () => _authMessage =
+            'Password reset took too long. Check your email before trying again.',
+      );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _authMessage =
-          'We could not send the reset email. Please try again.');
+      setState(
+        () => _authMessage =
+            'We could not send the reset email. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _authSubmitting = false);
     }
@@ -3873,7 +3888,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _phone: record['phoneNumber'],
       _postcode: record['postcode'],
       _homeAddress: record['homeAddress'] ?? record['address'],
-      _plateNumber: record['vehicleRegistration']
+      _plateNumber: record['vehicleRegistration'],
     }.entries) {
       final value = '${entry.value ?? ''}'.trim();
       if (value.isNotEmpty) entry.key.text = value;
@@ -3894,9 +3909,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _saveRiderProfile(User user) async {
-    await FirebaseFunctions.instanceFor(
-      region: 'us-central1',
-    ).httpsCallable('updateRiderProfile').call({
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateRiderProfile')
+        .call({
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
@@ -3919,8 +3934,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _onboardingDocuments = null;
     void showRefreshError(Object error) {
       if (mounted) {
-        setState(() => _documentMessage =
-            'Could not refresh document progress. Sign in again to retry.');
+        setState(
+          () => _documentMessage =
+              'Could not refresh document progress. Sign in again to retry.',
+        );
       }
     }
 
@@ -3930,11 +3947,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .snapshots()
         .listen((snapshot) {
       if (mounted) {
-        setState(() => _riderProfile = {
-              ...?snapshot.data(),
-              if (_onboardingDocuments != null)
-                'verificationDocuments': _onboardingDocuments,
-            });
+        setState(
+          () => _riderProfile = {
+            ...?snapshot.data(),
+            if (_onboardingDocuments != null)
+              'verificationDocuments': _onboardingDocuments,
+          },
+        );
       }
     }, onError: showRefreshError);
     _onboardingDocumentsSub = FirebaseFirestore.instance
@@ -3952,14 +3971,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         });
       _onboardingDocuments = {
         for (final record in records)
-          riderDocumentKey('${record['type'] ?? record['documentType'] ?? ''}'):
-              record,
+          riderDocumentKey(
+            '${record['type'] ?? record['documentType'] ?? ''}',
+          ): record,
       };
       if (mounted) {
-        setState(() => _riderProfile = {
-              ...?_riderProfile,
-              'verificationDocuments': _onboardingDocuments,
-            });
+        setState(
+          () => _riderProfile = {
+            ...?_riderProfile,
+            'verificationDocuments': _onboardingDocuments,
+          },
+        );
       }
     }, onError: showRefreshError);
   }
@@ -4013,7 +4035,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Stream<List<Map<String, dynamic>>> _authorizedRiderOffers(
-      String riderId) async* {
+    String riderId,
+  ) async* {
     while (mounted && _riderUser?.uid == riderId) {
       try {
         final response =
@@ -4031,10 +4054,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           yield rows
               .whereType<Map>()
               .map((row) => Map<String, dynamic>.from(row))
-              .where((row) =>
-                  row['projectionVersion'] == 2 &&
-                  row['offerExpiresAt'] is num &&
-                  (row['offerExpiresAt'] as num) > now)
+              .where(
+                (row) =>
+                    row['projectionVersion'] == 2 &&
+                    row['offerExpiresAt'] is num &&
+                    (row['offerExpiresAt'] as num) > now,
+              )
               .toList();
         }
       } catch (_) {
@@ -5243,8 +5268,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       );
       if (!mounted) return;
       if (!signedOut) {
-        setState(() => _authMessage =
-            'Sign out could not be confirmed. Please try again.');
+        setState(
+          () => _authMessage =
+              'Sign out could not be confirmed. Please try again.',
+        );
         return;
       }
       setState(() {
@@ -5343,34 +5370,38 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final documentType = _riderDocumentType(_documentType.text);
       final key = crypto.sha256.convert([
         ...utf8.encode('${user.uid}:$documentType:'),
-        ...picked.bytes
+        ...picked.bytes,
       ]).toString();
       await submitRiderDocumentTransport(
-          request: {
-            'documentType': documentType,
-            'idempotencyKey': key,
-            'notes': _documentNotes.text.trim(),
-            'fileName': picked.name,
-            'contentType': picked.contentType,
-            'fileBase64': base64Encode(picked.bytes),
-          },
-          call: (payload) async {
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('submitRiderDocument')
-                .call(payload);
-          });
+        request: {
+          'documentType': documentType,
+          'idempotencyKey': key,
+          'notes': _documentNotes.text.trim(),
+          'fileName': picked.name,
+          'contentType': picked.contentType,
+          'fileBase64': base64Encode(picked.bytes),
+        },
+        call: (payload) async {
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('submitRiderDocument').call(payload);
+        },
+      );
       _riderProfile = await _loadRiderProfile(user.uid);
       if (mounted) {
-        setState(() =>
-            _documentMessage = 'Document uploaded. Documents under review.');
+        setState(
+          () => _documentMessage = 'Document uploaded. Documents under review.',
+        );
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _documentMessage = error is FirebaseFunctionsException
-            ? (error.message ?? 'Upload failed. Please retry.')
-            : error is StateError
-                ? error.message
-                : 'Upload failed or timed out. Please retry.');
+        setState(
+          () => _documentMessage = error is FirebaseFunctionsException
+              ? (error.message ?? 'Upload failed. Please retry.')
+              : error is StateError
+                  ? error.message
+                  : 'Upload failed or timed out. Please retry.',
+        );
       }
     } finally {
       if (mounted) setState(() => _documentSubmitting = false);
@@ -5417,15 +5448,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'postcode': _postcode.text,
       'homeAddress': _homeAddress.text,
       'vehicleType': _vehicle.text,
-      'vehicleRegistration': _plateNumber.text
+      'vehicleRegistration': _plateNumber.text,
     });
     if (validation != null) {
       setState(() => _message = validation);
       return;
     }
     if (!_rightToWork || !_sealedPackageConsent) {
-      setState(() => _message =
-          'Accept the rider terms and confirm your details are accurate.');
+      setState(
+        () => _message =
+            'Accept the rider terms and confirm your details are accurate.',
+      );
       return;
     }
     setState(() {
@@ -5463,13 +5496,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       });
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
-        setState(() => _message =
-            error.message ?? 'Application could not be submitted. Try again.');
+        setState(
+          () => _message =
+              error.message ?? 'Application could not be submitted. Try again.',
+        );
       }
     } on TimeoutException {
       if (mounted) {
-        setState(() => _message =
-            'The connection timed out. Your details are kept; try again.');
+        setState(
+          () => _message =
+              'The connection timed out. Your details are kept; try again.',
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -6184,7 +6221,10 @@ class _RiderEnrollmentForm extends StatelessWidget {
               _InputBox(colors: colors, controller: postcode, hint: 'Postcode'),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors, controller: homeAddress, hint: 'Address'),
+                colors: colors,
+                controller: homeAddress,
+                hint: 'Address',
+              ),
               const SizedBox(height: 10),
               _CompactSelectBox(
                 colors: colors,
@@ -6841,13 +6881,15 @@ class _RiderDocumentStatusList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text('Documents submitted: ${documentTypes.where((type) => const {
-              "pending",
-              "under_review",
-              "uploaded",
-              "submitted",
-              "approved"
-            }.contains(_statusFor(type))).length}/${documentTypes.length}'),
+        Text(
+          'Documents submitted: ${documentTypes.where((type) => const {
+                "pending",
+                "under_review",
+                "uploaded",
+                "submitted",
+                "approved"
+              }.contains(_statusFor(type))).length}/${documentTypes.length}',
+        ),
         ...documentTypes.map((type) {
           final status = _statusFor(type);
           final rejected =
@@ -7879,22 +7921,28 @@ class _DriverPerformancePanel extends StatelessWidget {
 }
 
 Future<void> _reportWebRatingFeedback(
-    BuildContext context, String ratingId) async {
+  BuildContext context,
+  String ratingId,
+) async {
   final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => SimpleDialog(
-            title: const Text('Report feedback'),
-            children: [
-              'Abusive or threatening',
-              'Discriminatory',
-              'Private information',
-              'Other policy violation'
-            ]
-                .map((reason) => SimpleDialogOption(
-                    onPressed: () => Navigator.pop(dialogContext, reason),
-                    child: Text(reason)))
-                .toList(),
-          ));
+    context: context,
+    builder: (dialogContext) => SimpleDialog(
+      title: const Text('Report feedback'),
+      children: [
+        'Abusive or threatening',
+        'Discriminatory',
+        'Private information',
+        'Other policy violation',
+      ]
+          .map(
+            (reason) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, reason),
+              child: Text(reason),
+            ),
+          )
+          .toList(),
+    ),
+  );
   if (reason == null || !context.mounted) return;
   try {
     await FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -7902,13 +7950,19 @@ Future<void> _reportWebRatingFeedback(
         .call({'ratingId': ratingId, 'reason': reason}).timeout(
             const Duration(seconds: 20));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Feedback sent to Circum Support for review.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Feedback sent to Circum Support for review.'),
+        ),
+      );
     }
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not send your report. Please try again.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send your report. Please try again.'),
+        ),
+      );
     }
   }
 }
@@ -8823,9 +8877,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSubmit: _bookHealthPlus,
           onPauseSchedule: _pauseHealthPlusSchedule,
           onResumeSchedule: _resumeHealthPlusSchedule,
-          onCancelSchedule: _cancelHealthPlusSchedule,
+          onCancelSchedule: _openHealthPlusBillingPortal,
           onCancelPickup: _cancelNextHealthPlusPickup,
-          onUpdatePayment: _openHealthPlusCheckout,
+          onUpdatePayment: _openHealthPlusBillingPortal,
           onAdminStatus: _adminUpdateHealthPlusStatus,
         ),
       _SenderStep.business => _BusinessCentreStep(
@@ -9409,24 +9463,29 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('cancelBusinessInvoiceCheckout')
-              .call({'paymentId': query['paymentId']}).timeout(
-                  const Duration(seconds: 15));
-      final data = Map<String, dynamic>.from(response.data as Map);
+      final data = await WebsiteProductionPaymentApi.call(
+        'business_invoices',
+        'cancelBusinessInvoiceCheckout',
+        {'paymentId': query['paymentId']},
+      ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() => _businessMessage = data['paid'] == true
-          ? 'The invoice payment has completed.'
-          : 'Checkout cancelled. Reserved Roth is available again.');
+      setState(
+        () => _businessMessage = data['paid'] == true
+            ? 'The invoice payment has completed.'
+            : 'Checkout cancelled. Reserved Roth is available again.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _businessMessage = error.message ??
-          'Checkout is still being reconciled. Retry before starting another payment.');
+      setState(
+        () => _businessMessage = error.message ??
+            'Checkout is still being reconciled. Retry before starting another payment.',
+      );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _businessMessage =
-          'We could not confirm cancellation. Reopen the invoice to retry safely.');
+      setState(
+        () => _businessMessage =
+            'We could not confirm cancellation. Reopen the invoice to retry safely.',
+      );
     }
   }
 
@@ -9458,8 +9517,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallableFromUrl(
-            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
-          )
+        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
+      )
           .call({
         'checkoutSessionId': checkoutSessionId,
         'paymentSessionId': paymentSessionId,
@@ -9551,9 +9610,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (user == null || !await _allowSenderUser(user)) {
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
-      final result = await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      )
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('getSenderRothBalance')
           .call<Map<String, dynamic>>()
           .timeout(_senderAuthOperationTimeout);
@@ -9763,11 +9820,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           }
                           Stripe.publishableKey = Env.stripePublishableKey;
                           await Stripe.instance.applySettings();
-                          final payment = await FirebaseFunctions.instance
-                              .httpsCallable('createDeliveryAdjustmentPayment')
-                              .call({'adjustmentId': adjustmentId});
-                          final data = Map<String, dynamic>.from(
-                            payment.data as Map,
+                          final data = await WebsiteProductionPaymentApi.call(
+                            'delivery_adjustments',
+                            'createDeliveryAdjustmentPayment',
+                            {'adjustmentId': adjustmentId},
                           );
                           await Stripe.instance
                               .initPaymentSheet(
@@ -9780,14 +9836,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                                 ),
                               )
                               .timeout(const Duration(seconds: 20));
-                          await Stripe.instance
-                              .presentPaymentSheet()
-                              .timeout(const Duration(seconds: 90));
-                          await FirebaseFunctions.instance
-                              .httpsCallable(
+                          await Stripe.instance.presentPaymentSheet().timeout(
+                                const Duration(seconds: 90),
+                              );
+                          await WebsiteProductionPaymentApi.call(
+                            'delivery_adjustments',
                             'finalizeDeliveryAdjustmentPayment',
-                          )
-                              .call({'adjustmentId': adjustmentId});
+                            {'adjustmentId': adjustmentId},
+                          );
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
                           final uid = _senderUser?.uid;
@@ -9918,17 +9974,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         return;
       }
       _attachSender(user);
-      await _loadSenderDeliveries(user.uid)
-          .timeout(_senderAuthOperationTimeout);
+      await _loadSenderDeliveries(
+        user.uid,
+      ).timeout(_senderAuthOperationTimeout);
       setState(() => _senderProfileMessage = 'Profile ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } on TimeoutException {
-      setState(() => _senderProfileMessage =
-          'Sign in timed out. Check your connection and try again.');
+      setState(
+        () => _senderProfileMessage =
+            'Sign in timed out. Check your connection and try again.',
+      );
     } catch (_) {
-      setState(() => _senderProfileMessage =
-          'Sign in could not be completed. Please try again.');
+      setState(
+        () => _senderProfileMessage =
+            'Sign in could not be completed. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -9953,39 +10014,49 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('updateSenderProfile').call({
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateSenderProfile')
+          .call({
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
       }).timeout(_senderAuthOperationTimeout);
-      final referralMessage =
-          await applySignupReferral(_senderReferralCode.text, (code) async {
-        final result =
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('attachReferralCode')
-                .call({'referralCode': code});
-        return result.data;
-      }, timeout: _senderAuthOperationTimeout);
+      final referralMessage = await applySignupReferral(
+        _senderReferralCode.text,
+        (code) async {
+          final result = await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('attachReferralCode').call({'referralCode': code});
+          return result.data;
+        },
+        timeout: _senderAuthOperationTimeout,
+      );
       if (mounted) {
         setState(() => _senderProfileMessage = referralMessage);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: Text(referralMessage),
-            duration: const Duration(seconds: 12)));
+            duration: const Duration(seconds: 12),
+          ),
+        );
       }
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
-      await _loadSenderDeliveries(user.uid)
-          .timeout(_senderAuthOperationTimeout);
+      await _loadSenderDeliveries(
+        user.uid,
+      ).timeout(_senderAuthOperationTimeout);
       if (mounted) setState(() => _senderProfileMessage = referralMessage);
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } on TimeoutException {
-      setState(() => _senderProfileMessage =
-          'Your account was created, but setup timed out. Sign in to continue setup.');
+      setState(
+        () => _senderProfileMessage =
+            'Your account was created, but setup timed out. Sign in to continue setup.',
+      );
     } catch (_) {
-      setState(() => _senderProfileMessage =
-          'Your account may have been created, but setup did not finish. Sign in to continue.');
+      setState(
+        () => _senderProfileMessage =
+            'Your account may have been created, but setup did not finish. Sign in to continue.',
+      );
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -10024,12 +10095,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
     } on TimeoutException {
       if (!mounted) return;
-      setState(() => _senderProfileMessage =
-          'Password reset took too long. Check your email before trying again.');
+      setState(
+        () => _senderProfileMessage =
+            'Password reset took too long. Check your email before trying again.',
+      );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _senderProfileMessage =
-          'We could not send the reset email. Please try again.');
+      setState(
+        () => _senderProfileMessage =
+            'We could not send the reset email. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -10142,26 +10217,28 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<bool> _allowSenderUser(User user) async {
-    final roles =
-        await _rolesForSenderUser(user).timeout(_senderAuthOperationTimeout);
+    final roles = await _rolesForSenderUser(
+      user,
+    ).timeout(_senderAuthOperationTimeout);
     if (!mounted) return false;
     final allowed = await ensureWebSenderBootstrap(
       roles: roles,
       ensureAccount: () async {
-        final result = await FirebaseFunctions.instanceFor(
-          region: 'us-central1',
-        )
-            .httpsCallable('ensureSenderAccount')
-            .call<Map<String, dynamic>>()
-            .timeout(_senderAuthOperationTimeout);
+        final result =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('ensureSenderAccount')
+                .call<Map<String, dynamic>>()
+                .timeout(_senderAuthOperationTimeout);
         return result.data;
       },
     );
     if (!mounted || !allowed) return false;
-    setState(() => _availableRoles = {
-          ...roles.where((role) => role != CircumRole.unknown),
-          CircumRole.sender,
-        });
+    setState(
+      () => _availableRoles = {
+        ...roles.where((role) => role != CircumRole.unknown),
+        CircumRole.sender,
+      },
+    );
     return true;
   }
 
@@ -10213,8 +10290,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
       if (!mounted) return;
       if (!signedOut) {
-        setState(() => _senderProfileMessage =
-            'Sign out could not be confirmed. Please try again.');
+        setState(
+          () => _senderProfileMessage =
+              'Sign out could not be confirmed. Please try again.',
+        );
         return;
       }
       setState(() {
@@ -10737,15 +10816,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _businessMessage = 'Preparing invoice payment...';
     });
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('createBusinessInvoiceCheckout')
-          .call({
-        'businessId': businessId,
-        'invoiceId': invoiceId,
-        'useRoth': useRoth,
-        'returnUrl': 'https://circumuk.com/?app=business',
-      });
-      final data = Map<String, dynamic>.from(result.data as Map);
+      // Installed bundles used httpsCallable('createBusinessInvoiceCheckout');
+      // new website releases call the isolated live Cloud Run owner.
+      final data = await WebsiteProductionPaymentApi.call(
+        'business_invoices',
+        'createBusinessInvoiceCheckout',
+        {
+          'businessId': businessId,
+          'invoiceId': invoiceId,
+          'useRoth': useRoth,
+          'returnUrl': 'https://circumuk.com/?app=business',
+        },
+      );
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
         await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
@@ -10791,8 +10873,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallableFromUrl(
-            'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
-          )
+        'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
+      )
           .call({
         'businessId': businessId,
         'amount': rawAmount,
@@ -10809,8 +10891,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
     } on TimeoutException {
       if (mounted) {
-        setState(() => _businessMessage =
-            'Roth checkout timed out. Try again safely; your pending checkout will be reused.');
+        setState(
+          () => _businessMessage =
+              'Roth checkout timed out. Try again safely; your pending checkout will be reused.',
+        );
       }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -10827,8 +10911,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() => _businessMessage = message);
     } catch (_) {
       if (mounted) {
-        setState(() => _businessMessage =
-            'Roth checkout could not start. Check your connection and try again safely.');
+        setState(
+          () => _businessMessage =
+              'Roth checkout could not start. Check your connection and try again safely.',
+        );
       }
     } finally {
       if (mounted) setState(() => _businessBusy = false);
@@ -10911,14 +10997,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('cancelDelivery')
-              .call({
-        'quoteToken': preview['quoteToken'],
-        'deliveryId': delivery.id,
-      }).timeout(const Duration(seconds: 20));
-      final data = Map<String, dynamic>.from(response.data as Map);
+      // Installed bundles used httpsCallable('cancelDelivery'); new website
+      // releases call the isolated live Cloud Run cancellation owner.
+      final data = await WebsiteProductionPaymentApi.call(
+        'sender_cancellation',
+        'cancelDelivery',
+        {'quoteToken': preview['quoteToken'], 'deliveryId': delivery.id},
+      ).timeout(const Duration(seconds: 20));
       if (data['success'] != true || data['status'] != 'settled') {
         final decision = Map<String, dynamic>.from(
           data['decision'] as Map? ?? {},
@@ -11896,12 +11981,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'iris': _webCanonicalIrisPayload(),
         'deliveryTime': _webCanonicalDeliveryTimePayload(),
       };
-      final sessionResult =
-          await functions
-              .httpsCallableFromUrl(
-                'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
-              )
-              .call({
+      final sessionResult = await functions
+          .httpsCallableFromUrl(
+        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+      )
+          .call({
         'quoteId': quote['quoteId'],
         'fallbackMethod': 'card',
         'rothEnabled': _deliveryUseRoth,
@@ -11913,12 +11997,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       });
       final session = Map<String, dynamic>.from(sessionResult.data as Map);
       if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
-        final paidDeliveryResult =
-            await functions
-                .httpsCallableFromUrl(
-                  'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
-                )
-                .call({
+        final paidDeliveryResult = await functions
+            .httpsCallableFromUrl(
+          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
+        )
+            .call({
           ...deliveryPayload,
           'quoteId': quote['quoteId'],
           'paymentSessionId': session['paymentSessionId'],
@@ -12266,7 +12349,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(
-          'https://us-central1-circum-2797c.cloudfunctions.net/createHealthPlusCheckoutSession',
+          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -12299,16 +12382,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  Future<void> _openHealthPlusCheckout() async {
-    final url = _healthCheckoutUrl;
-    if (url == null) {
+  Future<void> _openHealthPlusBillingPortal() async {
+    try {
+      final result = await WebsiteProductionPaymentApi.call(
+        'health_plus',
+        'createHealthPlusBillingPortalSession',
+        const <String, dynamic>{},
+        callable: false,
+      );
+      final url = Uri.tryParse('${result['url'] ?? ''}');
+      if (url == null || url.scheme != 'https' || url.host.isEmpty) {
+        throw StateError('billing_portal_unavailable');
+      }
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
       setState(
         () => _healthMessage =
-            'Payment is not ready yet. Create or refresh the Health+ booking first.',
+            'Health+ billing could not be opened. Please try again.',
       );
-      return;
     }
-    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   Future<void> _pauseHealthPlusSchedule() async {
@@ -12343,23 +12436,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'idempotencyKey': 'web-healthplus:resume:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is active.');
-  }
-
-  Future<void> _cancelHealthPlusSchedule() async {
-    final scheduleId = _healthScheduleId;
-    if (scheduleId == null) {
-      setState(() => _healthMessage = 'This Health+ pickup is one-off.');
-      return;
-    }
-    await _ensureFirebaseReady();
-    await FirebaseFunctions.instanceFor(
-      region: 'us-central1',
-    ).httpsCallable('updateSenderHealthPlusBooking').call({
-      'action': 'cancel_schedule',
-      'scheduleId': scheduleId,
-      'idempotencyKey': 'web-healthplus:cancel-schedule:$scheduleId',
-    });
-    setState(() => _healthMessage = 'Your repeat Health+ pickup is cancelled.');
   }
 
   Future<void> _cancelNextHealthPlusPickup() async {
@@ -13154,34 +13230,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'feedbackTags': _selectedRatingTags.toList(),
       }).timeout(const Duration(seconds: 20));
       if (_selectedTipAmount > 0) {
-        final tipResult =
-            await functions.httpsCallable('submitDeliveryTip').call({
-          'deliveryId': requestId,
-          'amountPence': (_selectedTipAmount * 100).round(),
-          'paymentMethod': 'roth',
-        }).timeout(const Duration(seconds: 20));
-        if (tipResult.data is! Map || tipResult.data['status'] != 'succeeded') {
+        // Installed web bundles used httpsCallable('submitDeliveryTip'); the
+        // canonical website now calls the isolated live Cloud Run owner.
+        final tipData = await WebsiteProductionPaymentApi.call(
+          'tips',
+          'submitDeliveryTip',
+          {
+            'deliveryId': requestId,
+            'amountPence': (_selectedTipAmount * 100).round(),
+            'paymentMethod': 'roth',
+          },
+        ).timeout(const Duration(seconds: 20));
+        if (tipData['status'] != 'succeeded') {
           throw StateError('Tip confirmation is pending.');
         }
       }
       if (!mounted) return;
       setState(() {
         _ratingSubmitted = true;
-        _ratingMessage = _selectedRatingTags
-                .any((tag) => tag == 'safety_concern' || tag == 'damaged_item')
+        _ratingMessage = _selectedRatingTags.any(
+          (tag) => tag == 'safety_concern' || tag == 'damaged_item',
+        )
             ? 'Your rating is saved. Your feedback has been sent to Circum Support.'
             : 'Thanks. Your rating has been saved.';
       });
     } on FirebaseFunctionsException {
       if (!mounted) return;
-      setState(() => _ratingMessage = _selectedTipAmount > 0
-          ? 'Your rating or tip could not be confirmed. Retry with the same tip amount.'
-          : 'We could not save your rating. Please try again.');
+      setState(
+        () => _ratingMessage = _selectedTipAmount > 0
+            ? 'Your rating or tip could not be confirmed. Retry with the same tip amount.'
+            : 'We could not save your rating. Please try again.',
+      );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _ratingMessage = _selectedTipAmount > 0
-          ? 'Confirmation is pending. Retry with the same tip amount to avoid another payment.'
-          : 'We could not save your rating. Please try again.');
+      setState(
+        () => _ratingMessage = _selectedTipAmount > 0
+            ? 'Confirmation is pending. Retry with the same tip amount to avoid another payment.'
+            : 'We could not save your rating. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _ratingSubmitting = false);
     }
@@ -13938,7 +14024,8 @@ class _SenderAccessGate extends StatelessWidget {
                   hint: 'REFERRAL CODE (OPTIONAL)',
                 ),
                 const Text(
-                    'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
+                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
+                ),
               ],
               Align(
                 alignment: Alignment.centerRight,
@@ -17419,7 +17506,8 @@ class _SenderProfileStep extends StatelessWidget {
               hint: 'REFERRAL CODE (OPTIONAL)',
             ),
             const Text(
-                'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
+              'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -25421,12 +25509,13 @@ class _RiderRankPresentation extends StatelessWidget {
   }
 }
 
-Widget senderWebRatingPromptPreview(
-        {required TextEditingController feedback,
-        required int stars,
-        Set<String> selectedTags = const {},
-        bool submitted = false,
-        String? message}) =>
+Widget senderWebRatingPromptPreview({
+  required TextEditingController feedback,
+  required int stars,
+  Set<String> selectedTags = const {},
+  bool submitted = false,
+  String? message,
+}) =>
     _DriverRatingPrompt(
       colors: const _CircumColors(true),
       driver: null,
@@ -25556,8 +25645,9 @@ class _DriverRatingPrompt extends StatelessWidget {
               selectedTags.contains('damaged_item')) ...[
             const SizedBox(height: 12),
             Text(
-                'Submitting this rating also sends your feedback to Circum Support.',
-                style: TextStyle(color: colors.text, height: 1.4)),
+              'Submitting this rating also sends your feedback to Circum Support.',
+              style: TextStyle(color: colors.text, height: 1.4),
+            ),
           ],
           const SizedBox(height: 12),
           _InputBox(
@@ -26689,9 +26779,8 @@ class _SupportPage extends StatelessWidget {
         ],
         actions: [
           TextButton(
-            onPressed: () => launchUrl(
-              Uri.parse('mailto:support@circumuk.com'),
-            ),
+            onPressed: () =>
+                launchUrl(Uri.parse('mailto:support@circumuk.com')),
             child: const Text('Email support'),
           ),
           TextButton(
@@ -27472,9 +27561,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final sessionId = Uri.base.queryParameters['session_id'];
     if (giftDraftId == null || sessionId == null) return;
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('finalizeGiftPayment')
-          .call({'giftDraftId': giftDraftId, 'sessionId': sessionId});
+      await WebsiteProductionPaymentApi.call('gifts', 'finalizeGiftPayment', {
+        'giftDraftId': giftDraftId,
+        'sessionId': sessionId,
+      });
       if (mounted) {
         setState(
           () => _message =
@@ -27683,10 +27773,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'mutualRevealAllowed': _anonymousGiftType == 'campaign',
         'anonymousByDefault': _giftMode == 'anonymous_gift',
       };
-      final payment = await FirebaseFunctions.instance
-          .httpsCallable('createGiftPayment')
-          .call({'giftDraftId': giftDraftId, 'giftDraft': giftDraft});
-      final paymentData = Map<String, dynamic>.from(payment.data as Map);
+      final paymentData = await WebsiteProductionPaymentApi.call(
+        'gifts',
+        'createGiftPayment',
+        {'giftDraftId': giftDraftId, 'giftDraft': giftDraft},
+      );
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError(
