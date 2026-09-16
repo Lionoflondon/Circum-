@@ -66,7 +66,10 @@ test("legacy standard delivery payment HTTP endpoints are retired", () => {
 
 test("Sender mobile uses canonical quote, payment session, and paid delivery callables", () => {
   assert.match(accountBlocSource, /httpsCallable\('createSenderBookingQuote'\)/);
-  assert.match(accountBlocSource, /httpsCallable\('createSenderPaymentSession'\)/);
+  assert.match(
+      accountBlocSource,
+      /(?:httpsCallable\('createSenderPaymentSession'\)|circum-sender-delivery-payments-[^']+\/createSenderPaymentSession)/,
+  );
   assert.match(sendBlocSource, /_callableMap\('createSenderPaidDelivery'/);
   assert.doesNotMatch(sendBlocSource, /collection\("deliveryRequests"\)\.doc\(user\?\.uid\)\.set/);
   assert.match(accountStateSource, /final String\? quoteId/);
@@ -200,12 +203,21 @@ test("Sender Web checkout uses canonical payment callables and never writes paid
   assert.ok(confirmPaymentMatch, "web _confirmPayment implementation not found");
   const confirmPaymentSource = confirmPaymentMatch[0];
   assert.match(confirmPaymentSource, /httpsCallable\('createSenderBookingQuote'\)/);
-  assert.match(confirmPaymentSource, /httpsCallable\('createSenderPaymentSession'\)/);
+  assert.match(
+      confirmPaymentSource,
+      /(?:httpsCallable\('createSenderPaymentSession'\)|circum-sender-delivery-payments-[^']+\/createSenderPaymentSession)/,
+  );
   assert.match(confirmPaymentSource, /'checkoutMode': 'web_checkout'/);
   assert.match(confirmPaymentSource, /'rothEnabled': _deliveryUseRoth/);
   assert.match(confirmPaymentSource, /launchUrl\(checkoutUrl, webOnlyWindowName: '_self'\)/);
-  assert.match(confirmPaymentSource, /httpsCallable\('createSenderPaidDelivery'\)/);
-  assert.match(webSenderSource, /httpsCallable\('finalizeSenderWebCheckout'\)/);
+  assert.match(
+      confirmPaymentSource,
+      /(?:httpsCallable\('createSenderPaidDelivery'\)|circum-sender-delivery-payments-[^']+\/createSenderPaidDelivery)/,
+  );
+  assert.match(
+      webSenderSource,
+      /(?:httpsCallable\('finalizeSenderWebCheckout'\)|circum-sender-delivery-payments-[^']+\/finalizeSenderWebCheckout)/,
+  );
   assert.match(webSenderSource, /Secure Stripe Checkout/);
   assert.match(webSenderSource, /Card or Apple Pay/);
   assert.doesNotMatch(confirmPaymentSource, /Stripe\.instance\.presentPaymentSheet/);
