@@ -2199,6 +2199,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
     if (activeRequest.trim().isNotEmpty) {
       try {
+        // Installed apps used httpsCallable('requestSenderCancellation'); new
+        // releases call the isolated live Cloud Run cancellation owner.
         final data = await ProductionPaymentApi.call(
           'sender_cancellation',
           'requestSenderCancellation',
