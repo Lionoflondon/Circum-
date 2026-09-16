@@ -1378,8 +1378,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
   });
 }
 
-function scheduledRiderStripeStatusSync(stripeOrFactory) {
-  return stripeSecretRuntime.pubsub.schedule("every 6 hours").onRun(async () => {
+async function scheduledRiderStripeStatusSyncCore(stripeOrFactory) {
     const stripe = stripeFrom(stripeOrFactory);
     const db = getFirestore();
     const byId = new Map();
@@ -1420,7 +1419,11 @@ function scheduledRiderStripeStatusSync(stripeOrFactory) {
       }
     }
     return {synced, failed};
-  });
+}
+
+function scheduledRiderStripeStatusSync(stripeOrFactory) {
+  return stripeSecretRuntime.pubsub.schedule("every 6 hours").onRun(() =>
+    scheduledRiderStripeStatusSyncCore(stripeOrFactory));
 }
 
 function redactLegacyPayoutBankFields() {
@@ -1462,6 +1465,7 @@ module.exports = {
   resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,
+  scheduledRiderStripeStatusSyncCore,
   redactLegacyPayoutBankFields,
   adminBaseUrl,
   estimateStripeFee,

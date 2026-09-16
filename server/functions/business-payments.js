@@ -874,7 +874,13 @@ exports._private = {
   payBusinessInvoiceAtomically,
 };
 
+async function reconcileBusinessInvoiceCheckoutsCore(stripe) {
+  return checkoutReservations.reconcileExpired({db: getFirestore(), stripe});
+}
+
 exports.reconcileBusinessInvoiceCheckouts = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).pubsub.schedule("every 5 minutes").onRun(() =>
-  checkoutReservations.reconcileExpired({db: getFirestore(), stripe}));
+  reconcileBusinessInvoiceCheckoutsCore(stripe));
+
+exports.reconcileBusinessInvoiceCheckoutsCore = reconcileBusinessInvoiceCheckoutsCore;
 
 exports._qaHandlers = {createBusinessInvoiceCheckoutHandler, cancelBusinessInvoiceCheckoutHandler};
