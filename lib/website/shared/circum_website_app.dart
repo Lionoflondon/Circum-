@@ -10816,6 +10816,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _businessMessage = 'Preparing invoice payment...';
     });
     try {
+      // Installed bundles used httpsCallable('createBusinessInvoiceCheckout');
+      // new website releases call the isolated live Cloud Run owner.
       final data = await WebsiteProductionPaymentApi.call(
         'business_invoices',
         'createBusinessInvoiceCheckout',
@@ -10995,6 +10997,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
+      // Installed bundles used httpsCallable('cancelDelivery'); new website
+      // releases call the isolated live Cloud Run cancellation owner.
       final data = await WebsiteProductionPaymentApi.call(
         'sender_cancellation',
         'cancelDelivery',
