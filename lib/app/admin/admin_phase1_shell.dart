@@ -2569,6 +2569,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Payout action failed.');
+    } catch (_) {
+      setState(() => _message = 'Payout action failed.');
     }
   }
 
