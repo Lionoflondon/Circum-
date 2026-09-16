@@ -89,8 +89,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _pharmacyAddress = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _notes = TextEditingController();
-  final _preferredTime =
-      TextEditingController(text: _defaultHealthPickupDateTime());
+  final _preferredTime = TextEditingController(
+    text: _defaultHealthPickupDateTime(),
+  );
   final _customSchedule = TextEditingController();
   final _pharmacySearch = _HealthPlaceSearchController();
   final _deliverySearch = _HealthPlaceSearchController();
@@ -161,13 +162,19 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           _goTo(_HealthStep.pharmacy);
         }
       case _HealthStep.pharmacy:
-        if (_requireResolvedAddress(_pharmacyAddress, _pharmacyPlace,
-            'Choose a Google-resolved pharmacy.')) {
+        if (_requireResolvedAddress(
+          _pharmacyAddress,
+          _pharmacyPlace,
+          'Choose a Google-resolved pharmacy.',
+        )) {
           _goTo(_HealthStep.delivery);
         }
       case _HealthStep.delivery:
-        if (_requireResolvedAddress(_deliveryAddress, _deliveryPlace,
-            'Choose a Google-resolved delivery address.')) {
+        if (_requireResolvedAddress(
+          _deliveryAddress,
+          _deliveryPlace,
+          'Choose a Google-resolved delivery address.',
+        )) {
           _goTo(_HealthStep.frequency);
         }
       case _HealthStep.frequency:
@@ -199,11 +206,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   }
 
   bool _requireResolvedAddress(
-      TextEditingController controller, Suggestion? place, String message) {
+    TextEditingController controller,
+    Suggestion? place,
+    String message,
+  ) {
     if (controller.text.trim().isNotEmpty &&
         place?.placeId.isNotEmpty == true &&
         place?.lat != null &&
-        place?.lng != null) return true;
+        place?.lng != null) {
+      return true;
+    }
     setState(() => _message = message);
     return false;
   }
@@ -221,13 +233,14 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 
   Future<void> _loadRothBalance() async {
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('getSenderRothBalance')
-          .call<Map<String, dynamic>>();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getSenderRothBalance').call<Map<String, dynamic>>();
       final data = Map<String, dynamic>.from(result.data);
       if (!mounted) return;
       setState(() {
-        _rothBalance = (data['availableRoth'] as num?)?.toDouble() ??
+        _rothBalance =
+            (data['availableRoth'] as num?)?.toDouble() ??
             (data['balance'] as num?)?.toDouble() ??
             0;
       });
@@ -257,27 +270,27 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createHealthPlusBooking')
           .call<Map<String, dynamic>>({
-        'fullName': _fullName.text.trim(),
-        'phoneNumber': _phone.text.trim(),
-        'email': _email.text.trim(),
-        'pharmacyAddress': _pharmacyAddress.text.trim(),
-        'deliveryAddress': _deliveryAddress.text.trim(),
-        'pharmacyAddressData': _addressData(_pharmacyPlace),
-        'deliveryAddressData': _addressData(_deliveryPlace),
-        'notes': _notes.text.trim(),
-        'consentConfirmed': _consent,
-        'preferredPickupTime': _preferredTime.text.trim(),
-        'frequency': _frequency.value,
-        'customSchedule': _customSchedule.text.trim(),
-        'savedPaymentMethod': _savePaymentMethod,
-        'subscriptionPlan': _plan,
-        'pricingInputs': {
-          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
-          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
-        },
-        'idempotencyKey':
-            'healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_frequency.value}:${_preferredTime.text.trim()}:$_plan',
-      });
+            'fullName': _fullName.text.trim(),
+            'phoneNumber': _phone.text.trim(),
+            'email': _email.text.trim(),
+            'pharmacyAddress': _pharmacyAddress.text.trim(),
+            'deliveryAddress': _deliveryAddress.text.trim(),
+            'pharmacyAddressData': _addressData(_pharmacyPlace),
+            'deliveryAddressData': _addressData(_deliveryPlace),
+            'notes': _notes.text.trim(),
+            'consentConfirmed': _consent,
+            'preferredPickupTime': _preferredTime.text.trim(),
+            'frequency': _frequency.value,
+            'customSchedule': _customSchedule.text.trim(),
+            'savedPaymentMethod': _savePaymentMethod,
+            'subscriptionPlan': _plan,
+            'pricingInputs': {
+              'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+              'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+            },
+            'idempotencyKey':
+                'healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_frequency.value}:${_preferredTime.text.trim()}:$_plan',
+          });
       final data = Map<String, dynamic>.from(result.data);
       final profileId = '${data['profileId'] ?? ''}'.trim();
       final pickupId = '${data['pickupId'] ?? ''}'.trim();
@@ -288,8 +301,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         profileId: profileId,
         quote: quote,
       );
-      final checkoutUrl =
-          checkout == null ? null : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final checkoutUrl = checkout == null
+          ? null
+          : '${checkout['checkoutUrl'] ?? ''}'.trim();
       final paid = checkout != null && checkout['paid'] == true;
       final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
@@ -316,16 +330,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           'status': paid
               ? 'paid'
               : !hasCheckoutUrl
-                  ? 'pending_secure_checkout'
-                  : 'checkout_created',
+              ? 'pending_secure_checkout'
+              : 'checkout_created',
           'rothApplied': checkout?['rothApplied'],
           'cardAmount': checkout?['cardAmount'],
         });
         _message = paid
             ? 'Health+ pickup paid with Roth.'
             : !hasCheckoutUrl
-                ? 'Health+ pickup saved. Secure checkout needs configuration.'
-                : 'Health+ pickup saved. Secure checkout is ready.';
+            ? 'Health+ pickup saved. Secure checkout needs configuration.'
+            : 'Health+ pickup saved. Secure checkout is ready.';
         _step = _HealthStep.confirmed;
       });
 
@@ -335,7 +349,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() {
-        _message = error.message ??
+        _message =
+            error.message ??
             'Health+ could not be saved. Please check the details and try again.';
       });
     } on _HealthCheckoutException catch (error) {
@@ -363,7 +378,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(
-          'https://us-central1-circum-2797c.cloudfunctions.net/createHealthPlusCheckoutSession',
+          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -417,9 +432,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       setState(() => _message = 'This Health+ pickup is one-off.');
       return;
     }
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'pause_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:pause:$_scheduleId',
@@ -432,9 +447,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       setState(() => _message = 'This Health+ pickup is one-off.');
       return;
     }
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'resume_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:resume:$_scheduleId',
@@ -445,9 +460,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   Future<void> _cancelPickup() async {
     final pickupId = _latestPickup?['id']?.toString();
     if (pickupId == null) return;
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'cancel_pickup',
       'pickupId': pickupId,
       'idempotencyKey': 'healthplus:cancel:$pickupId',
@@ -488,10 +503,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
                     key: const Key('sender-health-guided-flow'),
                     padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
                     children: [
-                      _HealthStepRail(
-                        selected: _step,
-                        onSelected: _goTo,
-                      ),
+                      _HealthStepRail(selected: _step, onSelected: _goTo),
                       const SizedBox(height: 18),
                       _HealthEyebrow(_step.eyebrow),
                       const SizedBox(height: 6),
@@ -530,78 +542,78 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   Widget _buildStep() {
     return switch (_step) {
       _HealthStep.status => _HealthStatusStep(
-          pickup: _latestPickup,
-          payments: _payments,
-          onNewPickup: () => _goTo(_HealthStep.details),
-          onPauseSchedule: _pauseSchedule,
-          onResumeSchedule: _resumeSchedule,
-          onCancelPickup: _cancelPickup,
-          onOpenCheckout: _openCheckout,
-        ),
+        pickup: _latestPickup,
+        payments: _payments,
+        onNewPickup: () => _goTo(_HealthStep.details),
+        onPauseSchedule: _pauseSchedule,
+        onResumeSchedule: _resumeSchedule,
+        onCancelPickup: _cancelPickup,
+        onOpenCheckout: _openCheckout,
+      ),
       _HealthStep.details => _HealthDetailsStep(
-          fullName: _fullName,
-          phone: _phone,
-          email: _email,
-          onContinue: _next,
-        ),
+        fullName: _fullName,
+        phone: _phone,
+        email: _email,
+        onContinue: _next,
+      ),
       _HealthStep.pharmacy => _HealthAddressStep(
-          title: 'Search pharmacy or address',
-          controller: _pharmacyAddress,
-          search: _pharmacySearch,
-          onSelected: (place) => setState(() => _pharmacyPlace = place),
-          onContinue: _next,
-        ),
+        title: 'Search pharmacy or address',
+        controller: _pharmacyAddress,
+        search: _pharmacySearch,
+        onSelected: (place) => setState(() => _pharmacyPlace = place),
+        onContinue: _next,
+      ),
       _HealthStep.delivery => _HealthAddressStep(
-          title: 'Search delivery address',
-          controller: _deliveryAddress,
-          search: _deliverySearch,
-          onSelected: (place) => setState(() => _deliveryPlace = place),
-          onContinue: _next,
-        ),
+        title: 'Search delivery address',
+        controller: _deliveryAddress,
+        search: _deliverySearch,
+        onSelected: (place) => setState(() => _deliveryPlace = place),
+        onContinue: _next,
+      ),
       _HealthStep.frequency => _HealthFrequencyStep(
-          selected: _frequency,
-          customSchedule: _customSchedule,
-          preferredTime: _preferredTime,
-          onChanged: (value) => setState(() => _frequency = value),
-          onContinue: _next,
-        ),
+        selected: _frequency,
+        customSchedule: _customSchedule,
+        preferredTime: _preferredTime,
+        onChanged: (value) => setState(() => _frequency = value),
+        onContinue: _next,
+      ),
       _HealthStep.plan => _HealthPlanStep(
-          selected: _plan,
-          frequency: _frequency,
-          onChanged: (value) => setState(() => _plan = value),
-          onContinue: _next,
-        ),
+        selected: _plan,
+        frequency: _frequency,
+        onChanged: (value) => setState(() => _plan = value),
+        onContinue: _next,
+      ),
       _HealthStep.notes => _HealthNotesStep(
-          notes: _notes,
-          consent: _consent,
-          savePaymentMethod: _savePaymentMethod,
-          onConsent: (value) => setState(() => _consent = value),
-          onSavePayment: (value) => setState(() => _savePaymentMethod = value),
-          onContinue: _next,
-        ),
+        notes: _notes,
+        consent: _consent,
+        savePaymentMethod: _savePaymentMethod,
+        onConsent: (value) => setState(() => _consent = value),
+        onSavePayment: (value) => setState(() => _savePaymentMethod = value),
+        onContinue: _next,
+      ),
       _HealthStep.review => _HealthReviewStep(
-          quote: _quote,
-          frequency: _frequency,
-          plan: _plan,
-          pharmacy: _pharmacyAddress.text.trim(),
-          delivery: _deliveryAddress.text.trim(),
-          preferredTime: _preferredTime.text.trim(),
-          onContinue: _next,
-        ),
+        quote: _quote,
+        frequency: _frequency,
+        plan: _plan,
+        pharmacy: _pharmacyAddress.text.trim(),
+        delivery: _deliveryAddress.text.trim(),
+        preferredTime: _preferredTime.text.trim(),
+        onContinue: _next,
+      ),
       _HealthStep.checkout => _HealthCheckoutStep(
-          quote: _quote,
-          submitting: _submitting,
-          useRoth: _useRoth,
-          rothBalance: _rothBalance,
-          recurring: _frequency != HealthPlusFrequency.oneOff,
-          onUseRoth: (value) => setState(() => _useRoth = value),
-          onCheckout: _next,
-        ),
+        quote: _quote,
+        submitting: _submitting,
+        useRoth: _useRoth,
+        rothBalance: _rothBalance,
+        recurring: _frequency != HealthPlusFrequency.oneOff,
+        onUseRoth: (value) => setState(() => _useRoth = value),
+        onCheckout: _next,
+      ),
       _HealthStep.confirmed => _HealthConfirmedStep(
-          pickup: _latestPickup,
-          onStatus: () => _goTo(_HealthStep.status),
-          onCheckout: _openCheckout,
-        ),
+        pickup: _latestPickup,
+        onStatus: () => _goTo(_HealthStep.status),
+        onCheckout: _openCheckout,
+      ),
     };
   }
 }
@@ -1188,7 +1200,9 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Plan', value: _healthPlanTitle(plan)),
         const _HealthDivider(),
         _HealthReviewRow(
-            label: 'Base fare', value: _money(quote.delivery.baseFare)),
+          label: 'Base fare',
+          value: _money(quote.delivery.baseFare),
+        ),
         _HealthReviewRow(
           label: 'Mileage fare',
           value: _money(quote.delivery.distanceFare),
@@ -1200,7 +1214,9 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Health+ fee', value: _money(quote.serviceFee)),
         if (quote.priorityFee > 0)
           _HealthReviewRow(
-              label: 'Priority fee', value: _money(quote.priorityFee)),
+            label: 'Priority fee',
+            value: _money(quote.priorityFee),
+          ),
         if (quote.familySupportFee > 0)
           _HealthReviewRow(
             label: 'Family support',
@@ -1308,7 +1324,9 @@ class _HealthConfirmedStep extends StatelessWidget {
         ),
         _HealthPrimaryButton(label: 'Back to Status', onTap: onStatus),
         _HealthSecondaryButton(
-            label: 'Open secure checkout', onTap: onCheckout),
+          label: 'Open secure checkout',
+          onTap: onCheckout,
+        ),
       ],
     );
   }
@@ -1390,10 +1408,7 @@ class _HealthDateTimeInput extends StatelessWidget {
   final TextEditingController controller;
   final String label;
 
-  const _HealthDateTimeInput({
-    required this.controller,
-    required this.label,
-  });
+  const _HealthDateTimeInput({required this.controller, required this.label});
 
   Future<void> _pick(BuildContext context) async {
     FocusScope.of(context).unfocus();
@@ -1446,8 +1461,10 @@ class _HealthDateTimeInput extends StatelessWidget {
         controller: controller,
         readOnly: true,
         onTap: () => _pick(context),
-        style:
-            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
         decoration: InputDecoration(
           labelText: label,
           helperText: 'Choose day, month, year and time.',
@@ -1493,10 +1510,7 @@ class _HealthSuggestionRow extends StatelessWidget {
   final Suggestion suggestion;
   final VoidCallback onTap;
 
-  const _HealthSuggestionRow({
-    required this.suggestion,
-    required this.onTap,
-  });
+  const _HealthSuggestionRow({required this.suggestion, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1776,10 +1790,7 @@ class _HealthDisclaimer extends StatelessWidget {
       children: [
         const Text(
           'Safety and compliance',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         ...items.map(
@@ -1837,10 +1848,7 @@ class _HealthReviewRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _HealthReviewRow({
-    required this.label,
-    required this.value,
-  });
+  const _HealthReviewRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2039,10 +2047,7 @@ class _HealthSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _HealthSecondaryButton({
-    required this.label,
-    required this.onTap,
-  });
+  const _HealthSecondaryButton({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2237,10 +2242,7 @@ class _HealthBackdrop extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment(-.8, -1),
           radius: 1.2,
-          colors: [
-            Color(0x2A2FAE8C),
-            _HealthTokens.bg,
-          ],
+          colors: [Color(0x2A2FAE8C), _HealthTokens.bg],
         ),
       ),
       child: SizedBox.expand(),
