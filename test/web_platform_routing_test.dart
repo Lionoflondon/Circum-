@@ -301,7 +301,24 @@ void main() {
         ).readAsStringSync();
         expect(source, isNot(contains("'riderEarning': driverPayout")));
         expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
-        expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+        expect(
+          source,
+          contains(
+            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
+          ),
+        );
+        expect(
+          source,
+          contains(
+            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+          ),
+        );
+        expect(
+          source,
+          contains(
+            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
+          ),
+        );
       },
     );
 
