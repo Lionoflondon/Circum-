@@ -56,8 +56,6 @@ class CreateNewPasswordView extends StatelessWidget {
                         const SizedBox(height: 20),
                         _confirmPasswordField(),
                         const SizedBox(height: 20),
-                        _otpField(),
-                        const SizedBox(height: 20),
                         _errorMessage(),
                         const SizedBox(height: 40),
                         _resetPasswordButton(),
@@ -113,26 +111,9 @@ Widget _passwordField() {
         obscureText: true,
         maxLines: 1,
         minLines: 1,
-        hintText: '(8+ characters)',
+        hintText: '(10+ characters)',
         onChanged: (value) => context.read<AuthBloc>().add(
               SignupPasswordChanged(password: value),
-            ),
-      )
-    ]);
-  });
-}
-
-Widget _otpField() {
-  return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AppText.text('OTP', color: Colors.white, fontWeight: FontWeight.bold),
-      const SizedBox(height: 4),
-      AppTextInput.input(
-        maxLines: 1,
-        minLines: 1,
-        hintText: '******',
-        onChanged: (value) => context.read<AuthBloc>().add(
-              SetResetPasswordOTP(otp: value),
             ),
       )
     ]);
@@ -149,7 +130,7 @@ Widget _confirmPasswordField() {
         obscureText: true,
         maxLines: 1,
         minLines: 1,
-        hintText: '(8+ characters)',
+        hintText: '(10+ characters)',
         onChanged: (value) => context.read<AuthBloc>().add(
               ConfirmPasswordChanged(password: value),
             ),

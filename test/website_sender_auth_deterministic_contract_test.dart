@@ -7,6 +7,9 @@ void main() {
       File('lib/app/sender_mobile/sender_mobile_home.dart').readAsStringSync();
   final authBloc =
       File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+  final authErrors =
+      File('lib/app/authentication/sender_auth_error_message.dart')
+          .readAsStringSync();
   final accountClosure =
       File('lib/app/authentication/sender_account_closure.dart')
           .readAsStringSync();
@@ -119,7 +122,7 @@ void main() {
     );
     final google = authBloc.substring(
       authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
-      authBloc.indexOf('Future<void> _handleSubmitOTP'),
+      authBloc.indexOf('Future<void> _handleFirstNameChanged'),
     );
 
     expect(apple, contains('getAppleIDCredential'));
@@ -135,6 +138,8 @@ void main() {
     expect(google, contains('status: Status.failure'));
     expect(authBloc, isNot(contains('auth.verifyPhoneNumber')));
     expect(authBloc, isNot(contains('PhoneAuthProvider.credential')));
+    expect(authBloc, isNot(contains('Email is invalid')));
+    expect(authErrors, contains('Email or password is incorrect.'));
   });
 
   test('Sender verification and account-exit operations are bounded', () {

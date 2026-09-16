@@ -70,9 +70,9 @@ void main() {
         source,
         contains(
             'Use a friend’s code. Rewards unlock after your first completed paid delivery.'));
-    final sequence = source.substring(
-        source.indexOf('Future<void> _signUpSender()'),
-        source.indexOf('Future<void> _sendSenderPasswordReset()'));
+    final signupStart = source.indexOf('Future<void> _signUpSender()');
+    final sequence = source.substring(signupStart,
+        source.indexOf('Future<void> _sendSenderPasswordReset()', signupStart));
     expect(sequence.indexOf('createUserWithEmailAndPassword'),
         lessThan(sequence.indexOf('_allowSenderUser(user)')));
     expect(sequence.indexOf('updateSenderProfile'),

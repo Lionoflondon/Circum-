@@ -22,6 +22,7 @@ import 'package:permission_handler/permission_handler.dart'
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../sender_mobile/sender_profile_authority.dart';
+import '../sender_auth_error_message.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -59,24 +60,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SortSessionState>(_handleSortSessionState);
     on<ResetStatus>(_handleResetStatus);
-    on<StartCountDown>(_handleStartCountDown);
-    on<ResetCountdown>(_handleResetCountdown);
     on<SignupEmailChanged>(_handleSignupEmailChanged);
     on<PhoneNumberChanged>(_handlePhoneNumberChanged);
     on<SignupPasswordChanged>(_handleSignupPasswordChanged);
     on<ConfirmPasswordChanged>(_handleConfirmPasswordChanged);
     on<DateOfBirthChanged>(_handleDateOfBirthChanged);
-    on<SetOTP>(_handleSetOTP);
-    on<SetPin>(_handleSetPin);
     on<SignInWithAppleAuth>(_handleSignInWithAppleAuth);
     on<SignInWithGoogle>(_handleSignInWithGoogle);
-    on<SubmitOTP>(_handleSubmitOTP);
     on<FirstNameChanged>(_handleFirstNameChanged);
     on<LastNameChanged>(_handleLastNameChanged);
     on<UsernameChanged>(_handleUsernameChanged);
     on<GenderChanged>(_handleGenderChanged);
-    on<SetVerificationMethod>(_handleSetVerificationMethod);
-    on<SetResetPasswordOTP>(_handleSetResetPasswordOTP);
     on<ForgotPassword>(_handleForgotPassword);
     on<ResetPassword>(_handleResetPassword);
     on<SetShowPassword>(_handleSetShowPassword);
@@ -209,31 +203,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(state.copyWith(status: Status.initial));
   }
 
-  void _handleStartCountDown(StartCountDown event, Emitter<AuthState> emit) {
-    int countdown = state.countdown;
-    const oneSec = Duration(seconds: 1);
-    Timer.periodic(
-      oneSec,
-      (Timer timer) {
-        if (state.countdown == 0) {
-          timer.cancel();
-        } else {
-          emit(state.copyWith(countdown: countdown--));
-        }
-      },
-    );
-  }
-
-  void _handleResetCountdown(ResetCountdown event, Emitter<AuthState> emit) {
-    if (state.countdown < 30) {
-      emit(state.copyWith(countdown: 59));
-      add(StartCountDown());
-    } else {
-      emit(state.copyWith(countdown: 30));
-      add(StartCountDown());
-    }
-  }
-
   void _handleSignupEmailChanged(
       SignupEmailChanged event, Emitter<AuthState> emit) {
     emit(state.copyWith(email: event.email));
@@ -273,15 +242,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } else {
       emit(state.copyWith(dateOfBirth: event.dateOfBirth));
     }
-  }
-
-  void _handleSetOTP(SetOTP event, Emitter<AuthState> emit) {
-    emit(state.copyWith(otp: event.otp));
-  }
-
-  void _handleSetPin(SetPin event, Emitter<AuthState> emit) {
-    emit(state.copyWith(pin: event.pin));
-    add(SubmitOTP());
   }
 
   Future<void> _handleSignInWithAppleAuth(
@@ -407,11 +367,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _handleSubmitOTP(
-      SubmitOTP event, Emitter<AuthState> emit) async {
-    emit(state.copyWith(isLoading: true, status: Status.success));
-  }
-
   Future<void> _handleFirstNameChanged(
       FirstNameChanged event, Emitter<AuthState> emit) async {
     return emit(state.copyWith(firstName: event.firstName));
@@ -425,16 +380,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _handleUsernameChanged(
       UsernameChanged event, Emitter<AuthState> emit) async {
     return emit(state.copyWith(username: event.username));
-  }
-
-  Future<void> _handleSetVerificationMethod(
-      SetVerificationMethod event, Emitter<AuthState> emit) async {
-    emit(state.copyWith(verificationType: event.method));
-  }
-
-  Future<void> _handleSetResetPasswordOTP(
-      SetResetPasswordOTP event, Emitter<AuthState> emit) async {
-    emit(state.copyWith(resetPasswordOtp: event.otp));
   }
 
   Future<void> _handleForgotPassword(
@@ -491,26 +436,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               username: user.displayName,
               profilePhoto: user.photoURL,
               email: user.email,
-              verificationId: '',
-              otp: '',
               phoneNumber: phone,
               currentState: AppState.authenticated));
         }
       }
     } on FirebaseAuthException catch (e) {
-      emit(state.copyWith(status: Status.failure));
-      if (e.code == 'invalid-email') {
-        emit(state.copyWith(errorMessage: 'Email is invalid'));
-      }
-      if (e.code == 'user-disabled') {
-        emit(state.copyWith(errorMessage: 'User disabled'));
-      }
-      if (e.code == 'user-not-found') {
-        emit(state.copyWith(errorMessage: 'User not found'));
-      }
-      if (e.code == 'wrong-password') {
-        emit(state.copyWith(errorMessage: 'Password incorrect'));
-      }
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: senderAuthErrorMessage(SenderAuthAction.signIn, e),
+      ));
     } catch (error, stack) {
       _logRecoverableAuthError('email_sign_in', error, stack);
       emit(state.copyWith(
@@ -548,19 +482,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             : 'Your account was created, but the verification email could not be sent. Please retry.',
       ));
     } on FirebaseAuthException catch (e) {
-      emit(state.copyWith(status: Status.failure));
-      if (e.code == 'invalid-email') {
-        emit(state.copyWith(errorMessage: 'Email is invalid'));
-      }
-      if (e.code == 'email-already-in-use') {
-        emit(state.copyWith(errorMessage: 'User already exists'));
-      }
-      if (e.code == 'user-not-found') {
-        emit(state.copyWith(errorMessage: 'User not found'));
-      }
-      if (e.code == 'weak-password') {
-        emit(state.copyWith(errorMessage: 'Use a strong password'));
-      }
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: senderAuthErrorMessage(SenderAuthAction.createAccount, e),
+      ));
     } catch (error, stack) {
       _logRecoverableAuthError('email_sign_up', error, stack);
       emit(state.copyWith(
@@ -689,16 +614,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .timeout(_authOperationTimeout);
       emit(state.copyWith(status: Status.passwordResetEmailSent));
     } on FirebaseAuthException catch (err) {
-      emit(state.copyWith(status: Status.failure));
-      if (err.code == 'invalid-email') {
-        emit(state.copyWith(errorMessage: 'Invalid email'));
-      }
-
-      if (err.code == 'user-not-found') {
-        emit(state.copyWith(errorMessage: 'User not found'));
-      }
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: err.code == 'invalid-email'
+            ? 'Enter a valid email address.'
+            : 'Password reset could not be completed. Please try again.',
+      ));
     } catch (err) {
-      emit(state.copyWith(status: Status.failure));
+      _logRecoverableAuthError('password_reset', err);
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage:
+            'Password reset could not be completed. Please try again.',
+      ));
     }
   }
 

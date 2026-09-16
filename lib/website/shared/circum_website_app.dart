@@ -3318,7 +3318,9 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
               if (widget.user != null && widget.eligible) ...[
                 Row(
                   children: [
-                    Expanded(child: Text('Pending: $_pending  •  Completed: $_completed')),
+                    Expanded(
+                        child: Text(
+                            'Pending: $_pending  •  Completed: $_completed')),
                     TextButton.icon(
                       onPressed: _loading
                           ? null
@@ -3328,7 +3330,8 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                       icon: Icon((_link?.isNotEmpty ?? false)
                           ? Icons.copy_rounded
                           : Icons.refresh_rounded),
-                      label: Text((_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
+                      label: Text(
+                          (_link?.isNotEmpty ?? false) ? 'Copy link' : 'Load'),
                     ),
                   ],
                 ),
@@ -3551,7 +3554,24 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       final user = FirebaseAuth.instance.currentUser;
       if (user == null || !mounted) return;
-      if (!await _allowRiderUser(user).timeout(const Duration(seconds: 25))) {
+      await user.reload().timeout(webAuthOperationTimeout);
+      final refreshedUser = FirebaseAuth.instance.currentUser ?? user;
+      if (!refreshedUser.emailVerified) {
+        await refreshedUser.sendEmailVerification().timeout(
+              webAuthOperationTimeout,
+            );
+        try {
+          await FirebaseAuth.instance
+              .signOut()
+              .timeout(webAuthOperationTimeout);
+        } catch (_) {}
+        if (!mounted) return;
+        setState(() => _authMessage =
+            'Verify your email before continuing. We sent a new verification email.');
+        return;
+      }
+      if (!await _allowRiderUser(refreshedUser)
+          .timeout(const Duration(seconds: 25))) {
         await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         if (!mounted) return;
         setState(
@@ -3560,23 +3580,23 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
         return;
       }
-      final riderProfile = await _loadRiderProfile(user.uid);
+      final riderProfile = await _loadRiderProfile(refreshedUser.uid);
       setState(() {
-        _riderUser = user;
+        _riderUser = refreshedUser;
         _riderProfile = riderProfile;
-        _email.text = user.email ?? _email.text;
+        _email.text = refreshedUser.email ?? _email.text;
         _roleChoiceConfirmed = false;
       });
-      _listenToRiderOnboarding(user.uid);
-      _listenToRiderEarnings(user.uid);
-      _listenToRiderPerformance(user.uid);
+      _listenToRiderOnboarding(refreshedUser.uid);
+      _listenToRiderEarnings(refreshedUser.uid);
+      _listenToRiderPerformance(refreshedUser.uid);
       if (RiderOnboardingPolicy.canViewJobs(
-        email: user.email,
+        email: refreshedUser.email,
         profile: riderProfile,
         verifiedSuperAdmin: _superAdminRiderBypass,
       )) {
         _listenToAvailableJobs();
-        _listenToRiderJobs(user.uid);
+        _listenToRiderJobs(refreshedUser.uid);
       }
     } catch (_) {
       if (!mounted) return;
@@ -3589,10 +3609,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (_authSubmitting) return;
     final email = _email.text.trim();
     final password = _password.text.trim();
-    if (email.isEmpty || password.length < 6) {
+    if (email.isEmpty ||
+        password.isEmpty ||
+        (_signupMode && password.length < 10)) {
       setState(
-        () => _authMessage =
-            'Enter an email and a password with at least 6 characters.',
+        () => _authMessage = _signupMode
+            ? 'Enter an email and a password with at least 10 characters.'
+            : 'Enter your email and password.',
       );
       return;
     }
@@ -3621,6 +3644,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               )
               .timeout(const Duration(seconds: 25));
       final user = credential.user!;
+      if (!user.emailVerified) {
+        await user.sendEmailVerification().timeout(webAuthOperationTimeout);
+        try {
+          await auth.signOut().timeout(webAuthOperationTimeout);
+        } catch (_) {}
+        if (!mounted) return;
+        setState(() => _authMessage =
+            'Verify your email before continuing. We sent a verification email.');
+        return;
+      }
       if (_signupMode) {
         await user
             .updateDisplayName(_fullName.text.trim())
@@ -3696,7 +3729,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(
         () => _authMessage = switch (error.code) {
           'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum Rider account found for that email.',
+          'user-not-found' ||
+          'wrong-password' ||
+          'invalid-credential' =>
+            'Email or password is incorrect.',
           _ =>
             'We could not send the reset email. Check the address and try again.',
         },
@@ -3737,10 +3773,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final current = _currentPassword.text.trim();
     final next = _newPassword.text.trim();
     final confirm = _confirmNewPassword.text.trim();
-    if (current.isEmpty || next.length < 6 || next != confirm) {
+    if (current.isEmpty || next.length < 10 || next != confirm) {
       setState(
         () => _securityMessage =
-            'Enter your current password and make sure the new passwords match.',
+            'Enter your current password, use at least 10 characters for the new password, and make sure the passwords match.',
       );
       return;
     }
@@ -5396,12 +5432,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   String _friendlyAuthMessage(FirebaseAuthException error) {
     return switch (error.code) {
       'email-already-in-use' =>
-        'That email already has a Circum Rider account.',
-      'user-not-found' => 'No Circum Rider account found for that email.',
+        'Account creation could not be completed. If you already have an account, sign in or reset your password.',
+      'user-not-found' ||
       'wrong-password' ||
       'invalid-credential' =>
-        'The sign-in details are not right.',
-      'weak-password' => 'Use a stronger password.',
+        'Email or password is incorrect.',
+      'weak-password' => 'Use a password with at least 10 characters.',
       _ => 'We could not sign you in. Please check the details.',
     };
   }
@@ -9365,6 +9401,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         setState(() => _senderAuthLoading = false);
         return;
       }
+      await user.reload().timeout(_senderAuthOperationTimeout);
+      if (!user.emailVerified) {
+        await user.sendEmailVerification().timeout(_senderAuthOperationTimeout);
+        try {
+          await FirebaseAuth.instance
+              .signOut()
+              .timeout(_senderAuthOperationTimeout);
+        } catch (_) {}
+        if (!mounted) return;
+        setState(() {
+          _senderAuthLoading = false;
+          _senderProfileMessage =
+              'Verify your email before continuing. We sent a new verification email.';
+        });
+        return;
+      }
       var senderRestoreTimedOut = false;
       final senderAllowed = await _allowSenderUser(user).timeout(
         const Duration(seconds: 8),
@@ -9904,6 +9956,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           )
           .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
+      if (!user.emailVerified) {
+        await user.sendEmailVerification().timeout(_senderAuthOperationTimeout);
+        try {
+          await FirebaseAuth.instance
+              .signOut()
+              .timeout(_senderAuthOperationTimeout);
+        } catch (_) {}
+        setState(() => _senderProfileMessage =
+            'Verify your email before continuing. We sent a verification email.');
+        return;
+      }
       if (!await _allowSenderUser(user)) {
         await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         setState(
@@ -9954,25 +10017,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
       }).timeout(_senderAuthOperationTimeout);
-      final referralMessage =
-          await applySignupReferral(_senderReferralCode.text, (code) async {
+      await applySignupReferral(_senderReferralCode.text, (code) async {
         final result =
             await FirebaseFunctions.instanceFor(region: 'us-central1')
                 .httpsCallable('attachReferralCode')
                 .call({'referralCode': code});
         return result.data;
       }, timeout: _senderAuthOperationTimeout);
+      await user.sendEmailVerification().timeout(_senderAuthOperationTimeout);
+      try {
+        await FirebaseAuth.instance
+            .signOut()
+            .timeout(_senderAuthOperationTimeout);
+      } catch (_) {}
       if (mounted) {
-        setState(() => _senderProfileMessage = referralMessage);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(referralMessage),
-            duration: const Duration(seconds: 12)));
+        setState(() => _senderProfileMessage =
+            'Verify your email before continuing. We sent a verification email.');
       }
-      _availableRoles = {CircumRole.sender};
-      _attachSender(user);
-      await _loadSenderDeliveries(user.uid)
-          .timeout(_senderAuthOperationTimeout);
-      if (mounted) setState(() => _senderProfileMessage = referralMessage);
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } on TimeoutException {
@@ -10012,7 +10073,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(
         () => _senderProfileMessage = switch (error.code) {
           'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum profile found for that email.',
+          'user-not-found' =>
+            'Password reset could not be completed. Please try again.',
           _ =>
             'We could not send the reset email. Check the address and try again.',
         },
@@ -10051,10 +10113,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final current = _senderCurrentPassword.text.trim();
     final next = _senderNewPassword.text.trim();
     final confirm = _senderConfirmNewPassword.text.trim();
-    if (current.isEmpty || next.length < 6 || next != confirm) {
+    if (current.isEmpty || next.length < 10 || next != confirm) {
       setState(
         () => _senderSecurityMessage =
-            'Enter your current password and make sure the new passwords match.',
+            'Enter your current password, use at least 10 characters for the new password, and make sure the passwords match.',
       );
       return;
     }
@@ -10964,12 +11026,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String _friendlySenderAuthMessage(FirebaseAuthException error) {
     return switch (error.code) {
-      'email-already-in-use' => 'That email already has a Circum profile.',
-      'user-not-found' => 'No Circum profile found for that email.',
+      'email-already-in-use' =>
+        'Account creation could not be completed. If you already have an account, sign in or reset your password.',
+      'user-not-found' ||
       'wrong-password' ||
       'invalid-credential' =>
-        'Those sign-in details are not right.',
-      'weak-password' => 'Use a stronger password.',
+        'Email or password is incorrect.',
+      'weak-password' => 'Use a password with at least 10 characters.',
       _ => 'We could not sign you in. Please check the details.',
     };
   }
