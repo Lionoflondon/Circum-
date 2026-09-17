@@ -6,9 +6,11 @@ const fs = require("node:fs");
 
 test("payment scheduler service exposes only bounded maintenance routes", () => {
   const source = fs.readFileSync("cloud-run-payment-schedulers.js", "utf8");
+  const payoutSource = fs.readFileSync("rider-connect.js", "utf8");
   assert.match(source, /reconcileBusinessInvoiceCheckoutsCore/);
   assert.match(source, /scheduledRiderStripeStatusSyncCore/);
   assert.match(source, /recoverRiderPayoutsCore/);
+  assert.match(payoutSource, /FieldPath\.documentId\(\)/);
   assert.doesNotMatch(source, /createRiderTransferOrPayout\(stripeClient/);
   assert.doesNotMatch(source, /createBusinessInvoiceCheckout/);
 });
