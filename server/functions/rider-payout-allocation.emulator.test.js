@@ -3,7 +3,7 @@ const {test, before, after} = require("node:test");
 const assert = require("node:assert/strict");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
-const {handleStripeConnectWebhook} = require("./rider-connect");
+const {handleStripeConnectWebhook, recoverRiderPayoutsCore} = require("./rider-connect");
 let app; let db;
 before(() => {
 assert.ok(process.env.FIRESTORE_EMULATOR_HOST); app = initializeApp({projectId: "demo-payout-allocation"}); db = getFirestore();
@@ -82,4 +82,79 @@ test("unlinked historical payout debits cannot be silently allocated a second ti
   await db.doc("riderWalletTransactions/orphan-withdrawal").set({riderId, type: "withdrawal", amount: -5, createdAt: new Date(2000)});
   await assert.rejects(db.runTransaction((tx) => require("./rider-payout-allocation").readAllocationPlan(tx, db, riderId, "new-request", 500)), /Historical payout ledger requires reconciliation/);
   assert.equal((await db.doc("payoutRequests/new-request").get()).exists, false);
+});
+
+test("bounded payout recovery reconciles a stale known transfer once and never creates a payout for terminal or malformed records", async () => {
+  const now = Date.now();
+  const stale = new Date(now - 20 * 60 * 1000);
+  await db.doc("payoutRequests/recover-known").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 4,
+    status: "processing", payoutStatus: "processing", fundsReserved: true,
+    stripeTransferId: "tr_known", transferAttemptStartedAt: stale, updatedAt: stale,
+  });
+  await db.doc("payoutRequests/recover-terminal").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 4,
+    status: "failed", fundsReserved: true, updatedAt: stale,
+  });
+  await db.doc("payoutRequests/recover-malformed").set({
+    status: "reserved", fundsReserved: true, transferDispatching: true,
+    transferAttemptStartedAt: stale, updatedAt: stale,
+  });
+  const calls = {retrieve: 0, create: 0};
+  const stripe = {transfers: {
+    retrieve: async (id) => {
+ calls.retrieve += 1; return {id};
+},
+    create: async () => {
+ calls.create += 1; return {id: "unexpected"};
+},
+  }};
+  const result = await recoverRiderPayoutsCore(stripe, {db, now});
+  assert.equal(result.reconciled, 1);
+  assert.equal(result.rejected, 1);
+  assert.equal(calls.retrieve, 1);
+  assert.equal(calls.create, 0);
+  assert.equal((await db.doc("payoutRequests/recover-known").get()).data().payoutRecoverySource, "cloud_run_scheduler");
+  assert.equal((await db.doc("payoutRequests/recover-terminal").get()).data().status, "failed");
+});
+
+test("twenty concurrent recovery deliveries create one deterministic Stripe transfer and a timeout is safely retried", async () => {
+  const now = Date.now();
+  const stale = new Date(now - 20 * 60 * 1000);
+  await db.doc("payoutRequests/recover-concurrent").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 7,
+    status: "reserved", payoutStatus: "reserved", fundsReserved: true, transferDispatching: true,
+    transferAttemptStartedAt: stale, updatedAt: stale,
+  });
+  const keys = [];
+  const stripe = {transfers: {
+    retrieve: async (id) => ({id}),
+    create: async (_data, options) => {
+ keys.push(options.idempotencyKey); return {id: "tr_concurrent"};
+},
+  }};
+  await Promise.all(Array.from({length: 20}, () => recoverRiderPayoutsCore(stripe, {db, now})));
+  assert.equal(keys.length, 1);
+  assert.deepEqual(keys, ["rider_payout_transfer_recover-concurrent"]);
+  const recovered = (await db.doc("payoutRequests/recover-concurrent").get()).data();
+  assert.equal(recovered.stripeTransferId, "tr_concurrent");
+  assert.equal(recovered.transferDispatching, false);
+
+  await db.doc("payoutRequests/recover-timeout").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 3,
+    status: "reserved", fundsReserved: true, transferDispatching: true,
+    transferAttemptStartedAt: stale, updatedAt: stale,
+  });
+  let attempts = 0;
+  const flaky = {transfers: {
+    retrieve: async (id) => ({id}),
+    create: async () => {
+ attempts += 1; if (attempts === 1) throw new Error("timeout"); return {id: "tr_timeout"};
+},
+  }};
+  const first = await recoverRiderPayoutsCore(flaky, {db, now});
+  const second = await recoverRiderPayoutsCore(flaky, {db, now: now + 1});
+  assert.equal(first.failures, 1);
+  assert.equal(second.reconciled, 1);
+  assert.equal((await db.doc("payoutRequests/recover-timeout").get()).data().stripeTransferId, "tr_timeout");
 });

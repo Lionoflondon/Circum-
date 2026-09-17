@@ -23,6 +23,8 @@ const handlers = Object.freeze({
     businessPayments.reconcileBusinessInvoiceCheckoutsCore(stripeClient()),
   scheduledRiderStripeStatusSync: () =>
     riderConnect.scheduledRiderStripeStatusSyncCore(stripeClient()),
+  scheduledRiderPayoutRecovery: () =>
+    riderConnect.recoverRiderPayoutsCore(stripeClient()),
 });
 
 function eventHandlerName(body) {

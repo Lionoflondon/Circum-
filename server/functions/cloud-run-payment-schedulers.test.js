@@ -4,11 +4,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-test("payment scheduler service exposes only the two required maintenance routes", () => {
+test("payment scheduler service exposes only bounded maintenance routes", () => {
   const source = fs.readFileSync("cloud-run-payment-schedulers.js", "utf8");
   assert.match(source, /reconcileBusinessInvoiceCheckoutsCore/);
   assert.match(source, /scheduledRiderStripeStatusSyncCore/);
-  assert.doesNotMatch(source, /createRiderTransferOrPayout/);
+  assert.match(source, /recoverRiderPayoutsCore/);
+  assert.doesNotMatch(source, /createRiderTransferOrPayout\(stripeClient/);
   assert.doesNotMatch(source, /createBusinessInvoiceCheckout/);
 });
 
@@ -23,6 +24,7 @@ test("Pub/Sub Eventarc envelopes select only an explicit scheduler handler", () 
   const wrap = (payload) => ({message: {data: Buffer.from(JSON.stringify(payload)).toString("base64")}});
   assert.equal(eventHandlerName(wrap({handler: "health"})), "health");
   assert.equal(eventHandlerName({data: wrap({handler: "scheduledRiderStripeStatusSync"})}), "scheduledRiderStripeStatusSync");
+  assert.equal(eventHandlerName(wrap({handler: "scheduledRiderPayoutRecovery"})), "scheduledRiderPayoutRecovery");
   assert.equal(eventHandlerName(wrap({handler: 42})), "");
   assert.equal(eventHandlerName({message: {data: "%%%"}}), "");
 });
