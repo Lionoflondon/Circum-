@@ -274,7 +274,7 @@ jobs:
           capture "$evidence/cold-launch-ui-dump.txt" adb_timed shell uiautomator dump /sdcard/window.xml
           capture "$evidence/cold-launch-ui.xml" adb_timed pull /sdcard/window.xml "$evidence/cold-launch-ui.xml"
           capture "$evidence/logcat.txt" adb_timed logcat -d -v threadtime
-          if rg -n "FATAL EXCEPTION|AndroidRuntime|Fatal signal|ANR in|Process: com\.circum\.app" "$evidence/logcat.txt"; then status=1; fi
+          if grep -En "FATAL EXCEPTION|AndroidRuntime|Fatal signal|ANR in|Process: com\.circum\.app" "$evidence/logcat.txt"; then status=1; fi
           capture "$evidence/pid.txt" adb_timed shell pidof com.circum.app
           capture "$evidence/force-stop.txt" adb_timed shell am force-stop com.circum.app
           capture "$evidence/relaunch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
