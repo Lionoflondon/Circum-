@@ -1,7 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const payoutAllocation = require("./rider-payout-allocation");
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
 
@@ -155,7 +155,11 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
   const boundedLimit = Math.max(1, Math.min(Number(limit) || payoutRecoveryMaxPerRun, payoutRecoveryMaxPerRun));
   const snapshot = await db.collection("payoutRequests")
       .where("status", "in", ["reserved", "processing"])
-      .orderBy("updatedAt", "asc")
+      // Ordering by the document id keeps this bounded recovery query on the
+      // built-in index.  Ordering the status-IN query by updatedAt would need
+      // a production composite index and otherwise turns every recovery run
+      // into a 500 before it can inspect a candidate.
+      .orderBy(FieldPath.documentId(), "asc")
       .limit(boundedLimit)
       .get();
   const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit, maxWrites: boundedLimit * 3};
