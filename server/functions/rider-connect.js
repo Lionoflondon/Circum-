@@ -115,6 +115,143 @@ function stripeTransferIdempotencyKey(requestId) {
   return `rider_payout_transfer_${text(requestId)}`;
 }
 
+// Recovery is deliberately narrower than the primary payout authority.  A
+// request is recoverable only after the primary path recorded that it had
+// started a Stripe transfer.  This prevents a periodic worker from turning an
+// ordinary reserved withdrawal into a new payout.
+const payoutRecoveryLeaseMs = 5 * 60 * 1000;
+const payoutRecoveryStaleMs = 10 * 60 * 1000;
+const payoutRecoveryMaxPerRun = 25;
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function payoutRecoveryCandidate(record = {}, now = Date.now(), staleMs = payoutRecoveryStaleMs) {
+  const status = text(record.status || record.payoutStatus).toLowerCase();
+  if (!["reserved", "processing"].includes(status)) return false;
+  if (record.fundsReserved !== true || record.cancelledAt || record.canceledAt) return false;
+  const started = timestampMillis(record.transferAttemptStartedAt);
+  const updated = timestampMillis(record.updatedAt || record.payoutReservedAt);
+  // A known Stripe object can be reconciled after a stale local commit.  A
+  // missing Stripe object is eligible only when the primary path had already
+  // begun its transfer attempt.
+  if (text(record.stripeTransferId)) return now - Math.max(updated, started) >= staleMs;
+  return record.transferDispatching === true && started > 0 && now - started >= staleMs;
+}
+
+async function recoverRiderPayoutsCore(stripeOrFactory, {
+  db = getFirestore(),
+  now = Date.now(),
+  limit = payoutRecoveryMaxPerRun,
+  leaseMs = payoutRecoveryLeaseMs,
+  staleMs = payoutRecoveryStaleMs,
+} = {}) {
+  const stripe = stripeFrom(stripeOrFactory);
+  const boundedLimit = Math.max(1, Math.min(Number(limit) || payoutRecoveryMaxPerRun, payoutRecoveryMaxPerRun));
+  const snapshot = await db.collection("payoutRequests")
+      .where("status", "in", ["reserved", "processing"])
+      .orderBy("updatedAt", "asc")
+      .limit(boundedLimit)
+      .get();
+  const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit, maxWrites: boundedLimit * 3};
+  for (const doc of snapshot.docs) {
+    const record = doc.data() || {};
+    const candidate = payoutRecoveryCandidate(record, now, staleMs);
+    if (!candidate) {
+      result.noops += 1;
+      continue;
+    }
+    const riderId = text(record.riderId);
+    const stripeAccountId = text(record.stripeAccountId);
+    const amount = Number(record.riderNetPayout);
+    if (!riderId || !stripeAccountId || !Number.isFinite(amount) || amount <= 0) {
+      console.warn("rider_payout_recovery_rejected", {requestId: doc.id, reason: "malformed_recovery_candidate"});
+      result.rejected += 1;
+      continue;
+    }
+    const leaseOwner = `recovery:${doc.id}:${now}`;
+    const claimed = await db.runTransaction(async (transaction) => {
+      const currentDoc = await transaction.get(doc.ref);
+      const current = currentDoc.data() || {};
+      if (!currentDoc.exists || !payoutRecoveryCandidate(current, now, staleMs)) return null;
+      if (timestampMillis(current.payoutRecoveryLeaseExpiresAt) > now) return null;
+      transaction.set(doc.ref, {
+        payoutRecoveryLeaseOwner: leaseOwner,
+        payoutRecoveryLeaseExpiresAt: new Date(now + leaseMs),
+        payoutRecoveryAttemptedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return current;
+    });
+    if (!claimed) {
+      result.noops += 1;
+      continue;
+    }
+    result.candidates += 1;
+    try {
+      let transferId = text(claimed.stripeTransferId);
+      let transfer = null;
+      if (transferId) {
+        transfer = await stripe.transfers.retrieve(transferId);
+      } else {
+        const createTransfer = stripe.transfers.create.bind(stripe.transfers);
+        transfer = await createTransfer({
+          amount: Math.round(amount * 100),
+          currency: "gbp",
+          destination: stripeAccountId,
+          metadata: {
+            riderId,
+            payoutRequestId: doc.id,
+            deliveryId: text(claimed.deliveryId || claimed.bookingId || claimed.orderId),
+            payoutFeePayer: "rider",
+            recovery: "true",
+          },
+        }, {idempotencyKey: stripeTransferIdempotencyKey(doc.id)});
+        transferId = text(transfer && transfer.id);
+      }
+      if (!transferId) throw new Error("Stripe transfer reconciliation returned no transfer id");
+      await db.runTransaction(async (transaction) => {
+        const currentDoc = await transaction.get(doc.ref);
+        const current = currentDoc.data() || {};
+        if (text(current.payoutRecoveryLeaseOwner) !== leaseOwner) return;
+        const existingTransferId = text(current.stripeTransferId);
+        if (existingTransferId && existingTransferId !== transferId) throw new Error("Payout transfer identity mismatch");
+        const allocationDocs = await payoutAllocation.readRequestAllocations(transaction, db, doc.id);
+        for (const allocation of allocationDocs) transaction.set(allocation.ref, {stripeTransferId: transferId}, {merge: true});
+        transaction.set(doc.ref, {
+          status: "processing",
+          payoutStatus: "processing",
+          stripeTransferId: transferId,
+          transferDispatching: false,
+          payoutRecoveryLeaseOwner: FieldValue.delete(),
+          payoutRecoveryLeaseExpiresAt: FieldValue.delete(),
+          payoutRecoveredAt: FieldValue.serverTimestamp(),
+          payoutRecoverySource: "cloud_run_scheduler",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+      console.log("rider_payout_recovered", {requestId: doc.id, stripeTransferId: transferId, reconciledExisting: Boolean(text(claimed.stripeTransferId))});
+      result.reconciled += 1;
+    } catch (error) {
+      // Keep the canonical transfer-dispatch marker.  A later bounded run uses
+      // the same Stripe idempotency key and can reconcile a timeout safely.
+      await doc.ref.set({
+        payoutRecoveryLeaseOwner: FieldValue.delete(),
+        payoutRecoveryLeaseExpiresAt: FieldValue.delete(),
+        payoutRecoveryLastError: text(error && error.message) || "recovery_failed",
+        payoutRecoveryFailedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      console.error("rider_payout_recovery_failed", {requestId: doc.id, message: error && error.message});
+      result.failures += 1;
+    }
+  }
+  return result;
+}
+
 function stripeConnectAccountIdempotencyKey(riderId, replacedAccountId = "") {
   const generation = text(replacedAccountId) || "initial";
   return `rider_connect_account_${text(riderId)}_${generation}`;
@@ -1466,6 +1603,9 @@ module.exports = {
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,
   scheduledRiderStripeStatusSyncCore,
+  recoverRiderPayoutsCore,
+  payoutRecoveryCandidate,
+  timestampMillis,
   redactLegacyPayoutBankFields,
   adminBaseUrl,
   estimateStripeFee,
