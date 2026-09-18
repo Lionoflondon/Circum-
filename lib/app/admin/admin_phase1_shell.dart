@@ -11,10 +11,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'admin_operations.dart';
 import 'admin_production_payment_api.dart';
 import 'roth_grant_campaigns.dart';
+import 'newsletter_audience.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
   visitorAnalytics('Visitor analytics', Icons.query_stats_rounded),
+  newsletter('Audience', Icons.mark_email_read_rounded),
   deliveries('Deliveries', Icons.local_shipping_rounded),
   discrepancyReview('Parcel Intelligence', Icons.fact_check_rounded),
   irisRepository('Item Library', Icons.inventory_2_rounded),
@@ -2530,24 +2532,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     try {
       if (nextStatus == 'approved') {
-        await AdminProductionPaymentApi.call(
-          'createRiderTransferOrPayout',
-          {
-            'requestId': requestId,
-            'riderId': riderId,
-            'amount': amount,
-          },
-        );
+        await AdminProductionPaymentApi.call('createRiderTransferOrPayout', {
+          'requestId': requestId,
+          'riderId': riderId,
+          'amount': amount,
+        });
       } else {
-        await AdminProductionPaymentApi.call(
-          'adminReviewRiderWithdrawal',
-          {
-            'requestId': requestId,
-            'riderId': riderId,
-            'action': 'rejected',
-            'reason': 'Rider payout rejected from Admin finance review',
-          },
-        );
+        await AdminProductionPaymentApi.call('adminReviewRiderWithdrawal', {
+          'requestId': requestId,
+          'riderId': riderId,
+          'action': 'rejected',
+          'reason': 'Rider payout rejected from Admin finance review',
+        });
       }
       await _writeAudit(
         AdminAuditEntry(
@@ -4388,6 +4384,7 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.visitorAnalytics => _VisitorAnalyticsModule(
               records: data.websiteVisitors,
             ),
+          AdminModule.newsletter => const NewsletterAudienceModule(),
           AdminModule.governance => _GovernanceOperationsModule(
               rateLimits: data.rateLimits,
               senderDrafts: data.senderDrafts,

@@ -9,6 +9,7 @@ enum CircumWebSurface {
   privacyPolicy,
   terms,
   cookiePolicy,
+  newsletterPreferences,
   admin,
 }
 
@@ -130,6 +131,12 @@ CircumWebRouteResolution resolveCircumWebRoute(
         surface: CircumWebSurface.cookiePolicy,
         canonicalPath: '/cookie_policy',
       );
+    case 'unsubscribe':
+    case 'newsletter':
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.newsletterPreferences,
+        canonicalPath: '/unsubscribe',
+      );
     case 'join':
       var rawCode = segments.length > 1 ? segments[1] : '';
       try {
@@ -137,8 +144,10 @@ CircumWebRouteResolution resolveCircumWebRoute(
       } on FormatException {
         rawCode = '';
       }
-      final normalized =
-          rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      final normalized = rawCode.toUpperCase().replaceAll(
+            RegExp(r'[^A-Z0-9]'),
+            '',
+          );
       final code = normalized.substring(0, normalized.length.clamp(0, 24));
       return CircumWebRouteResolution(
         surface: CircumWebSurface.sender,

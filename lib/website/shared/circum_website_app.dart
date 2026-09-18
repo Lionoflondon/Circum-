@@ -45,6 +45,7 @@ import 'package:web/web.dart' as web;
 import 'firebase/website_firebase_options.dart';
 import 'pricing/website_delivery_pricing.dart';
 import 'pricing/website_special_handling_engine.dart';
+import 'newsletter/newsletter_widgets.dart';
 
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
@@ -71,6 +72,7 @@ enum _WebAppMode {
   privacyPolicy,
   terms,
   cookiePolicy,
+  newsletterPreferences,
 }
 
 const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
@@ -102,6 +104,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   late _SenderStep _senderInitialStep = _senderStepFromRoute(
     _initialRoute.senderEntry,
   );
+  final _newsletterKey = GlobalKey();
 
   @override
   void initState() {
@@ -127,6 +130,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.terms => _WebAppMode.terms,
       CircumWebSurface.cookiePolicy => _WebAppMode.cookiePolicy,
+      CircumWebSurface.newsletterPreferences =>
+        _WebAppMode.newsletterPreferences,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -178,6 +183,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.privacyPolicy => '/privacy_policy',
       _WebAppMode.terms => '/terms',
       _WebAppMode.cookiePolicy => '/cookie_policy',
+      _WebAppMode.newsletterPreferences => '/unsubscribe',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -302,6 +308,12 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onManageConsent: _showConsentPreferences,
         ),
+      _WebAppMode.newsletterPreferences => NewsletterPreferencesPage(
+          key: const ValueKey('newsletter_preferences'),
+          background: colors.background,
+          text: colors.text,
+          mutedText: colors.mutedText,
+        ),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -316,9 +328,22 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               senderStep: _SenderStep.business),
           onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
+          newsletterKey: _newsletterKey,
+          onNewsletter: _scrollToNewsletter,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
     };
+  }
+
+  Future<void> _scrollToNewsletter() async {
+    final context = _newsletterKey.currentContext;
+    if (context != null) {
+      await Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   void _setAnalyticsConsent(bool accepted) {
@@ -675,6 +700,8 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onVanguard;
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
+  final GlobalKey newsletterKey;
+  final VoidCallback onNewsletter;
 
   const _LandingPage({
     super.key,
@@ -686,6 +713,8 @@ class _LandingPage extends StatelessWidget {
     required this.onBusiness,
     required this.onVanguard,
     this.onGifts,
+    required this.newsletterKey,
+    required this.onNewsletter,
     required this.onToggleTheme,
   });
 
@@ -828,6 +857,17 @@ class _LandingPage extends StatelessWidget {
             onBusiness: onBusiness,
             onVanguard: onVanguard,
           ),
+          NewsletterSignupSection(
+            key: newsletterKey,
+            background: colors.background,
+            panel: colors.panel,
+            text: colors.text,
+            mutedText: colors.mutedText,
+            border: colors.border,
+            onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
+              '/privacy_policy',
+            ),
+          ),
           _LandingFooter(
             colors: colors,
             onDeliveries: onStart,
@@ -835,6 +875,7 @@ class _LandingPage extends StatelessWidget {
             onGifts: onGifts,
             onBusiness: onBusiness,
             onVanguard: onVanguard,
+            onNewsletter: onNewsletter,
           ),
         ],
       ),
@@ -27094,6 +27135,7 @@ class _LandingFooter extends StatelessWidget {
   final VoidCallback? onGifts;
   final VoidCallback onBusiness;
   final VoidCallback onVanguard;
+  final VoidCallback onNewsletter;
 
   const _LandingFooter({
     required this.colors,
@@ -27102,6 +27144,7 @@ class _LandingFooter extends StatelessWidget {
     required this.onGifts,
     required this.onBusiness,
     required this.onVanguard,
+    required this.onNewsletter,
   });
 
   @override
@@ -27135,6 +27178,11 @@ class _LandingFooter extends StatelessWidget {
                     spacing: 14,
                     runSpacing: 8,
                     children: [
+                      _FooterServiceLink(
+                        label: 'Newsletter',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/'),
+                        onPressed: onNewsletter,
+                      ),
                       _FooterServiceLink(
                         label: 'Support',
                         uri: _CircumWebsiteAppState._canonicalWebUri(

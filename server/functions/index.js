@@ -84,6 +84,7 @@ const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
 const adminOperationsAuthority = require("./admin-operations-authority");
+const newsletter = require("./newsletter");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 const {createStripeWebhookProcessor} = require("./stripe-webhook-core");
 
@@ -276,6 +277,14 @@ exports.adminGovernanceAction = adminGovernance.adminGovernanceAction;
 exports.adminResolveAccess = adminOperationsAuthority.adminResolveAccess;
 exports.adminQueryPage = adminOperationsAuthority.adminQueryPage;
 exports.adminRecordAuditEntry = adminOperationsAuthority.adminRecordAuditEntry;
+exports.submitNewsletterSignup = newsletter.submitNewsletterSignup;
+exports.getNewsletterPreferences = newsletter.getNewsletterPreferences;
+exports.updateNewsletterPreferences = newsletter.updateNewsletterPreferences;
+exports.unsubscribeNewsletter = newsletter.unsubscribeNewsletter;
+exports.recordNewsletterAnalytics = newsletter.recordNewsletterAnalytics;
+exports.adminNewsletterDashboard = newsletter.adminNewsletterDashboard;
+exports.adminSearchNewsletterSubscribers = newsletter.adminSearchNewsletterSubscribers;
+exports.adminExportNewsletterSubscribers = newsletter.adminExportNewsletterSubscribers;
 exports.adminSaveAdminUser = adminOperationsAuthority.adminSaveAdminUser;
 exports.adminUpdateDeliveryOperation =
   adminOperationsAuthority.adminUpdateDeliveryOperation;
