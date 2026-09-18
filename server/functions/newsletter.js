@@ -214,11 +214,20 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
     const snapshot = await db.collection(COLLECTION).where("unsubscribeTokenHash", "==", sha256(token)).limit(1).get();
     if (snapshot.empty) throw new functions.https.HttpsError("permission-denied", "This unsubscribe link is invalid.");
     const doc = snapshot.docs[0];
-    if (doc.data().status !== "unsubscribed") {
+    const record = doc.data();
+    if (record.status !== "unsubscribed") {
       await db.runTransaction(async (tx) => {
         tx.set(doc.ref, {status: "unsubscribed", categories: [], unsubscribedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), providerSyncStatus: "pending"}, {merge: true});
         tx.set(doc.ref.collection("consentEvents").doc(), {type: "unsubscribed", createdAt: FieldValue.serverTimestamp()});
       });
+      try {
+        const result = await provider.upsertAudienceMember({
+          email: record.email, categories: [], status: "unsubscribed",
+        });
+        await doc.ref.set({providerSyncStatus: result.status || "synced", providerLastSyncedAt: FieldValue.serverTimestamp()}, {merge: true});
+      } catch (_) {
+        await doc.ref.set({providerSyncStatus: "retry_required", providerLastErrorAt: FieldValue.serverTimestamp()}, {merge: true});
+      }
     }
     return {ok: true, status: "unsubscribed"};
   }
@@ -229,11 +238,18 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
     const categories = normalizeCategories(data.categories);
     const snapshot = await db.collection(COLLECTION).where("unsubscribeTokenHash", "==", sha256(token)).limit(1).get();
     if (snapshot.empty || snapshot.docs[0].data().status !== "active") throw new functions.https.HttpsError("permission-denied", "This preferences link is invalid.");
-    const ref = snapshot.docs[0].ref;
+    const doc = snapshot.docs[0];
+    const ref = doc.ref;
     await db.runTransaction(async (tx) => {
       tx.set(ref, {categories, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       tx.set(ref.collection("consentEvents").doc(), {type: "preferences_updated", categories, createdAt: FieldValue.serverTimestamp()});
     });
+    try {
+      const result = await provider.upsertAudienceMember({email: doc.data().email, categories, status: "active"});
+      await ref.set({providerSyncStatus: result.status || "synced", providerLastSyncedAt: FieldValue.serverTimestamp()}, {merge: true});
+    } catch (_) {
+      await ref.set({providerSyncStatus: "retry_required", providerLastErrorAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
     return {ok: true, categories};
   }
 
