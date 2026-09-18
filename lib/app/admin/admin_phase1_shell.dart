@@ -2532,18 +2532,24 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     try {
       if (nextStatus == 'approved') {
-        await AdminProductionPaymentApi.call('createRiderTransferOrPayout', {
-          'requestId': requestId,
-          'riderId': riderId,
-          'amount': amount,
-        });
+        await AdminProductionPaymentApi.call(
+          'createRiderTransferOrPayout',
+          {
+            'requestId': requestId,
+            'riderId': riderId,
+            'amount': amount,
+          },
+        );
       } else {
-        await AdminProductionPaymentApi.call('adminReviewRiderWithdrawal', {
-          'requestId': requestId,
-          'riderId': riderId,
-          'action': 'rejected',
-          'reason': 'Rider payout rejected from Admin finance review',
-        });
+        await AdminProductionPaymentApi.call(
+          'adminReviewRiderWithdrawal',
+          {
+            'requestId': requestId,
+            'riderId': riderId,
+            'action': 'rejected',
+            'reason': 'Rider payout rejected from Admin finance review',
+          },
+        );
       }
       await _writeAudit(
         AdminAuditEntry(
