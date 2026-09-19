@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/link.dart';
 
 // Opt in only after the backend, provider and published policy are approved.
@@ -22,10 +24,31 @@ typedef NewsletterCall = Future<Map<String, dynamic>> Function(
 
 Future<Map<String, dynamic>> _callNewsletter(
     String name, Map<String, dynamic> data) async {
-  final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-      .httpsCallable(name)
-      .call(data);
-  return Map<String, dynamic>.from(result.data as Map);
+  final appCheck = await FirebaseAppCheck.instance.getToken();
+  if (appCheck == null || appCheck.isEmpty) {
+    throw const NewsletterRequestException(
+        'Circum security verification is required.');
+  }
+  final response = await http.post(
+    Uri.base.resolve('/newsletter-api/v1/callable/$name'),
+    headers: {
+      'content-type': 'application/json',
+      'x-firebase-appcheck': appCheck,
+    },
+    body: jsonEncode({'data': data}),
+  );
+  final payload = jsonDecode(response.body) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final error = payload['error'] as Map?;
+    throw NewsletterRequestException(
+        '${error?['message'] ?? 'Newsletter request failed.'}');
+  }
+  return Map<String, dynamic>.from(payload['result'] as Map);
+}
+
+class NewsletterRequestException implements Exception {
+  const NewsletterRequestException(this.message);
+  final String message;
 }
 
 const _categories = <String, String>{
@@ -115,7 +138,7 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
       if (!mounted) return;
       setState(() => _success = true);
       unawaited(_event('newsletter_signup_completed'));
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       if (!mounted) return;
       setState(() =>
           _error = error.message ?? 'Could not join right now. Try again.');
@@ -332,7 +355,7 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
       }
       _selected.addAll(
           (data['categories'] as List? ?? const []).map((value) => '$value'));
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       _message = error.message ?? 'This link is invalid or has expired.';
     } catch (_) {
       _message = 'This link is invalid or has expired.';
@@ -364,7 +387,7 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
               : 'Your communication preferences have been updated.';
         });
       }
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       if (mounted) {
         setState(() =>
             _message = error.message ?? 'Could not update your preferences.');

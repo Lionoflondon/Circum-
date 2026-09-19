@@ -1,6 +1,44 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'dart:convert';
+
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+
+class _NewsletterAdminRequestException implements Exception {
+  const _NewsletterAdminRequestException(this.message);
+  final String message;
+}
+
+Future<Map<String, dynamic>> _callNewsletterAdmin(String name,
+    [Map<String, dynamic> data = const {}]) async {
+  final appCheck = await FirebaseAppCheck.instance.getToken();
+  final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+  if (appCheck == null ||
+      appCheck.isEmpty ||
+      idToken == null ||
+      idToken.isEmpty) {
+    throw const _NewsletterAdminRequestException(
+        'Sign in again and complete Circum security verification.');
+  }
+  final response = await http.post(
+    Uri.base.resolve('/newsletter-api/v1/callable/$name'),
+    headers: {
+      'content-type': 'application/json',
+      'x-firebase-appcheck': appCheck,
+      'authorization': 'Bearer $idToken',
+    },
+    body: jsonEncode({'data': data}),
+  );
+  final payload = jsonDecode(response.body) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final error = payload['error'] as Map?;
+    throw _NewsletterAdminRequestException(
+        '${error?['message'] ?? 'Newsletter request failed.'}');
+  }
+  return Map<String, dynamic>.from(payload['result'] as Map);
+}
 
 String newsletterCsvCell(Object? value) {
   var text = '${value ?? ''}';
@@ -18,7 +56,6 @@ class NewsletterAudienceModule extends StatefulWidget {
 
 class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
   final _search = TextEditingController();
-  final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
   Map<String, dynamic>? _summary;
   List<Map<String, dynamic>> _records = const [];
   String? _message;
@@ -40,13 +77,11 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
 
   Future<void> _loadSummary() async {
     try {
-      final result =
-          await _functions.httpsCallable('adminNewsletterDashboard').call();
+      final result = await _callNewsletterAdmin('adminNewsletterDashboard');
       if (mounted) {
-        setState(
-            () => _summary = Map<String, dynamic>.from(result.data as Map));
+        setState(() => _summary = result);
       }
-    } on FirebaseFunctionsException catch (error) {
+    } on _NewsletterAdminRequestException catch (error) {
       if (mounted) {
         setState(() => _message =
             error.message ?? 'Audience data is unavailable for this role.');
@@ -63,15 +98,13 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
     if (query.isEmpty) return;
     setState(() => _message = null);
     try {
-      final result = await _functions
-          .httpsCallable('adminSearchNewsletterSubscribers')
-          .call({'query': query});
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = await _callNewsletterAdmin(
+          'adminSearchNewsletterSubscribers', {'query': query});
       if (!mounted) return;
       setState(() => _records = (data['records'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList(growable: false));
-    } on FirebaseFunctionsException catch (error) {
+    } on _NewsletterAdminRequestException catch (error) {
       if (!mounted) return;
       setState(
           () => _message = error.message ?? 'Could not search the audience.');
@@ -84,10 +117,8 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
-      final result = await _functions
-          .httpsCallable('adminExportNewsletterSubscribers')
-          .call({'cursor': _exportCursor});
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = await _callNewsletterAdmin(
+          'adminExportNewsletterSubscribers', {'cursor': _exportCursor});
       final records = (data['records'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map));
       final csv =
@@ -110,7 +141,7 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
               '${_exportCursor == null ? ' Export complete.' : ' More records are available; export the next page.'}';
         });
       }
-    } on FirebaseFunctionsException catch (error) {
+    } on _NewsletterAdminRequestException catch (error) {
       if (mounted) {
         setState(
             () => _message = error.message ?? 'You do not have export access.');

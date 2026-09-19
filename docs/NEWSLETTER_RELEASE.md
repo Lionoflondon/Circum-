@@ -33,8 +33,8 @@ feature. Do not activate merely because tests or protected CI pass.
 
 ## Exact prospective release boundary
 
-Project `circum-2797c`; callable region `us-central1`. These are the only eight
-newsletter backend exports:
+Project `circum-2797c`; service region `us-central1`. Cloud Run service
+`circum-newsletter` exposes only these eight callable-compatible routes:
 
 - `submitNewsletterSignup`
 - `getNewsletterPreferences`
@@ -45,11 +45,24 @@ newsletter backend exports:
 - `adminSearchNewsletterSubscribers`
 - `adminExportNewsletterSubscribers`
 
-After approvals and runtime validation, the permitted Functions selector is:
+Firebase Hosting routes `/newsletter-api/**` on public and Admin hosts to that
+service. The public and Admin clients obtain Firebase App Check tokens; Admin
+requests additionally send a freshly verified Firebase ID token. Cloud Run
+verifies both server-side before invoking the existing handlers.
+
+The previous managed-Functions attempt used this exact selector:
 
 ```text
 functions:submitNewsletterSignup,functions:getNewsletterPreferences,functions:updateNewsletterPreferences,functions:unsubscribeNewsletter,functions:recordNewsletterAnalytics,functions:adminNewsletterDashboard,functions:adminSearchNewsletterSubscribers,functions:adminExportNewsletterSubscribers
 ```
+
+All eight managed Gen1 creations failed their platform health checks and remain
+`OFFLINE`; do not retry them. Build `server/functions/Dockerfile.newsletter`
+from the exact protected SHA and deploy only `circum-newsletter` with zero
+minimum instances and three maximum instances. The service may accept
+unauthenticated network ingress because application access is gated by verified
+App Check (and Firebase Auth for Admin); do not bypass those checks. Health must
+report the exact source SHA and `signupEnabled: false` until approval.
 
 Separately review/publish the newsletter rule additions and the exact-SHA public
 website (`hosting:public`) and Admin (`hosting:admin`) builds. Never include
