@@ -36,3 +36,12 @@ test("Admin App Check denies missing or invalid context and accepts verified con
   assert.throws(() => requireAppCheck({app: {}}), {code: "failed-precondition"});
   assert.equal(requireAppCheck({app: {appId: "admin-web-test"}}), "admin-web-test");
 });
+
+test("newsletter audience remains least privilege", () => {
+  assert.equal(hasPermission(["operations_admin"], "newsletter.read"), true);
+  assert.equal(hasPermission(["operations_admin"], "newsletter.export"), true);
+  assert.equal(hasPermission(["analytics_viewer"], "newsletter.read"), true);
+  assert.equal(hasPermission(["analytics_viewer"], "newsletter.export"), false);
+  assert.equal(hasPermission(["support_agent"], "newsletter.read"), false);
+  assert.equal(hasPermission(["finance_admin"], "newsletter.read"), false);
+});

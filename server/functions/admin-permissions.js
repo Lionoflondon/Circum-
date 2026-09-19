@@ -27,7 +27,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     "dashboard.read", "users.read", "riders.read", "deliveries.read",
     "deliveries.manage", "business.read", "business.manage", "gift.read",
     "gift.manage", "health.read", "health.manage", "support.read",
-    "support.manage", "ratings.read", "ratings.manage", "riders.review", "audit.read",
+    "support.manage", "ratings.read", "ratings.manage", "riders.review", "audit.read", "newsletter.read", "newsletter.export",
   ],
   support_agent: [
     "dashboard.read", "users.read", "riders.read", "deliveries.read",
@@ -47,7 +47,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     "dashboard.read", "users.read", "riders.read", "deliveries.read",
     "risk.read", "risk.manage", "ratings.read", "audit.read",
   ],
-  analytics_viewer: ["dashboard.read", "analytics.read"],
+  analytics_viewer: ["dashboard.read", "analytics.read", "newsletter.read"],
 });
 
 function lower(value) {

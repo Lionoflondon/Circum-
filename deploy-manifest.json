@@ -262,6 +262,28 @@
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
       "reason": "Sender account closure must coordinate client-owned Firebase Auth deletion with backend-owned anonymisation and idempotent delivery-state checks."
+    },
+    {
+      "products": ["website", "admin", "backend"],
+      "files": [
+        "deploy-manifest.json",
+        "docs/NEWSLETTER_PRIVACY_POLICY_AMENDMENT.md",
+        "firestore.rules",
+        "lib/app/admin/admin_operations.dart",
+        "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/admin/newsletter_audience.dart",
+        "lib/web_platform_routing.dart",
+        "lib/website/shared/circum_website_app.dart",
+        "lib/website/shared/newsletter/newsletter_widgets.dart",
+        "server/functions/admin-operations-authority.js",
+        "server/functions/admin-permissions.js",
+        "server/functions/admin-permissions.test.js",
+        "server/functions/firestore-newsletter-rules.test.js",
+        "server/functions/index.js",
+        "server/functions/newsletter.js",
+        "server/functions/newsletter.test.js"
+      ],
+      "reason": "Newsletter signup, suppression, audience administration, persistence, and public signup UI form one explicitly reviewed cross-product capability."
     }
   ],
   "blockedPrefixes": [

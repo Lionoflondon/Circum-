@@ -1463,3 +1463,5 @@ exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   }, before, patch);
   return {ok: true};
 });
+
+exports._private = {resolveActor, writeAudit};

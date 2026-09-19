@@ -789,6 +789,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Newsletter records contain marketing-consent and suppression data. They
+    // are callable-only; neither public visitors nor ordinary accounts can read
+    // or write them directly.
+    match /newsletterSubscribers/{subscriberId} {
+      allow read, write: if false;
+    }
+
+    match /newsletterSignupRateLimits/{entryId} {
+      allow read, write: if false;
+    }
+
+    match /newsletterAnalyticsEvents/{entryId} {
+      allow read, write: if false;
+    }
+
     match /giftRequests/{giftRequestId} {
       allow create: if false;
       allow read: if (isSupportAdmin()) ||

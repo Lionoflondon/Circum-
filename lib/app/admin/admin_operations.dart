@@ -50,6 +50,7 @@ enum AdminPermission {
   viewRatings,
   viewRisk,
   viewAnalytics,
+  viewNewsletter,
   viewSupport,
   manageIssues,
   viewAudit,
@@ -170,6 +171,7 @@ class AdminAccessPolicy {
       AdminPermission.viewGifts,
       AdminPermission.manageGifts,
       AdminPermission.viewRatings,
+      AdminPermission.viewNewsletter,
       AdminPermission.viewSupport,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
@@ -217,12 +219,14 @@ class AdminAccessPolicy {
     AdminRole.analyticsViewer: [
       AdminPermission.viewDashboard,
       AdminPermission.viewAnalytics,
+      AdminPermission.viewNewsletter,
     ],
   };
 
   static const _modulePermissions = <String, AdminPermission>{
     'dashboard': AdminPermission.viewDashboard,
     'visitorAnalytics': AdminPermission.viewAnalytics,
+    'newsletter': AdminPermission.viewNewsletter,
     'deliveries': AdminPermission.viewDeliveries,
     'discrepancyReview': AdminPermission.viewDeliveries,
     'irisRepository': AdminPermission.viewDeliveries,
