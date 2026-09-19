@@ -26,6 +26,7 @@ import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -477,9 +478,7 @@ class _PlatformNotificationCenterState
       final callable = widget.mode == _WebAppMode.rider
           ? 'updateRiderPushToken'
           : 'updateSenderPushToken';
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable(callable).call({'fcmToken': token});
+      await callTokenCallable(callable, {'fcmToken': token});
     } catch (_) {
       // In-app notification history remains available if push is unavailable.
     }
