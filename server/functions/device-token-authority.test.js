@@ -17,6 +17,11 @@ test("token authority normalizes only sender and rider roles", () => {
   assert.throws(() => normalizeRole("admin"));
 });
 
+test("token lookup safely skips unsupported recipient roles", async () => {
+  const {ownedProfileToken} = require("./device-token-authority");
+  assert.equal(await ownedProfileToken("circum-support", "admin"), "");
+});
+
 test("registration audits every legacy profile and token field", () => {
   assert.deepEqual(PROFILE_COLLECTIONS, ["users", "senders", "riderProfiles", "riders"]);
   assert.deepEqual(TOKEN_FIELDS, ["fcmToken", "pushToken", "code"]);

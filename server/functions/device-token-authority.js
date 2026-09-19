@@ -77,10 +77,12 @@ async function registerProfileToken({uid, role, token, db = getFirestore()}) {
   return {tokenHash: hash, uid: ownerUid, role: ownerRole};
 }
 
-async function ownedProfileToken(uid, role, {db = getFirestore()} = {}) {
+async function ownedProfileToken(uid, role, options = {}) {
   const ownerUid = clean(uid, 128);
   if (!ownerUid) return "";
-  const ownerRole = normalizeRole(role);
+  const ownerRole = canonicalRole(role);
+  if (!ownerRole) return "";
+  const db = options.db || getFirestore();
   for (const collection of roleCollections(ownerRole)) {
     const profile = await db.collection(collection).doc(ownerUid).get();
     if (!profile.exists) continue;
