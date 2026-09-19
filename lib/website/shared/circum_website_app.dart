@@ -862,18 +862,19 @@ class _LandingPage extends StatelessWidget {
             onBusiness: onBusiness,
             onVanguard: onVanguard,
           ),
-          if (newsletterSignupEnabled) NewsletterSignupSection(
-            key: newsletterKey,
-            source: newsletterSource,
-            background: colors.background,
-            panel: colors.panel,
-            text: colors.text,
-            mutedText: colors.mutedText,
-            border: colors.border,
-            onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
-              '/privacy_policy',
+          if (newsletterSignupEnabled)
+            NewsletterSignupSection(
+              key: newsletterKey,
+              source: newsletterSource,
+              background: colors.background,
+              panel: colors.panel,
+              text: colors.text,
+              mutedText: colors.mutedText,
+              border: colors.border,
+              onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
+                '/privacy_policy',
+              ),
             ),
-          ),
           _LandingFooter(
             colors: colors,
             onDeliveries: onStart,
@@ -26856,51 +26857,91 @@ class _PrivacyPolicyPage extends StatelessWidget {
         colors: colors,
         title: 'Privacy Policy',
         intro:
-            'Last updated: 22 August 2026. This policy applies to CIRCUM, Circum Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.',
+            'Version 2.0. Effective 19 September 2026. This policy explains how Circum Technologies Ltd uses personal data across the Circum User and Circum Rider services, our websites, applications, and related delivery, payment, support, and communications services. All User and Rider account holders must be at least 18 years old.',
         sections: const [
           _ComplianceSection(
-            'Who we are and lawful bases',
-            'Circum Technologies Ltd is responsible for the personal information described here. Depending on the activity, we may process information to provide a requested service, perform a contract, comply with legal obligations, protect people and the service, or pursue legitimate interests. Where consent is the appropriate basis, we will ask for it and explain how to withdraw it. The exact legal basis can depend on the feature and facts of the request.',
+            'Who we are and scope',
+            'Circum Technologies Ltd, company number 13931698, of 124 City Road, London, England EC1V 2NX, is the controller of the personal data described here unless we say otherwise. This policy covers Circum User, Circum Rider, Business Centre, Circum Gifts and Gift Stories, Health+, Vanguard, IRIS, Roth, delivery and tracking services, support, newsletters, and related operational systems in the United Kingdom.',
           ),
           _ComplianceSection(
-            'Information we use',
-            'Depending on the feature, we process name, email, account and user IDs, addresses, phone numbers, precise location, payment information through Stripe, device or other identifiers, photos, videos, Gift Stories, optional Gifts voice or sound recordings, and supported in-app messages.',
+            'Who this policy covers',
+            'This policy applies to Users, Riders, delivery recipients, pickup contacts, authorised business users, Gift participants, Health+ recipients, newsletter subscribers, website visitors, and people who contact us or take part in a complaint, claim, dispute, or investigation. Account holders must share another person’s information only where necessary and authorised.',
           ),
           _ComplianceSection(
-            'Purposes and choices',
-            'We use information for account management, address resolution, booking, payment, dispatch, Rider matching, tracking, support, safety, fraud prevention, service reliability, and legal obligations. Required service data is required; optional media, Gift Stories, and voice features are optional.',
+            'Personal data we collect',
+            'Depending on the service, we process identity and account information; contact details; Rider eligibility, right-to-work, licence, insurance, vehicle and verification records; pickup and delivery addresses; recipient and parcel details; photos, PIN events, custody and proof records; precise or approximate location and route data; chats, support, ratings and complaints; payment, payout, invoice, tip and Roth records; device, push-token, App Check, security and log data; newsletter choices and consent records; and IRIS, dispatch, safety, fraud and service assessments derived from this information.',
           ),
           _ComplianceSection(
-            'Health+ information',
-            'Health+ can involve prescription, medication, pharmacy, collection, and recipient information supplied for a requested pickup or delivery. CIRCUM provides delivery coordination and does not diagnose, treat, cure, or prevent disease. Health-related processing may require additional legal conditions; we will use the information only for the requested service, safety, compliance, and related legal purposes.',
+            'How we obtain personal data',
+            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Mailchimp; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
           ),
           _ComplianceSection(
-            'Matching and service decisions',
-            'We use service information, eligibility information, safety checks, delivery details, and operational signals to match requests, protect the service, support Riders, and manage delivery risk. These processes may affect which service options or delivery opportunities are shown. We do not describe these operational checks as a decision about a person beyond the service context.',
+            'Why we use data and lawful bases',
+            'We use personal data to create and secure accounts; provide, price, match, route, track and complete deliveries; assess Rider eligibility and suitability; process payments, refunds, subscriptions, tips, Roth, invoices and payouts; provide support; prevent fraud and unsafe activity; resolve disputes; improve reliability; send essential messages; and comply with law. Depending on the purpose, we rely on contract, steps before a contract, legal obligation, legitimate interests, consent, legal claims, or vital interests in an emergency. You may withdraw consent at any time where consent applies.',
           ),
           _ComplianceSection(
-            'Processors',
-            'CIRCUM uses service providers for cloud infrastructure, Google Maps or Places, Stripe, hosting, and communications where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.',
+            'User and Rider services',
+            'We use User information to create and manage delivery requests, calculate prices, provide tracking, process payments and maintain history. We use Rider identity, eligibility, right-to-work, vehicle, insurance, licence, availability, location and financial information to manage onboarding, suitable work, safe deliveries, earnings, payouts, ratings and investigations. Telephone numbers are operational contact information after authentication and are not the sole basis for account identity.',
           ),
           _ComplianceSection(
-            'Transfers and security',
-            'Some service providers may process information in countries outside the UK. Where this occurs, we use appropriate contractual, technical, or other safeguards required by applicable law. We use access controls and encryption in transit, but no online service can promise absolute security.',
+            'Deliveries recipients photos and verification',
+            'A User may provide a recipient’s name, contact details, address and instructions. We share the minimum necessary information with the assigned Rider. Parcel descriptions, photos, weight or size, collection and delivery PINs, timestamps and other evidence help us classify and safely handle deliveries, verify custody and completion, prevent fraud, and resolve disputes. Do not place PINs in public notes or share them unnecessarily.',
           ),
           _ComplianceSection(
-            'Location and communications',
-            'Precise location is used for delivery, dispatch, presence, navigation, and live tracking where enabled. Service notifications and supported communications may be sent; SMS/MMS is used only where a CIRCUM flow requires it.',
+            'Location and live tracking',
+            'We may process pickup and drop-off coordinates, a Rider’s precise location while available or completing a delivery, background location where enabled and needed, route, distance, estimated arrival time, progress and security indicators. We use this for matching, navigation, live progress, safety, delivery verification and disputes. Continuous Rider location is not intended to be public. Disabling required permissions may prevent availability, matching, tracking or completion.',
           ),
           _ComplianceSection(
-            'Retention and deletion',
-            'We retain information only for as long as needed for the service and applicable payment, accounting, fraud, safety, dispute, regulatory, and legal requirements. Some completed-delivery, financial, compliance, and security records may need to be retained after an account closes. See /delete_account for account closure and particular-data requests.',
+            'IRIS dispatch and automated processing',
+            'IRIS and dispatch tools may use parcel descriptions, photos, catalogue or historical weight information, declared and Rider-verified weight, dimensions, service type, route, location, vehicle, availability, delivery history and risk indicators. They may assess parcel category, likely weight or size, handling, pricing weight, vehicle suitability, routing, matches, fraud, safety and operational review. We do not intend to make solely automated decisions with legal or similarly significant effects unless permitted by law with safeguards. Material adverse outcomes such as suspension, fraud enforcement, verification failure or Rider eligibility can be reviewed by an authorised person. Contact us to request human review, express your view or challenge an outcome.',
           ),
           _ComplianceSection(
-            'Security and rights',
-            'Under applicable law, including the UK GDPR and Data Protection Act 2018, you may have rights to access, correct, delete, restrict, object to, or receive a copy of your information. You may also withdraw consent where consent is used. Contact support@circumuk.com; identity verification and legal exceptions may apply. You can complain to the UK Information Commissioner’s Office at ico.org.uk.',
+            'Chat support Business Gifts Health+ and Vanguard',
+            'Delivery chats may connect a User, assigned Rider and authorised support staff. Business Centre processes authorised users, roles, deliveries, invoices and memberships. Gifts and Gift Stories may use organiser, participant, recipient, message, media, payment and fulfilment information. Health+ supports prescription collection and delivery but does not prescribe or provide medical advice; provide health information only where necessary for safe service. Vanguard uses stronger identity, custody, PIN, photo, route and proof controls for protected handling.',
           ),
           _ComplianceSection(
-            'Contact',
-            'For privacy questions or requests, contact support@circumuk.com. Written requests may require identity verification before we can act on them.',
+            'Payments Roth tips and financial records',
+            'Stripe supports card payments, subscriptions, refunds, connected Rider accounts and payouts. Apple Pay or Google Pay may be available through compatible flows. Payment providers receive credentials directly; Circum generally receives references, status, limited card descriptors and settlement information rather than complete card details. Roth records balances, credits, debits, reservations and adjustments. We process tips and Rider earnings to allocate, pay, refund, reverse and answer disputes.',
+          ),
+          _ComplianceSection(
+            'Service messages push notifications and marketing',
+            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
+          ),
+          _ComplianceSection(
+            'Newsletter and Mailchimp',
+            'If you choose to subscribe, we process your email address, selected topics, signup source, policy and consent version, timestamps and preference or unsubscribe events. We use Mailchimp to manage subscribers and send selected marketing emails. Consent is a clear positive choice: we do not use pre-ticked boxes or make marketing consent a condition of the delivery service. Every marketing email identifies Circum and provides a simple unsubscribe route. We keep the minimum suppression information needed to honour your choice. Unsubscribing from marketing does not stop essential service messages.',
+          ),
+          _ComplianceSection(
+            'Cookies and similar technologies',
+            'Our websites and applications may use cookies, local storage, software development kits, tokens or similar technologies for sessions, security, authentication, App Check, preferences, accessibility, reliability and, with consent where required, analytics or marketing. Strictly necessary technologies operate where permitted without consent. We ask before using non-essential technologies where consent is required. See the Cookie and Storage Technologies Policy for the technologies currently in use and your controls.',
+          ),
+          _ComplianceSection(
+            'Who we share data with',
+            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Mailchimp; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+          ),
+          _ComplianceSection(
+            'International transfers',
+            'Some providers or support teams may process data outside the United Kingdom. For restricted transfers, we use a lawful safeguard such as UK adequacy regulations, the UK International Data Transfer Agreement, the UK Addendum to approved EU standard contractual clauses, or another recognised mechanism. Contact info@circumuk.com for information about the safeguard used for a relevant transfer, subject to lawful confidentiality limits.',
+          ),
+          _ComplianceSection(
+            'Retention',
+            'Accounts and profiles are kept while active and normally up to 6 years after closure. Delivery and transaction records are normally kept for 6 years. Precise or live Rider location is normally kept for no more than 90 days after the relevant delivery. Rider identity, vehicle, verification and right-to-work records are kept during the relationship and normally for 2 years afterward. Chats and support records are normally kept for 3 years after closure of the delivery or case. Payment, invoice, accounting and tax records are kept for at least 6 years. Newsletter consent evidence is kept while subscribed and normally for 6 years after withdrawal; minimum suppression information is kept as long as reasonably needed to prevent re-addition. Safety, fraud, disputes, legal holds and law may require longer retention, and we may delete or anonymise sooner where no continuing need applies.',
+          ),
+          _ComplianceSection(
+            'Account closure and deletion',
+            'Closing an account stops ordinary future use but does not erase every record immediately. We delete or anonymise information that is no longer needed while retaining limited transaction, payout, refund, tax, accounting, fraud, suppression, safety, dispute and legal-claim records where required. Shared delivery, chat, invoice, payout or claim records may need to be preserved. See /delete_account for closure and particular-data requests.',
+          ),
+          _ComplianceSection(
+            'Security',
+            'We use authenticated access, role and ownership controls, server-authoritative operational changes, App Check where applicable, encryption in transit, restricted production access, logs, audit records, token ownership controls, testing, backups and incident response. No online service can guarantee absolute security. Protect your device and account, do not share PINs or authentication material, and report suspected unauthorised access promptly.',
+          ),
+          _ComplianceSection(
+            'Your rights and complaints',
+            'Under UK data protection law, you may have rights to be informed, access, correct, erase or restrict data, object to processing, receive portable data, withdraw consent, and obtain safeguards for solely automated significant decisions. Email info@circumuk.com. We may verify identity and normally respond within one calendar month, subject to lawful extensions and exceptions. You can object to direct marketing at any time. You may complain to the UK Information Commissioner’s Office at ico.org.uk/make-a-complaint/.',
+          ),
+          _ComplianceSection(
+            'Changes and contact',
+            'We may update this policy when services, providers, law or practices change. We will publish the revised version and effective date and provide additional notice or seek fresh consent where required. For privacy questions, requests or complaints, contact Circum Technologies Ltd, 124 City Road, London, England EC1V 2NX, or email info@circumuk.com. Do not send identity documents or sensitive delivery information by ordinary email unless we ask you to use an approved secure method.',
           ),
         ],
         actions: [
@@ -27184,11 +27225,12 @@ class _LandingFooter extends StatelessWidget {
                     spacing: 14,
                     runSpacing: 8,
                     children: [
-                      if (newsletterSignupEnabled) _FooterServiceLink(
-                        label: 'Newsletter',
-                        uri: _CircumWebsiteAppState._canonicalWebUri('/'),
-                        onPressed: onNewsletter,
-                      ),
+                      if (newsletterSignupEnabled)
+                        _FooterServiceLink(
+                          label: 'Newsletter',
+                          uri: _CircumWebsiteAppState._canonicalWebUri('/'),
+                          onPressed: onNewsletter,
+                        ),
                       _FooterServiceLink(
                         label: 'Support',
                         uri: _CircumWebsiteAppState._canonicalWebUri(
