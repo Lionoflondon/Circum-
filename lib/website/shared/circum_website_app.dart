@@ -198,14 +198,15 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _logWebsiteVisit() async {
     if (_optionalAnalyticsConsent != true) return;
+    final pageUri = newsletterPublicPageUri(Uri.base);
     try {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('recordWebsiteVisit').call({
-        'url': Uri.base.toString(),
-        'path': Uri.base.path,
-        'query': Uri.base.queryParameters,
+        'url': pageUri.toString(),
+        'path': pageUri.path,
+        'query': pageUri.queryParameters,
         'appMode': _mode.name,
       });
     } catch (_) {
@@ -29330,7 +29331,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
         ].where((part) => part.isNotEmpty).join(' '),
         'email': contact,
         'message': message,
-        'pageUrl': Uri.base.toString(),
+        'pageUrl': newsletterPublicPageUri(Uri.base).toString(),
         'participantRole': 'visitor',
       });
       _message.clear();

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/website/shared/newsletter/newsletter_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,28 @@ void main() {
 
   test('newsletter marketing entry is dormant in the default build', () {
     expect(newsletterSignupEnabled, isFalse);
+  });
+
+  test('preference tokens are removed from visitor and support URL metadata',
+      () {
+    for (final value in [
+      'https://circumuk.com/unsubscribe?token=private-token&utm_source=email',
+      'https://circumuk.com/#/unsubscribe?token=private-token',
+    ]) {
+      final safe = newsletterPublicPageUri(Uri.parse(value));
+      expect(safe.toString(), isNot(contains('private-token')));
+      expect(safe.queryParameters, isNot(contains('token')));
+    }
+    final safe = newsletterPublicPageUri(Uri.parse(
+        'https://circumuk.com/unsubscribe?token=private-token&utm_source=email'));
+    expect(safe.queryParameters['utm_source'], 'email');
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    expect(source, contains("'url': pageUri.toString()"));
+    expect(source, contains("'query': pageUri.queryParameters"));
+    expect(source,
+        contains("'pageUrl': newsletterPublicPageUri(Uri.base).toString()"));
+    expect(source, isNot(contains("'url': Uri.base.toString()")));
   });
 
   Widget preferences(NewsletterCall call) => MaterialApp(

@@ -8,6 +8,15 @@ import 'package:url_launcher/link.dart';
 const newsletterSignupEnabled =
     bool.fromEnvironment('NEWSLETTER_SIGNUP_ENABLED', defaultValue: false);
 
+// Bearer preference tokens must never reach visitor analytics or support logs.
+Uri newsletterPublicPageUri(Uri uri) {
+  final query = Map<String, String>.from(uri.queryParameters)..remove('token');
+  final fragmentHasToken =
+      Uri.tryParse(uri.fragment)?.queryParameters.containsKey('token') ?? false;
+  return uri.replace(
+      queryParameters: query, fragment: fragmentHasToken ? '' : uri.fragment);
+}
+
 typedef NewsletterCall = Future<Map<String, dynamic>> Function(
     String name, Map<String, dynamic> data);
 
