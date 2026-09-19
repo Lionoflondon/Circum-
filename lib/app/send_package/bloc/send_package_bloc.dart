@@ -336,9 +336,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       if (fcmToken != null) {
         await storage.write(key: "pushToken", value: fcmToken);
         if (auth.currentUser != null) {
-          await callTokenCallable('updateSenderPushToken', {
-            'fcmToken': fcmToken,
-          });
+          await callTokenCallable(
+            'updateSenderPushToken',
+            {'fcmToken': fcmToken},
+          );
         }
       }
     } catch (e) {
