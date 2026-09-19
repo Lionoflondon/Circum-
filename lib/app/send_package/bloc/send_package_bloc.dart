@@ -10,6 +10,7 @@ import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/app/send_package/repo/token_callable_api.dart';
 import 'package:circum/utils/theme/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -335,9 +336,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       if (fcmToken != null) {
         await storage.write(key: "pushToken", value: fcmToken);
         if (auth.currentUser != null) {
-          await FirebaseFunctions.instance
-              .httpsCallable('updateSenderPushToken')
-              .call({'fcmToken': fcmToken});
+          await callTokenCallable(
+            'updateSenderPushToken',
+            {'fcmToken': fcmToken},
+          );
         }
       }
     } catch (e) {
