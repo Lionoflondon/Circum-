@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:circum/services/token_callable_api.dart';
+import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
