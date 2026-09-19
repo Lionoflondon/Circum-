@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
 const rothLedger = require("./roth-ledger");
+const deviceTokenAuthority = require("./device-token-authority");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -412,10 +413,7 @@ exports.updateSenderPushToken = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError("invalid-argument", "Push token is required.");
   }
   const db = getFirestore();
-  await db.collection("users").doc(uid).set({
-    fcmToken,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  await deviceTokenAuthority.registerProfileToken({uid, role: "sender", token: fcmToken, db});
   await db.collection("senderProfileEvents").doc().set({
     uid,
     action: "sender_push_token_updated",

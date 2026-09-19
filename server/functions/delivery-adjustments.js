@@ -7,6 +7,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const {senderPaymentCallable} = require("./sender-app-check");
+const deviceTokenAuthority = require("./device-token-authority");
 let cachedStripe = null;
 
 function getStripeClient() {
@@ -31,18 +32,15 @@ const {
   isMaterialDiscrepancy,
 } = require("./delivery-adjustment-core");
 
-async function notifyUser(userId, title, body, data) {
+async function notifyUser(userId, role, title, body, data) {
   if (!userId) return;
-  for (const collection of ["users", "riders"]) {
-    const snapshot = await getFirestore().collection(collection).doc(userId).get();
-    const token = snapshot.exists && snapshot.data().fcmToken;
-    if (!token) continue;
+  const token = await deviceTokenAuthority.ownedProfileToken(userId, role);
+  if (token) {
     await getMessaging().send({
       token,
       notification: {title, body},
       data: Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])),
     }).catch((error) => console.error("Adjustment notification failed", error));
-    return;
   }
 }
 
@@ -149,7 +147,7 @@ exports.reportLoadDiscrepancy = riderCallable(async (data, context) => {
       updatedAt: Date.now(),
     });
   });
-  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
+  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "sender", "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
   return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
 });
 
@@ -194,7 +192,7 @@ exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).ht
         "loadDiscrepancy.adminReviewedAt": reviewedAt,
         "updatedAt": reviewedAt,
       });
-      notify = {userId: adjustment.senderId, title: "Booking update approved", body: `Additional payment required: £${Number(adjustment.additionalAmount || 0).toFixed(2)}`, type: "delivery_adjustment"};
+      notify = {userId: adjustment.senderId, role: "sender", title: "Booking update approved", body: `Additional payment required: £${Number(adjustment.additionalAmount || 0).toFixed(2)}`, type: "delivery_adjustment"};
       return;
     }
     if (decision === "reject") {
@@ -207,7 +205,7 @@ exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).ht
         "requiresAdminReview": false,
         "updatedAt": reviewedAt,
       });
-      notify = {userId: adjustment.riderId, title: "Parcel report reviewed", body: "Circum rejected the parcel adjustment after review.", type: "delivery_adjustment_rejected"};
+      notify = {userId: adjustment.riderId, role: "rider", title: "Parcel report reviewed", body: "Circum rejected the parcel adjustment after review.", type: "delivery_adjustment_rejected"};
       return;
     }
     transaction.update(adjustmentRef, {...review, status: "more_evidence_requested"});
@@ -216,9 +214,9 @@ exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).ht
       "loadDiscrepancy.adminReviewNote": note,
       "updatedAt": reviewedAt,
     });
-    notify = {userId: adjustment.riderId, title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
+    notify = {userId: adjustment.riderId, role: "rider", title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
   });
-  if (notify) await notifyUser(notify.userId, notify.title, notify.body, {type: notify.type, adjustmentId});
+  if (notify) await notifyUser(notify.userId, notify.role, notify.title, notify.body, {type: notify.type, adjustmentId});
   return {success: true, adjustmentId, decision};
 });
 
@@ -241,7 +239,7 @@ exports.cancelAdjustedCollection = senderPaymentCallable(async (data, context) =
     transaction.update(adjustmentRef, {status: "cancelled_by_sender", senderDecision: "cancelled", updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": "cancelled_verified_discrepancy", "cancellationReason": "verified_load_discrepancy", "loadDiscrepancy.senderDecision": "cancelled", "updatedAt": Date.now()});
   });
-  await notifyUser(adjustment.data().riderId, "Collection cancelled", "The sender cancelled after the verified load discrepancy.", {type: "delivery_adjustment_cancelled", adjustmentId: adjustment.id});
+  await notifyUser(adjustment.data().riderId, "rider", "Collection cancelled", "The sender cancelled after the verified load discrepancy.", {type: "delivery_adjustment_cancelled", adjustmentId: adjustment.id});
   return {success: true};
 });
 
@@ -287,6 +285,6 @@ exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, c
     transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "riderAdjustment": riderAdjustmentAmount, "updatedAt": Date.now()});
   });
-  await notifyUser(adjustment.data().riderId, "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
+  await notifyUser(adjustment.data().riderId, "rider", "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
   return {success: true};
 }, {secrets: ["STRIPE_SECRET_KEY"]});

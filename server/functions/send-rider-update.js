@@ -1,5 +1,4 @@
 const functions = require("firebase-functions/v1");
-const {getMessaging} = require("firebase-admin/messaging");
 
 const sendRiderUpdate = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -9,46 +8,10 @@ const sendRiderUpdate = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const {token, data: messageData, message, title} = data;
-
-  if (!token || !messageData || !messageData.type) {
-    throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Must provide token and data.type.",
-    );
-  }
-
-  const payload = {
-    data: Object.fromEntries(
-        Object.entries(messageData).map(([key, value]) => [key, String(value)]),
-    ),
-    android: {
-      priority: "high",
-      ttl: 5000,
-    },
-    apns: {
-      headers: {
-        "apns-priority": "10",
-        "apns-push-type": "background",
-      },
-      payload: {
-        aps: {
-          "content-available": 1,
-        },
-      },
-    },
-    token,
-  };
-
-  if (title || message) {
-    payload.notification = {
-      title: title || "Circum",
-      body: message || "",
-    };
-  }
-
-  const messageId = await getMessaging().send(payload);
-  return {success: true, messageId};
+  throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Legacy direct-token Rider notifications are disabled. Use an authorised server-owned notification path.",
+  );
 });
 
 module.exports = sendRiderUpdate;

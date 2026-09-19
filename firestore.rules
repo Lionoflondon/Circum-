@@ -1236,6 +1236,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /notificationTokens/{tokenHash} {
+      allow read, write: if false;
+    }
+
     match /deliveryCancellationSettlements/{deliveryId} {
       allow read, write: if false;
     }

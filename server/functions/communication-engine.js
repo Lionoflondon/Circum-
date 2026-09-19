@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
+const deviceTokenAuthority = require("./device-token-authority");
 
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
@@ -123,19 +124,6 @@ function pushMessageFor({token, payload, destination}) {
   return message;
 }
 
-async function profileToken(uid, role) {
-  if (!uid) return "";
-  const db = getFirestore();
-  const collections = role === "rider" ? ["riderProfiles", "riders"] : ["users", "senders"];
-  for (const collection of collections) {
-    const doc = await db.collection(collection).doc(uid).get();
-    if (!doc.exists) continue;
-    const token = clean(doc.data().fcmToken || doc.data().pushToken || doc.data().code);
-    if (token) return token;
-  }
-  return "";
-}
-
 async function participantDisplayName(uid, role, context) {
   if (!uid) return "Participant";
   const token = context.auth && context.auth.uid === uid ? context.auth.token || {} : {};
@@ -206,7 +194,7 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
   } else {
     await ref.set(payload);
   }
-  const token = await profileToken(recipientId, recipientRole);
+  const token = await deviceTokenAuthority.ownedProfileToken(recipientId, recipientRole);
   if (!token) {
     await ref.set({
       pushDeliveryStatus: "skipped",
@@ -503,7 +491,7 @@ async function retryStoredNotification(notificationId, actorId = "system:cancell
   const snap = await ref.get();
   if (!snap.exists) throw new functions.https.HttpsError("not-found", "Notification not found.");
   const notification = snap.data() || {};
-  const token = await profileToken(clean(notification.recipientId), clean(notification.recipientRole));
+  const token = await deviceTokenAuthority.ownedProfileToken(clean(notification.recipientId), clean(notification.recipientRole));
   if (!token) {
     await ref.set({
       pushDeliveryStatus: "skipped",
