@@ -7,6 +7,7 @@ const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore"
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
+const deviceTokenAuthority = require("./device-token-authority");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -861,14 +862,7 @@ async function resolveGiftStoryActionAccess(db, data, context, {requireAccount =
 async function sendThankYouPush(giftId, gift, notificationId) {
   const senderId = text(gift.senderId || gift.userId || gift.customerId);
   if (!senderId) return;
-  let token = "";
-  for (const collection of ["users", "senders"]) {
-    const profile = await getFirestore().collection(collection).doc(senderId).get();
-    if (profile.exists) {
-      token = text(profile.data().fcmToken || profile.data().pushToken || profile.data().code);
-      if (token) break;
-    }
-  }
+  const token = await deviceTokenAuthority.ownedProfileToken(senderId, "sender");
   if (!token) return;
   await getMessaging().send({
     token,

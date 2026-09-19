@@ -5,6 +5,10 @@ const {destinationFor, pushMessageFor} = require("./communication-engine");
 
 const source = fs.readFileSync("communication-engine.js", "utf8");
 const indexSource = fs.readFileSync("index.js", "utf8");
+const notificationSources = [
+  "communication-engine.js", "platform-notifications.js", "accept-ride-requests.js",
+  "delivery-adjustments.js", "gift-story-automation.js",
+].map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
 test("Rider job pushes use the native job contract and attention configuration", () => {
   assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1"}), {
@@ -170,4 +174,26 @@ test("website support message content is redacted before storage", () => {
   const support = source.slice(source.indexOf("async function submitWebsiteSupportRequest"));
   assert.match(support, /const message = maskContactDetails\(data\.message\)\.slice\(0, 4000\)/);
   assert.doesNotMatch(support, /const message = clean\(data\.message\)/);
+});
+
+test("all user-targeted push paths require canonical token ownership", () => {
+  for (const file of [
+    "communication-engine.js", "accept-ride-requests.js",
+    "delivery-adjustments.js", "gift-story-automation.js",
+  ]) {
+    assert.match(fs.readFileSync(file, "utf8"), /deviceTokenAuthority\.ownedProfileToken/);
+  }
+  assert.doesNotMatch(notificationSources, /snapshot\.data\(\)\.fcmToken/);
+  assert.doesNotMatch(notificationSources, /deliveryRequest\.(?:code|fcmToken|pushToken)/);
+  assert.doesNotMatch(notificationSources, /rider\.code\s*\|\|\s*rider\.fcmToken/);
+  const legacy = fs.readFileSync("send-rider-update.js", "utf8");
+  assert.match(legacy, /Legacy direct-token Rider notifications are disabled/);
+  assert.doesNotMatch(legacy, /getMessaging\(\)\.send/);
+});
+
+test("token registration uses canonical authority for both roles", () => {
+  const sender = fs.readFileSync("sender-account.js", "utf8");
+  const rider = fs.readFileSync("rider-account.js", "utf8");
+  assert.match(sender, /registerProfileToken\(\{uid, role: "sender", token: fcmToken, db\}\)/);
+  assert.match(rider, /registerProfileToken\(\{uid: rider\.uid, role: "rider", token: fcmToken, db\}\)/);
 });

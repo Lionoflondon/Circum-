@@ -7,6 +7,7 @@ const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {start: startLatency} = require("./latency-observability");
 const {requireDispatchablePresence, dispatchablePresenceDecision} = require("./rider-presence");
+const deviceTokenAuthority = require("./device-token-authority");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -71,7 +72,7 @@ const riderPayload = (riderId, rider) => {
     typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
     plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),
     estimatedDeliveryTime: cleanText(rider.estimatedDeliveryTime, "On the way"),
-    code: cleanText(rider.code || rider.fcmToken),
+    code: cleanText(rider.code),
     rating: cleanText(rider.rating || rider.averageRating, "New"),
     riderId,
     photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
@@ -117,7 +118,8 @@ const canOverrideVehicleMismatch = (context, data) => {
 };
 
 const notifySender = async (deliveryRequest, payload) => {
-  const token = cleanText(deliveryRequest.code || deliveryRequest.fcmToken || deliveryRequest.pushToken);
+  const senderId = cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId);
+  const token = await deviceTokenAuthority.ownedProfileToken(senderId, "sender");
   if (!token) return false;
 
   await getMessaging().send({

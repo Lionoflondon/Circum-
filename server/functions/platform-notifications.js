@@ -78,21 +78,6 @@ const giftEvents = new Set([
   "dispute_resolved",
 ]);
 
-async function profileToken(uid, role) {
-  if (!uid) return "";
-  const db = getFirestore();
-  const collections = role === "rider" ? ["riderProfiles", "riders"] : ["users", "senders"];
-  for (const collection of collections) {
-    const doc = await db.collection(collection).doc(uid).get();
-    if (doc.exists) {
-      const data = doc.data();
-      const token = text(data.fcmToken || data.pushToken || data.code);
-      if (token) return token;
-    }
-  }
-  return "";
-}
-
 async function adminRecipients() {
   const snapshot = await getFirestore().collection("adminUsers").get();
   return snapshot.docs.filter((doc) => text(doc.data().status || "active").toLowerCase() !== "disabled").map((doc) => ({
@@ -141,7 +126,6 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     await ref.set(payload);
   }
 
-  let token = "";
   if (recipientRole === "admin") {
     const admins = await adminRecipients();
     const tokens = admins.map((admin) => admin.token).filter(Boolean);
@@ -153,14 +137,6 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
       }).catch((error) => console.error("Admin notification failed", error));
     }
     return ref.id;
-  }
-  token = await profileToken(recipientId, recipientRole);
-  if (token) {
-    await getMessaging().send({
-      token,
-      notification: {title, body},
-      data: {type, notificationId: ref.id, bookingId: bookingId || "", ticketId: ticketId || ""},
-    }).catch((error) => console.error("Notification failed", error));
   }
   return ref.id;
 }

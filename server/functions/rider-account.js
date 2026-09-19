@@ -6,6 +6,7 @@ const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
 const documentChunks = require("./rider-document-chunks");
+const deviceTokenAuthority = require("./device-token-authority");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -577,15 +578,8 @@ exports.updateRiderPushToken = riderCallable(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "Push token is required.");
   }
   const db = getFirestore();
-  const now = FieldValue.serverTimestamp();
-  await db.runTransaction(async (transaction) => {
-    transaction.set(db.collection("riderProfiles").doc(rider.uid), {
-      fcmToken,
-      notificationTokenUpdatedAt: now,
-      updatedAt: now,
-    }, {merge: true});
-    transaction.set(db.collection("riderOnboardingEvents").doc(), audit("rider_push_token_updated", rider));
-  });
+  await deviceTokenAuthority.registerProfileToken({uid: rider.uid, role: "rider", token: fcmToken, db});
+  await db.collection("riderOnboardingEvents").doc().set(audit("rider_push_token_updated", rider));
   return {ok: true};
 });
 
