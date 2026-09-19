@@ -4,6 +4,21 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/link.dart';
 
+// Opt in only after the backend, provider and published policy are approved.
+const newsletterSignupEnabled =
+    bool.fromEnvironment('NEWSLETTER_SIGNUP_ENABLED', defaultValue: false);
+
+typedef NewsletterCall = Future<Map<String, dynamic>> Function(
+    String name, Map<String, dynamic> data);
+
+Future<Map<String, dynamic>> _callNewsletter(
+    String name, Map<String, dynamic> data) async {
+  final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+      .httpsCallable(name)
+      .call(data);
+  return Map<String, dynamic>.from(result.data as Map);
+}
+
 const _categories = <String, String>{
   'circum_updates': 'CIRCUM Updates',
   'offers_rewards': 'Offers & Rewards',
@@ -20,6 +35,8 @@ class NewsletterSignupSection extends StatefulWidget {
     required this.mutedText,
     required this.border,
     required this.onPrivacy,
+    this.call = _callNewsletter,
+    this.source = 'homepage',
   });
 
   final Color background;
@@ -28,6 +45,8 @@ class NewsletterSignupSection extends StatefulWidget {
   final Color mutedText;
   final Color border;
   final Uri onPrivacy;
+  final NewsletterCall call;
+  final String source;
 
   @override
   State<NewsletterSignupSection> createState() =>
@@ -56,9 +75,8 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
 
   Future<void> _event(String event) async {
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('recordNewsletterAnalytics')
-          .call({'event': event, 'source': 'homepage'});
+      await widget.call('recordNewsletterAnalytics',
+          {'event': event, 'source': widget.source});
     } catch (_) {
       // Privacy-conscious analytics must never affect signup.
     }
@@ -78,12 +96,11 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
     });
     unawaited(_event('newsletter_signup_started'));
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('submitNewsletterSignup')
-          .call({
+      await widget.call('submitNewsletterSignup', {
         'email': email,
+        'consent': true,
         'categories': _selected.toList(growable: false),
-        'source': 'homepage',
+        'source': widget.source,
         'website': '',
       });
       if (!mounted) return;
@@ -266,10 +283,14 @@ class NewsletterPreferencesPage extends StatefulWidget {
       {super.key,
       required this.background,
       required this.text,
-      required this.mutedText});
+      required this.mutedText,
+      this.call = _callNewsletter,
+      this.token});
   final Color background;
   final Color text;
   final Color mutedText;
+  final NewsletterCall call;
+  final String? token;
   @override
   State<NewsletterPreferencesPage> createState() =>
       _NewsletterPreferencesPageState();
@@ -279,8 +300,12 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
   final _selected = <String>{};
   bool _loading = true;
   bool _saving = false;
+  bool _canEdit = false;
   String? _message;
-  late final String _token = Uri.base.queryParameters['token'] ?? '';
+  late final String _token = widget.token ??
+      Uri.base.queryParameters['token'] ??
+      Uri.tryParse(Uri.base.fragment)?.queryParameters['token'] ??
+      '';
 
   @override
   void initState() {
@@ -290,10 +315,9 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
 
   Future<void> _load() async {
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('getNewsletterPreferences')
-          .call({'token': _token, 'website': ''});
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = await widget
+          .call('getNewsletterPreferences', {'token': _token, 'website': ''});
+      _canEdit = data['status'] == 'active';
       if (data['status'] == 'unsubscribed') {
         _message = 'You’ve already been unsubscribed.';
       }
@@ -309,26 +333,37 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
 
   Future<void> _save({required bool unsubscribe}) async {
     if (_saving) return;
+    if (!unsubscribe && _selected.isEmpty) {
+      setState(() =>
+          _message = 'Choose an interest or select Unsubscribe from all.');
+      return;
+    }
     setState(() => _saving = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable(unsubscribe
-              ? 'unsubscribeNewsletter'
-              : 'updateNewsletterPreferences')
-          .call({
-        'token': _token,
-        if (!unsubscribe) 'categories': _selected.toList(growable: false),
-        'website': '',
-      });
+      await widget.call(
+          unsubscribe ? 'unsubscribeNewsletter' : 'updateNewsletterPreferences',
+          {
+            'token': _token,
+            if (!unsubscribe) 'categories': _selected.toList(growable: false),
+            'website': '',
+          });
       if (mounted) {
-        setState(() => _message = unsubscribe
-            ? 'You’ve been unsubscribed. You won’t receive further CIRCUM marketing emails.'
-            : 'Your communication preferences have been updated.');
+        setState(() {
+          if (unsubscribe) _canEdit = false;
+          _message = unsubscribe
+              ? 'You’ve been unsubscribed. You won’t receive further CIRCUM marketing emails.'
+              : 'Your communication preferences have been updated.';
+        });
       }
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         setState(() =>
             _message = error.message ?? 'Could not update your preferences.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+            () => _message = 'Could not update your preferences. Try again.');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -357,7 +392,8 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
                 Text(_message!,
                     style: TextStyle(
                         color: widget.text, fontWeight: FontWeight.w700)),
-              ] else ...[
+              ],
+              if (_canEdit) ...[
                 const SizedBox(height: 18),
                 ..._categories.entries.map((entry) {
                   return CheckboxListTile(
@@ -393,7 +429,9 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
             child: Center(
                 child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 620),
-                    child: Padding(
-                        padding: const EdgeInsets.all(24), child: content)))));
+                    child: SingleChildScrollView(
+                        child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: content))))));
   }
 }

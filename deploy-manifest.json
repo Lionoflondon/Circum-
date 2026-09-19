@@ -268,6 +268,7 @@
       "files": [
         "deploy-manifest.json",
         "docs/NEWSLETTER_PRIVACY_POLICY_AMENDMENT.md",
+        "docs/NEWSLETTER_RELEASE.md",
         "firestore.rules",
         "lib/app/admin/admin_operations.dart",
         "lib/app/admin/admin_phase1_shell.dart",
@@ -281,7 +282,9 @@
         "server/functions/firestore-newsletter-rules.test.js",
         "server/functions/index.js",
         "server/functions/newsletter.js",
-        "server/functions/newsletter.test.js"
+        "server/functions/newsletter.test.js",
+        "test/website_newsletter_test.dart",
+        "test/admin_newsletter_test.dart"
       ],
       "reason": "Newsletter signup, suppression, audience administration, persistence, and public signup UI form one explicitly reviewed cross-product capability."
     }

@@ -3,8 +3,8 @@
 
 const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
-const {adminCallable, requirePermission} = require("./admin-permissions");
+const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
+const {adminCallable, requirePermission, requireAppCheck} = require("./admin-permissions");
 const adminOperations = require("./admin-operations-authority");
 
 const COLLECTION = "newsletterSubscribers";
@@ -12,7 +12,7 @@ const RATE_LIMIT_COLLECTION = "newsletterSignupRateLimits";
 const CONSENT_VERSION = "newsletter-consent-v1";
 // This is intentionally unset until the amended CIRCUM Privacy Policy has
 // been approved and published with a real version/effective date.
-const PRIVACY_POLICY_VERSION = null;
+const PRIVACY_POLICY_VERSION = process.env.NEWSLETTER_PRIVACY_POLICY_VERSION || null;
 const DEFAULT_CATEGORIES = Object.freeze(["circum_updates"]);
 const CATEGORIES = Object.freeze([
   "circum_updates", "offers_rewards", "rider_opportunities", "business_partnerships",
@@ -30,7 +30,10 @@ function clean(value, max = 240) {
 }
 
 function normalizeEmail(value) {
-  const email = clean(value, 254).toLowerCase();
+  if (typeof value !== "string" || value.trim().length > 254) {
+    throw new functions.https.HttpsError("invalid-argument", "Enter a valid email address.");
+  }
+  const email = value.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(email)) {
     throw new functions.https.HttpsError("invalid-argument", "Enter a valid email address.");
   }
@@ -62,7 +65,10 @@ function normalizeCategories(value) {
   if (categories.some((item) => !CATEGORIES.includes(item))) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid newsletter preference.");
   }
-  return categories.length ? categories : [...DEFAULT_CATEGORIES];
+  if (!categories.length) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose an interest or unsubscribe from all marketing.");
+  }
+  return categories.sort();
 }
 
 function timestampMillis(value) {
@@ -100,8 +106,26 @@ function providerBoundary() {
 }
 
 function createService({db = getFirestore(), provider = providerBoundary(), now = () => Date.now(), tokenFactory = randomToken} = {}) {
+  async function syncProvider(ref, payload, revision) {
+    // Adapters must apply revision monotonically and recheck local suppression
+    // before any send. Audience synchronization is never proof of delivery.
+    let status = "retry_required";
+    try {
+      const result = await provider.upsertAudienceMember({...payload, revision});
+      status = result && ["synced", "pending_configuration"].includes(result.status) ? result.status : "retry_required";
+    } catch (_) {/* Retain explicit retry work; there is no automatic retry loop. */}
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(ref);
+      if (!current.exists || current.data().revision !== revision) return;
+      tx.set(ref, {providerSyncStatus: status, providerLastAttemptAt: FieldValue.serverTimestamp()}, {merge: true});
+    });
+  }
+
   async function signup(data) {
     assertNoBotPayload(data);
+    if (data.consent !== true) {
+      throw new functions.https.HttpsError("invalid-argument", "Newsletter consent is required.");
+    }
     const email = normalizeEmail(data.email);
     const source = validSource(data.source);
     const categories = normalizeCategories(data.categories);
@@ -113,8 +137,11 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
     const startedAt = now();
     let outcome = "created";
     let shouldSyncProvider = false;
+    let revision = 0;
 
     await db.runTransaction(async (tx) => {
+      // Firestore may rerun this callback after a conflicting transaction.
+      shouldSyncProvider = false;
       const [subscriberSnapshot, limitSnapshot] = await Promise.all([
         tx.get(subscriber), tx.get(rateLimit),
       ]);
@@ -128,46 +155,34 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
       tx.set(rateLimit, {
         attempts: attempts + 1,
         windowStartedAt: inWindow ? previousLimit.windowStartedAt : new Date(startedAt),
+        expiresAt: new Date(startedAt + 24 * 60 * 60 * 1000),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
 
       const existing = subscriberSnapshot.exists ? subscriberSnapshot.data() : null;
       if (existing && existing.status === "active") {
         outcome = "already_active";
-        const sameCategories = JSON.stringify(existing.categories || []) === JSON.stringify(categories);
-        if (!sameCategories) {
-          tx.set(subscriber, {
-            categories,
-            updatedAt: FieldValue.serverTimestamp(),
-            lastSignupSource: source,
-          }, {merge: true});
-          tx.set(subscriber.collection("consentEvents").doc(), {
-            type: "preferences_updated", categories, source,
-            consentVersion: CONSENT_VERSION,
-            privacyPolicyVersion: PRIVACY_POLICY_VERSION,
-            createdAt: FieldValue.serverTimestamp(),
-          });
-          outcome = "preferences_updated";
-          shouldSyncProvider = true;
-        }
+        // Knowing an email address is not authority to edit its preferences.
         return;
       }
 
       outcome = existing ? "resubscribed" : "created";
       shouldSyncProvider = true;
+      revision = Number(existing && existing.revision || 0) + 1;
       tx.set(subscriber, {
         email,
         emailHash: id,
         status: "active",
+        revision,
         categories,
         source,
         signupSource: source,
         lastSignupSource: source,
         consentAt: FieldValue.serverTimestamp(),
-        consentWording: "I want to receive CIRCUM marketing emails. I can unsubscribe at any time.",
+        consentWording: "By joining, you agree to receive CIRCUM marketing emails. Unsubscribe anytime.",
         consentVersion: CONSENT_VERSION,
         privacyPolicyVersion: PRIVACY_POLICY_VERSION,
-        privacyPolicyVersionStatus: "approval_required",
+        privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
         verificationState: "not_required",
         unsubscribeTokenHash: tokenHash,
         createdAt: existing ? existing.createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
@@ -180,18 +195,13 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
         type: existing ? "resubscribed" : "subscribed", categories, source,
         consentVersion: CONSENT_VERSION,
         privacyPolicyVersion: PRIVACY_POLICY_VERSION,
-        privacyPolicyVersionStatus: "approval_required",
+        privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
         createdAt: FieldValue.serverTimestamp(),
       });
     });
 
     if (shouldSyncProvider) {
-      try {
-        const result = await provider.upsertAudienceMember({email, categories, status: "active", unsubscribeToken: token});
-        await subscriber.set({providerSyncStatus: result.status || "synced", providerLastSyncedAt: FieldValue.serverTimestamp()}, {merge: true});
-      } catch (_) {
-        await subscriber.set({providerSyncStatus: "retry_required", providerLastErrorAt: FieldValue.serverTimestamp()}, {merge: true});
-      }
+      await syncProvider(subscriber, {email, categories, status: "active", unsubscribeToken: token}, revision);
     }
     return {ok: true, outcome};
   }
@@ -214,20 +224,23 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
     const snapshot = await db.collection(COLLECTION).where("unsubscribeTokenHash", "==", sha256(token)).limit(1).get();
     if (snapshot.empty) throw new functions.https.HttpsError("permission-denied", "This unsubscribe link is invalid.");
     const doc = snapshot.docs[0];
-    const record = doc.data();
-    if (record.status !== "unsubscribed") {
-      await db.runTransaction(async (tx) => {
-        tx.set(doc.ref, {status: "unsubscribed", categories: [], unsubscribedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), providerSyncStatus: "pending"}, {merge: true});
-        tx.set(doc.ref.collection("consentEvents").doc(), {type: "unsubscribed", createdAt: FieldValue.serverTimestamp()});
-      });
-      try {
-        const result = await provider.upsertAudienceMember({
-          email: record.email, categories: [], status: "unsubscribed",
-        });
-        await doc.ref.set({providerSyncStatus: result.status || "synced", providerLastSyncedAt: FieldValue.serverTimestamp()}, {merge: true});
-      } catch (_) {
-        await doc.ref.set({providerSyncStatus: "retry_required", providerLastErrorAt: FieldValue.serverTimestamp()}, {merge: true});
+    const change = await db.runTransaction(async (tx) => {
+      const current = await tx.get(doc.ref);
+      const record = current.exists ? current.data() : null;
+      if (!record || record.unsubscribeTokenHash !== sha256(token)) {
+        throw new functions.https.HttpsError("permission-denied", "This unsubscribe link is invalid.");
       }
+      if (record.status !== "unsubscribed") {
+        const revision = Number(record.revision || 0) + 1;
+        tx.set(doc.ref, {revision, status: "unsubscribed", categories: [], unsubscribedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), providerSyncStatus: "pending"}, {merge: true});
+        tx.set(doc.ref.collection("consentEvents").doc(), {type: "unsubscribed", createdAt: FieldValue.serverTimestamp()});
+        tx.set(db.collection("newsletterAnalyticsEvents").doc(), {event: "newsletter_unsubscribed", source: record.signupSource, createdAt: FieldValue.serverTimestamp()});
+        return {email: record.email, revision};
+      }
+      return record.providerSyncStatus === "retry_required" ? {email: record.email, revision: record.revision} : null;
+    });
+    if (change) {
+      await syncProvider(doc.ref, {email: change.email, categories: [], status: "unsubscribed"}, change.revision);
     }
     return {ok: true, status: "unsubscribed"};
   }
@@ -240,16 +253,19 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
     if (snapshot.empty || snapshot.docs[0].data().status !== "active") throw new functions.https.HttpsError("permission-denied", "This preferences link is invalid.");
     const doc = snapshot.docs[0];
     const ref = doc.ref;
-    await db.runTransaction(async (tx) => {
-      tx.set(ref, {categories, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    const change = await db.runTransaction(async (tx) => {
+      const current = await tx.get(ref);
+      const record = current.exists ? current.data() : null;
+      if (!record || record.status !== "active" || record.unsubscribeTokenHash !== sha256(token)) {
+        throw new functions.https.HttpsError("permission-denied", "This preferences link is invalid.");
+      }
+      const revision = Number(record.revision || 0) + 1;
+      tx.set(ref, {revision, categories, updatedAt: FieldValue.serverTimestamp(), providerSyncStatus: "pending"}, {merge: true});
       tx.set(ref.collection("consentEvents").doc(), {type: "preferences_updated", categories, createdAt: FieldValue.serverTimestamp()});
+      tx.set(db.collection("newsletterAnalyticsEvents").doc(), {event: "newsletter_preferences_updated", source: record.signupSource, createdAt: FieldValue.serverTimestamp()});
+      return {email: record.email, revision};
     });
-    try {
-      const result = await provider.upsertAudienceMember({email: doc.data().email, categories, status: "active"});
-      await ref.set({providerSyncStatus: result.status || "synced", providerLastSyncedAt: FieldValue.serverTimestamp()}, {merge: true});
-    } catch (_) {
-      await ref.set({providerSyncStatus: "retry_required", providerLastErrorAt: FieldValue.serverTimestamp()}, {merge: true});
-    }
+    await syncProvider(ref, {email: change.email, categories, status: "active"}, change.revision);
     return {ok: true, categories};
   }
 
@@ -264,11 +280,52 @@ function createService({db = getFirestore(), provider = providerBoundary(), now 
   return {signup, preferences, unsubscribe, updatePreferences, recordEvent};
 }
 
-exports.submitNewsletterSignup = functions.runWith({enforceAppCheck: true}).https.onCall((data, context) => createService().signup(data, context));
-exports.getNewsletterPreferences = functions.runWith({enforceAppCheck: true}).https.onCall((data) => createService().preferences(data));
-exports.updateNewsletterPreferences = functions.runWith({enforceAppCheck: true}).https.onCall((data) => createService().updatePreferences(data));
-exports.unsubscribeNewsletter = functions.runWith({enforceAppCheck: true}).https.onCall((data) => createService().unsubscribe(data));
-exports.recordNewsletterAnalytics = functions.runWith({enforceAppCheck: true}).https.onCall((data) => createService().recordEvent(data));
+async function limitPublicRequest(db, context, method, now = Date.now()) {
+  const ip = context.rawRequest && context.rawRequest.ip;
+  if (!ip) throw new functions.https.HttpsError("failed-precondition", "Request origin is unavailable.");
+  const bucket = Math.floor(now / RATE_WINDOW_MS);
+  // A global budget also bounds traffic that rotates both IP and email.
+  const refs = [
+    db.collection(RATE_LIMIT_COLLECTION).doc(`global-${method}`),
+    db.collection(RATE_LIMIT_COLLECTION).doc(`origin-${sha256(`${bucket}:${ip}`)}`),
+  ];
+  await db.runTransaction(async (tx) => {
+    const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+    const counts = snapshots.map((snapshot) => {
+      const record = snapshot.exists ? snapshot.data() : {};
+      return record.bucket === bucket ? Number(record.attempts || 0) : 0;
+    });
+    if (counts[0] >= 1000 || counts[1] >= 60) {
+      throw new functions.https.HttpsError("resource-exhausted", "Please wait before trying again.");
+    }
+    refs.forEach((ref, index) => tx.set(ref, {
+      bucket, attempts: counts[index] + 1,
+      expiresAt: new Date(now + 24 * 60 * 60 * 1000),
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  });
+}
+
+function publicCallable(method) {
+  return functions.runWith({enforceAppCheck: true, maxInstances: 3, timeoutSeconds: 30}).https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    if (["signup", "recordEvent"].includes(method) &&
+        (process.env.NEWSLETTER_SIGNUP_ENABLED !== "true" || !PRIVACY_POLICY_VERSION)) {
+      throw new functions.https.HttpsError("failed-precondition", "Newsletter signup is not available yet.");
+    }
+    assertNoBotPayload(data);
+    await limitPublicRequest(getFirestore(), context, method);
+    const result = await createService()[method](data);
+    // Public signup must not disclose whether an address was already present.
+    return method === "signup" ? {ok: true} : result;
+  });
+}
+
+exports.submitNewsletterSignup = publicCallable("signup");
+exports.getNewsletterPreferences = publicCallable("preferences");
+exports.updateNewsletterPreferences = publicCallable("updatePreferences");
+exports.unsubscribeNewsletter = publicCallable("unsubscribe");
+exports.recordNewsletterAnalytics = publicCallable("recordEvent");
 
 async function newsletterActor(context, permission) {
   const actor = await adminOperations._private.resolveActor(context);
@@ -279,27 +336,56 @@ async function newsletterActor(context, permission) {
 exports.adminNewsletterDashboard = adminCallable(async (_data, context) => {
   await newsletterActor(context, "newsletter.read");
   const db = getFirestore();
-  const [active, unsubscribed, recent] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const previousSince = new Date(since.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const [active, unsubscribed, recent, previous] = await Promise.all([
     db.collection(COLLECTION).where("status", "==", "active").count().get(),
     db.collection(COLLECTION).where("status", "==", "unsubscribed").count().get(),
-    db.collection(COLLECTION).where("subscribedAt", ">=", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).count().get(),
+    db.collection(COLLECTION).where("createdAt", ">=", since).count().get(),
+    db.collection(COLLECTION).where("createdAt", ">=", previousSince).where("createdAt", "<", since).count().get(),
   ]);
-  return {ok: true, active: active.data().count, unsubscribed: unsubscribed.data().count, newLast30Days: recent.data().count};
+  const countBy = async (values, field, operator) => Object.fromEntries(await Promise.all(values.map(async (value) => {
+    const result = await db.collection(COLLECTION).where(field, operator, value).count().get();
+    return [value, result.data().count];
+  })));
+  const [sources, categories] = await Promise.all([
+    countBy([...SOURCES], "signupSource", "=="), countBy(CATEGORIES, "categories", "array-contains"),
+  ]);
+  return {ok: true, active: active.data().count, unsubscribed: unsubscribed.data().count,
+    newLast30Days: recent.data().count, newPrevious30Days: previous.data().count,
+    growth: recent.data().count - previous.data().count, sources, categories};
 });
+
+function audienceRecord(doc) {
+  const record = doc.data();
+  return {id: doc.id, email: record.email, status: record.status,
+    categories: record.categories || [], signupSource: record.signupSource,
+    subscribedAt: timestampMillis(record.subscribedAt),
+    providerSyncStatus: record.providerSyncStatus};
+}
 
 exports.adminSearchNewsletterSubscribers = adminCallable(async (data, context) => {
   await newsletterActor(context, "newsletter.read");
   const query = clean(data && data.query, 254).toLowerCase();
   const emailHash = query.includes("@") ? sha256(normalizeEmail(query)) : clean(data && data.emailHash, 64);
-  if (!emailHash) throw new functions.https.HttpsError("invalid-argument", "Search by email or email hash.");
+  if (!/^[a-f0-9]{64}$/.test(emailHash)) throw new functions.https.HttpsError("invalid-argument", "Search by email or email hash.");
   const doc = await getFirestore().collection(COLLECTION).doc(emailHash).get();
-  return {ok: true, records: doc.exists ? [{id: doc.id, ...doc.data()}] : []};
+  return {ok: true, records: doc.exists ? [audienceRecord(doc)] : []};
 });
 
-exports.adminExportNewsletterSubscribers = adminCallable(async (_data, context) => {
+exports.adminExportNewsletterSubscribers = adminCallable(async (data, context) => {
   await newsletterActor(context, "newsletter.export");
-  const snapshot = await getFirestore().collection(COLLECTION).where("status", "==", "active").limit(1000).get();
-  return {ok: true, records: snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}))};
+  let query = getFirestore().collection(COLLECTION).where("status", "==", "active").orderBy(FieldPath.documentId());
+  if (data && data.cursor) {
+    if (typeof data.cursor !== "string" || !/^[a-f0-9]{64}$/.test(data.cursor)) {
+      throw new functions.https.HttpsError("invalid-argument", "Invalid audience cursor.");
+    }
+    query = query.startAfter(data.cursor);
+  }
+  const snapshot = await query.limit(501).get();
+  const docs = snapshot.docs.slice(0, 500);
+  return {ok: true, records: docs.map(audienceRecord),
+    nextCursor: snapshot.docs.length > 500 ? docs.at(-1).id : null};
 });
 
-exports._private = {normalizeEmail, sha256, normalizeCategories, createService, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};
+exports._private = {normalizeEmail, sha256, normalizeCategories, createService, limitPublicRequest, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};

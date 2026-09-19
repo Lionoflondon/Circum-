@@ -1,8 +1,12 @@
-import 'dart:convert';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+String newsletterCsvCell(Object? value) {
+  var text = '${value ?? ''}';
+  if (RegExp(r'^[\s]*[=+@\-\t\r\n]').hasMatch(text)) text = "'$text";
+  return '"${text.replaceAll('"', '""')}"';
+}
 
 class NewsletterAudienceModule extends StatefulWidget {
   const NewsletterAudienceModule({super.key});
@@ -19,6 +23,8 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
   List<Map<String, dynamic>> _records = const [];
   String? _message;
   bool _loading = true;
+  bool _exporting = false;
+  String? _exportCursor;
 
   @override
   void initState() {
@@ -45,6 +51,8 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
         setState(() => _message =
             error.message ?? 'Audience data is unavailable for this role.');
       }
+    } catch (_) {
+      if (mounted) setState(() => _message = 'Audience data is unavailable.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -59,20 +67,26 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
           .httpsCallable('adminSearchNewsletterSubscribers')
           .call({'query': query});
       final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
       setState(() => _records = (data['records'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList(growable: false));
     } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
       setState(
           () => _message = error.message ?? 'Could not search the audience.');
+    } catch (_) {
+      if (mounted) setState(() => _message = 'Could not search the audience.');
     }
   }
 
   Future<void> _export() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
     try {
       final result = await _functions
           .httpsCallable('adminExportNewsletterSubscribers')
-          .call();
+          .call({'cursor': _exportCursor});
       final data = Map<String, dynamic>.from(result.data as Map);
       final records = (data['records'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map));
@@ -85,18 +99,26 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
           (item['categories'] as List? ?? const []).join('|'),
           item['signupSource'],
           item['subscribedAt']
-        ].map((value) => jsonEncode('$value')).join(','));
+        ].map(newsletterCsvCell).join(','));
       }
       await Clipboard.setData(ClipboardData(text: csv.toString()));
       if (mounted) {
-        setState(
-            () => _message = 'Active audience CSV copied to the clipboard.');
+        setState(() {
+          _exportCursor = data['nextCursor'] as String?;
+          _message =
+              '${records.length} active subscriber records copied as CSV.'
+              '${_exportCursor == null ? ' Export complete.' : ' More records are available; export the next page.'}';
+        });
       }
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         setState(
             () => _message = error.message ?? 'You do not have export access.');
       }
+    } catch (_) {
+      if (mounted) setState(() => _message = 'Could not export the audience.');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -116,7 +138,14 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
         _metric('Active subscribers', summary['active']),
         _metric('New in 30 days', summary['newLast30Days']),
         _metric('Unsubscribed', summary['unsubscribed']),
+        _metric('New vs prior 30 days', summary['growth']),
       ]),
+      const SizedBox(height: 16),
+      const Text('Acquisition sources (all subscribers)'),
+      Text('${summary['sources'] ?? {}}'),
+      const SizedBox(height: 8),
+      const Text('Subscribed interests'),
+      Text('${summary['categories'] ?? {}}'),
       const SizedBox(height: 24),
       TextField(
           controller: _search,
@@ -134,9 +163,11 @@ class _NewsletterAudienceModuleState extends State<NewsletterAudienceModule> {
             icon: const Icon(Icons.search),
             label: const Text('Search')),
         OutlinedButton.icon(
-            onPressed: _export,
+            onPressed: _exporting ? null : _export,
             icon: const Icon(Icons.download_rounded),
-            label: const Text('Export active audience'))
+            label: Text(_exportCursor == null
+                ? 'Export active audience'
+                : 'Export next page'))
       ]),
       if (_message != null) ...[const SizedBox(height: 16), Text(_message!)],
       if (_records.isNotEmpty) ...[
