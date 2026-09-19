@@ -1,8 +1,55 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/link.dart';
+
+// Opt in only after the backend, provider and published policy are approved.
+const newsletterSignupEnabled =
+    bool.fromEnvironment('NEWSLETTER_SIGNUP_ENABLED', defaultValue: false);
+
+// Bearer preference tokens must never reach visitor analytics or support logs.
+Uri newsletterPublicPageUri(Uri uri) {
+  final query = Map<String, String>.from(uri.queryParameters)..remove('token');
+  final fragmentHasToken =
+      Uri.tryParse(uri.fragment)?.queryParameters.containsKey('token') ?? false;
+  return uri.replace(
+      queryParameters: query, fragment: fragmentHasToken ? '' : uri.fragment);
+}
+
+typedef NewsletterCall = Future<Map<String, dynamic>> Function(
+    String name, Map<String, dynamic> data);
+
+Future<Map<String, dynamic>> _callNewsletter(
+    String name, Map<String, dynamic> data) async {
+  final appCheck = await FirebaseAppCheck.instance.getToken();
+  if (appCheck == null || appCheck.isEmpty) {
+    throw const NewsletterRequestException(
+        'Circum security verification is required.');
+  }
+  final response = await http.post(
+    Uri.base.resolve('/newsletter-api/v1/callable/$name'),
+    headers: {
+      'content-type': 'application/json',
+      'x-firebase-appcheck': appCheck,
+    },
+    body: jsonEncode({'data': data}),
+  );
+  final payload = jsonDecode(response.body) as Map<String, dynamic>;
+  if (response.statusCode != 200) {
+    final error = payload['error'] as Map?;
+    throw NewsletterRequestException(
+        '${error?['message'] ?? 'Newsletter request failed.'}');
+  }
+  return Map<String, dynamic>.from(payload['result'] as Map);
+}
+
+class NewsletterRequestException implements Exception {
+  const NewsletterRequestException(this.message);
+  final String message;
+}
 
 const _categories = <String, String>{
   'circum_updates': 'CIRCUM Updates',
@@ -20,6 +67,8 @@ class NewsletterSignupSection extends StatefulWidget {
     required this.mutedText,
     required this.border,
     required this.onPrivacy,
+    this.call = _callNewsletter,
+    this.source = 'homepage',
   });
 
   final Color background;
@@ -28,6 +77,8 @@ class NewsletterSignupSection extends StatefulWidget {
   final Color mutedText;
   final Color border;
   final Uri onPrivacy;
+  final NewsletterCall call;
+  final String source;
 
   @override
   State<NewsletterSignupSection> createState() =>
@@ -56,9 +107,8 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
 
   Future<void> _event(String event) async {
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('recordNewsletterAnalytics')
-          .call({'event': event, 'source': 'homepage'});
+      await widget.call('recordNewsletterAnalytics',
+          {'event': event, 'source': widget.source});
     } catch (_) {
       // Privacy-conscious analytics must never affect signup.
     }
@@ -78,18 +128,17 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
     });
     unawaited(_event('newsletter_signup_started'));
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('submitNewsletterSignup')
-          .call({
+      await widget.call('submitNewsletterSignup', {
         'email': email,
+        'consent': true,
         'categories': _selected.toList(growable: false),
-        'source': 'homepage',
+        'source': widget.source,
         'website': '',
       });
       if (!mounted) return;
       setState(() => _success = true);
       unawaited(_event('newsletter_signup_completed'));
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       if (!mounted) return;
       setState(() =>
           _error = error.message ?? 'Could not join right now. Try again.');
@@ -266,10 +315,14 @@ class NewsletterPreferencesPage extends StatefulWidget {
       {super.key,
       required this.background,
       required this.text,
-      required this.mutedText});
+      required this.mutedText,
+      this.call = _callNewsletter,
+      this.token});
   final Color background;
   final Color text;
   final Color mutedText;
+  final NewsletterCall call;
+  final String? token;
   @override
   State<NewsletterPreferencesPage> createState() =>
       _NewsletterPreferencesPageState();
@@ -279,8 +332,12 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
   final _selected = <String>{};
   bool _loading = true;
   bool _saving = false;
+  bool _canEdit = false;
   String? _message;
-  late final String _token = Uri.base.queryParameters['token'] ?? '';
+  late final String _token = widget.token ??
+      Uri.base.queryParameters['token'] ??
+      Uri.tryParse(Uri.base.fragment)?.queryParameters['token'] ??
+      '';
 
   @override
   void initState() {
@@ -290,16 +347,15 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
 
   Future<void> _load() async {
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('getNewsletterPreferences')
-          .call({'token': _token, 'website': ''});
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = await widget
+          .call('getNewsletterPreferences', {'token': _token, 'website': ''});
+      _canEdit = data['status'] == 'active';
       if (data['status'] == 'unsubscribed') {
         _message = 'You’ve already been unsubscribed.';
       }
       _selected.addAll(
           (data['categories'] as List? ?? const []).map((value) => '$value'));
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       _message = error.message ?? 'This link is invalid or has expired.';
     } catch (_) {
       _message = 'This link is invalid or has expired.';
@@ -309,26 +365,37 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
 
   Future<void> _save({required bool unsubscribe}) async {
     if (_saving) return;
+    if (!unsubscribe && _selected.isEmpty) {
+      setState(() =>
+          _message = 'Choose an interest or select Unsubscribe from all.');
+      return;
+    }
     setState(() => _saving = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable(unsubscribe
-              ? 'unsubscribeNewsletter'
-              : 'updateNewsletterPreferences')
-          .call({
-        'token': _token,
-        if (!unsubscribe) 'categories': _selected.toList(growable: false),
-        'website': '',
-      });
+      await widget.call(
+          unsubscribe ? 'unsubscribeNewsletter' : 'updateNewsletterPreferences',
+          {
+            'token': _token,
+            if (!unsubscribe) 'categories': _selected.toList(growable: false),
+            'website': '',
+          });
       if (mounted) {
-        setState(() => _message = unsubscribe
-            ? 'You’ve been unsubscribed. You won’t receive further CIRCUM marketing emails.'
-            : 'Your communication preferences have been updated.');
+        setState(() {
+          if (unsubscribe) _canEdit = false;
+          _message = unsubscribe
+              ? 'You’ve been unsubscribed. You won’t receive further CIRCUM marketing emails.'
+              : 'Your communication preferences have been updated.';
+        });
       }
-    } on FirebaseFunctionsException catch (error) {
+    } on NewsletterRequestException catch (error) {
       if (mounted) {
         setState(() =>
             _message = error.message ?? 'Could not update your preferences.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+            () => _message = 'Could not update your preferences. Try again.');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -357,7 +424,8 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
                 Text(_message!,
                     style: TextStyle(
                         color: widget.text, fontWeight: FontWeight.w700)),
-              ] else ...[
+              ],
+              if (_canEdit) ...[
                 const SizedBox(height: 18),
                 ..._categories.entries.map((entry) {
                   return CheckboxListTile(
@@ -393,7 +461,9 @@ class _NewsletterPreferencesPageState extends State<NewsletterPreferencesPage> {
             child: Center(
                 child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 620),
-                    child: Padding(
-                        padding: const EdgeInsets.all(24), child: content)))));
+                    child: SingleChildScrollView(
+                        child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: content))))));
   }
 }

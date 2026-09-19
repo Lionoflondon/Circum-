@@ -116,6 +116,13 @@
       ],
       "rewrites": [
         {
+          "source": "/newsletter-api/**",
+          "run": {
+            "serviceId": "circum-newsletter",
+            "region": "us-central1"
+          }
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }
@@ -293,6 +300,13 @@
         }
       ],
       "rewrites": [
+        {
+          "source": "/newsletter-api/**",
+          "run": {
+            "serviceId": "circum-newsletter",
+            "region": "us-central1"
+          }
+        },
         {
           "source": "**",
           "destination": "/index.html"

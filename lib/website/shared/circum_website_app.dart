@@ -105,6 +105,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     _initialRoute.senderEntry,
   );
   final _newsletterKey = GlobalKey();
+  String _newsletterSource = 'homepage';
 
   @override
   void initState() {
@@ -197,14 +198,15 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _logWebsiteVisit() async {
     if (_optionalAnalyticsConsent != true) return;
+    final pageUri = newsletterPublicPageUri(Uri.base);
     try {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('recordWebsiteVisit').call({
-        'url': Uri.base.toString(),
-        'path': Uri.base.path,
-        'query': Uri.base.queryParameters,
+        'url': pageUri.toString(),
+        'path': pageUri.path,
+        'query': pageUri.queryParameters,
         'appMode': _mode.name,
       });
     } catch (_) {
@@ -329,6 +331,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
           newsletterKey: _newsletterKey,
+          newsletterSource: _newsletterSource,
           onNewsletter: _scrollToNewsletter,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
@@ -336,6 +339,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _scrollToNewsletter() async {
+    setState(() => _newsletterSource = 'footer');
     final context = _newsletterKey.currentContext;
     if (context != null) {
       await Scrollable.ensureVisible(
@@ -701,6 +705,7 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
   final GlobalKey newsletterKey;
+  final String newsletterSource;
   final VoidCallback onNewsletter;
 
   const _LandingPage({
@@ -714,6 +719,7 @@ class _LandingPage extends StatelessWidget {
     required this.onVanguard,
     this.onGifts,
     required this.newsletterKey,
+    required this.newsletterSource,
     required this.onNewsletter,
     required this.onToggleTheme,
   });
@@ -857,8 +863,9 @@ class _LandingPage extends StatelessWidget {
             onBusiness: onBusiness,
             onVanguard: onVanguard,
           ),
-          NewsletterSignupSection(
+          if (newsletterSignupEnabled) NewsletterSignupSection(
             key: newsletterKey,
+            source: newsletterSource,
             background: colors.background,
             panel: colors.panel,
             text: colors.text,
@@ -27178,7 +27185,7 @@ class _LandingFooter extends StatelessWidget {
                     spacing: 14,
                     runSpacing: 8,
                     children: [
-                      _FooterServiceLink(
+                      if (newsletterSignupEnabled) _FooterServiceLink(
                         label: 'Newsletter',
                         uri: _CircumWebsiteAppState._canonicalWebUri('/'),
                         onPressed: onNewsletter,
@@ -29324,7 +29331,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
         ].where((part) => part.isNotEmpty).join(' '),
         'email': contact,
         'message': message,
-        'pageUrl': Uri.base.toString(),
+        'pageUrl': newsletterPublicPageUri(Uri.base).toString(),
         'participantRole': 'visitor',
       });
       _message.clear();
