@@ -11,6 +11,7 @@ const engine = require("./communication-engine");
 const notifications = require("./platform-notifications");
 const sender = require("./sender-account");
 const rider = require("./rider-account");
+const deviceTokenAuthority = require("./device-token-authority");
 let app; let db; let env; let sends = 0; let adminSends = 0;
 const ctx = (uid) => ({auth: {uid, token: {email: `${uid}@example.invalid`, name: "Test participant"}}});
 const client = (uid, role = "user") => env.authenticatedContext(uid, {role, adminRole: role, roles: [role]}).firestore();
@@ -99,8 +100,8 @@ test("chat messages stay backend-authored; participants send/read through callab
 });
 
 test("chat trigger replay deduplicates each recipient and admin record and push attempt", async () => {
-  await db.doc("users/recipient").set({fcmToken: "test-sender-token"});
-  await db.doc("riderProfiles/recipient-rider").set({fcmToken: "test-rider-token"});
+  await deviceTokenAuthority.registerProfileToken({uid: "recipient", role: "sender", token: "test-sender-token", db});
+  await deviceTokenAuthority.registerProfileToken({uid: "recipient-rider", role: "rider", token: "test-rider-token", db});
   await db.doc("adminUsers/admin").set({fcmToken: "test-admin-token"});
   const chatId = "dedupe-chat";
   await db.doc(`chats/${chatId}`).set({type: "support", participants: ["author", "recipient", "recipient-rider", "circum-support"], participantRoles: {"recipient-rider": "rider"}});
