@@ -2,11 +2,11 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 270
-- Gen 1 exports: 268
-- Files importing Firebase Functions v1: 63
+- Source exports: 271
+- Gen 1 exports: 269
+- Files importing Firebase Functions v1: 64
 - MIGRATE TO CLOUD RUN: 177
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 48
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 49
 - REPLACE WITH CLOUD RUN + EVENTARC: 27
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
@@ -119,6 +119,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | ensurePublicRiderId | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | none found |
 | ensureReferralCode | server/functions/referrals.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/sender_mobile/sender_wallet.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-referral-callable-server.js<br>server/functions/cloud-run-referral-servers.test.js<br>test/website_rider_referral_test.dart |
 | ensureRiderRothWallet | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-onboarding-flow.emulator.test.js |
+| ensureSenderAccount | server/functions/account-bootstrap-compat.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/account_bootstrap_api.dart<br>lib/app/sender_mobile/sender_profile_authority.dart<br>lib/website/shared/account_bootstrap_api.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/account-bootstrap-compat.test.js<br>server/functions/account-bootstrap-gen2.js<br>server/functions/account-bootstrap-gen2.test.js<br>server/functions/check-functions-inventory.test.js<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/firestore-sender-bootstrap-rules.test.js<br>server/functions/firestore-starter-roth-rules.test.js<br>server/functions/production-functions-inventory.json<br>server/functions/sender-account-authority.test.js<br>server/functions/sender-account.js<br>test/sender_account_bootstrap_api_test.dart<br>test/website_account_bootstrap_api_test.dart<br>test/website_sender_auth_deterministic_contract_test.dart |
 | escalateUnclaimedDeliveries | server/functions/platform-notifications.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
 | executeRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
 | expireQaLifecycleFixtures | server/functions/qa-lifecycle.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | server/functions/QA-LIFECYCLE.md |

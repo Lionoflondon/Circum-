@@ -341,6 +341,11 @@
       "owner": "circum-health-plus-payments"
     },
     {
+      "name": "ensureSenderAccount",
+      "category": "RESTORABLE_COMPATIBILITY",
+      "owner": "circum-account-bootstrap"
+    },
+    {
       "name": "getNewsletterPreferences",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-newsletter"

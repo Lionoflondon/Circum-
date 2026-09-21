@@ -20,10 +20,9 @@ test("account bootstrap uses Gen 2 callable infrastructure", () => {
 
 test("retired managed account bootstrap exports cannot be recreated", () => {
   assert.doesNotMatch(indexSource, /accountBootstrapGen2/);
-  assert.doesNotMatch(indexSource, /exports\.ensureSenderAccount/);
+  assert.match(indexSource, /exports\.ensureSenderAccount = accountBootstrapCompat\.ensureSenderAccount/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess/);
   assert.doesNotMatch(indexSource, /exports\.updateRiderProfile/);
-  assert.doesNotMatch(indexSource, /exports\.ensureSenderAccount = senderAccount\.ensureSenderAccount/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess = riderAccount\.verifyRiderAccountAccess/);
   assert.doesNotMatch(indexSource, /exports\.updateRiderProfile = riderAccount\.updateRiderProfile/);
 });

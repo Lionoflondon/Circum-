@@ -13,6 +13,7 @@ function argValue(name) {
 
 const deployedPath = argValue("--deployed-json");
 const classificationPath = argValue("--classification-json");
+const allowRestorableScope = process.argv.includes("--allow-restorable-scope");
 const deploymentScope = argValue("--scope")
     .split(",")
     .map((target) => target.trim())
@@ -48,6 +49,12 @@ const classifiedMissing = new Set((classification && classification.deployedMiss
     .map((item) => item.name));
 const classifiedAbsent = new Set((classification && classification.sourceNotDeployed || [])
     .map((item) => item.name));
+const restorableCompatibility = new Set((classification && classification.sourceNotDeployed || [])
+    .filter((item) => item.category === "RESTORABLE_COMPATIBILITY")
+    .map((item) => item.name));
+for (const name of restorableCompatibility) {
+  if (deployedSet.has(name)) classifiedAbsent.delete(name);
+}
 const unexpectedDeployedMissing = classification ?
   deployedMissingSource.filter((name) => !classifiedMissing.has(name)) : [];
 const staleDeployedMissing = classification ?
@@ -59,6 +66,9 @@ const staleSourceNotDeployed = classification ?
 const classificationMatches = Boolean(classification) &&
   unexpectedDeployedMissing.length === 0 && staleDeployedMissing.length === 0 &&
   unexpectedSourceNotDeployed.length === 0 && staleSourceNotDeployed.length === 0;
+const exactRestorableScope = allowRestorableScope && deploymentScope.length === 1 &&
+  scopeNotDeployed.length === 1 && restorableCompatibility.has(scopeNotDeployed[0]);
+const unsafeScopeNotDeployed = exactRestorableScope ? [] : scopeNotDeployed;
 
 console.log(JSON.stringify({
   deployed: deployed.length,
@@ -67,6 +77,7 @@ console.log(JSON.stringify({
   sourceNotDeployed,
   deploymentScope,
   scopeNotDeployed,
+  allowRestorableScope,
   classificationMatches,
   classificationDrift: {
     unexpectedDeployedMissing,
@@ -84,7 +95,7 @@ if (classification && !classificationMatches) {
   process.exit(1);
 }
 
-if (deploymentScope.length > 0 && scopeNotDeployed.length > 0) {
+if (deploymentScope.length > 0 && unsafeScopeNotDeployed.length > 0) {
   console.error(
       "Unsafe Functions scope: it contains source exports that are not present in " +
       "the production inventory. Review ownership before creating or restoring them.",

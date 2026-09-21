@@ -62,14 +62,21 @@ jobs:
         if: steps.functions-scope.outputs.resolver_status == '0' && steps.functions-scope.outputs.scope != ''
         env:
           FUNCTION_SCOPE: ${{ steps.functions-scope.outputs.scope }}
+          FUNCTION_SCOPE_INPUT: ${{ inputs.function_scope }}
         run: |
           set -euo pipefail
           inventory="$RUNNER_TEMP/circum-functions-list.json"
           firebase functions:list --project circum-2797c --json > "$inventory"
+          args=(
+            "--deployed-json=$inventory"
+            "--classification-json=production-functions-inventory.json"
+            "--scope=$FUNCTION_SCOPE"
+          )
+          if [ -n "$FUNCTION_SCOPE_INPUT" ]; then
+            args+=(--allow-restorable-scope)
+          fi
           npm --prefix server/functions run check:functions-inventory -- \
-            --deployed-json="$inventory" \
-            --classification-json="production-functions-inventory.json" \
-            --scope="$FUNCTION_SCOPE"
+            "${args[@]}"
       - name: Deploy affected Functions
         if: steps.functions-scope.outputs.resolver_status == '0' && steps.functions-scope.outputs.scope != ''
         env:
@@ -78,19 +85,3 @@ jobs:
       - name: Report empty Functions scope
         if: steps.functions-scope.outputs.resolver_status != '0' || steps.functions-scope.outputs.scope == ''
         run: echo "No affected Functions; skipping source deployment."
-      - name: Delete retired Roth Functions when present
-        run: |
-          set -euo pipefail
-          existing="$(firebase functions:list --project circum-2797c --json | node -e '
-            let input = "";
-            process.stdin.on("data", chunk => input += chunk);
-            process.stdin.on("end", () => {
-              const ids = new Set((JSON.parse(input).result || []).map(fn => fn.id));
-              process.stdout.write(["issueRothCredit", "issueRothToWallets"].filter(id => ids.has(id)).join(" "));
-            });
-          ')"
-          if [ -n "$existing" ]; then
-            firebase functions:delete $existing --region us-central1 --project circum-2797c --force
-          else
-            echo "Retired Roth Functions already absent."
-          fi
