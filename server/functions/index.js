@@ -74,6 +74,7 @@ const senderFinance = require("./sender-finance");
 const {senderPaymentCallable} = require("./sender-app-check");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
+const accountBootstrapGen2 = require("./account-bootstrap-gen2");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
@@ -438,7 +439,7 @@ exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =
   senderAccount.updateSenderNotificationState;
-exports.ensureSenderAccount = senderAccount.ensureSenderAccount;
+exports.ensureSenderAccount = accountBootstrapGen2.ensureSenderAccount;
 exports.markSenderLegendCelebrationSeen =
   senderAccount.markSenderLegendCelebrationSeen;
 exports.recordWebsiteVisit = senderAccount.recordWebsiteVisit;
@@ -446,8 +447,8 @@ exports.requestSenderEmailChange = senderAccount.requestSenderEmailChange;
 exports.updateSenderLocation = senderAccount.updateSenderLocation;
 exports.recordIrisLearningCandidate = senderAccount.recordIrisLearningCandidate;
 exports.recordIrisLearningOutlier = senderAccount.recordIrisLearningOutlier;
-exports.updateRiderProfile = riderAccount.updateRiderProfile;
-exports.verifyRiderAccountAccess = riderAccount.verifyRiderAccountAccess;
+exports.updateRiderProfile = accountBootstrapGen2.updateRiderProfile;
+exports.verifyRiderAccountAccess = accountBootstrapGen2.verifyRiderAccountAccess;
 exports.cleanupRiderDocumentChunks = riderAccount.cleanupRiderDocumentChunks;
 exports.ensurePublicRiderId = riderAccount.ensurePublicRiderId;
 exports.advanceRiderOnboarding = riderAccount.advanceRiderOnboarding;
