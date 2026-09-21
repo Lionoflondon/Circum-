@@ -1,0 +1,384 @@
+{
+  "project": "circum-2797c",
+  "baselineDate": "2026-09-21",
+  "deployedMissingSource": [
+    {
+      "name": "acknowledgeBusinessOperationalIncident",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "acknowledgeOperationalIncident",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "activateDueScheduledDeliveries",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminDuplicateDelivery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminRepairCanonicalRider",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminRetryNoShowSettlement",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminScheduleGiftDelivery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminScheduleHealthPlusDelivery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "adminSetIrisVisualModelState",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "assignBusinessCustomRole",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "claimCircumUsername",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "claimSenderUsername",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "confirmRiderActiveDelivery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "createSenderSetupCheckoutSession",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "decideGiftSubstitution",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "deleteBusinessCustomRole",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "deliveryLifecycleWatchdog",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "exportBusinessRecords",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "founderDesignateTestAccount",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "founderListTestAccounts",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "founderPreflightE2E",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "founderRevokeTestAccount",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "founderRiderOperationalPreflight",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getBusinessDeliveryEvidenceAccess",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getBusinessDeliveryTimeline",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getBusinessOperationsWorkspace",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getCustomerDeliveryTrust",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getDeliveryAdjustmentEvidence",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getDeliveryAppreciation",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getDeliveryEvidenceAccess",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getFounderRiderAccess",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getIrisHealthMetrics",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getOrCreateDeliveryConversation",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getReferralDashboard",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderAppreciation",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderHealthPickup",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderPayoutQuote",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderRothTransactions",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderRothWallet",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "getRiderScheduledJobs",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "giftStoryVoiceMedia",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "listBusinessAccessRequests",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "listBusinessAccounts",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "listBusinessCustomRoles",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "liveDeliveryDiagnostics",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "migrateBusinessMembershipAuthority",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "migrateCircumUsernames",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onChatMessageOperationalCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onChatOperationalCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryCompletedEvent",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryDisputeIntelligenceCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryEvidenceOperationalWrite",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryEvidencePhotoFinalized",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryIntelligenceEventCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDeliveryLocationRiskWrite",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onDriverRatingIntelligenceCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onMarketplaceRiskFlagCreate",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onMovementDeliveryWrite",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onNotificationOperationalWrite",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onVerticalDeliveryMovementWrite",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "operationsHealthRepair",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "operationsHealthScan",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "pipelineHealthReset",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "processNoShowSettlementRetries",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "processNotificationRetries",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "proposeGiftSubstitution",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "purgeFounderTestPipeline",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "reconcileDeliveryTips",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "recordHealthPlusEvidence",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "recoverIneligibleSenderDelivery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "removeRiderProfilePhoto",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "resolveOperationalIncident",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "reverseRothDeliveryTip",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "reviewMarketplaceRiskFlag",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "saveBusinessCustomRole",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "scheduledRiderPayoutRecovery",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "settleScheduledRoadChargeCashRefund",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "updateBusinessDeliveryNotes",
+      "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "updateGiftProcurement",
+      "category": "INTENTIONALLY_LEGACY"
+    }
+  ],
+  "sourceNotDeployed": [
+    {
+      "name": "adminExportNewsletterSubscribers",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "adminNewsletterDashboard",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "adminSearchNewsletterSubscribers",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "createHealthPlusBillingPortalSession",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-health-plus-payments"
+    },
+    {
+      "name": "getNewsletterPreferences",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "handleStripeConnectWebhook",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-stripe-connect-webhook"
+    },
+    {
+      "name": "onDeliveryCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-delivery-created-events"
+    },
+    {
+      "name": "reconcilePendingSenderCancellations",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-cancellation-reconciler"
+    },
+    {
+      "name": "recordNewsletterAnalytics",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "submitNewsletterSignup",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "unsubscribeNewsletter",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    },
+    {
+      "name": "updateNewsletterPreferences",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-newsletter"
+    }
+  ]
+}

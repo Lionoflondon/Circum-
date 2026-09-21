@@ -1,8 +1,8 @@
 /* eslint-disable no-console, max-len, require-jsdoc */
 "use strict";
 
-const admin = require("firebase-admin");
-const {FieldValue} = require("firebase-admin/firestore");
+const {getApps, initializeApp} = require("firebase-admin/app");
+const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 
 const ACTIVE_STATUSES = new Set([
   "requested",
@@ -137,8 +137,8 @@ function privateAuthorityPatch({
 }
 
 async function migrate({apply = false, limit = 500} = {}) {
-  if (!admin.apps.length) admin.initializeApp();
-  const db = admin.firestore();
+  if (!getApps().length) initializeApp();
+  const db = getFirestore();
   const queryFields = [
     "vanguardProtocolEnabled",
     "vanguardEnabled",
