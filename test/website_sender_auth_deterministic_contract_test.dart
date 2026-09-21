@@ -78,6 +78,9 @@ void main() {
     expect(authBloc, contains('_authOperationTimeout'));
     expect(authBloc, contains('_hydrateSenderSession'));
     expect(authBloc, contains('_hydrateSenderSessionRecoverably'));
+    expect(authBloc, contains('SenderProfileDiagnosticCode.permissionDenied'));
+    expect(authBloc, contains("FirebaseAuthException(code: 'wrong-surface')"));
+    expect(authBloc, contains('_updateSenderProfileRecoverably'));
     expect(authBloc, contains('SenderProfileAuthority'));
     expect(authBloc, contains('signInWithEmailAndPassword'));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
@@ -133,6 +136,8 @@ void main() {
     expect(apple, contains('status: Status.failure'));
     expect(google, contains('if (googleSignInAccount == null)'));
     expect(google, contains('_hydrateSenderSessionRecoverably'));
+    expect(apple, contains('_updateSenderProfileRecoverably'));
+    expect(google, contains('_updateSenderProfileRecoverably'));
     expect(google, contains('status: Status.failure'));
     expect(authBloc, isNot(contains('auth.verifyPhoneNumber')));
     expect(authBloc, isNot(contains('PhoneAuthProvider.credential')));

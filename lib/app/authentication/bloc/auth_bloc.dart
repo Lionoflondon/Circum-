@@ -158,9 +158,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       return await _hydrateSenderSession(user, phase)
           .timeout(_authOperationTimeout);
+    } on SenderProfileAuthorityException catch (error, stack) {
+      if (error.code == SenderProfileDiagnosticCode.permissionDenied) {
+        _logRecoverableAuthError('$phase.denied', error, stack);
+        try {
+          await auth.signOut().timeout(_authOperationTimeout);
+        } catch (_) {}
+        throw FirebaseAuthException(code: 'wrong-surface');
+      }
+      _logRecoverableAuthError('$phase.deferred', error, stack);
+      return null;
     } catch (error, stack) {
       _logRecoverableAuthError('$phase.deferred', error, stack);
       return null;
+    }
+  }
+
+  Future<void> _updateSenderProfileRecoverably({
+    String? displayName,
+    String? username,
+    required String phase,
+  }) async {
+    try {
+      await _updateSenderProfile(
+        displayName: displayName,
+        username: username,
+      );
+    } catch (error, stack) {
+      _logRecoverableAuthError('$phase.deferred', error, stack);
     }
   }
 
@@ -321,8 +346,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .where((part) => part.isNotEmpty)
           .join(' ');
       if (fullName.isNotEmpty && user.displayName != fullName) {
-        await user.updateDisplayName(fullName).timeout(_authOperationTimeout);
-        await _updateSenderProfile(displayName: fullName);
+        try {
+          await user.updateDisplayName(fullName).timeout(_authOperationTimeout);
+        } catch (error, stack) {
+          _logRecoverableAuthError(
+              'auth.apple.display_name.deferred', error, stack);
+        }
+        await _updateSenderProfileRecoverably(
+          displayName: fullName,
+          phase: 'auth.apple.profile_update',
+        );
       }
       final phone =
           await _hydrateSenderSessionRecoverably(user, 'auth.apple.profile');
@@ -384,7 +417,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       final displayName = user.displayName?.trim();
       if (displayName != null && displayName.isNotEmpty) {
-        await _updateSenderProfile(displayName: displayName);
+        await _updateSenderProfileRecoverably(
+          displayName: displayName,
+          phase: 'auth.google.profile_update',
+        );
       }
       final phone =
           await _hydrateSenderSessionRecoverably(user, 'auth.google.profile');

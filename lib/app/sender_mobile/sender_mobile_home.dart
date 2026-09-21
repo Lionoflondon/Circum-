@@ -438,10 +438,15 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         final currentUid = FirebaseAuth.instance.currentUser?.uid;
         if (user != null &&
             currentUid == user.uid &&
-            _isWeakNetworkSenderAuthFailure(error)) {
+            !_isSenderAccessDenied(error)) {
           _lastAppliedAuthUid = user.uid;
           setState(() => _entry = _SenderEntryScreen.app);
         } else {
+          if (user != null && _isSenderAccessDenied(error)) {
+            try {
+              await FirebaseAuth.instance.signOut();
+            } catch (_) {}
+          }
           _lastAppliedAuthUid = null;
           setState(() => _entry = _SenderEntryScreen.landing);
         }
@@ -513,42 +518,9 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   }
 }
 
-bool _isWeakNetworkSenderAuthFailure(Object error) {
-  if (error is TimeoutException) return true;
-  if (error is SenderProfileAuthorityException) {
-    return const {
-      SenderProfileDiagnosticCode.authUnavailable,
-      SenderProfileDiagnosticCode.startupRace,
-    }.contains(error.code);
-  }
-  if (error is FirebaseFunctionsException) {
-    return const {
-      'aborted',
-      'cancelled',
-      'deadline-exceeded',
-      'internal',
-      'resource-exhausted',
-      'unavailable',
-      'unknown',
-    }.contains(error.code);
-  }
-  if (error is FirebaseException) {
-    return const {
-      'deadline-exceeded',
-      'network-request-failed',
-      'timeout',
-      'unavailable',
-      'web-storage-unsupported',
-    }.contains(error.code);
-  }
-  final message = error.toString().toLowerCase();
-  return message.contains('deadline') ||
-      message.contains('network') ||
-      message.contains('offline') ||
-      message.contains('timed out') ||
-      message.contains('timeout') ||
-      message.contains('unavailable');
-}
+bool _isSenderAccessDenied(Object? error) =>
+    error is SenderProfileAuthorityException &&
+    error.code == SenderProfileDiagnosticCode.permissionDenied;
 
 class _SenderAuthRestoringSplash extends StatelessWidget {
   const _SenderAuthRestoringSplash();
@@ -899,8 +871,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 icon: Icons.apple_rounded,
                 onTap: _busy || providerBusy
                     ? null
-                    : () =>
-                        context.read<AuthBloc>().add(SignInWithAppleAuth()),
+                    : () => context.read<AuthBloc>().add(SignInWithAppleAuth()),
               ),
             ],
             if (visibleAuthMessage != null) ...[
@@ -981,7 +952,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           'error=${bootstrap.error.runtimeType}',
         );
         if (!mounted) return;
-        if (_canContinueAfterWeakNetworkBootstrap(bootstrap.error)) {
+        if (_canContinueAfterAuthenticatedBootstrap(bootstrap.error)) {
           _showAuthSnackBar(
             messenger,
             accountCreated
@@ -990,6 +961,16 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           );
           if (accountCreated) _queueSignupReferral(messenger);
           widget.onAuthenticated();
+          return;
+        }
+        if (_isSenderAccessDenied(bootstrap.error)) {
+          try {
+            await FirebaseAuth.instance.signOut();
+          } catch (_) {}
+          setState(() => _authMessage = senderAuthErrorMessage(
+                SenderAuthAction.signIn,
+                FirebaseAuthException(code: 'wrong-surface'),
+              ));
           return;
         }
         setState(() => _authMessage =
@@ -1054,13 +1035,23 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           functions: functions,
         ).ensureCanonicalSenderAccount(user, 'sender_mobile.auth.ensure');
         if (!createAccount) return;
-        await functions.httpsCallable('updateSenderProfile').call({
-          'firstName': firstName,
-        }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
-        if (user.displayName != firstName) {
-          await user
-              .updateDisplayName(firstName)
-              .timeout(_senderAuthOperationTimeout);
+        try {
+          await functions.httpsCallable('updateSenderProfile').call({
+            'firstName': firstName,
+          }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+        } catch (error) {
+          debugPrint(
+              'Sender post-auth profile update deferred: ${error.runtimeType}');
+        }
+        try {
+          if (user.displayName != firstName) {
+            await user
+                .updateDisplayName(firstName)
+                .timeout(_senderAuthOperationTimeout);
+          }
+        } catch (error) {
+          debugPrint(
+              'Sender post-auth display name deferred: ${error.runtimeType}');
         }
       },
       hydrateProfile: () => SenderProfileAuthority(
@@ -1075,11 +1066,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     return bootstrap;
   }
 
-  bool _canContinueAfterWeakNetworkBootstrap(Object? error) {
+  bool _canContinueAfterAuthenticatedBootstrap(Object? error) {
     if (error == null || FirebaseAuth.instance.currentUser == null) {
       return false;
     }
-    return _isWeakNetworkSenderAuthFailure(error);
+    return !_isSenderAccessDenied(error);
   }
 
   void _queueSignupReferral(ScaffoldMessengerState messenger) {
@@ -1323,8 +1314,8 @@ class _SenderProviderAction extends StatelessWidget {
           onPressed: onTap,
           icon: Icon(icon, size: 22),
           label: Text(label,
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.w700)),
+              style:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
             side: const BorderSide(color: _SenderTokens.glassBorder),

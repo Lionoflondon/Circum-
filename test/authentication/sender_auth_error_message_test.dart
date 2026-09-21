@@ -59,4 +59,14 @@ void main() {
       'Sign in failed. Check the email and password.',
     );
   });
+
+  test('accounts for another Circum app get clear recovery guidance', () {
+    expect(
+      senderAuthErrorMessage(
+        SenderAuthAction.signIn,
+        FirebaseAuthException(code: 'wrong-surface'),
+      ),
+      'This account belongs to another Circum app. Sign in with a Sender account.',
+    );
+  });
 }
