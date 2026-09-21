@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import 'account_bootstrap_api.dart';
+
 enum SenderProfileDiagnosticCode {
   authUnavailable('PROFILE_AUTH_UNAVAILABLE'),
   notFound('PROFILE_NOT_FOUND'),
@@ -136,11 +138,9 @@ class SenderProfileAuthority {
       event: 'ensure_begin',
     );
     try {
-      final result = await functions
-          .httpsCallable('ensureSenderAccount')
-          .call<Map<String, dynamic>>()
+      final result = await ensureSenderAccountViaCloudRun(auth: auth)
           .timeout(senderAccountEnsureTimeout);
-      if (result.data['allowed'] != true) {
+      if (result['allowed'] != true) {
         throw FirebaseFunctionsException(
           code: 'permission-denied',
           message: 'This account cannot access Sender.',
@@ -152,7 +152,7 @@ class SenderProfileAuthority {
         path: 'functions/ensureSenderAccount',
         event: 'ensure_complete',
       );
-      return Map<String, dynamic>.from(result.data);
+      return Map<String, dynamic>.from(result);
     } on TimeoutException catch (error, stack) {
       logSenderProfileDiagnostic(
         code: SenderProfileDiagnosticCode.startupRace,
@@ -168,10 +168,10 @@ class SenderProfileAuthority {
         phase: phase,
         documentId: user.uid,
       );
-    } on FirebaseFunctionsException catch (error, stack) {
-      final code = error.code == 'permission-denied'
+    } on SenderAccountBootstrapException catch (error, stack) {
+      final code = error.status == 'PERMISSION_DENIED'
           ? SenderProfileDiagnosticCode.permissionDenied
-          : _isTransientFunctionsFailure(error.code)
+          : _isTransientFunctionsFailure(error.status.toLowerCase())
               ? SenderProfileDiagnosticCode.startupRace
               : SenderProfileDiagnosticCode.repositoryFailure;
       logSenderProfileDiagnostic(
