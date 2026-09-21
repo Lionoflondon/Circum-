@@ -22,10 +22,11 @@ fs.writeFileSync(credentialsPath, JSON.stringify({
 }));
 process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
 
-const admin = require("firebase-admin");
+const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const functions = require("./index");
-const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const db = getFirestore();
+const bucket = getStorage().bucket();
 
 function file(side, content) {
   return {

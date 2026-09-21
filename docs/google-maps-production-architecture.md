@@ -1,6 +1,6 @@
 # Google Maps Production Architecture
 
-Status: repository prepared, console verification pending.
+Status: public website Places traffic migrated to the server proxy; credential rollout verification pending.
 
 ## Current Repository Flow
 
@@ -9,7 +9,8 @@ Status: repository prepared, console verification pending.
 | Sender Web tracking | Google Maps JavaScript SDK through `google_maps_flutter_web` | `CIRCUM_WEB_GOOGLE_MAPS_API_KEY` injected by `scripts/build_sender_app_web.sh` | Maps JavaScript API | Tracking falls back to the existing animated background when no map snapshot exists. |
 | Sender Android | `google_maps_flutter` native Android SDK | `GOOGLE_MAPS_API_KEY` manifest placeholder from `SENDER_ANDROID_GOOGLE_MAPS_API_KEY` in CI | Maps SDK for Android | Native map widget can fail independently of booking state; deployment build now fails on missing key. |
 | Sender iOS | `google_maps_flutter` native iOS SDK | `$(GOOGLE_MAPS_API_KEY)` read from `Info.plist` by `AppDelegate`; future CI secret name `SENDER_IOS_GOOGLE_MAPS_API_KEY` | Maps SDK for iOS | `GMSServices` is called only when the build setting is present. |
-| Public Website addresses | Direct HTTPS from Flutter web | `GOOGLE_PLACES_API_KEY` | Places Autocomplete, Place Details, Find Place, Geocoding, Static Maps | Code falls back to seeded/manual address paths on request failure. |
+| Public Website addresses | Firebase callable Functions | `BACKEND_GOOGLE_PLACES_API_KEY` mapped to the Functions `GOOGLE_PLACES_API_KEY` runtime variable | Places Autocomplete and Place Details | Code falls back to seeded/manual address paths on request failure. |
+| Public Website static maps | Direct image URL from Flutter web | `PUBLIC_WEB_STATIC_MAPS_API_KEY` mapped to `GOOGLE_STATIC_MAPS_API_KEY` | Maps Static API only | The map image is omitted when the key is unavailable. |
 | Sender mobile route preview | Direct HTTPS through Flutter polyline package | `GOOGLE_MAPS_DIRECTIONS_API_KEY` | Directions API | Route preview is skipped with a user-safe error when key is absent. |
 
 ## Direct REST API Audit
@@ -17,11 +18,10 @@ Status: repository prepared, console verification pending.
 | File | Function/area | API | Purpose | Authentication | Should remain client-side? |
 | --- | --- | --- | --- | --- | --- |
 | `lib/app/send_package/bloc/send_package_bloc.dart` | destination route preview after pickup/drop-off selection | Directions API | Polyline and route distance preview | `GOOGLE_MAPS_DIRECTIONS_API_KEY` | Short term yes; long term move behind Firebase Functions for stronger key restriction and canonical distance. |
-| `lib/website/shared/circum_website_app.dart` | `_googlePlacesAutocomplete` | Places Autocomplete API | Address suggestions | `GOOGLE_PLACES_API_KEY` | Move behind Firebase Functions. |
-| `lib/website/shared/circum_website_app.dart` | `_googlePlaceDetails` | Place Details API | Coordinates and formatted address | `GOOGLE_PLACES_API_KEY` | Move behind Firebase Functions. |
-| `lib/website/shared/circum_website_app.dart` | `_googleFindPlaceFromText` | Find Place API | Manual/typed address verification | `GOOGLE_PLACES_API_KEY` | Move behind Firebase Functions. |
-| `lib/website/shared/circum_website_app.dart` | geocode request block | Geocoding API | Convert typed address to coordinates | `GOOGLE_PLACES_API_KEY` | Move behind Firebase Functions. |
-| `lib/website/shared/circum_website_app.dart` | static map URL builder | Maps Static API | Receipt/summary-style map image URL | `GOOGLE_PLACES_API_KEY` | Move behind Firebase Functions or signed static map generation. |
+| `lib/website/shared/circum_website_app.dart` | `_googlePlacesAutocomplete` | `searchFreeUkAddresses` callable | Address suggestions | Server credential | Yes; the browser does not receive the Places key. |
+| `lib/website/shared/circum_website_app.dart` | `_googlePlaceDetails` | `resolveUkAddressPlace` callable | Coordinates and formatted address | Server credential | Yes; the browser does not receive the Places key. |
+| `lib/website/shared/circum_website_app.dart` | `_googleFindPlaceFromText` | Existing autocomplete/details callables | Manual/typed address verification | Server credential | Yes; the browser does not receive the Places key. |
+| `lib/website/shared/circum_website_app.dart` | static map URL builder | Maps Static API | Receipt/summary-style map image URL | `GOOGLE_STATIC_MAPS_API_KEY` | Yes, with HTTP-referrer and Static Maps-only restrictions. |
 
 Routes API is not used.
 
@@ -35,7 +35,8 @@ Required repository secrets today:
 - `SENDER_ANDROID_GOOGLE_MAPS_API_KEY`: Sender Android native map SDK, Android package/SHA restricted, Maps SDK for Android only.
 - `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`: Rider Android native map SDK, Android package/SHA restricted, Maps SDK for Android only.
 - `GOOGLE_MAPS_DIRECTIONS_API_KEY`: temporary shared client-side Sender/Rider route preview key, API restricted to Directions API.
-- `GOOGLE_PLACES_API_KEY`: temporary public website REST key, API restricted to Places, Geocoding, and Static Maps.
+- `PUBLIC_WEB_STATIC_MAPS_API_KEY`: public website image key, HTTP-referrer restricted and limited to Maps Static API.
+- `BACKEND_GOOGLE_PLACES_API_KEY`: server-only Places key used by the two address Functions and mapped to their `GOOGLE_PLACES_API_KEY` runtime variable.
 
 Reserved future iOS CI secrets:
 
@@ -50,23 +51,22 @@ GOOGLE_MAPS_API_KEY="$SENDER_IOS_GOOGLE_MAPS_API_KEY" flutter build ipa --releas
 
 ## Recommended Firebase Function Proxy
 
-Long-term target:
+Remaining long-term target:
 
-1. Create backend functions for address autocomplete, place details, geocoding, static map URL generation, and route preview.
-2. Store Google REST keys only in Cloud Functions secrets.
+1. Keep website address autocomplete and details behind the existing backend Functions.
+2. Move remaining mobile Directions traffic and optional signed static-map generation behind backend services.
 3. Apply App Check, auth, rate limits, and per-user quota.
 4. Cache Places/Geocoding responses by normalized query and session token where licensing allows.
 5. Cache route previews by rounded origin/destination and mode for short TTLs.
 6. Return canonical distance/route metadata to clients.
-7. Remove client-side `GOOGLE_PLACES_API_KEY` and `GOOGLE_MAPS_DIRECTIONS_API_KEY` after parity tests pass.
+7. Remove client-side `GOOGLE_MAPS_DIRECTIONS_API_KEY` after parity tests pass.
 
 Migration order:
 
-1. Public Website Places Autocomplete and Details.
-2. Public Website Geocoding.
-3. Sender mobile Directions route preview.
-4. Static Maps generation.
-5. Delete client-side REST key build requirements.
+1. Public Website Places Autocomplete and Details. Completed in source.
+2. Sender mobile Directions route preview.
+3. Optional signed Static Maps generation.
+4. Delete remaining client-side REST key build requirements.
 
 ## Manual Console Actions
 
@@ -116,7 +116,7 @@ These cannot be completed from the repository.
 
 7. GitHub -> repository Settings -> Secrets and variables -> Actions.
    Button: New repository secret.
-   Values: `CIRCUM_WEB_GOOGLE_MAPS_API_KEY`, `SENDER_ANDROID_GOOGLE_MAPS_API_KEY`, `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_MAPS_DIRECTIONS_API_KEY`.
+   Values: `CIRCUM_WEB_GOOGLE_MAPS_API_KEY`, `SENDER_ANDROID_GOOGLE_MAPS_API_KEY`, `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`, `PUBLIC_WEB_STATIC_MAPS_API_KEY`, `BACKEND_GOOGLE_PLACES_API_KEY`, `GOOGLE_MAPS_DIRECTIONS_API_KEY`.
    Why: CI build scripts now fail if these required keys are absent.
    Blocking: yes.
    Estimate: 5 minutes.
