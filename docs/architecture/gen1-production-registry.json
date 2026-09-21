@@ -4182,6 +4182,7 @@
       "productionPurpose": "accountBootstrapGen2.ensureSenderAccount",
       "callers": [
         "lib/app/sender_mobile/sender_profile_authority.dart",
+        "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/account-bootstrap-gen2.test.js",
         "server/functions/cloud-run-account-bootstrap.js",
@@ -4190,6 +4191,7 @@
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
+        "test/website_account_bootstrap_api_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],
       "criticality": "P0/P1-review-required",
@@ -9941,6 +9943,7 @@
       "generation": "Gen 2",
       "productionPurpose": "accountBootstrapGen2.updateRiderProfile",
       "callers": [
+        "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "scripts/scoped_functions_deploy_list.test.js",
         "server/functions/account-bootstrap-gen2.test.js",
@@ -10280,12 +10283,14 @@
       "generation": "Gen 2",
       "productionPurpose": "accountBootstrapGen2.verifyRiderAccountAccess",
       "callers": [
+        "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/account-bootstrap-gen2.test.js",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/rider-account.js",
         "server/functions/rider-onboarding-flow.emulator.test.js",
+        "test/website_account_bootstrap_api_test.dart",
         "test/website_rider_onboarding_hardening_test.dart"
       ],
       "criticality": "P0/P1-review-required",
