@@ -30,6 +30,10 @@ const productArg = args.find((arg) => arg.startsWith('--product=') || arg.starts
 const baseArg = args.find((arg) => arg.startsWith('--base='));
 const headArg = args.find((arg) => arg.startsWith('--head='));
 const ciMode = args.includes('--ci');
+const generatedArchitectureRegistryFiles = new Set([
+  'docs/architecture/GEN1_PRODUCTION_EXIT.md',
+  'docs/architecture/gen1-production-registry.json',
+]);
 if (productIndex === -1 && !productArg) usage();
 
 const productName = productArg ? productArg.split('=')[1] : args[productIndex + 1];
@@ -70,6 +74,9 @@ function isAllowedDependencyIntersection(file) {
 
 const changed = changedFiles();
 const ownedForCi = changed.filter((file) => {
+  // Product caller cutovers must refresh the generated Gen 1 registry, but
+  // those artifacts do not make the product PR a backend deployment.
+  if (productName === 'backend' && generatedArchitectureRegistryFiles.has(file)) return false;
   if (productName === 'backend' &&
       (file === 'firebase.json' ||
         file === '.github/workflows/rc1_release_build.yml' ||
@@ -96,6 +103,7 @@ if (blocked.length > 0) {
 
 const offenders = changed.filter((file) => {
   if (startsWithAny(file, manifest.ignoredPrefixes || [])) return false;
+  if (productName !== 'backend' && generatedArchitectureRegistryFiles.has(file)) return false;
   // firebase.json contains all Hosting targets; public-site redirect changes
   // are validated by the website deployment workflow and remain website-only.
   if (productName === 'website' && file === 'firebase.json') return false;
