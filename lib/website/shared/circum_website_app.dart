@@ -26,6 +26,7 @@ import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -23541,14 +23542,10 @@ class _AddressFieldState extends State<_AddressField> {
     String input,
   ) async {
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('searchFreeUkAddresses')
-              .call<Map<String, dynamic>>({
+      final body = await callAddressPlaces('searchFreeUkAddresses', {
         'query': input,
         'sessionToken': _placesSessionToken,
-      }).timeout(const Duration(seconds: 6));
-      final body = Map<String, dynamic>.from(response.data);
+      });
       if ('${body['status']}' != 'OK') return const [];
       final results = body['results'] as List<dynamic>? ?? const [];
       return results
@@ -23582,14 +23579,10 @@ class _AddressFieldState extends State<_AddressField> {
     final placeId = suggestion.placeId;
     if (placeId == null) return suggestion;
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('resolveUkAddressPlace')
-              .call<Map<String, dynamic>>({
+      final result = await callAddressPlaces('resolveUkAddressPlace', {
         'placeId': placeId,
         'sessionToken': _placesSessionToken,
-      }).timeout(const Duration(seconds: 6));
-      final result = Map<String, dynamic>.from(response.data);
+      });
       final lat = (result['lat'] as num?)?.toDouble();
       final lng = (result['lng'] as num?)?.toDouble();
       if (lat == null || lng == null) return null;
