@@ -39,6 +39,8 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
       return creating
           ? 'Account creation is temporarily unavailable. Please try again later.'
           : 'Sign in is temporarily unavailable. Please try again later.';
+    case 'wrong-surface':
+      return 'This account belongs to another Circum app. Sign in with a Sender account.';
     default:
       return creating
           ? 'Account creation could not be completed. Please try again.'
