@@ -59,6 +59,9 @@ assertContains('.github/workflows/rc1_release_build.yml',
 assertContains('.github/workflows/rc1_release_build.yml',
   'name: Build Sender Android AAB',
   'Sender Android release job remains available for Android-only builds');
+assertContains('.github/workflows/rc1_release_build.yml',
+  'sender-android-runtime:\n    if: ${{ !inputs.android_only }}',
+  'Sender Android-only release build skips old-source runtime APKs');
 assertContains('lib/app/send_package/bloc/send_package_bloc.dart', 'getSenderRoutePreview',
   'Sender backend route preview contract');
 assertContains('.github/workflows/rc1_release_build.yml', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
