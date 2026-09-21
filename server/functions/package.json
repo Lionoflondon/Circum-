@@ -12,6 +12,8 @@
     "test:adjustments": "node --test delivery-adjustment-core.test.js",
     "check:functions-inventory": "node check-functions-inventory.js",
     "test:functions-inventory": "node --test check-functions-inventory.test.js",
+    "generate:gen1-registry": "node gen1-architecture-registry.js",
+    "check:gen1-architecture": "node gen1-architecture-registry.js --check",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",

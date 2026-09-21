@@ -25,6 +25,7 @@ Future<Map<String, dynamic>> callTokenCallable(
   http.Client? client,
 }) async {
   if (!const {
+    'ensureSenderAccount',
     'updateSenderPushToken',
     'updateRiderPushToken',
     'sendRiderUpdate',

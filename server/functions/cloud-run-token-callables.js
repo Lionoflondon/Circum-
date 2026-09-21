@@ -7,9 +7,10 @@ const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const deviceTokenAuthority = require("./device-token-authority");
+const rothLedger = require("./roth-ledger");
 
 const MAX_BODY_BYTES = 32 * 1024;
-const ROUTES = new Set(["updateSenderPushToken", "updateRiderPushToken", "sendRiderUpdate"]);
+const ROUTES = new Set(["ensureSenderAccount", "updateSenderPushToken", "updateRiderPushToken", "sendRiderUpdate"]);
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -30,7 +31,95 @@ function createHandlers(options = {}) {
   const db = options.db || getFirestore();
   const registerProfileToken = options.registerProfileToken || deviceTokenAuthority.registerProfileToken;
   const serverTimestamp = options.serverTimestamp || (() => FieldValue.serverTimestamp());
+  const grantSenderWelcomeRoth = options.grantSenderWelcomeRoth || rothLedger.grantSenderWelcomeRoth;
   return {
+    async ensureSenderAccount(_data, context) {
+      const uid = context.auth.uid;
+      const userRef = db.collection("users").doc(uid);
+      const riderRef = db.collection("riderProfiles").doc(uid);
+      const adminRef = db.collection("adminUsers").doc(uid);
+      const now = serverTimestamp();
+      const result = await db.runTransaction(async (transaction) => {
+        const [userSnap, riderSnap, adminSnap] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(riderRef),
+          transaction.get(adminRef),
+        ]);
+        const existing = userSnap.exists ? userSnap.data() || {} : {};
+        const roles = new Set([
+          ...(Array.isArray(existing.roles) ? existing.roles : []),
+          existing.role,
+          existing.userType,
+          existing.accountType,
+        ].map((entry) => clean(entry, 80).toLowerCase()).filter(Boolean));
+        if (roles.has("admin") || roles.has("rider") || riderSnap.exists || adminSnap.exists) {
+          if (roles.has("sender") || roles.has("user") || roles.has("customer")) {
+            return {
+              allowed: true,
+              roles: Array.from(roles),
+              action: "existing_sender_role_allowed",
+              starterRothEligible: clean(existing.starterRothGrantStatus, 80).toLowerCase() === "pending",
+              profile: {
+                phone: clean(existing.phone || existing.phoneNumber, 80),
+                displayName: clean(existing.displayName || existing.name, 180),
+              },
+            };
+          }
+          return {allowed: false, roles: Array.from(roles), action: "blocked_conflicting_role"};
+        }
+        const starterRothEligible = !userSnap.exists || clean(existing.starterRothGrantStatus, 80).toLowerCase() === "pending";
+        transaction.set(userRef, {
+          uid,
+          email: clean(context.auth.token.email, 180),
+          role: "user",
+          roles: FieldValue.arrayUnion("sender"),
+          userType: "sender",
+          accountType: "sender",
+          status: "active",
+          createdAt: userSnap.exists ? existing.createdAt || now : now,
+          ...(starterRothEligible ? {
+            starterRothGrantStatus: "pending",
+            starterRothAmount: rothLedger.SENDER_WELCOME_ROTH_AMOUNT,
+          } : {}),
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(db.collection("senderProfileEvents").doc(), {
+          uid,
+          action: "sender_account_ensured",
+          source: "ensureSenderAccount",
+          createdAt: now,
+        });
+        return {
+          allowed: true,
+          roles: ["sender"],
+          action: userSnap.exists ? "merged_sender_role" : "created_sender_profile",
+          starterRothEligible,
+          profile: {
+            phone: clean(existing.phone || existing.phoneNumber, 80),
+            displayName: clean(existing.displayName || existing.name, 180),
+          },
+        };
+      });
+      if (result.allowed && result.starterRothEligible) {
+        const grant = await grantSenderWelcomeRoth({
+          uid,
+          email: context.auth.token.email,
+          source: "ensureSenderAccount",
+        });
+        await userRef.set({
+          starterRothGrantStatus: "granted",
+          starterRothGrantedAt: serverTimestamp(),
+          starterRothAmount: rothLedger.SENDER_WELCOME_ROTH_AMOUNT,
+          starterRothTransactionId: grant.transactionId,
+          updatedAt: serverTimestamp(),
+        }, {merge: true});
+        result.starterRothGranted = true;
+        result.starterRothAmount = grant.amount;
+        result.starterRothTransactionId = grant.transactionId;
+      }
+      delete result.starterRothEligible;
+      return {ok: true, ...result};
+    },
     async updateSenderPushToken(data, context) {
       const token = clean(data && data.fcmToken);
       if (!token) throw callableError("invalid-argument", "Push token is required.");
@@ -94,7 +183,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(updateSenderPushToken|updateRiderPushToken|sendRiderUpdate)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderPushToken|updateRiderPushToken|sendRiderUpdate)$/.exec(pathname);
   return match && ROUTES.has(match[1]) ? match[1] : null;
 }
 
