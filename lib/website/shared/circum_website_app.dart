@@ -27,6 +27,7 @@ import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
+import 'package:circum/website/shared/account_bootstrap_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -3894,12 +3895,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (RoleAccessPolicy.rolesCanAccessRider(roles)) return true;
     if (roles.length == 1 && roles.contains(CircumRole.unknown)) {
       // Recover an Auth account whose initial Rider profile save was interrupted.
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('verifyRiderAccountAccess')
-          .call({}).timeout(const Duration(seconds: 20));
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateRiderProfile')
-          .call({}).timeout(const Duration(seconds: 20));
+      await callAccountBootstrap('verifyRiderAccountAccess', const {})
+          .timeout(const Duration(seconds: 20));
+      await callAccountBootstrap('updateRiderProfile', const {})
+          .timeout(const Duration(seconds: 20));
       if (mounted) setState(() => _availableRoles = {CircumRole.rider});
       return true;
     }
@@ -10277,12 +10276,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final allowed = await ensureWebSenderBootstrap(
       roles: roles,
       ensureAccount: () async {
-        final result =
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('ensureSenderAccount')
-                .call<Map<String, dynamic>>()
-                .timeout(_senderAuthOperationTimeout);
-        return result.data;
+        return callAccountBootstrap('ensureSenderAccount', const {})
+            .timeout(_senderAuthOperationTimeout);
       },
     );
     if (!mounted || !allowed) return false;

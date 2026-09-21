@@ -57,8 +57,9 @@ void main() {
     final access = source.substring(
         source.indexOf('  Future<bool> _allowRiderUser('),
         source.indexOf('  Future<Set<CircumRole>> _rolesForUser('));
-    expect(access, contains("httpsCallable('verifyRiderAccountAccess')"));
-    expect(access, contains("httpsCallable('updateRiderProfile')"));
+    expect(access,
+        contains("callAccountBootstrap('verifyRiderAccountAccess'"));
+    expect(access, contains("callAccountBootstrap('updateRiderProfile'"));
     expect(access, contains('CircumRole.unknown'));
   });
 }

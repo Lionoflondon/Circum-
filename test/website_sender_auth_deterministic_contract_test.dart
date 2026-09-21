@@ -215,7 +215,7 @@ void main() {
         website.indexOf('Future<bool> _allowSenderUser('),
         website.indexOf('Future<Set<CircumRole>> _rolesForSenderUser('));
     expect(access, contains('ensureWebSenderBootstrap'));
-    expect(access, contains("httpsCallable('ensureSenderAccount')"));
+    expect(access, contains("callAccountBootstrap('ensureSenderAccount'"));
     final balance = website.substring(
         website.indexOf('Future<void> _loadSenderRothBalance()'),
         website.indexOf('Future<void> _showLegendCelebration('));
