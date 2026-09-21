@@ -191,8 +191,13 @@ void main() {
       websiteSource,
       contains("String.fromEnvironment(\n  'GOOGLE_STATIC_MAPS_API_KEY',"),
     );
-    expect(websiteSource, contains("httpsCallable('searchFreeUkAddresses')"));
-    expect(websiteSource, contains("httpsCallable('resolveUkAddressPlace')"));
+    expect(websiteSource, contains("callAddressPlaces('searchFreeUkAddresses'"));
+    expect(websiteSource, contains("callAddressPlaces('resolveUkAddressPlace'"));
+    final addressTransport =
+        File('lib/shared/address_places_api.dart').readAsStringSync();
+    expect(addressTransport, contains('x-firebase-appcheck'));
+    expect(addressTransport, contains('authorization'));
+    expect(addressTransport, isNot(matches(hardcodedMapsKey)));
     expect(
       websiteSource,
       isNot(contains("String.fromEnvironment('GOOGLE_PLACES_API_KEY')")),

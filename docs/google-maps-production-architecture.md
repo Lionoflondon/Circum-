@@ -9,7 +9,7 @@ Status: public website Places traffic migrated to the server proxy; credential r
 | Sender Web tracking | Google Maps JavaScript SDK through `google_maps_flutter_web` | `CIRCUM_WEB_GOOGLE_MAPS_API_KEY` injected by `scripts/build_sender_app_web.sh` | Maps JavaScript API | Tracking falls back to the existing animated background when no map snapshot exists. |
 | Sender Android | `google_maps_flutter` native Android SDK | `GOOGLE_MAPS_API_KEY` manifest placeholder from `SENDER_ANDROID_GOOGLE_MAPS_API_KEY` in CI | Maps SDK for Android | Native map widget can fail independently of booking state; deployment build now fails on missing key. |
 | Sender iOS | `google_maps_flutter` native iOS SDK | `$(GOOGLE_MAPS_API_KEY)` read from `Info.plist` by `AppDelegate`; future CI secret name `SENDER_IOS_GOOGLE_MAPS_API_KEY` | Maps SDK for iOS | `GMSServices` is called only when the build setting is present. |
-| Public Website addresses | Firebase callable Functions | `BACKEND_GOOGLE_PLACES_API_KEY` mapped to the Functions `GOOGLE_PLACES_API_KEY` runtime variable | Places Autocomplete and Place Details | Code falls back to seeded/manual address paths on request failure. |
+| Public Website and Sender addresses | `circum-address-places` Cloud Run callable-compatible service | `BACKEND_GOOGLE_PLACES_API_KEY` from Google Secret Manager | Places Autocomplete and Place Details | Requires Firebase Auth and App Check; code falls back to manual address entry on request failure. |
 | Public Website static maps | Direct image URL from Flutter web | `PUBLIC_WEB_STATIC_MAPS_API_KEY` mapped to `GOOGLE_STATIC_MAPS_API_KEY` | Maps Static API only | The map image is omitted when the key is unavailable. |
 | Sender mobile route preview | Direct HTTPS through Flutter polyline package | `GOOGLE_MAPS_DIRECTIONS_API_KEY` | Directions API | Route preview is skipped with a user-safe error when key is absent. |
 
@@ -18,8 +18,8 @@ Status: public website Places traffic migrated to the server proxy; credential r
 | File | Function/area | API | Purpose | Authentication | Should remain client-side? |
 | --- | --- | --- | --- | --- | --- |
 | `lib/app/send_package/bloc/send_package_bloc.dart` | destination route preview after pickup/drop-off selection | Directions API | Polyline and route distance preview | `GOOGLE_MAPS_DIRECTIONS_API_KEY` | Short term yes; long term move behind Firebase Functions for stronger key restriction and canonical distance. |
-| `lib/website/shared/circum_website_app.dart` | `_googlePlacesAutocomplete` | `searchFreeUkAddresses` callable | Address suggestions | Server credential | Yes; the browser does not receive the Places key. |
-| `lib/website/shared/circum_website_app.dart` | `_googlePlaceDetails` | `resolveUkAddressPlace` callable | Coordinates and formatted address | Server credential | Yes; the browser does not receive the Places key. |
+| `lib/website/shared/circum_website_app.dart` | `_googlePlacesAutocomplete` | `circum-address-places/searchFreeUkAddresses` | Address suggestions | Server credential | Yes; the browser does not receive the Places key. |
+| `lib/website/shared/circum_website_app.dart` | `_googlePlaceDetails` | `circum-address-places/resolveUkAddressPlace` | Coordinates and formatted address | Server credential | Yes; the browser does not receive the Places key. |
 | `lib/website/shared/circum_website_app.dart` | `_googleFindPlaceFromText` | Existing autocomplete/details callables | Manual/typed address verification | Server credential | Yes; the browser does not receive the Places key. |
 | `lib/website/shared/circum_website_app.dart` | static map URL builder | Maps Static API | Receipt/summary-style map image URL | `GOOGLE_STATIC_MAPS_API_KEY` | Yes, with HTTP-referrer and Static Maps-only restrictions. |
 
@@ -36,7 +36,7 @@ Required repository secrets today:
 - `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`: Rider Android native map SDK, Android package/SHA restricted, Maps SDK for Android only.
 - `GOOGLE_MAPS_DIRECTIONS_API_KEY`: temporary shared client-side Sender/Rider route preview key, API restricted to Directions API.
 - `PUBLIC_WEB_STATIC_MAPS_API_KEY`: public website image key, HTTP-referrer restricted and limited to Maps Static API.
-- `BACKEND_GOOGLE_PLACES_API_KEY`: server-only Places key used by the two address Functions and mapped to their `GOOGLE_PLACES_API_KEY` runtime variable.
+- `BACKEND_GOOGLE_PLACES_API_KEY`: server-only Places key mounted into `circum-address-places` from Google Secret Manager. It must never be supplied to a Flutter build.
 
 Reserved future iOS CI secrets:
 

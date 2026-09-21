@@ -26,6 +26,7 @@ import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/shared/address_places_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -117,7 +118,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     if (kIsWeb) {
       _optionalAnalyticsConsent =
           web.window.localStorage.getItem(_analyticsConsentStorageKey) ==
-              'accepted';
+          'accepted';
       if (_optionalAnalyticsConsent == true) _logWebsiteVisit();
     }
   }
@@ -174,11 +175,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     final path = switch (mode) {
       _WebAppMode.landing => '/',
       _WebAppMode.sender => switch (senderStep) {
-          _SenderStep.healthPlus => '/send/health',
-          _SenderStep.business => '/send/business',
-          _SenderStep.profile => '/send/profile',
-          _ => '/send',
-        },
+        _SenderStep.healthPlus => '/send/health',
+        _SenderStep.business => '/send/business',
+        _SenderStep.profile => '/send/profile',
+        _ => '/send',
+      },
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
@@ -258,86 +259,86 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   Widget _surfaceStage(_CircumColors colors) {
     return switch (_mode) {
       _WebAppMode.sender => _PhoneStage(
-          key: const ValueKey(circumSenderWebIdentity),
-          colors: colors,
-          child: _CustomerPortal(
-            darkMode: _darkMode,
-            colors: colors,
-            initialStep: _senderInitialStep,
-            referralCode: _initialRoute.referralCode,
-            onBack: () => _openSurface(_WebAppMode.landing),
-            onRoleSelected: _openRole,
-            onGifts: () => _openSurface(_WebAppMode.gifts),
-            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-          ),
-        ),
-      _WebAppMode.rider => _PhoneStage(
-          key: const ValueKey(circumRiderWebIdentity),
-          colors: colors,
-          child: _RiderEnrollmentPortal(
-            darkMode: _darkMode,
-            colors: colors,
-            onBack: () => _openSurface(_WebAppMode.landing),
-            onRoleSelected: _openRole,
-            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-          ),
-        ),
-      _WebAppMode.gifts => _GiftsRequestPage(
-          key: const ValueKey('gifts-request'),
-          colors: colors,
-          onBack: () => _openSurface(_WebAppMode.landing),
-        ),
-      _WebAppMode.vanguard => _VanguardLandingPage(
-          key: const ValueKey('vanguard-page'),
-          colors: colors,
-          onBack: () => _openSurface(_WebAppMode.landing),
-        ),
-      _WebAppMode.support => _SupportPage(
-          key: const ValueKey('support-page'),
-          colors: colors,
-        ),
-      _WebAppMode.deleteAccount => _AccountDeletionPage(
-          key: const ValueKey('account-deletion'),
-          colors: colors,
-        ),
-      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(
-          key: const ValueKey('privacy_policy'),
-          colors: colors,
-        ),
-      _WebAppMode.terms => _TermsPage(
-          key: const ValueKey('terms'),
-          colors: colors,
-        ),
-      _WebAppMode.cookiePolicy => _CookiePolicyPage(
-          key: const ValueKey('cookie_policy'),
-          colors: colors,
-          onManageConsent: _showConsentPreferences,
-        ),
-      _WebAppMode.newsletterPreferences => NewsletterPreferencesPage(
-          key: const ValueKey('newsletter_preferences'),
-          background: colors.background,
-          text: colors.text,
-          mutedText: colors.mutedText,
-        ),
-      _WebAppMode.landing => _LandingPage(
-          key: const ValueKey(circumPublicWebIdentity),
-          colors: colors,
+        key: const ValueKey(circumSenderWebIdentity),
+        colors: colors,
+        child: _CustomerPortal(
           darkMode: _darkMode,
-          onStart: () => _openSurface(_WebAppMode.sender),
-          onRider: () => _openSurface(_WebAppMode.rider),
-          onHealthPlus: () => _openSurface(
-            _WebAppMode.sender,
-            senderStep: _SenderStep.healthPlus,
-          ),
-          onBusiness: () => _openSurface(_WebAppMode.sender,
-              senderStep: _SenderStep.business),
-          onVanguard: () => _openSurface(_WebAppMode.vanguard),
+          colors: colors,
+          initialStep: _senderInitialStep,
+          referralCode: _initialRoute.referralCode,
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onRoleSelected: _openRole,
           onGifts: () => _openSurface(_WebAppMode.gifts),
-          newsletterKey: _newsletterKey,
-          newsletterSource: _newsletterSource,
-          onNewsletter: _scrollToNewsletter,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
+      ),
+      _WebAppMode.rider => _PhoneStage(
+        key: const ValueKey(circumRiderWebIdentity),
+        colors: colors,
+        child: _RiderEnrollmentPortal(
+          darkMode: _darkMode,
+          colors: colors,
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onRoleSelected: _openRole,
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+      ),
+      _WebAppMode.gifts => _GiftsRequestPage(
+        key: const ValueKey('gifts-request'),
+        colors: colors,
+        onBack: () => _openSurface(_WebAppMode.landing),
+      ),
+      _WebAppMode.vanguard => _VanguardLandingPage(
+        key: const ValueKey('vanguard-page'),
+        colors: colors,
+        onBack: () => _openSurface(_WebAppMode.landing),
+      ),
+      _WebAppMode.support => _SupportPage(
+        key: const ValueKey('support-page'),
+        colors: colors,
+      ),
+      _WebAppMode.deleteAccount => _AccountDeletionPage(
+        key: const ValueKey('account-deletion'),
+        colors: colors,
+      ),
+      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(
+        key: const ValueKey('privacy_policy'),
+        colors: colors,
+      ),
+      _WebAppMode.terms => _TermsPage(
+        key: const ValueKey('terms'),
+        colors: colors,
+      ),
+      _WebAppMode.cookiePolicy => _CookiePolicyPage(
+        key: const ValueKey('cookie_policy'),
+        colors: colors,
+        onManageConsent: _showConsentPreferences,
+      ),
+      _WebAppMode.newsletterPreferences => NewsletterPreferencesPage(
+        key: const ValueKey('newsletter_preferences'),
+        background: colors.background,
+        text: colors.text,
+        mutedText: colors.mutedText,
+      ),
+      _WebAppMode.landing => _LandingPage(
+        key: const ValueKey(circumPublicWebIdentity),
+        colors: colors,
+        darkMode: _darkMode,
+        onStart: () => _openSurface(_WebAppMode.sender),
+        onRider: () => _openSurface(_WebAppMode.rider),
+        onHealthPlus: () => _openSurface(
+          _WebAppMode.sender,
+          senderStep: _SenderStep.healthPlus,
+        ),
+        onBusiness: () =>
+            _openSurface(_WebAppMode.sender, senderStep: _SenderStep.business),
+        onVanguard: () => _openSurface(_WebAppMode.vanguard),
+        onGifts: () => _openSurface(_WebAppMode.gifts),
+        newsletterKey: _newsletterKey,
+        newsletterSource: _newsletterSource,
+        onNewsletter: _scrollToNewsletter,
+        onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+      ),
     };
   }
 
@@ -453,8 +454,9 @@ class _PlatformNotificationCenterState
       if (mounted) setState(() => _items = const []);
       return;
     }
-    Query<Map<String, dynamic>> query =
-        FirebaseFirestore.instance.collection('notifications').limit(80);
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('notifications')
+        .limit(80);
     query = query.where('recipientId', isEqualTo: user.uid);
     _subscription = query.snapshots().listen((snapshot) {
       final docs = snapshot.docs.toList(growable: false)
@@ -462,8 +464,9 @@ class _PlatformNotificationCenterState
           final left = a.data()['createdAt'];
           final right = b.data()['createdAt'];
           final leftDate = left is Timestamp ? left.toDate() : DateTime(1970);
-          final rightDate =
-              right is Timestamp ? right.toDate() : DateTime(1970);
+          final rightDate = right is Timestamp
+              ? right.toDate()
+              : DateTime(1970);
           return rightDate.compareTo(leftDate);
         });
       if (mounted) setState(() => _items = docs);
@@ -492,10 +495,10 @@ class _PlatformNotificationCenterState
     if (item.data()['read'] == true) return;
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable(
-      widget.mode == _WebAppMode.rider
-          ? 'updateRiderNotificationState'
-          : 'updateSenderNotificationState',
-    )
+          widget.mode == _WebAppMode.rider
+              ? 'updateRiderNotificationState'
+              : 'updateSenderNotificationState',
+        )
         .call({'notificationId': item.id, 'action': 'mark_read'});
   }
 
@@ -504,14 +507,14 @@ class _PlatformNotificationCenterState
     if (unread.isEmpty) return;
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable(
-      widget.mode == _WebAppMode.rider
-          ? 'updateRiderNotificationState'
-          : 'updateSenderNotificationState',
-    )
+          widget.mode == _WebAppMode.rider
+              ? 'updateRiderNotificationState'
+              : 'updateSenderNotificationState',
+        )
         .call({
-      'notificationIds': unread.map((item) => item.id).toList(),
-      'action': 'mark_read',
-    });
+          'notificationIds': unread.map((item) => item.id).toList(),
+          'action': 'mark_read',
+        });
   }
 
   @override
@@ -630,7 +633,7 @@ class _PlatformNotificationCenterState
                                     border: Border.all(
                                       color: isUnread
                                           ? widget.colors.adminAccent
-                                              .withValues(alpha: 0.45)
+                                                .withValues(alpha: 0.45)
                                           : widget.colors.border,
                                     ),
                                   ),
@@ -815,8 +818,9 @@ class _LandingPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.mutedText,
-                      fontSize:
-                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
+                      fontSize: MediaQuery.sizeOf(context).width < 680
+                          ? 18
+                          : 22,
                       height: 1.45,
                       fontWeight: FontWeight.w600,
                     ),
@@ -941,8 +945,8 @@ String _jobReceivedTextFromDate(DateTime? date) {
   final monthIndex = local.month < 1
       ? 0
       : local.month > 12
-          ? 11
-          : local.month - 1;
+      ? 11
+      : local.month - 1;
   final month = _shortMonthNames[monthIndex];
   return 'Received: ${local.day} $month, $hour:$minute';
 }
@@ -2467,16 +2471,18 @@ Uri _circumOrderPdfUri() {
   return _pdfUriFromLines(
     rawLines,
     title: 'THE CIRCUM ORDER',
-    sectionTitles:
-        _circumOrderCharterSections.map((section) => section.title).toSet(),
+    sectionTitles: _circumOrderCharterSections
+        .map((section) => section.title)
+        .toSet(),
   );
 }
 
 Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
   final id = '${invoice['id'] ?? ''}'.trim();
   final invoiceNumber = '${invoice['invoiceNumber'] ?? id}'.trim();
-  final displayNumber =
-      invoiceNumber.isEmpty ? 'Business invoice' : invoiceNumber;
+  final displayNumber = invoiceNumber.isEmpty
+      ? 'Business invoice'
+      : invoiceNumber;
   final status = _displayStatusLabel(
     '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}',
   );
@@ -2484,7 +2490,8 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
   final paid = _pdfMoney(invoice['amountPaid']);
   final balance = _pdfMoney(invoice['balanceDue'] ?? invoice['total']);
   final roth = _pdfMoney(invoice['rothApplied'] ?? invoice['rothAmount']);
-  final deliveryCount = invoice['deliveryCount'] ??
+  final deliveryCount =
+      invoice['deliveryCount'] ??
       (invoice['deliveryIds'] is List
           ? (invoice['deliveryIds'] as List).length
           : null);
@@ -2933,7 +2940,8 @@ class _RiderOrderProfileCard extends StatelessWidget {
         : performance.averageRating.toStringAsFixed(2);
     final verificationStatus =
         '${profile?['verificationStatus'] ?? profile?['approvalStatus'] ?? 'pending'}';
-    final verified = verificationStatus.toLowerCase() == 'approved' ||
+    final verified =
+        verificationStatus.toLowerCase() == 'approved' ||
         verificationStatus.toLowerCase() == 'verified';
     final memberSince = _dateFromAny(
       profile?['memberSince'] ?? profile?['createdAt'],
@@ -3353,12 +3361,12 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                       widget.user == null
                           ? 'Sign in to view your referral code'
                           : !widget.eligible
-                              ? 'Available after Rider approval'
-                              : _loading
-                                  ? 'Loading your referral code…'
-                                  : (_code?.isNotEmpty ?? false)
-                                      ? _code!
-                                      : 'Generate your referral code',
+                          ? 'Available after Rider approval'
+                          : _loading
+                          ? 'Loading your referral code…'
+                          : (_code?.isNotEmpty ?? false)
+                          ? _code!
+                          : 'Generate your referral code',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 18,
@@ -3381,8 +3389,8 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                       onPressed: _loading
                           ? null
                           : (_link?.isNotEmpty ?? false)
-                              ? _copyLink
-                              : _load,
+                          ? _copyLink
+                          : _load,
                       icon: Icon(
                         (_link?.isNotEmpty ?? false)
                             ? Icons.copy_rounded
@@ -3495,9 +3503,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   Map<String, dynamic>? _riderProfile;
   Map<String, dynamic>? _onboardingDocuments;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _onboardingProfileSub;
+  _onboardingProfileSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _onboardingDocumentsSub;
+  _onboardingDocumentsSub;
   Set<CircumRole> _availableRoles = const {};
   bool _superAdminRiderBypass = false;
   late _RiderPortalTab _riderTab = _initialRiderTab();
@@ -3529,10 +3537,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       var cursors = <String, dynamic>{};
       var hasMore = true;
       while (mounted && _riderUser?.uid == riderId && hasMore) {
-        final result = await FirebaseFunctions.instanceFor(
-                region: 'us-central1')
-            .httpsCallable('repairRiderRatingFeedback')
-            .call({'cursors': cursors}).timeout(const Duration(seconds: 20));
+        final result =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('repairRiderRatingFeedback')
+                .call({'cursors': cursors})
+                .timeout(const Duration(seconds: 20));
         final data = Map<String, dynamic>.from(result.data as Map);
         cursors = Map<String, dynamic>.from(data['cursors'] as Map);
         hasMore = data['hasMore'] == true;
@@ -3552,7 +3561,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   _RiderPortalTab _initialRiderTab() {
-    final section = Uri.base.queryParameters['section'] ??
+    final section =
+        Uri.base.queryParameters['section'] ??
         Uri.base.queryParameters['tab'] ??
         Uri.base.queryParameters['app'];
     return switch (section) {
@@ -3675,14 +3685,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final auth = FirebaseAuth.instance;
       final credential = _signupMode
           ? await auth
-              .createUserWithEmailAndPassword(
-                email: email,
-                password: password,
-              )
-              .timeout(const Duration(seconds: 25))
+                .createUserWithEmailAndPassword(
+                  email: email,
+                  password: password,
+                )
+                .timeout(const Duration(seconds: 25))
           : await auth
-              .signInWithEmailAndPassword(email: email, password: password)
-              .timeout(const Duration(seconds: 25));
+                .signInWithEmailAndPassword(email: email, password: password)
+                .timeout(const Duration(seconds: 25));
       final user = credential.user!;
       if (_signupMode) {
         await user
@@ -3895,10 +3905,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       // Recover an Auth account whose initial Rider profile save was interrupted.
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('verifyRiderAccountAccess')
-          .call({}).timeout(const Duration(seconds: 20));
+          .call({})
+          .timeout(const Duration(seconds: 20));
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('updateRiderProfile')
-          .call({}).timeout(const Duration(seconds: 20));
+          .call({})
+          .timeout(const Duration(seconds: 20));
       if (mounted) setState(() => _availableRoles = {CircumRole.rider});
       return true;
     }
@@ -3944,11 +3956,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (value.isNotEmpty) entry.key.text = value;
     }
     final vehicle = '${record['vehicleType'] ?? ''}'.trim().toLowerCase();
-    _vehicle.text = const {
-          'motorbike': 'Motorbike',
-          'car': 'Car',
-          'van': 'Van'
-        }[vehicle] ??
+    _vehicle.text =
+        const {'motorbike': 'Motorbike', 'car': 'Car', 'van': 'Van'}[vehicle] ??
         '';
     return {'id': snapshot.id, ...record};
   }
@@ -3962,20 +3971,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('updateRiderProfile')
         .call({
-      'fullName': _fullName.text.trim().isEmpty
-          ? user.displayName
-          : _fullName.text.trim(),
-      'phoneNumber': _phone.text.trim(),
-      'email': user.email ?? _email.text.trim(),
-      'postcode': _postcode.text.trim(),
-      'homeAddress': _homeAddress.text.trim(),
-      'vehicleType': _vehicle.text.trim().toLowerCase(),
-      'vehicleMakeModel': _vehicleMakeModel.text.trim(),
-      'vehicleColour': _vehicleColour.text.trim(),
-      'plateNumber': _plateNumber.text.trim(),
-      'vehicleRegistration': _plateNumber.text.trim(),
-      'availability': _availability.text.trim(),
-    }).timeout(const Duration(seconds: 25));
+          'fullName': _fullName.text.trim().isEmpty
+              ? user.displayName
+              : _fullName.text.trim(),
+          'phoneNumber': _phone.text.trim(),
+          'email': user.email ?? _email.text.trim(),
+          'postcode': _postcode.text.trim(),
+          'homeAddress': _homeAddress.text.trim(),
+          'vehicleType': _vehicle.text.trim().toLowerCase(),
+          'vehicleMakeModel': _vehicleMakeModel.text.trim(),
+          'vehicleColour': _vehicleColour.text.trim(),
+          'plateNumber': _plateNumber.text.trim(),
+          'vehicleRegistration': _plateNumber.text.trim(),
+          'availability': _availability.text.trim(),
+        })
+        .timeout(const Duration(seconds: 25));
   }
 
   void _listenToRiderOnboarding(String uid) {
@@ -3996,44 +4006,44 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(uid)
         .snapshots()
         .listen((snapshot) {
-      if (mounted) {
-        setState(
-          () => _riderProfile = {
-            ...?snapshot.data(),
-            if (_onboardingDocuments != null)
-              'verificationDocuments': _onboardingDocuments,
-          },
-        );
-      }
-    }, onError: showRefreshError);
+          if (mounted) {
+            setState(
+              () => _riderProfile = {
+                ...?snapshot.data(),
+                if (_onboardingDocuments != null)
+                  'verificationDocuments': _onboardingDocuments,
+              },
+            );
+          }
+        }, onError: showRefreshError);
     _onboardingDocumentsSub = FirebaseFirestore.instance
         .collection('riderDocuments')
         .where('riderId', isEqualTo: uid)
         .snapshots()
         .listen((snapshot) {
-      final records = snapshot.docs.map((doc) => doc.data()).toList()
-        ..sort((a, b) {
-          int millis(Map<String, dynamic> value) =>
-              value['uploadedAt'] is Timestamp
+          final records = snapshot.docs.map((doc) => doc.data()).toList()
+            ..sort((a, b) {
+              int millis(Map<String, dynamic> value) =>
+                  value['uploadedAt'] is Timestamp
                   ? (value['uploadedAt'] as Timestamp).millisecondsSinceEpoch
                   : 0;
-          return millis(a).compareTo(millis(b));
-        });
-      _onboardingDocuments = {
-        for (final record in records)
-          riderDocumentKey(
-            '${record['type'] ?? record['documentType'] ?? ''}',
-          ): record,
-      };
-      if (mounted) {
-        setState(
-          () => _riderProfile = {
-            ...?_riderProfile,
-            'verificationDocuments': _onboardingDocuments,
-          },
-        );
-      }
-    }, onError: showRefreshError);
+              return millis(a).compareTo(millis(b));
+            });
+          _onboardingDocuments = {
+            for (final record in records)
+              riderDocumentKey(
+                '${record['type'] ?? record['documentType'] ?? ''}',
+              ): record,
+          };
+          if (mounted) {
+            setState(
+              () => _riderProfile = {
+                ...?_riderProfile,
+                'verificationDocuments': _onboardingDocuments,
+              },
+            );
+          }
+        }, onError: showRefreshError);
   }
 
   void _listenToRiderEarnings(String riderId) {
@@ -4045,11 +4055,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
+          });
+        });
   }
 
   void _listenToRiderPerformance(String riderId) {
@@ -4060,14 +4070,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _performance = DriverPerformanceMetric.fromMap(
-          riderId,
-          snapshot.data(),
-        );
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _performance = DriverPerformanceMetric.fromMap(
+              riderId,
+              snapshot.data(),
+            );
+          });
+        });
     unawaited(_repairRiderFeedback(riderId));
     _ratingSub = FirebaseFirestore.instance
         .collection('publishedDriverRatings')
@@ -4075,13 +4085,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(8)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _recentRatings = snapshot.docs
-            .map((doc) => DriverRating.fromMap(doc.data()))
-            .toList();
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _recentRatings = snapshot.docs
+                .map((doc) => DriverRating.fromMap(doc.data()))
+                .toList();
+          });
+        });
   }
 
   Stream<List<Map<String, dynamic>>> _authorizedRiderOffers(
@@ -4092,7 +4102,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         final response =
             await FirebaseFunctions.instanceFor(region: 'us-central1')
                 .httpsCallable('getAvailableRequests')
-                .call(<String, dynamic>{}).timeout(const Duration(seconds: 15));
+                .call(<String, dynamic>{})
+                .timeout(const Duration(seconds: 15));
         final data = Map<String, dynamic>.from(response.data as Map);
         final rows = data['nearestRequests'];
         if (data['riderId'] != riderId ||
@@ -4179,13 +4190,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _completedJobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList(growable: false);
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _completedJobs = snapshot.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList(growable: false);
+          });
+        });
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -4241,8 +4252,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
-    final requestId =
-        '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
+    final requestId = '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'
+        .trim();
     final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
     if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
     _startRiderLiveLocationPublishing(requestId, user.uid, status);
@@ -4345,8 +4356,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .call({'requestId': requestId, 'action': action});
       if (!mounted) return;
       setState(
-        () => _jobMessage =
-            action == 'reject' ? 'Job rejected.' : 'Job hidden for now.',
+        () => _jobMessage = action == 'reject'
+            ? 'Job rejected.'
+            : 'Job hidden for now.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -4398,8 +4410,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       if (!mounted) return;
       setState(
-        () => _jobMessage =
-            status == 'completed' ? 'Delivery completed.' : 'Job updated.',
+        () => _jobMessage = status == 'completed'
+            ? 'Delivery completed.'
+            : 'Job updated.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -4416,9 +4429,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }) async {
     final currentStatus = _canonicalRiderBackendStatus(
       '${job['status'] ?? 'accepted'}'.trim().toLowerCase().replaceAll(
-            RegExp(r'[-\s]+'),
-            '_',
-          ),
+        RegExp(r'[-\s]+'),
+        '_',
+      ),
     );
     final actions = _backendActionsForRiderTarget(currentStatus, targetStatus);
     final callable = FirebaseFunctions.instanceFor(
@@ -4526,11 +4539,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final collectionContact =
-        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
+        const <String, dynamic>{};
+    final collectionContact = (job['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (job['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the collection contact'}'
             .trim();
@@ -4606,8 +4619,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return null;
     }
 
-    final verifiedField =
-        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
+    final verifiedField = stage == 'delivery'
+        ? 'deliveryPinVerified'
+        : 'collectionPinVerified';
     final verifiedAtField = stage == 'delivery'
         ? 'deliveryPinVerifiedAt'
         : 'collectionPinVerifiedAt';
@@ -4631,8 +4645,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   bool _jobVanguardEnabled(Map<String, dynamic> job) {
     if (job['vanguardEnabled'] == true) return true;
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+    final protection = (job['vanguardProtection'] as Map?)
+        ?.cast<String, dynamic>();
     return protection?['enabled'] == true;
   }
 
@@ -4832,7 +4846,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
 
     if (heavier) {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -4868,8 +4882,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
-      'weightDisputeStatus':
-          optionValue == 'accurate' ? 'verified' : 'admin_review',
+      'weightDisputeStatus': optionValue == 'accurate'
+          ? 'verified'
+          : 'admin_review',
       'driverWeightDispute': {
         'reported': optionValue != 'accurate',
         'issueType': optionValue,
@@ -5131,8 +5146,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           ),
           actions: [
             TextButton(
-              onPressed:
-                  uploading ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: uploading
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Back'),
             ),
             FilledButton(
@@ -5228,38 +5244,41 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(80)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _riderChatMessages
-            ..clear()
-            ..addAll(
-              snapshot.docs.map((doc) {
-                final data = doc.data();
-                final role =
-                    '${data['senderRole'] ?? data['senderType'] ?? ''}';
-                return _ChatMessage(
-                  fromMe: data['senderId'] == _riderUser?.uid,
-                  text: '${data['messageText'] ?? data['message'] ?? ''}',
-                  time: _formatMessageTime(
-                    data['createdAt'],
-                    data['timeStamp'],
-                  ),
-                  label: role == 'admin' || role == 'support'
-                      ? 'CIRCUM Support'
-                      : role == 'sender' || role == 'user'
-                          ? 'User'
-                          : 'Rider',
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _riderChatMessages
+                ..clear()
+                ..addAll(
+                  snapshot.docs
+                      .map((doc) {
+                        final data = doc.data();
+                        final role =
+                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                        return _ChatMessage(
+                          fromMe: data['senderId'] == _riderUser?.uid,
+                          text:
+                              '${data['messageText'] ?? data['message'] ?? ''}',
+                          time: _formatMessageTime(
+                            data['createdAt'],
+                            data['timeStamp'],
+                          ),
+                          label: role == 'admin' || role == 'support'
+                              ? 'CIRCUM Support'
+                              : role == 'sender' || role == 'user'
+                              ? 'User'
+                              : 'Rider',
+                        );
+                      })
+                      .where((message) => message.text.trim().isNotEmpty),
                 );
-              }).where((message) => message.text.trim().isNotEmpty),
-            );
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => _jobMessage = 'Could not open this chat.');
-      },
-    );
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _jobMessage = 'Could not open this chat.');
+          },
+        );
     setState(() {
       _activeRiderChatJob = job;
       _riderChatOpen = true;
@@ -5451,8 +5470,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           () => _documentMessage = error is FirebaseFunctionsException
               ? (error.message ?? 'Upload failed. Please retry.')
               : error is StateError
-                  ? error.message
-                  : 'Upload failed or timed out. Please retry.',
+              ? error.message
+              : 'Upload failed or timed out. Please retry.',
         );
       }
     } finally {
@@ -5485,8 +5504,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'That email already has a Circum Rider account.',
       'user-not-found' => 'No Circum Rider account found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'The sign-in details are not right.',
+      'invalid-credential' => 'The sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -5523,19 +5541,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('submitRiderApplication')
           .call<Map<String, dynamic>>({
-        'fullName': _fullName.text.trim(),
-        'phoneNumber': _phone.text.trim(),
-        'email': _email.text.trim(),
-        'postcode': _postcode.text.trim(),
-        'homeAddress': _homeAddress.text.trim(),
-        'vehicleType': _vehicle.text.trim().toLowerCase(),
-        'vehicleRegistration': _plateNumber.text.trim(),
-        'availability': _availability.text.trim(),
-        'notes': _notes.text.trim(),
-        'rightToWorkConfirmed': _rightToWork,
-        'sealedPackageConsent': _sealedPackageConsent,
-        'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
-      }).timeout(const Duration(seconds: 25));
+            'fullName': _fullName.text.trim(),
+            'phoneNumber': _phone.text.trim(),
+            'email': _email.text.trim(),
+            'postcode': _postcode.text.trim(),
+            'homeAddress': _homeAddress.text.trim(),
+            'vehicleType': _vehicle.text.trim().toLowerCase(),
+            'vehicleRegistration': _plateNumber.text.trim(),
+            'availability': _availability.text.trim(),
+            'notes': _notes.text.trim(),
+            'rightToWorkConfirmed': _rightToWork,
+            'sealedPackageConsent': _sealedPackageConsent,
+            'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
+          })
+          .timeout(const Duration(seconds: 25));
       final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
@@ -5784,70 +5803,71 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 Expanded(
                   child: switch (_riderTab) {
                     _RiderPortalTab.order => _CircumOrderContent(
-                        colors: colors,
-                        onBecomeRider: () => setState(
-                            () => _riderTab = _RiderPortalTab.overview),
-                      ),
+                      colors: colors,
+                      onBecomeRider: () =>
+                          setState(() => _riderTab = _RiderPortalTab.overview),
+                    ),
                     _RiderPortalTab.earnings => _RiderEarningsTab(
-                        colors: colors,
-                        earnings: _earnings,
-                      ),
+                      colors: colors,
+                      earnings: _earnings,
+                    ),
                     _RiderPortalTab.referrals => _RiderReferralsTab(
-                        colors: colors,
-                        user: _riderUser,
-                        eligible: _riderApprovalStatus() == 'approved',
-                      ),
-                    _RiderPortalTab.overview => _riderUser == null
-                        ? ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              wide ? 28 : 18,
-                              18,
-                              wide ? 28 : 18,
-                              34,
-                            ),
-                            children: [
-                              _RiderPublicIntro(colors: colors),
-                              const SizedBox(height: 14),
-                              _RiderAccessPanel(
-                                colors: colors,
-                                email: _email,
-                                password: _password,
-                                signupMode: _signupMode,
-                                submitting: _authSubmitting,
-                                user: _riderUser,
-                                message: _authMessage,
-                                onToggleMode: () => setState(
-                                  () => _signupMode = !_signupMode,
-                                ),
-                                onSubmit: _submitAuth,
-                                onForgotPassword: _sendRiderPasswordReset,
-                                onSignOut: _signOutRider,
+                      colors: colors,
+                      user: _riderUser,
+                      eligible: _riderApprovalStatus() == 'approved',
+                    ),
+                    _RiderPortalTab.overview =>
+                      _riderUser == null
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
                               ),
-                            ],
-                          )
-                        : !_roleChoiceConfirmed && _availableRoles.length > 1
-                            ? ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  wide ? 28 : 18,
-                                  18,
-                                  wide ? 28 : 18,
-                                  34,
-                                ),
-                                children: [
-                                  _MultiRoleChoicePanel(
-                                    colors: colors,
-                                    roles: _availableRoles,
-                                    onSender: () => widget
-                                        .onRoleSelected(CircumRole.sender),
-                                    onRider: () => setState(
-                                      () => _roleChoiceConfirmed = true,
-                                    ),
-                                    onAdmin: () =>
-                                        widget.onRoleSelected(CircumRole.admin),
+                              children: [
+                                _RiderPublicIntro(colors: colors),
+                                const SizedBox(height: 14),
+                                _RiderAccessPanel(
+                                  colors: colors,
+                                  email: _email,
+                                  password: _password,
+                                  signupMode: _signupMode,
+                                  submitting: _authSubmitting,
+                                  user: _riderUser,
+                                  message: _authMessage,
+                                  onToggleMode: () => setState(
+                                    () => _signupMode = !_signupMode,
                                   ),
-                                ],
-                              )
-                            : _buildSignedInRiderContent(colors, wide),
+                                  onSubmit: _submitAuth,
+                                  onForgotPassword: _sendRiderPasswordReset,
+                                  onSignOut: _signOutRider,
+                                ),
+                              ],
+                            )
+                          : !_roleChoiceConfirmed && _availableRoles.length > 1
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
+                              ),
+                              children: [
+                                _MultiRoleChoicePanel(
+                                  colors: colors,
+                                  roles: _availableRoles,
+                                  onSender: () =>
+                                      widget.onRoleSelected(CircumRole.sender),
+                                  onRider: () => setState(
+                                    () => _roleChoiceConfirmed = true,
+                                  ),
+                                  onAdmin: () =>
+                                      widget.onRoleSelected(CircumRole.admin),
+                                ),
+                              ],
+                            )
+                          : _buildSignedInRiderContent(colors, wide),
                   },
                 ),
               ],
@@ -6011,8 +6031,8 @@ class _RiderAccessPanel extends StatelessWidget {
                       submitting
                           ? 'Please wait...'
                           : signupMode
-                              ? 'Create account'
-                              : 'Sign in',
+                          ? 'Create account'
+                          : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.text,
@@ -6068,23 +6088,23 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       _ => 'Application pending',
     };
     final body = switch (normalized) {
-      'rejected' ||
-      'needs_information' =>
+      'rejected' || 'needs_information' =>
         'Circum could not approve this rider profile yet. Check the note below and contact support if you need help.',
       'suspended' =>
         'This Circum Rider account cannot accept jobs right now. Contact Circum support for the next step.',
       _ =>
         'Your Circum Rider profile has been created. Circum will review your details and documents before jobs appear here.',
     };
-    final note = [
-      profile['adminMessage'],
-      profile['approvalNote'],
-      profile['rejectionReason'],
-      profile['accountNote'],
-    ]
-        .where((value) => '${value ?? ''}'.trim().isNotEmpty)
-        .map((value) => '$value'.trim())
-        .join('\n');
+    final note =
+        [
+              profile['adminMessage'],
+              profile['approvalNote'],
+              profile['rejectionReason'],
+              profile['accountNote'],
+            ]
+            .where((value) => '${value ?? ''}'.trim().isNotEmpty)
+            .map((value) => '$value'.trim())
+            .join('\n');
 
     return _GlassPanel(
       colors: colors,
@@ -6097,8 +6117,8 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
                 normalized == 'suspended'
                     ? Icons.block
                     : normalized == 'rejected'
-                        ? Icons.report_problem_outlined
-                        : Icons.pending_actions,
+                    ? Icons.report_problem_outlined
+                    : Icons.pending_actions,
                 color: colors.text,
               ),
               const SizedBox(width: 10),
@@ -6427,7 +6447,7 @@ class _RiderWorkspace extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
   final bool nested;
@@ -6762,7 +6782,8 @@ class _RiderWorkspace extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: signedIn &&
+                    onPressed:
+                        signedIn &&
                             !submittingWithdrawal &&
                             _canRequestWithdrawal(
                               amountText: withdrawAmount.text,
@@ -6934,13 +6955,7 @@ class _RiderDocumentStatusList extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Documents submitted: ${documentTypes.where((type) => const {
-                "pending",
-                "under_review",
-                "uploaded",
-                "submitted",
-                "approved"
-              }.contains(_statusFor(type))).length}/${documentTypes.length}',
+          'Documents submitted: ${documentTypes.where((type) => const {"pending", "under_review", "uploaded", "submitted", "approved"}.contains(_statusFor(type))).length}/${documentTypes.length}',
         ),
         ...documentTypes.map((type) {
           final status = _statusFor(type);
@@ -6961,10 +6976,10 @@ class _RiderDocumentStatusList extends StatelessWidget {
                   color: rejected
                       ? const Color(0xfff97316)
                       : status == 'approved'
-                          ? const Color(0xff22c55e)
-                          : status == 'missing'
-                              ? const Color(0xff60a5fa)
-                              : const Color(0xfff59e0b),
+                      ? const Color(0xff22c55e)
+                      : status == 'missing'
+                      ? const Color(0xff60a5fa)
+                      : const Color(0xfff59e0b),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -7024,9 +7039,10 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = riderDocumentKey(type);
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final entry = documents[key] ??
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final entry =
+        documents[key] ??
         documents[type] ??
         documents[type.toLowerCase()] ??
         documents[key.replaceAll('_', '')];
@@ -7044,8 +7060,8 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = riderDocumentKey(type);
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     final entry =
         documents[key] ?? documents[type] ?? documents[type.toLowerCase()];
     if (entry is Map) {
@@ -7250,7 +7266,9 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...jobs.take(8).map(
+            ...jobs
+                .take(8)
+                .map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -7275,7 +7293,7 @@ class _RiderJobListPanel extends StatelessWidget {
   final List<Map<String, dynamic>> jobs;
   final bool completed;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
 
@@ -7302,7 +7320,9 @@ class _RiderJobListPanel extends StatelessWidget {
           if (jobs.isEmpty)
             Text(emptyText, style: TextStyle(color: colors.mutedText))
           else
-            ...jobs.take(8).map(
+            ...jobs
+                .take(8)
+                .map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -7349,10 +7369,10 @@ class _DriverJobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final pricing =
         (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final customerWeight = _num(
       job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg'],
     );
@@ -7399,7 +7419,8 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
-    final vanguardEnabled = job['vanguardEnabled'] == true ||
+    final vanguardEnabled =
+        job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
     final duration = _num(
@@ -7454,7 +7475,8 @@ class _DriverJobCard extends StatelessWidget {
       nestedKey: 'collectionContact',
       nestedName: 'phone',
     );
-    final collectionDifferent = (job['collectionContactDifferent'] == true ||
+    final collectionDifferent =
+        (job['collectionContactDifferent'] == true ||
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
     final jobStatus = '${job['status'] ?? ''}'.toLowerCase();
@@ -7587,8 +7609,9 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.timer,
             label: 'ETA',
-            value:
-                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
+            value: duration > 0
+                ? '${duration.toStringAsFixed(0)} min'
+                : 'Not set',
           ),
           _JobInfoLine(
             colors: colors,
@@ -7940,7 +7963,9 @@ class _DriverPerformancePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...recentRatings.take(3).map(
+          ...recentRatings
+              .take(3)
+              .map(
                 (rating) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _RatingFeedbackRow(colors: colors, rating: rating),
@@ -7980,27 +8005,28 @@ Future<void> _reportWebRatingFeedback(
     context: context,
     builder: (dialogContext) => SimpleDialog(
       title: const Text('Report feedback'),
-      children: [
-        'Abusive or threatening',
-        'Discriminatory',
-        'Private information',
-        'Other policy violation',
-      ]
-          .map(
-            (reason) => SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, reason),
-              child: Text(reason),
-            ),
-          )
-          .toList(),
+      children:
+          [
+                'Abusive or threatening',
+                'Discriminatory',
+                'Private information',
+                'Other policy violation',
+              ]
+              .map(
+                (reason) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(dialogContext, reason),
+                  child: Text(reason),
+                ),
+              )
+              .toList(),
     ),
   );
   if (reason == null || !context.mounted) return;
   try {
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('reportRating')
-        .call({'ratingId': ratingId, 'reason': reason}).timeout(
-            const Duration(seconds: 20));
+        .call({'ratingId': ratingId, 'reason': reason})
+        .timeout(const Duration(seconds: 20));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -8025,11 +8051,11 @@ class _RatingFeedbackRow extends StatelessWidget {
   const _RatingFeedbackRow({required this.colors, required this.rating});
   @override
   Widget build(BuildContext context) => RiderWebRatingFeedback(
-        background: colors.field,
-        mutedText: colors.mutedText,
-        rating: rating,
-        onReport: () => _reportWebRatingFeedback(context, rating.ratingId),
-      );
+    background: colors.field,
+    mutedText: colors.mutedText,
+    rating: rating,
+    onReport: () => _reportWebRatingFeedback(context, rating.ratingId),
+  );
 }
 
 class _RiderEarningsSnapshot {
@@ -8052,33 +8078,36 @@ class _RiderEarningsSnapshot {
   });
 
   factory _RiderEarningsSnapshot.empty() => const _RiderEarningsSnapshot(
-        availableBalance: 0,
-        pendingBalance: 0,
-        pendingWithdrawal: 0,
-        lifetimeEarnings: 0,
-        tipsReceived: 0,
-        withdrawnEarnings: 0,
-        completedJobs: 0,
-      );
+    availableBalance: 0,
+    pendingBalance: 0,
+    pendingWithdrawal: 0,
+    lifetimeEarnings: 0,
+    tipsReceived: 0,
+    withdrawnEarnings: 0,
+    completedJobs: 0,
+  );
 
   factory _RiderEarningsSnapshot.fromMap(Map<String, dynamic>? data) {
     if (data == null) return _RiderEarningsSnapshot.empty();
     return _RiderEarningsSnapshot(
-      availableBalance: (data['availableBalance'] as num? ??
-              data['accountBalance'] as num? ??
-              0)
-          .toDouble(),
+      availableBalance:
+          (data['availableBalance'] as num? ??
+                  data['accountBalance'] as num? ??
+                  0)
+              .toDouble(),
       pendingBalance: (data['pendingBalance'] as num? ?? 0).toDouble(),
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
-      lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
-              data['totalAmountEarned'] as num? ??
-              0)
-          .toDouble(),
+      lifetimeEarnings:
+          (data['lifetimeEarnings'] as num? ??
+                  data['totalAmountEarned'] as num? ??
+                  0)
+              .toDouble(),
       tipsReceived: (data['tipsReceived'] as num? ?? 0).toDouble(),
-      withdrawnEarnings: (data['withdrawnEarnings'] as num? ??
-              data['totalWithdrawn'] as num? ??
-              0)
-          .toDouble(),
+      withdrawnEarnings:
+          (data['withdrawnEarnings'] as num? ??
+                  data['totalWithdrawn'] as num? ??
+                  0)
+              .toDouble(),
       completedJobs:
           (data['completedJobs'] as num? ?? data['totalTrips'] as num? ?? 0)
               .toInt(),
@@ -8395,11 +8424,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _driverPerformanceSub;
+  _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _assignedDriverRatingsSub;
+  _assignedDriverRatingsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _deliveryAdjustmentSub;
+  _deliveryAdjustmentSub;
   String? _visibleAdjustmentId;
 
   bool get _matchingHasStarted =>
@@ -8580,13 +8609,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             title: _supportChat
                 ? 'Iris Support'
                 : _assignedDriver?.fullName.trim().isNotEmpty == true
-                    ? _assignedDriver!.fullName.trim()
-                    : 'Delivery chat',
+                ? _assignedDriver!.fullName.trim()
+                : 'Delivery chat',
             recipient: _supportChat
                 ? 'Iris'
                 : _assignedDriver?.fullName.trim().isNotEmpty == true
-                    ? 'Your Circum Rider'
-                    : 'Rider not assigned yet',
+                ? 'Your Circum Rider'
+                : 'Rider not assigned yet',
             messages: _supportChat ? _supportMessages : _driverMessages,
             input: _chatInput,
             onClose: () => setState(() => _chatOpen = false),
@@ -8636,409 +8665,409 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     return switch (_step) {
       _SenderStep.dashboard => _SenderDashboardStep(
-          key: const ValueKey('sender-dashboard'),
-          colors: colors,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          onSendParcel: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-          onBusiness: () => setState(() => _step = _SenderStep.business),
-          onProfile: () => setState(() => _step = _SenderStep.profile),
-          onSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-        ),
+        key: const ValueKey('sender-dashboard'),
+        colors: colors,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        onSendParcel: () => setState(() => _step = _SenderStep.details),
+        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+        onBusiness: () => setState(() => _step = _SenderStep.business),
+        onProfile: () => setState(() => _step = _SenderStep.profile),
+        onSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+      ),
       _SenderStep.details => _DetailsStep(
-          key: const ValueKey('details'),
-          colors: colors,
-          pickup: _pickup,
-          dropoff: _dropoff,
-          savedAddresses: _senderProfile?.savedAddresses ?? const [],
-          onSavedPickup: _applySavedPickupAddress,
-          onSavedDropoff: _applySavedDropoffAddress,
-          pickupVerified: _pickupAddressVerified,
-          dropoffVerified: _dropoffAddressVerified,
-          locationValidationMessage: _locationValidationMessage,
-          checkoutState: _checkoutState,
-          canSubmit: _canAnalyzeDelivery,
-          senderName: _senderName,
-          senderPhone: _senderPhone,
-          senderDisplayName: _effectiveSenderName,
-          senderDisplayPhone: _effectiveSenderPhone,
-          senderDetailsRequired: _senderDetailsRequired,
-          receiverName: _receiverName,
-          receiverPhone: _receiverPhone,
-          differentCollectionContact: _differentCollectionContact,
-          collectionContactName: _collectionContactName,
-          collectionContactPhone: _collectionContactPhone,
-          contactDetailsReady: _hasRequiredContactDetails,
-          contactValidationMessage: _contactValidationMessage,
-          onDifferentCollectionContact: (value) {
-            setState(() {
-              _differentCollectionContact = value;
-              if (!value) {
-                _collectionContactName.clear();
-                _collectionContactPhone.clear();
-              }
-            });
-          },
-          onPickupSelected: _selectPickupAddress,
-          onDropoffSelected: _selectDropoffAddress,
-          onPickupEdited: _handlePickupEdited,
-          onDropoffEdited: _handleDropoffEdited,
-          description: _description,
-          weight: _weight,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          irisWeightBand: _irisWeightBand,
-          irisWeightConfidence: _irisWeightConfidence,
-          irisWeightExplanation: _irisWeightExplanation,
-          irisMatchedItemName: _irisMatchedItemName,
-          irisQuantity: _irisQuantity,
-          irisTruthBand: _irisTruthBand(),
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          pricingWeightKg: _confirmedWeightKg,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          verificationRequired: _weightVerificationRequired,
-          weightMessage: _weightMessage,
-          onConfirmIrisWeight: _confirmIrisWeight,
-          parcelPhotoName: _parcelPhoto?.name,
-          parcelPhotoBusy: _parcelPhotoBusy,
-          parcelPhotoMessage: _parcelPhotoMessage,
-          onPickParcelPhoto: _pickParcelPhoto,
-          onRemoveParcelPhoto: () => setState(() {
-            _parcelPhoto = null;
-            _parcelPhotoCapturedAt = null;
-            _irisPhotoAnalysisId = null;
-            _irisImageInsight = null;
-            _parcelPhotoMessage = 'Parcel photo removed.';
-          }),
-          scheduledPickupDate: _scheduledPickupDate,
-          scheduledPickupWindow: _scheduledPickupWindow,
-          scheduledDropoffDate: _scheduledDropoffDate,
-          scheduledDropoffWindow: _scheduledDropoffWindow,
-          deliveryTimingType: _deliveryTimingType,
-          onDeliveryTimingChanged: _setDeliveryTimingType,
-          analyzing: _analyzing,
-          onSubmit: _analyseRequest,
-        ),
+        key: const ValueKey('details'),
+        colors: colors,
+        pickup: _pickup,
+        dropoff: _dropoff,
+        savedAddresses: _senderProfile?.savedAddresses ?? const [],
+        onSavedPickup: _applySavedPickupAddress,
+        onSavedDropoff: _applySavedDropoffAddress,
+        pickupVerified: _pickupAddressVerified,
+        dropoffVerified: _dropoffAddressVerified,
+        locationValidationMessage: _locationValidationMessage,
+        checkoutState: _checkoutState,
+        canSubmit: _canAnalyzeDelivery,
+        senderName: _senderName,
+        senderPhone: _senderPhone,
+        senderDisplayName: _effectiveSenderName,
+        senderDisplayPhone: _effectiveSenderPhone,
+        senderDetailsRequired: _senderDetailsRequired,
+        receiverName: _receiverName,
+        receiverPhone: _receiverPhone,
+        differentCollectionContact: _differentCollectionContact,
+        collectionContactName: _collectionContactName,
+        collectionContactPhone: _collectionContactPhone,
+        contactDetailsReady: _hasRequiredContactDetails,
+        contactValidationMessage: _contactValidationMessage,
+        onDifferentCollectionContact: (value) {
+          setState(() {
+            _differentCollectionContact = value;
+            if (!value) {
+              _collectionContactName.clear();
+              _collectionContactPhone.clear();
+            }
+          });
+        },
+        onPickupSelected: _selectPickupAddress,
+        onDropoffSelected: _selectDropoffAddress,
+        onPickupEdited: _handlePickupEdited,
+        onDropoffEdited: _handleDropoffEdited,
+        description: _description,
+        weight: _weight,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        irisWeightBand: _irisWeightBand,
+        irisWeightConfidence: _irisWeightConfidence,
+        irisWeightExplanation: _irisWeightExplanation,
+        irisMatchedItemName: _irisMatchedItemName,
+        irisQuantity: _irisQuantity,
+        irisTruthBand: _irisTruthBand(),
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        pricingWeightKg: _confirmedWeightKg,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        verificationRequired: _weightVerificationRequired,
+        weightMessage: _weightMessage,
+        onConfirmIrisWeight: _confirmIrisWeight,
+        parcelPhotoName: _parcelPhoto?.name,
+        parcelPhotoBusy: _parcelPhotoBusy,
+        parcelPhotoMessage: _parcelPhotoMessage,
+        onPickParcelPhoto: _pickParcelPhoto,
+        onRemoveParcelPhoto: () => setState(() {
+          _parcelPhoto = null;
+          _parcelPhotoCapturedAt = null;
+          _irisPhotoAnalysisId = null;
+          _irisImageInsight = null;
+          _parcelPhotoMessage = 'Parcel photo removed.';
+        }),
+        scheduledPickupDate: _scheduledPickupDate,
+        scheduledPickupWindow: _scheduledPickupWindow,
+        scheduledDropoffDate: _scheduledDropoffDate,
+        scheduledDropoffWindow: _scheduledDropoffWindow,
+        deliveryTimingType: _deliveryTimingType,
+        onDeliveryTimingChanged: _setDeliveryTimingType,
+        analyzing: _analyzing,
+        onSubmit: _analyseRequest,
+      ),
       _SenderStep.vehicle => _VehicleStep(
-          key: const ValueKey('vehicle'),
-          colors: colors,
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          chargeableWeightKg: _deliveryClassification.finalWeightKg,
-          vehicleSuitability: _vehicleSuitability,
-          selectedVehicle: _effectiveVehicle,
-          selectedSpeed: _selectedSpeed,
-          locationsConfirmed: _hasValidatedRoute,
-          priceReady: _quoteTotal > 0,
-          weightReady: _deliveryClassification.finalWeightKg > 0,
-          specialHandling: _specialHandling,
-          vanguardRequired: _webVanguardRequired,
-          vanguardEnabled: _webVanguardEnabled,
-          onVanguardChanged: (value) =>
-              setState(() => _webVanguardSelected = value),
-          pickupAccess: _pickupAccess,
-          dropoffAccess: _dropoffAccess,
-          onPickupAccess: (value) => setState(() => _pickupAccess = value),
-          onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
-          onVehicle: (vehicle) {
-            final suitability = _vehicleSuitability;
-            if (!DeliveryPricing.vehicleCanCarryDelivery(
-              vehicle.name,
-              suitability,
-            )) {
-              setState(() {
-                _selectedVehicle = _effectiveVehicle;
-                _weightMessage =
-                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
-              });
-              return;
-            }
+        key: const ValueKey('vehicle'),
+        colors: colors,
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        chargeableWeightKg: _deliveryClassification.finalWeightKg,
+        vehicleSuitability: _vehicleSuitability,
+        selectedVehicle: _effectiveVehicle,
+        selectedSpeed: _selectedSpeed,
+        locationsConfirmed: _hasValidatedRoute,
+        priceReady: _quoteTotal > 0,
+        weightReady: _deliveryClassification.finalWeightKg > 0,
+        specialHandling: _specialHandling,
+        vanguardRequired: _webVanguardRequired,
+        vanguardEnabled: _webVanguardEnabled,
+        onVanguardChanged: (value) =>
+            setState(() => _webVanguardSelected = value),
+        pickupAccess: _pickupAccess,
+        dropoffAccess: _dropoffAccess,
+        onPickupAccess: (value) => setState(() => _pickupAccess = value),
+        onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
+        onVehicle: (vehicle) {
+          final suitability = _vehicleSuitability;
+          if (!DeliveryPricing.vehicleCanCarryDelivery(
+            vehicle.name,
+            suitability,
+          )) {
             setState(() {
-              _selectedVehicle = vehicle;
-              _checkoutState = _CheckoutState.awaitingPayment;
+              _selectedVehicle = _effectiveVehicle;
+              _weightMessage =
+                  'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
             });
-          },
-          onSpeed: (speed) => setState(() {
-            _selectedSpeed = speed;
+            return;
+          }
+          setState(() {
+            _selectedVehicle = vehicle;
             _checkoutState = _CheckoutState.awaitingPayment;
-          }),
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onContinue: () => setState(() {
-            _checkoutState = _CheckoutState.awaitingPayment;
-            _step = _SenderStep.payment;
-          }),
-        ),
+          });
+        },
+        onSpeed: (speed) => setState(() {
+          _selectedSpeed = speed;
+          _checkoutState = _CheckoutState.awaitingPayment;
+        }),
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onContinue: () => setState(() {
+          _checkoutState = _CheckoutState.awaitingPayment;
+          _step = _SenderStep.payment;
+        }),
+      ),
       _SenderStep.payment => _PaymentStep(
-          key: const ValueKey('payment'),
-          colors: colors,
-          vehicle: _effectiveVehicle,
-          speed: _selectedSpeed,
-          breakdown: _quoteBreakdown,
-          distanceMiles: _confirmedRouteDistanceMiles,
-          locationsConfirmed: _hasValidatedRoute,
-          routeMessage: _locationValidationMessage,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          weightKg: _deliveryClassification.finalWeightKg,
-          total: _quoteTotal,
-          checkoutState: _checkoutState,
-          weightConfirmed: _hasConfirmedWeight,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          specialHandling: _specialHandling,
-          vanguardEnabled: _webVanguardEnabled,
-          useRoth: _deliveryUseRoth,
-          rothBalance: _healthRothBalance,
-          scheduledPickupDate: _scheduledPickupDate.text.trim(),
-          scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
-          scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
-          scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
-          onBack: () => setState(() {
-            if (!_matchingHasStarted) {
-              _checkoutState = _CheckoutState.awaitingPayment;
-            }
-            _step = _SenderStep.vehicle;
-          }),
-          onPay: _confirmPayment,
-          onUseRoth: (value) => setState(() {
-            _deliveryUseRoth = value ?? false;
-          }),
-        ),
+        key: const ValueKey('payment'),
+        colors: colors,
+        vehicle: _effectiveVehicle,
+        speed: _selectedSpeed,
+        breakdown: _quoteBreakdown,
+        distanceMiles: _confirmedRouteDistanceMiles,
+        locationsConfirmed: _hasValidatedRoute,
+        routeMessage: _locationValidationMessage,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        weightKg: _deliveryClassification.finalWeightKg,
+        total: _quoteTotal,
+        checkoutState: _checkoutState,
+        weightConfirmed: _hasConfirmedWeight,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        specialHandling: _specialHandling,
+        vanguardEnabled: _webVanguardEnabled,
+        useRoth: _deliveryUseRoth,
+        rothBalance: _healthRothBalance,
+        scheduledPickupDate: _scheduledPickupDate.text.trim(),
+        scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
+        scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
+        scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
+        onBack: () => setState(() {
+          if (!_matchingHasStarted) {
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }
+          _step = _SenderStep.vehicle;
+        }),
+        onPay: _confirmPayment,
+        onUseRoth: (value) => setState(() {
+          _deliveryUseRoth = value ?? false;
+        }),
+      ),
       _SenderStep.tracking => _TrackingStep(
-          key: const ValueKey('tracking'),
-          colors: colors,
-          orderId: _activeOrderId ?? 'CIR-2026',
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          vehicle: _effectiveVehicle,
-          statusIndex: _statusIndex,
-          broadcasting: _broadcasting,
-          checkoutState: _checkoutState,
-          firebaseOnline: _firebaseOnline,
-          firebaseError: _firebaseError,
-          receivedAt: _activeRequestReceivedAt,
-          pickupAddress: _validatedPickup,
-          dropoffAddress: _validatedDropoff,
-          liveLocation: _liveLocationData,
-          vanguardData: _activeVanguardData,
-          irisItemName: _irisMatchedItemName,
-          irisQuantity: _irisQuantity,
-          irisConfidence: _irisWeightConfidence,
-          irisWeightKg: _deliveryClassification.finalWeightKg,
-          irisWeightBand: _deliveryClassification.finalWeightBand,
-          irisRepositoryMatched: _irisMatchedItemName != null,
-          irisCorrected: _weightSource == 'sender_confirmed' ||
-              _weightSource == 'manual_sender_entry',
-          recommendedVehicle: _vehicleSuitability.recommendedVehicle,
-          breakdown: _quoteBreakdown,
-          assignedDriver: _assignedDriver,
-          assignedDriverMetric: _assignedDriverMetric,
-          ratingStars: _selectedRating,
-          ratingFeedback: _ratingFeedback,
-          selectedRatingTags: _selectedRatingTags,
-          selectedTipAmount: _selectedTipAmount,
-          ratingSubmitting: _ratingSubmitting,
-          ratingSubmitted: _ratingSubmitted,
-          ratingMessage: _ratingMessage,
-          onRatingChanged: (rating) => setState(() => _selectedRating = rating),
-          onRatingTag: _toggleRatingTag,
-          onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
-          onSubmitRating: _submitDriverRating,
-          onChatDriver: () => setState(() {
-            _supportChat = false;
-            _chatOpen = true;
-          }),
-          onChatSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-          onNewOrder: _reset,
-          onViewHistory: () => setState(() {
-            _step = _SenderStep.profile;
-            _senderProfileTab = 1;
-          }),
-        ),
+        key: const ValueKey('tracking'),
+        colors: colors,
+        orderId: _activeOrderId ?? 'CIR-2026',
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        vehicle: _effectiveVehicle,
+        statusIndex: _statusIndex,
+        broadcasting: _broadcasting,
+        checkoutState: _checkoutState,
+        firebaseOnline: _firebaseOnline,
+        firebaseError: _firebaseError,
+        receivedAt: _activeRequestReceivedAt,
+        pickupAddress: _validatedPickup,
+        dropoffAddress: _validatedDropoff,
+        liveLocation: _liveLocationData,
+        vanguardData: _activeVanguardData,
+        irisItemName: _irisMatchedItemName,
+        irisQuantity: _irisQuantity,
+        irisConfidence: _irisWeightConfidence,
+        irisWeightKg: _deliveryClassification.finalWeightKg,
+        irisWeightBand: _deliveryClassification.finalWeightBand,
+        irisRepositoryMatched: _irisMatchedItemName != null,
+        irisCorrected:
+            _weightSource == 'sender_confirmed' ||
+            _weightSource == 'manual_sender_entry',
+        recommendedVehicle: _vehicleSuitability.recommendedVehicle,
+        breakdown: _quoteBreakdown,
+        assignedDriver: _assignedDriver,
+        assignedDriverMetric: _assignedDriverMetric,
+        ratingStars: _selectedRating,
+        ratingFeedback: _ratingFeedback,
+        selectedRatingTags: _selectedRatingTags,
+        selectedTipAmount: _selectedTipAmount,
+        ratingSubmitting: _ratingSubmitting,
+        ratingSubmitted: _ratingSubmitted,
+        ratingMessage: _ratingMessage,
+        onRatingChanged: (rating) => setState(() => _selectedRating = rating),
+        onRatingTag: _toggleRatingTag,
+        onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
+        onSubmitRating: _submitDriverRating,
+        onChatDriver: () => setState(() {
+          _supportChat = false;
+          _chatOpen = true;
+        }),
+        onChatSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+        onNewOrder: _reset,
+        onViewHistory: () => setState(() {
+          _step = _SenderStep.profile;
+          _senderProfileTab = 1;
+        }),
+      ),
       _SenderStep.healthPlus => _HealthPlusStep(
-          key: const ValueKey('health-plus'),
-          colors: colors,
-          fullName: _healthName,
-          phone: _healthPhone,
-          email: _healthEmail,
-          pharmacyName: _healthPharmacyName,
-          pharmacyAddress: _healthPharmacy,
-          deliveryAddress: _healthDelivery,
-          pharmacyVerified: _validatedHealthPharmacy?.isVerified == true,
-          deliveryVerified: _validatedHealthDelivery?.isVerified == true,
-          notes: _healthNotes,
-          preferredDay: _healthPreferredDay,
-          preferredTime: _healthPreferredTime,
-          customSchedule: _healthCustomSchedule,
-          frequency: _healthFrequency,
-          prescriptionType: _healthPrescriptionType,
-          subscriptionPlan: _healthSubscriptionPlan,
-          consent: _healthConsent,
-          savePayment: _healthSavePayment,
-          useRoth: _healthUseRoth,
-          rothBalance: _healthRothBalance,
-          submitting: _healthSubmitting,
-          message: _healthMessage,
-          checkoutUrl: _healthCheckoutUrl,
-          quote: _healthQuote,
-          pickups: _healthPickups,
-          payments: _healthPayments,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onFrequency: (frequency) =>
-              setState(() => _healthFrequency = frequency),
-          onPrescriptionType: (type) =>
-              setState(() => _healthPrescriptionType = type),
-          onSubscriptionPlan: (plan) =>
-              setState(() => _healthSubscriptionPlan = plan),
-          onStartSubscription: (plan) {
-            setState(() {
-              _healthSubscriptionPlan = plan;
-              if (_healthFrequency == HealthPlusFrequency.oneOff) {
-                _healthFrequency = HealthPlusFrequency.weekly;
-              }
-            });
-            _bookHealthPlus();
-          },
-          onContinueOneOff: () {
-            setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-            _bookHealthPlus();
-          },
-          onConsent: (value) => setState(() => _healthConsent = value ?? false),
-          onSavePayment: (value) =>
-              setState(() => _healthSavePayment = value ?? false),
-          onUseRoth: (value) => setState(() => _healthUseRoth = value ?? false),
-          onPharmacySelected: (address) => setState(() {
-            _validatedHealthPharmacy = address;
-            _healthPharmacy.text = address.displayAddress;
-          }),
-          onPharmacyEdited: (_) =>
-              setState(() => _validatedHealthPharmacy = null),
-          onDeliverySelected: (address) => setState(() {
-            _validatedHealthDelivery = address;
-            _healthDelivery.text = address.displayAddress;
-          }),
-          onDeliveryEdited: (_) =>
-              setState(() => _validatedHealthDelivery = null),
-          onSubmit: _bookHealthPlus,
-          onPauseSchedule: _pauseHealthPlusSchedule,
-          onResumeSchedule: _resumeHealthPlusSchedule,
-          onCancelSchedule: _openHealthPlusBillingPortal,
-          onCancelPickup: _cancelNextHealthPlusPickup,
-          onUpdatePayment: _openHealthPlusBillingPortal,
-          onAdminStatus: _adminUpdateHealthPlusStatus,
-        ),
+        key: const ValueKey('health-plus'),
+        colors: colors,
+        fullName: _healthName,
+        phone: _healthPhone,
+        email: _healthEmail,
+        pharmacyName: _healthPharmacyName,
+        pharmacyAddress: _healthPharmacy,
+        deliveryAddress: _healthDelivery,
+        pharmacyVerified: _validatedHealthPharmacy?.isVerified == true,
+        deliveryVerified: _validatedHealthDelivery?.isVerified == true,
+        notes: _healthNotes,
+        preferredDay: _healthPreferredDay,
+        preferredTime: _healthPreferredTime,
+        customSchedule: _healthCustomSchedule,
+        frequency: _healthFrequency,
+        prescriptionType: _healthPrescriptionType,
+        subscriptionPlan: _healthSubscriptionPlan,
+        consent: _healthConsent,
+        savePayment: _healthSavePayment,
+        useRoth: _healthUseRoth,
+        rothBalance: _healthRothBalance,
+        submitting: _healthSubmitting,
+        message: _healthMessage,
+        checkoutUrl: _healthCheckoutUrl,
+        quote: _healthQuote,
+        pickups: _healthPickups,
+        payments: _healthPayments,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onFrequency: (frequency) =>
+            setState(() => _healthFrequency = frequency),
+        onPrescriptionType: (type) =>
+            setState(() => _healthPrescriptionType = type),
+        onSubscriptionPlan: (plan) =>
+            setState(() => _healthSubscriptionPlan = plan),
+        onStartSubscription: (plan) {
+          setState(() {
+            _healthSubscriptionPlan = plan;
+            if (_healthFrequency == HealthPlusFrequency.oneOff) {
+              _healthFrequency = HealthPlusFrequency.weekly;
+            }
+          });
+          _bookHealthPlus();
+        },
+        onContinueOneOff: () {
+          setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+          _bookHealthPlus();
+        },
+        onConsent: (value) => setState(() => _healthConsent = value ?? false),
+        onSavePayment: (value) =>
+            setState(() => _healthSavePayment = value ?? false),
+        onUseRoth: (value) => setState(() => _healthUseRoth = value ?? false),
+        onPharmacySelected: (address) => setState(() {
+          _validatedHealthPharmacy = address;
+          _healthPharmacy.text = address.displayAddress;
+        }),
+        onPharmacyEdited: (_) =>
+            setState(() => _validatedHealthPharmacy = null),
+        onDeliverySelected: (address) => setState(() {
+          _validatedHealthDelivery = address;
+          _healthDelivery.text = address.displayAddress;
+        }),
+        onDeliveryEdited: (_) =>
+            setState(() => _validatedHealthDelivery = null),
+        onSubmit: _bookHealthPlus,
+        onPauseSchedule: _pauseHealthPlusSchedule,
+        onResumeSchedule: _resumeHealthPlusSchedule,
+        onCancelSchedule: _openHealthPlusBillingPortal,
+        onCancelPickup: _cancelNextHealthPlusPickup,
+        onUpdatePayment: _openHealthPlusBillingPortal,
+        onAdminStatus: _adminUpdateHealthPlusStatus,
+      ),
       _SenderStep.business => _BusinessCentreStep(
-          key: const ValueKey('business-centre'),
-          colors: colors,
-          loading: _businessLoading,
-          busy: _businessBusy,
-          message: _businessMessage,
-          accounts: _businessAccounts,
-          selectedBusinessId: _selectedBusinessId,
-          account: _selectedBusinessAccount,
-          currentUserId: _senderUser?.uid,
-          currentUserEmail: _senderUser?.email,
-          invoices: _businessInvoices,
-          deliveries: _senderDeliveries,
-          joinRequests: _businessJoinRequests,
-          auditLogs: _businessAuditLogs,
-          wallet: _businessWallet,
-          companyName: _businessCompanyName,
-          businessType: _businessType,
-          businessEmail: _businessEmail,
-          businessPhone: _businessPhone,
-          businessAddress: _businessAddress,
-          vatNumber: _businessVatNumber,
-          website: _businessWebsite,
-          companyCode: _businessCompanyCode,
-          rothAmount: _businessRothAmount,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onRefresh: () {
-            final user = _senderUser;
-            if (user != null) _loadBusinessWorkspaces(user.uid);
-          },
-          onSelectBusiness: (id) async {
-            setState(() {
-              _selectedBusinessId = id;
-              final account = _selectedBusinessAccount;
-              if (account != null) _populateBusinessControllers(account);
-            });
-            final user = _senderUser;
-            if (user != null) await _loadBusinessWorkspaces(user.uid);
-          },
-          onCreateBusiness: _createBusinessAccount,
-          onJoinBusiness: _joinBusinessByCode,
-          onEnsureCompanyCode: _ensureBusinessCompanyCode,
-          onRotateCompanyCode: () => _ensureBusinessCompanyCode(rotate: true),
-          onSaveProfile: _saveBusinessProfile,
-          onReviewRequest: _reviewBusinessRequest,
-          onUpdateMemberRole: _updateBusinessMemberRole,
-          onRemoveMember: _removeBusinessMember,
-          onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
-          onPayInvoiceWithRoth: (invoiceId) =>
-              _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
-          onDownloadInvoice: _downloadBusinessInvoice,
-          onBuyRoth: _openBusinessRothCheckout,
-          onCreateDelivery: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-          onGifts: widget.onGifts,
-        ),
+        key: const ValueKey('business-centre'),
+        colors: colors,
+        loading: _businessLoading,
+        busy: _businessBusy,
+        message: _businessMessage,
+        accounts: _businessAccounts,
+        selectedBusinessId: _selectedBusinessId,
+        account: _selectedBusinessAccount,
+        currentUserId: _senderUser?.uid,
+        currentUserEmail: _senderUser?.email,
+        invoices: _businessInvoices,
+        deliveries: _senderDeliveries,
+        joinRequests: _businessJoinRequests,
+        auditLogs: _businessAuditLogs,
+        wallet: _businessWallet,
+        companyName: _businessCompanyName,
+        businessType: _businessType,
+        businessEmail: _businessEmail,
+        businessPhone: _businessPhone,
+        businessAddress: _businessAddress,
+        vatNumber: _businessVatNumber,
+        website: _businessWebsite,
+        companyCode: _businessCompanyCode,
+        rothAmount: _businessRothAmount,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onRefresh: () {
+          final user = _senderUser;
+          if (user != null) _loadBusinessWorkspaces(user.uid);
+        },
+        onSelectBusiness: (id) async {
+          setState(() {
+            _selectedBusinessId = id;
+            final account = _selectedBusinessAccount;
+            if (account != null) _populateBusinessControllers(account);
+          });
+          final user = _senderUser;
+          if (user != null) await _loadBusinessWorkspaces(user.uid);
+        },
+        onCreateBusiness: _createBusinessAccount,
+        onJoinBusiness: _joinBusinessByCode,
+        onEnsureCompanyCode: _ensureBusinessCompanyCode,
+        onRotateCompanyCode: () => _ensureBusinessCompanyCode(rotate: true),
+        onSaveProfile: _saveBusinessProfile,
+        onReviewRequest: _reviewBusinessRequest,
+        onUpdateMemberRole: _updateBusinessMemberRole,
+        onRemoveMember: _removeBusinessMember,
+        onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
+        onPayInvoiceWithRoth: (invoiceId) =>
+            _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
+        onDownloadInvoice: _downloadBusinessInvoice,
+        onBuyRoth: _openBusinessRothCheckout,
+        onCreateDelivery: () => setState(() => _step = _SenderStep.details),
+        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+        onGifts: widget.onGifts,
+      ),
       _SenderStep.profile => _SenderProfileStep(
-          key: const ValueKey('sender-profile'),
-          colors: colors,
-          user: _senderUser,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          selectedDelivery: _selectedSenderDelivery,
-          loading: _senderAuthLoading,
-          busy: _senderAuthBusy || _senderProfileSaving,
-          message: _senderProfileMessage,
-          tabIndex: _senderProfileTab,
-          email: _senderEmail,
-          password: _senderPassword,
-          fullName: _senderName,
-          phone: _senderPhone,
-          referralCode: _senderReferralCode,
-          currentPassword: _senderCurrentPassword,
-          newPassword: _senderNewPassword,
-          confirmNewPassword: _senderConfirmNewPassword,
-          newEmail: _senderNewEmail,
-          emailChangePassword: _senderEmailChangePassword,
-          securitySubmitting: _senderSecurityBusy,
-          securityMessage: _senderSecurityMessage,
-          savedAddressLabel: _savedAddressLabel,
-          savedAddress: _savedAddress,
-          savedAddressType: _savedAddressType,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onTab: (index) => setState(() => _senderProfileTab = index),
-          onSignIn: _signInSender,
-          onSignUp: _signUpSender,
-          onForgotPassword: _sendSenderPasswordReset,
-          onChangePassword: _changeSenderPassword,
-          onChangeEmail: _changeSenderEmail,
-          onSignOut: _signOutSender,
-          onSaveProfile: _saveSenderProfile,
-          onAddAddress: _addSenderAddress,
-          onSavedAddressType: (type) =>
-              setState(() => _savedAddressType = type),
-          onSavedAddressSelected: (address) => setState(() {
-            _validatedSavedAddress = address;
-            _savedAddress.text = address.displayAddress;
-          }),
-          onSavedAddressEdited: (_) =>
-              setState(() => _validatedSavedAddress = null),
-          onSelectDelivery: (delivery) =>
-              setState(() => _selectedSenderDelivery = delivery),
-          onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
-          onCancelBooking: _cancelSenderBooking,
-        ),
+        key: const ValueKey('sender-profile'),
+        colors: colors,
+        user: _senderUser,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        selectedDelivery: _selectedSenderDelivery,
+        loading: _senderAuthLoading,
+        busy: _senderAuthBusy || _senderProfileSaving,
+        message: _senderProfileMessage,
+        tabIndex: _senderProfileTab,
+        email: _senderEmail,
+        password: _senderPassword,
+        fullName: _senderName,
+        phone: _senderPhone,
+        referralCode: _senderReferralCode,
+        currentPassword: _senderCurrentPassword,
+        newPassword: _senderNewPassword,
+        confirmNewPassword: _senderConfirmNewPassword,
+        newEmail: _senderNewEmail,
+        emailChangePassword: _senderEmailChangePassword,
+        securitySubmitting: _senderSecurityBusy,
+        securityMessage: _senderSecurityMessage,
+        savedAddressLabel: _savedAddressLabel,
+        savedAddress: _savedAddress,
+        savedAddressType: _savedAddressType,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onTab: (index) => setState(() => _senderProfileTab = index),
+        onSignIn: _signInSender,
+        onSignUp: _signUpSender,
+        onForgotPassword: _sendSenderPasswordReset,
+        onChangePassword: _changeSenderPassword,
+        onChangeEmail: _changeSenderEmail,
+        onSignOut: _signOutSender,
+        onSaveProfile: _saveSenderProfile,
+        onAddAddress: _addSenderAddress,
+        onSavedAddressType: (type) => setState(() => _savedAddressType = type),
+        onSavedAddressSelected: (address) => setState(() {
+          _validatedSavedAddress = address;
+          _savedAddress.text = address.displayAddress;
+        }),
+        onSavedAddressEdited: (_) =>
+            setState(() => _validatedSavedAddress = null),
+        onSelectDelivery: (delivery) =>
+            setState(() => _selectedSenderDelivery = delivery),
+        onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+        onCancelBooking: _cancelSenderBooking,
+      ),
     };
   }
 
@@ -9057,7 +9086,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   DeliveryClassification get _deliveryClassification {
     final pricingWeightKg = DeliveryPricing.checkoutPricingWeightKg(
-      userEnteredWeightKg: _senderEnteredWeightKg ??
+      userEnteredWeightKg:
+          _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimatedWeightKg: _irisEstimatedWeightKg,
       matchedCatalogueWeightKg: _matchedCatalogueWeightKg,
@@ -9099,12 +9129,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _hasValidDeliveryTiming {
     return switch (_deliveryTimingType) {
       'asap' => true,
-      'today' => _scheduledPickupWindow.text.trim().isNotEmpty &&
-          _scheduledDropoffWindow.text.trim().isNotEmpty,
-      'scheduled' => _scheduledPickupDate.text.trim().isNotEmpty &&
-          _scheduledDropoffDate.text.trim().isNotEmpty &&
-          _scheduledPickupWindow.text.trim().isNotEmpty &&
-          _scheduledDropoffWindow.text.trim().isNotEmpty,
+      'today' =>
+        _scheduledPickupWindow.text.trim().isNotEmpty &&
+            _scheduledDropoffWindow.text.trim().isNotEmpty,
+      'scheduled' =>
+        _scheduledPickupDate.text.trim().isNotEmpty &&
+            _scheduledDropoffDate.text.trim().isNotEmpty &&
+            _scheduledPickupWindow.text.trim().isNotEmpty &&
+            _scheduledDropoffWindow.text.trim().isNotEmpty,
       _ => false,
     };
   }
@@ -9331,11 +9363,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   SpecialHandlingResult get _specialHandling => SpecialHandlingEngine.evaluate(
-        description: _description.text,
-        itemName: _irisMatchedItemName,
-        pickupAccess: _pickupAccess,
-        dropoffAccess: _dropoffAccess,
-      );
+    description: _description.text,
+    itemName: _irisMatchedItemName,
+    pickupAccess: _pickupAccess,
+    dropoffAccess: _dropoffAccess,
+  );
 
   void _selectPickupAddress(_ValidatedAddress address) {
     if (!address.hasCoordinates) {
@@ -9529,7 +9561,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(
-        () => _businessMessage = error.message ??
+        () => _businessMessage =
+            error.message ??
             'Checkout is still being reconciled. Retry before starting another payment.',
       );
     } catch (_) {
@@ -9569,12 +9602,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallableFromUrl(
-        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
-      )
+            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
+          )
           .call({
-        'checkoutSessionId': checkoutSessionId,
-        'paymentSessionId': paymentSessionId,
-      });
+            'checkoutSessionId': checkoutSessionId,
+            'paymentSessionId': paymentSessionId,
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
@@ -9597,7 +9630,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() {
         _checkoutState = _CheckoutState.failed;
         _broadcasting = false;
-        _firebaseError = error.message ??
+        _firebaseError =
+            error.message ??
             'Stripe payment could not be confirmed. Please contact support.';
       });
     } catch (_) {
@@ -9624,33 +9658,33 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(user.uid)
         .snapshots()
         .listen((snapshot) {
-      final data = snapshot.data() ?? <String, dynamic>{};
-      final profile = SenderProfile.fromMap(user.uid, {
-        'email': user.email,
-        'photoURL': user.photoURL,
-        'phoneNumber': user.phoneNumber,
-        ...data,
-      });
-      if (!mounted) return;
-      setState(() {
-        _senderProfile = profile;
-        if (_senderName.text.trim().isEmpty) {
-          _senderName.text = profile.fullName;
-        }
-        if (_senderPhone.text.trim().isEmpty) {
-          _senderPhone.text = profile.phoneNumber;
-        }
-      });
-      _loadBusinessWorkspaces(user.uid);
-      if (profile.isLegend &&
-          profile.legendNumber != null &&
-          profile.legendCelebrationSeenAt == null &&
-          !_legendCelebrationShowing) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _showLegendCelebration(profile),
-        );
-      }
-    });
+          final data = snapshot.data() ?? <String, dynamic>{};
+          final profile = SenderProfile.fromMap(user.uid, {
+            'email': user.email,
+            'photoURL': user.photoURL,
+            'phoneNumber': user.phoneNumber,
+            ...data,
+          });
+          if (!mounted) return;
+          setState(() {
+            _senderProfile = profile;
+            if (_senderName.text.trim().isEmpty) {
+              _senderName.text = profile.fullName;
+            }
+            if (_senderPhone.text.trim().isEmpty) {
+              _senderPhone.text = profile.phoneNumber;
+            }
+          });
+          _loadBusinessWorkspaces(user.uid);
+          if (profile.isLegend &&
+              profile.legendNumber != null &&
+              profile.legendCelebrationSeenAt == null &&
+              !_legendCelebrationShowing) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _showLegendCelebration(profile),
+            );
+          }
+        });
     _listenForDeliveryAdjustments(user.uid);
     _loadSenderRothBalance();
   }
@@ -9669,7 +9703,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final data = Map<String, dynamic>.from(result.data);
       if (!mounted) return;
       setState(() {
-        _healthRothBalance = (data['availableRoth'] as num?)?.toDouble() ??
+        _healthRothBalance =
+            (data['availableRoth'] as num?)?.toDouble() ??
             (data['balance'] as num?)?.toDouble() ??
             0;
       });
@@ -9717,34 +9752,34 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .limit(20)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        final pending = snapshot.docs.where((doc) {
-          final status = '${doc.data()['status'] ?? ''}';
-          return {
-            'awaiting_admin_review',
-            'more_evidence_requested',
-            'awaiting_sender_payment',
-            'rejected_by_admin',
-          }.contains(status);
-        }).toList();
-        if (pending.isEmpty) return;
-        pending.sort(
-          (a, b) => _timestampMillis(
-            b.data()['createdAt'],
-          ).compareTo(_timestampMillis(a.data()['createdAt'])),
+          (snapshot) {
+            if (!mounted) return;
+            final pending = snapshot.docs.where((doc) {
+              final status = '${doc.data()['status'] ?? ''}';
+              return {
+                'awaiting_admin_review',
+                'more_evidence_requested',
+                'awaiting_sender_payment',
+                'rejected_by_admin',
+              }.contains(status);
+            }).toList();
+            if (pending.isEmpty) return;
+            pending.sort(
+              (a, b) => _timestampMillis(
+                b.data()['createdAt'],
+              ).compareTo(_timestampMillis(a.data()['createdAt'])),
+            );
+            final doc = pending.first;
+            if (_visibleAdjustmentId == doc.id) return;
+            _visibleAdjustmentId = doc.id;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
+            });
+          },
+          onError: (error) {
+            debugPrint('Could not load delivery adjustment: $error');
+          },
         );
-        final doc = pending.first;
-        if (_visibleAdjustmentId == doc.id) return;
-        _visibleAdjustmentId = doc.id;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
-        });
-      },
-      onError: (error) {
-        debugPrint('Could not load delivery adjustment: $error');
-      },
-    );
   }
 
   static int _timestampMillis(Object? value) {
@@ -9770,10 +9805,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final title = rejected
         ? 'Adjustment rejected'
         : approvedForPayment
-            ? 'Adjustment approved'
-            : moreEvidence
-                ? 'More evidence requested'
-                : 'Adjustment under review';
+        ? 'Adjustment approved'
+        : moreEvidence
+        ? 'More evidence requested'
+        : 'Adjustment under review';
     await showDialog<void>(
       context: context,
       barrierDismissible: !approvedForPayment,
@@ -9848,7 +9883,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         } on FirebaseFunctionsException catch (exception) {
                           setDialogState(() {
                             busy = false;
-                            error = exception.message ??
+                            error =
+                                exception.message ??
                                 'Could not cancel this collection.';
                           });
                         }
@@ -9881,16 +9917,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                               .initPaymentSheet(
                                 paymentSheetParameters:
                                     SetupPaymentSheetParameters(
-                                  paymentIntentClientSecret:
-                                      '${data['clientSecret']}',
-                                  merchantDisplayName: 'Circum Technologies',
-                                  style: ThemeMode.dark,
-                                ),
+                                      paymentIntentClientSecret:
+                                          '${data['clientSecret']}',
+                                      merchantDisplayName:
+                                          'Circum Technologies',
+                                      style: ThemeMode.dark,
+                                    ),
                               )
                               .timeout(const Duration(seconds: 20));
                           await Stripe.instance.presentPaymentSheet().timeout(
-                                const Duration(seconds: 90),
-                              );
+                            const Duration(seconds: 90),
+                          );
                           await WebsiteProductionPaymentApi.call(
                             'delivery_adjustments',
                             'finalizeDeliveryAdjustmentPayment',
@@ -9992,15 +10029,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   static String _discrepancyReasonLabel(String reason) => switch (reason) {
-        'weight_exceeded' => 'The collected parcel is heavier than booked.',
-        'dimensions_exceeded' =>
-          'The parcel dimensions exceed the booking details.',
-        'additional_undeclared_items' =>
-          'Additional undeclared items were presented.',
-        'item_differs_from_booking' =>
-          'The item differs from the original booking.',
-        _ => 'The rider reported a material load discrepancy.',
-      };
+    'weight_exceeded' => 'The collected parcel is heavier than booked.',
+    'dimensions_exceeded' =>
+      'The parcel dimensions exceed the booking details.',
+    'additional_undeclared_items' =>
+      'Additional undeclared items were presented.',
+    'item_differs_from_booking' =>
+      'The item differs from the original booking.',
+    _ => 'The rider reported a material load discrepancy.',
+  };
 
   Future<void> _signInSender() async {
     if (_senderAuthBusy) return;
@@ -10069,9 +10106,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('updateSenderProfile')
           .call({
-        'displayName': _senderName.text.trim(),
-        'phone': _senderPhone.text.trim(),
-      }).timeout(_senderAuthOperationTimeout);
+            'displayName': _senderName.text.trim(),
+            'phone': _senderPhone.text.trim(),
+          })
+          .timeout(_senderAuthOperationTimeout);
       final referralMessage = await applySignupReferral(
         _senderReferralCode.text,
         (code) async {
@@ -10369,7 +10407,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (user == null) return;
     setState(() => _senderProfileSaving = true);
     try {
-      final profile = _senderProfile ??
+      final profile =
+          _senderProfile ??
           SenderProfile.fromMap(user.uid, {
             'email': user.email,
             'fullName': _senderName.text.trim(),
@@ -10416,7 +10455,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       validated.buildingNumber,
       validated.street,
     ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
-    final city = (validated.city?.trim().isNotEmpty == true
+    final city =
+        (validated.city?.trim().isNotEmpty == true
             ? validated.city!.trim()
             : _cityFromAddress(validated.displayAddress)) ??
         'United Kingdom';
@@ -10476,15 +10516,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           byId[record.requestId] = record;
         }
       }
-      final records = SenderProfileService.ownDeliveries(
-        uid,
-        byId.values,
-      ).toList(growable: false)
-        ..sort((a, b) {
-          final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return right.compareTo(left);
-        });
+      final records =
+          SenderProfileService.ownDeliveries(
+            uid,
+            byId.values,
+          ).toList(growable: false)..sort((a, b) {
+            final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return right.compareTo(left);
+          });
       if (!mounted) return;
       setState(() {
         _senderDeliveries = records;
@@ -10549,12 +10589,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           accounts.add({'id': snap.id, ...snap.data()!});
         }
       }
-      final selectedId = _selectedBusinessId != null &&
+      final selectedId =
+          _selectedBusinessId != null &&
               accounts.any((account) => account['id'] == _selectedBusinessId)
           ? _selectedBusinessId!
           : accounts.isEmpty
-              ? null
-              : '${accounts.first['id']}';
+          ? null
+          : '${accounts.first['id']}';
       final invoices = <Map<String, dynamic>>[];
       final requests = <Map<String, dynamic>>[];
       final audits = <Map<String, dynamic>>[];
@@ -10584,8 +10625,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         audits.addAll(
           auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}),
         );
-        final walletSnap =
-            await db.collection('business_wallets').doc(selectedId).get();
+        final walletSnap = await db
+            .collection('business_wallets')
+            .doc(selectedId)
+            .get();
         if (walletSnap.exists) {
           wallet = {'id': walletSnap.id, ...walletSnap.data()!};
         }
@@ -10669,17 +10712,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessAccount')
           .call({
-        'companyName': _businessCompanyName.text.trim(),
-        'businessType': _businessType.text.trim(),
-        'businessEmail': _businessEmail.text.trim().isEmpty
-            ? _senderUser?.email
-            : _businessEmail.text.trim(),
-        'businessPhone': _businessPhone.text.trim(),
-        'businessAddress': _businessAddress.text.trim(),
-        'vatNumber': _businessVatNumber.text.trim(),
-        'businessSize': '1-10',
-        'acceptTerms': true,
-      });
+            'companyName': _businessCompanyName.text.trim(),
+            'businessType': _businessType.text.trim(),
+            'businessEmail': _businessEmail.text.trim().isEmpty
+                ? _senderUser?.email
+                : _businessEmail.text.trim(),
+            'businessPhone': _businessPhone.text.trim(),
+            'businessAddress': _businessAddress.text.trim(),
+            'vatNumber': _businessVatNumber.text.trim(),
+            'businessSize': '1-10',
+            'acceptTerms': true,
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       _selectedBusinessId = '${data['businessId']}';
       await _loadBusinessWorkspaces(_senderUser!.uid);
@@ -10784,9 +10827,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('ensureBusinessCompanyCode')
           .call<Map<String, dynamic>>({
-        'businessId': businessId,
-        'rotate': rotate,
-      });
+            'businessId': businessId,
+            'rotate': rotate,
+          });
       final data = Map<String, dynamic>.from(result.data);
       final code = '${data['companyCode'] ?? ''}'.trim();
       if (code.isEmpty) {
@@ -10925,14 +10968,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallableFromUrl(
-        'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
-      )
+            'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
+          )
           .call({
-        'businessId': businessId,
-        'amount': rawAmount,
-        'idempotencyKey': _businessRothCheckoutKey,
-        'returnUrl': 'https://circumuk.com/?app=business',
-      }).timeout(const Duration(seconds: 20));
+            'businessId': businessId,
+            'amount': rawAmount,
+            'idempotencyKey': _businessRothCheckoutKey,
+            'returnUrl': 'https://circumuk.com/?app=business',
+          })
+          .timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
@@ -10984,8 +11028,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final response =
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('previewSenderCancellation')
-              .call({'deliveryId': delivery.id}).timeout(
-                  const Duration(seconds: 20));
+              .call({'deliveryId': delivery.id})
+              .timeout(const Duration(seconds: 20));
       preview = Map<String, dynamic>.from(response.data as Map);
     } on TimeoutException {
       if (!mounted) return;
@@ -11136,8 +11180,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'email-already-in-use' => 'That email already has a Circum profile.',
       'user-not-found' => 'No Circum profile found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'Those sign-in details are not right.',
+      'invalid-credential' => 'Those sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -11181,8 +11224,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
       _irisEstimatedWeightKg =
           decision.source == 'repository_match' && decision.weightKg != null
-              ? math.max(estimate.weightKg, decision.weightKg!)
-              : estimate.weightKg;
+          ? math.max(estimate.weightKg, decision.weightKg!)
+          : estimate.weightKg;
       _irisWeightBand = estimate.weightBand;
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
@@ -11255,8 +11298,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         });
         return;
       }
-      final insight =
-          picked == null ? null : await _analyseParcelPhotoForIris(picked);
+      final insight = picked == null
+          ? null
+          : await _analyseParcelPhotoForIris(picked);
       if (!mounted) return;
       setState(() {
         _parcelPhoto = picked;
@@ -11280,14 +11324,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<bool> _parcelPhotoIsSafe(XFile photo) async {
     final name = photo.name.toLowerCase();
-    final allowedExtension = name.endsWith('.jpg') ||
+    final allowedExtension =
+        name.endsWith('.jpg') ||
         name.endsWith('.jpeg') ||
         name.endsWith('.png') ||
         name.endsWith('.webp') ||
         name.endsWith('.heic') ||
         name.endsWith('.heif');
     final mime = (photo.mimeType ?? '').toLowerCase();
-    final allowedMime = mime.isEmpty ||
+    final allowedMime =
+        mime.isEmpty ||
         mime.startsWith('image/') ||
         mime == 'application/octet-stream';
     final length = await photo.length();
@@ -11301,15 +11347,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('analyseParcelPhotoForIris')
           .call({
-        'imageBase64': base64Encode(bytes),
-        'contentType': photo.mimeType,
-        'fileName': photo.name,
-        'description': _description.text.trim(),
-        'declaredWeightText': _weight.text.trim(),
-        'distanceMiles': _confirmedRouteDistanceMiles,
-        'selectedSpeed': _selectedSpeed,
-        'vehicleType': _effectiveVehicle.name,
-      });
+            'imageBase64': base64Encode(bytes),
+            'contentType': photo.mimeType,
+            'fileName': photo.name,
+            'description': _description.text.trim(),
+            'declaredWeightText': _weight.text.trim(),
+            'distanceMiles': _confirmedRouteDistanceMiles,
+            'selectedSpeed': _selectedSpeed,
+            'vehicleType': _effectiveVehicle.name,
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       return _IrisImageInsight.fromBackend(data, fallbackFileName: photo.name);
     } catch (_) {
@@ -11366,7 +11412,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final estimate = _IrisWeightEstimate(
       weightKg: estimateWeight,
-      weightBand: _irisWeightBand ??
+      weightBand:
+          _irisWeightBand ??
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
       explanation: _irisWeightExplanation ?? 'IRIS estimate confirmed by you.',
@@ -11460,28 +11507,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required _IrisWeightEstimate estimate,
     required double? senderWeightKg,
   }) {
-    final trustedKnownItem = estimate.confidence == 'high' &&
+    final trustedKnownItem =
+        estimate.confidence == 'high' &&
         (estimate.weightSource == 'known_product_lookup' ||
             estimate.weightSource == 'repository_match');
     if (trustedKnownItem) {
       final trustedDecision =
           IrisWeightEstimator.resolveTrustedKnownItemPricing(
-        description: _description.text,
-        quantity: estimate.quantity,
-        userWeightKg: senderWeightKg ?? 0,
-        trustedItemWeightKg: estimate.weightKg,
-        historicalMatches: estimate.historicalVerifiedWeightKg == null
-            ? const []
-            : [estimate.historicalVerifiedWeightKg!],
-      );
+            description: _description.text,
+            quantity: estimate.quantity,
+            userWeightKg: senderWeightKg ?? 0,
+            trustedItemWeightKg: estimate.weightKg,
+            historicalMatches: estimate.historicalVerifiedWeightKg == null
+                ? const []
+                : [estimate.historicalVerifiedWeightKg!],
+          );
       final pricingWeight = trustedDecision.pricingWeightKg;
       return _WeightPricingDecision(
         weightKg: pricingWeight,
         weightBand: DeliveryPricing.weightBandFor(pricingWeight).category,
         source: 'repository_match',
-        message: trustedDecision.explanation ??
+        message:
+            trustedDecision.explanation ??
             'IRIS used the verified item weight with a packaging allowance.',
-        reason: trustedDecision.explanation ??
+        reason:
+            trustedDecision.explanation ??
             'Verified catalogue weight used for pricing.',
         verificationRequired: true,
       );
@@ -11512,11 +11562,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
     final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
-    final senderBand =
-        hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
+    final senderBand = hasSenderWeight
+        ? DeliveryPricing.weightBandFor(senderWeightKg)
+        : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference = bandChanged ||
+    final significantDifference =
+        bandChanged ||
         classification.selectedWeightSource == 'keyword_override';
     final mismatchReview = _hasIrisMismatchReview(
       senderWeightKg: senderWeightKg,
@@ -11551,10 +11603,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final source = classification.selectedWeightSource == 'keyword_override'
         ? 'keyword_override'
         : estimate.weightSource == 'known_product_lookup'
-            ? 'repository_match'
-            : estimate.weightKg >= (senderWeightKg ?? 0)
-                ? 'photo_match'
-                : 'customer_declared';
+        ? 'repository_match'
+        : estimate.weightKg >= (senderWeightKg ?? 0)
+        ? 'photo_match'
+        : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,
@@ -11563,10 +11615,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       message: mismatchReview
           ? 'Potential mismatch detected — manual review required.'
           : significantDifference
-              ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-              : 'IRIS has analysed this item and selected the most reliable weight available.',
+          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+          : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason: classification.resolutionReason,
-      verificationRequired: mismatchReview ||
+      verificationRequired:
+          mismatchReview ||
           significantDifference ||
           classification.requiresManualReview,
     );
@@ -11674,10 +11727,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
     final imageBandRank =
         DeliveryPricing.weightBandFor(imageTotalWeight).maxKg ??
-            double.infinity;
+        double.infinity;
     final textBandRank = textBand.maxKg ?? double.infinity;
     final strongImage = imageInsight.confidenceScore >= 0.55;
-    final shouldUseImage = strongImage &&
+    final shouldUseImage =
+        strongImage &&
         (imageBandRank > textBandRank || textEstimate.confidence == 'low');
     if (!shouldUseImage) {
       return textEstimate.copyWith(
@@ -11728,7 +11782,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             '${data['packageDescription'] ?? data['description'] ?? ''}'
                 .toLowerCase();
         if (!_looksLikeSimilarParcel(text, description)) continue;
-        final verified = _readWeightKg(data['finalVerifiedWeight']) ??
+        final verified =
+            _readWeightKg(data['finalVerifiedWeight']) ??
             _readWeightKg(data['riderVerifiedWeight']) ??
             _readWeightKg(data['driverReportedWeightKg']) ??
             _readWeightKg(data['finalWeightUsed']) ??
@@ -11739,7 +11794,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       matches.sort();
       final high = matches.last;
       final low = matches.first;
-      final trustedKnownItem = base.confidence == 'high' &&
+      final trustedKnownItem =
+          base.confidence == 'high' &&
           (base.weightSource == 'known_product_lookup' ||
               base.weightSource == 'repository_match');
       if (trustedKnownItem) {
@@ -11972,38 +12028,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final quoteResult =
-          await functions.httpsCallable('createSenderBookingQuote').call({
-        'quoteId': id,
-        'distanceMiles': _confirmedRouteDistanceMiles,
-        'route': {
-          'origin': {
-            'latitude': _validatedPickup?.lat,
-            'longitude': _validatedPickup?.lng,
-          },
-          'destination': {
-            'latitude': _validatedDropoff?.lat,
-            'longitude': _validatedDropoff?.lng,
-          },
-        },
-        'weightKg': _deliveryClassification.finalWeightKg,
-        'selectedSpeed': _selectedSpeed,
-        'vanguard': _webVanguardEnabled,
-        'vanguardProtocolEnabled': _webVanguardEnabled,
-        'parcel': {
-          'itemName': _irisMatchedItemName ?? _inferPackageType(),
-          'description': _description.text.trim(),
-          'weightKg': _deliveryClassification.finalWeightKg,
-        },
-        if (_irisPhotoAnalysisId != null)
-          'irisPhotoAnalysisId': _irisPhotoAnalysisId,
-        'iris': _webCanonicalIrisPayload(),
-        'clientDisplayQuote': {
-          'amount': _quoteTotal,
-          'amountPence': (_quoteTotal * 100).round(),
-          'currency': 'GBP',
-        },
-      });
+      final quoteResult = await functions
+          .httpsCallable('createSenderBookingQuote')
+          .call({
+            'quoteId': id,
+            'distanceMiles': _confirmedRouteDistanceMiles,
+            'route': {
+              'origin': {
+                'latitude': _validatedPickup?.lat,
+                'longitude': _validatedPickup?.lng,
+              },
+              'destination': {
+                'latitude': _validatedDropoff?.lat,
+                'longitude': _validatedDropoff?.lng,
+              },
+            },
+            'weightKg': _deliveryClassification.finalWeightKg,
+            'selectedSpeed': _selectedSpeed,
+            'vanguard': _webVanguardEnabled,
+            'vanguardProtocolEnabled': _webVanguardEnabled,
+            'parcel': {
+              'itemName': _irisMatchedItemName ?? _inferPackageType(),
+              'description': _description.text.trim(),
+              'weightKg': _deliveryClassification.finalWeightKg,
+            },
+            if (_irisPhotoAnalysisId != null)
+              'irisPhotoAnalysisId': _irisPhotoAnalysisId,
+            'iris': _webCanonicalIrisPayload(),
+            'clientDisplayQuote': {
+              'amount': _quoteTotal,
+              'amountPence': (_quoteTotal * 100).round(),
+              'currency': 'GBP',
+            },
+          });
       final quote = Map<String, dynamic>.from(quoteResult.data as Map);
       final authoritativeTotal =
           (quote['amountDue'] as num? ?? quote['total'] as num? ?? 0)
@@ -12035,30 +12092,30 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       };
       final sessionResult = await functions
           .httpsCallableFromUrl(
-        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
-      )
+            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+          )
           .call({
-        'quoteId': quote['quoteId'],
-        'fallbackMethod': 'card',
-        'rothEnabled': _deliveryUseRoth,
-        'checkoutMode': 'web_checkout',
-        'requestId': id,
-        'idempotencyKey': id,
-        'returnUrl': 'https://circum-2797c.web.app/send',
-        'deliveryPayload': deliveryPayload,
-      });
+            'quoteId': quote['quoteId'],
+            'fallbackMethod': 'card',
+            'rothEnabled': _deliveryUseRoth,
+            'checkoutMode': 'web_checkout',
+            'requestId': id,
+            'idempotencyKey': id,
+            'returnUrl': 'https://circum-2797c.web.app/send',
+            'deliveryPayload': deliveryPayload,
+          });
       final session = Map<String, dynamic>.from(sessionResult.data as Map);
       if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
         final paidDeliveryResult = await functions
             .httpsCallableFromUrl(
-          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
-        )
+              'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
+            )
             .call({
-          ...deliveryPayload,
-          'quoteId': quote['quoteId'],
-          'paymentSessionId': session['paymentSessionId'],
-          'idempotencyKey': id,
-        });
+              ...deliveryPayload,
+              'quoteId': quote['quoteId'],
+              'paymentSessionId': session['paymentSessionId'],
+              'idempotencyKey': id,
+            });
         final paidDelivery = Map<String, dynamic>.from(
           paidDeliveryResult.data as Map,
         );
@@ -12274,32 +12331,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createHealthPlusBooking')
           .call<Map<String, dynamic>>({
-        'fullName': _healthName.text.trim(),
-        'phoneNumber': _healthPhone.text.trim(),
-        'email': _healthEmail.text.trim(),
-        'pharmacyName': _healthPharmacyName.text.trim(),
-        'pharmacyAddress': _healthPharmacy.text.trim(),
-        'pharmacyAddressCanonical': _validatedHealthPharmacy?.toJson(),
-        'deliveryAddress': _healthDelivery.text.trim(),
-        'deliveryAddressCanonical': _validatedHealthDelivery?.toJson(),
-        'notes': _healthNotes.text.trim(),
-        'prescriptionType': _healthPrescriptionType,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'healthPlusPlan': _healthSubscriptionPlan,
-        'preferredDay': _healthPreferredDay.text.trim(),
-        'preferredPickupDay': _healthPreferredDay.text.trim(),
-        'preferredPickupTime': _healthPreferredTime.text.trim(),
-        'consentConfirmed': _healthConsent,
-        'frequency': _healthFrequency.value,
-        'customSchedule': _healthCustomSchedule.text.trim(),
-        'savedPaymentMethod': _healthSavePayment,
-        'pricingInputs': {
-          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
-          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
-        },
-        'idempotencyKey':
-            'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
-      });
+            'fullName': _healthName.text.trim(),
+            'phoneNumber': _healthPhone.text.trim(),
+            'email': _healthEmail.text.trim(),
+            'pharmacyName': _healthPharmacyName.text.trim(),
+            'pharmacyAddress': _healthPharmacy.text.trim(),
+            'pharmacyAddressCanonical': _validatedHealthPharmacy?.toJson(),
+            'deliveryAddress': _healthDelivery.text.trim(),
+            'deliveryAddressCanonical': _validatedHealthDelivery?.toJson(),
+            'notes': _healthNotes.text.trim(),
+            'prescriptionType': _healthPrescriptionType,
+            'subscriptionPlan': _healthSubscriptionPlan,
+            'healthPlusPlan': _healthSubscriptionPlan,
+            'preferredDay': _healthPreferredDay.text.trim(),
+            'preferredPickupDay': _healthPreferredDay.text.trim(),
+            'preferredPickupTime': _healthPreferredTime.text.trim(),
+            'consentConfirmed': _healthConsent,
+            'frequency': _healthFrequency.value,
+            'customSchedule': _healthCustomSchedule.text.trim(),
+            'savedPaymentMethod': _healthSavePayment,
+            'pricingInputs': {
+              'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+              'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+            },
+            'idempotencyKey':
+                'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
+          });
       final data = Map<String, dynamic>.from(result.data);
       final id = '${data['profileId'] ?? ''}'.trim();
       final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
@@ -12345,8 +12402,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         profileId: id,
         quote: quote,
       );
-      final checkoutUrl =
-          checkout == null ? null : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final checkoutUrl = checkout == null
+          ? null
+          : '${checkout['checkoutUrl'] ?? ''}'.trim();
       final paid = checkout != null && checkout['paid'] == true;
       final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
@@ -12361,16 +12419,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'status': paid
               ? 'paid'
               : !hasCheckoutUrl
-                  ? 'pending_secure_checkout'
-                  : 'checkout_created',
+              ? 'pending_secure_checkout'
+              : 'checkout_created',
           'rothApplied': checkout?['rothApplied'],
           'cardAmount': checkout?['cardAmount'],
         });
         _healthMessage = paid
             ? 'Your Health+ pickup has been paid with Roth.'
             : !hasCheckoutUrl
-                ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
-                : 'Your Health+ pickup is saved. Payment is ready.';
+            ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
+            : 'Your Health+ pickup is saved. Payment is ready.';
         _firebaseOnline = true;
       });
 
@@ -12602,8 +12660,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
     final vanguardIncluded = _webVanguardRequired;
-    final vanguardAddOn =
-        vanguardEnabled && !vanguardIncluded ? _webVanguardAddOnPriceGbp : 0.0;
+    final vanguardAddOn = vanguardEnabled && !vanguardIncluded
+        ? _webVanguardAddOnPriceGbp
+        : 0.0;
     final customerTotal = quote.total + vanguardAddOn;
     final hasPhoto = parcelPhotoData['hasPhoto'] == true;
     final parcelPhotoUrl =
@@ -12740,9 +12799,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
           : _irisImageInsight?.riderGuidance ??
-              (vanguardEnabled
-                  ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
-                  : ''),
+                (vanguardEnabled
+                    ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
+                    : ''),
       'vanguardEnabled': vanguardEnabled,
       'vanguardProtocolEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
@@ -12788,8 +12847,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'irisImageAnalysis': _irisImageInsight?.toJson(),
         'irisDecisionStatus': hasPhoto
             ? (_irisImageInsight == null
-                ? 'photo_attached_text_fallback'
-                : 'photo_used_in_iris_analysis')
+                  ? 'photo_attached_text_fallback'
+                  : 'photo_used_in_iris_analysis')
             : 'not_provided',
       },
       'weight': _weight.text.trim(),
@@ -12893,8 +12952,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'circumLabourShare': quote.circumLabourShare,
       'totalRiderEarnings': quote.totalRiderEarnings,
       'totalCircumRevenue': platformRevenue,
-      'serviceLevelSurcharge':
-          serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
+      'serviceLevelSurcharge': serviceLevelSurcharge < 0
+          ? 0
+          : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
@@ -12953,8 +13013,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             : 'distanceFromRider',
         'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
-        'matchingPriority':
-            selectedServiceLevel == 'express' ? 'high' : 'normal',
+        'matchingPriority': selectedServiceLevel == 'express'
+            ? 'high'
+            : 'normal',
       },
       'pickupDetails': {
         'fullname': collectionContactName,
@@ -13021,48 +13082,50 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(id)
         .snapshots()
         .listen(
-      (snapshot) {
-        final data = snapshot.data();
-        if (!mounted || data == null) return;
-        final status = _backendStatusFromDelivery(data);
-        final driverId = _driverIdFromRequest(data);
-        setState(() {
-          final matchingStatus = status == 'requested' || status == 'pending';
-          if (driverId != null || _statusIndexFromFirebase(status) > 0) {
-            _checkoutState = _CheckoutState.riderAssigned;
-          } else if (matchingStatus &&
-              (_checkoutState == _CheckoutState.bookingCreated ||
-                  _checkoutState == _CheckoutState.matchingRiders)) {
-            _checkoutState = _CheckoutState.matchingRiders;
-          }
-          _firebaseOnline = true;
-          _firebaseError = null;
-          _broadcasting =
-              _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
-          _statusIndex = _statusIndexFromFirebase(status);
-          _activeVanguardData = data['vanguardEnabled'] == true
-              ? Map<String, dynamic>.from(data)
-              : null;
-          _activeRequestReceivedAt = _jobReceivedDate(data);
-        });
-        if (driverId != null && driverId != _assignedDriverId) {
-          _assignedDriverId = driverId;
-          _listenToAssignedDriver(driverId, data);
-        }
-        if (_statusIndexFromFirebase(status) >= 3) {
-          _checkExistingDriverRating();
-        }
-      },
-      onError: (Object _) {
-        if (!mounted) return;
-        setState(() {
-          _checkoutState = _CheckoutState.failed;
-          _broadcasting = false;
-          _firebaseOnline = false;
-          _firebaseError = 'Could not keep this delivery up to date.';
-        });
-      },
-    );
+          (snapshot) {
+            final data = snapshot.data();
+            if (!mounted || data == null) return;
+            final status = _backendStatusFromDelivery(data);
+            final driverId = _driverIdFromRequest(data);
+            setState(() {
+              final matchingStatus =
+                  status == 'requested' || status == 'pending';
+              if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+                _checkoutState = _CheckoutState.riderAssigned;
+              } else if (matchingStatus &&
+                  (_checkoutState == _CheckoutState.bookingCreated ||
+                      _checkoutState == _CheckoutState.matchingRiders)) {
+                _checkoutState = _CheckoutState.matchingRiders;
+              }
+              _firebaseOnline = true;
+              _firebaseError = null;
+              _broadcasting =
+                  _checkoutState == _CheckoutState.matchingRiders &&
+                  matchingStatus;
+              _statusIndex = _statusIndexFromFirebase(status);
+              _activeVanguardData = data['vanguardEnabled'] == true
+                  ? Map<String, dynamic>.from(data)
+                  : null;
+              _activeRequestReceivedAt = _jobReceivedDate(data);
+            });
+            if (driverId != null && driverId != _assignedDriverId) {
+              _assignedDriverId = driverId;
+              _listenToAssignedDriver(driverId, data);
+            }
+            if (_statusIndexFromFirebase(status) >= 3) {
+              _checkExistingDriverRating();
+            }
+          },
+          onError: (Object _) {
+            if (!mounted) return;
+            setState(() {
+              _checkoutState = _CheckoutState.failed;
+              _broadcasting = false;
+              _firebaseOnline = false;
+              _firebaseError = 'Could not keep this delivery up to date.';
+            });
+          },
+        );
   }
 
   void _listenToLiveLocation(String deliveryId) {
@@ -13074,17 +13137,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc('liveLocation')
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _liveLocationData = snapshot.data();
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => _liveLocationData = null);
-      },
-    );
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _liveLocationData = snapshot.data();
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _liveLocationData = null);
+          },
+        );
   }
 
   String? _driverIdFromRequest(Map<String, dynamic> data) {
@@ -13109,60 +13172,60 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(driverId)
         .snapshots()
         .listen((snapshot) async {
-      if (!mounted) return;
-      if (snapshot.exists) {
-        setState(() {
-          _assignedDriver = DriverProfile.fromMap(
-            driverId,
-            snapshot.data(),
-            performance: _assignedDriverMetric,
-          );
+          if (!mounted) return;
+          if (snapshot.exists) {
+            setState(() {
+              _assignedDriver = DriverProfile.fromMap(
+                driverId,
+                snapshot.data(),
+                performance: _assignedDriverMetric,
+              );
+            });
+            return;
+          }
+          final riderSnapshot = await FirebaseFirestore.instance
+              .collection('riders')
+              .doc(driverId)
+              .get();
+          if (!mounted || !riderSnapshot.exists) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              driverId,
+              riderSnapshot.data(),
+              performance: _assignedDriverMetric,
+            );
+          });
         });
-        return;
-      }
-      final riderSnapshot = await FirebaseFirestore.instance
-          .collection('riders')
-          .doc(driverId)
-          .get();
-      if (!mounted || !riderSnapshot.exists) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          driverId,
-          riderSnapshot.data(),
-          performance: _assignedDriverMetric,
-        );
-      });
-    });
     _driverPerformanceSub = FirebaseFirestore.instance
         .collection('driverPerformanceMetrics')
         .doc(driverId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final metric = DriverPerformanceMetric.fromMap(
-        driverId,
-        snapshot.data(),
-      );
-      setState(() {
-        _assignedDriverMetric = metric;
-        final profile = _assignedDriver;
-        if (profile != null) {
-          _assignedDriver = DriverProfile.fromMap(
-            profile.driverId,
-            {
-              'fullName': profile.fullName,
-              'photoUrl': profile.photoUrl,
-              'phoneNumber': profile.phoneNumber,
-              'verificationStatus': profile.verificationStatus,
-              'driverStatus': profile.status,
-              'vehicle': profile.vehicle.toJson(),
-            },
-            performance: metric,
-            recentRatings: profile.recentRatings,
+          if (!mounted) return;
+          final metric = DriverPerformanceMetric.fromMap(
+            driverId,
+            snapshot.data(),
           );
-        }
-      });
-    });
+          setState(() {
+            _assignedDriverMetric = metric;
+            final profile = _assignedDriver;
+            if (profile != null) {
+              _assignedDriver = DriverProfile.fromMap(
+                profile.driverId,
+                {
+                  'fullName': profile.fullName,
+                  'photoUrl': profile.photoUrl,
+                  'phoneNumber': profile.phoneNumber,
+                  'verificationStatus': profile.verificationStatus,
+                  'driverStatus': profile.status,
+                  'vehicle': profile.vehicle.toJson(),
+                },
+                performance: metric,
+                recentRatings: profile.recentRatings,
+              );
+            }
+          });
+        });
     _assignedDriverRatingsSub = FirebaseFirestore.instance
         .collection('publishedDriverRatings')
         .where('driverId', isEqualTo: driverId)
@@ -13170,49 +13233,46 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .limit(6)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final ratings = snapshot.docs
-          .map((doc) => DriverRating.fromMap(doc.data()))
-          .where((rating) => !rating.hiddenByAdmin)
-          .take(3)
-          .toList();
-      final profile = _assignedDriver;
-      if (profile == null) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          profile.driverId,
-          {
-            'fullName': profile.fullName,
-            'photoUrl': profile.photoUrl,
-            'phoneNumber': profile.phoneNumber,
-            'verificationStatus': profile.verificationStatus,
-            'driverStatus': profile.status,
-            'vehicle': profile.vehicle.toJson(),
-          },
-          performance: _assignedDriverMetric,
-          recentRatings: ratings,
-        );
-      });
-    });
+          if (!mounted) return;
+          final ratings = snapshot.docs
+              .map((doc) => DriverRating.fromMap(doc.data()))
+              .where((rating) => !rating.hiddenByAdmin)
+              .take(3)
+              .toList();
+          final profile = _assignedDriver;
+          if (profile == null) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              profile.driverId,
+              {
+                'fullName': profile.fullName,
+                'photoUrl': profile.photoUrl,
+                'phoneNumber': profile.phoneNumber,
+                'verificationStatus': profile.verificationStatus,
+                'driverStatus': profile.status,
+                'vehicle': profile.vehicle.toJson(),
+              },
+              performance: _assignedDriverMetric,
+              recentRatings: ratings,
+            );
+          });
+        });
   }
 
   DriverProfile _driverProfileFromDelivery(
     String driverId,
     Map<String, dynamic> data,
   ) {
-    return DriverProfile.fromMap(
-        driverId,
-        {
-          'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
-          'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
-          'vehicleType':
-              data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
-          'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
-          'vehicleColour': data['vehicleColour'] ?? '',
-          'plateNumber': data['plateNumber'] ?? '',
-          'verificationStatus': data['verificationStatus'] ?? 'verified',
-        },
-        performance: _assignedDriverMetric);
+    return DriverProfile.fromMap(driverId, {
+      'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
+      'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
+      'vehicleType':
+          data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
+      'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
+      'vehicleColour': data['vehicleColour'] ?? '',
+      'plateNumber': data['plateNumber'] ?? '',
+      'verificationStatus': data['verificationStatus'] ?? 'verified',
+    }, performance: _assignedDriverMetric);
   }
 
   Future<void> _checkExistingDriverRating() async {
@@ -13275,12 +13335,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      await functions.httpsCallable('submitDeliveryRating').call({
-        'deliveryId': requestId,
-        'stars': _selectedRating,
-        'feedback': _ratingFeedback.text.trim(),
-        'feedbackTags': _selectedRatingTags.toList(),
-      }).timeout(const Duration(seconds: 20));
+      await functions
+          .httpsCallable('submitDeliveryRating')
+          .call({
+            'deliveryId': requestId,
+            'stars': _selectedRating,
+            'feedback': _ratingFeedback.text.trim(),
+            'feedbackTags': _selectedRatingTags.toList(),
+          })
+          .timeout(const Duration(seconds: 20));
       if (_selectedTipAmount > 0) {
         // Installed web bundles used httpsCallable('submitDeliveryTip'); the
         // canonical website now calls the isolated live Cloud Run owner.
@@ -13300,9 +13363,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!mounted) return;
       setState(() {
         _ratingSubmitted = true;
-        _ratingMessage = _selectedRatingTags.any(
-          (tag) => tag == 'safety_concern' || tag == 'damaged_item',
-        )
+        _ratingMessage =
+            _selectedRatingTags.any(
+              (tag) => tag == 'safety_concern' || tag == 'damaged_item',
+            )
             ? 'Your rating is saved. Your feedback has been sent to Circum Support.'
             : 'Thanks. Your rating has been saved.';
       });
@@ -13334,66 +13398,68 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .orderBy('createdAt')
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final driverMessages = <_ChatMessage>[];
-      final supportMessages = <_ChatMessage>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final senderType = '${data['senderType'] ?? 'support'}';
-        final senderRole = '${data['senderRole'] ?? senderType}';
-        final message =
-            '${data['messageText'] ?? data['message'] ?? ''}'.trim();
-        if (message.isEmpty) continue;
-        final chatMessage = _ChatMessage(
-          fromMe: data['senderId'] == _senderUser?.uid &&
-              senderRole != 'system' &&
-              senderType != 'support',
-          text: message,
-          time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-          label: senderRole == 'system' ||
-                  senderType == 'support' ||
-                  senderType == 'admin'
-              ? 'CIRCUM Support'
-              : senderType == 'rider' || senderType == 'driver'
+          if (!mounted) return;
+          final driverMessages = <_ChatMessage>[];
+          final supportMessages = <_ChatMessage>[];
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final senderType = '${data['senderType'] ?? 'support'}';
+            final senderRole = '${data['senderRole'] ?? senderType}';
+            final message = '${data['messageText'] ?? data['message'] ?? ''}'
+                .trim();
+            if (message.isEmpty) continue;
+            final chatMessage = _ChatMessage(
+              fromMe:
+                  data['senderId'] == _senderUser?.uid &&
+                  senderRole != 'system' &&
+                  senderType != 'support',
+              text: message,
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label:
+                  senderRole == 'system' ||
+                      senderType == 'support' ||
+                      senderType == 'admin'
+                  ? 'CIRCUM Support'
+                  : senderType == 'rider' || senderType == 'driver'
                   ? 'Rider'
                   : 'You',
-        );
-        if (senderType == 'rider' || senderType == 'driver') {
-          driverMessages.add(chatMessage);
-        } else {
-          supportMessages.add(chatMessage);
-        }
-      }
-      setState(() {
-        _driverMessages
-          ..clear()
-          ..addAll(
-            driverMessages.isEmpty
-                ? [
-                    const _ChatMessage(
-                      fromMe: false,
-                      text:
-                          'Rider chat will open when someone accepts the job.',
-                      time: 'Now',
-                    ),
-                  ]
-                : driverMessages,
-          );
-        _supportMessages
-          ..clear()
-          ..addAll(
-            supportMessages.isEmpty
-                ? [
-                    const _ChatMessage(
-                      fromMe: false,
-                      text: "Hi, this is Iris. How can we help?",
-                      time: 'Now',
-                    ),
-                  ]
-                : supportMessages,
-          );
-      });
-    });
+            );
+            if (senderType == 'rider' || senderType == 'driver') {
+              driverMessages.add(chatMessage);
+            } else {
+              supportMessages.add(chatMessage);
+            }
+          }
+          setState(() {
+            _driverMessages
+              ..clear()
+              ..addAll(
+                driverMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text:
+                              'Rider chat will open when someone accepts the job.',
+                          time: 'Now',
+                        ),
+                      ]
+                    : driverMessages,
+              );
+            _supportMessages
+              ..clear()
+              ..addAll(
+                supportMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text: "Hi, this is Iris. How can we help?",
+                          time: 'Now',
+                        ),
+                      ]
+                    : supportMessages,
+              );
+          });
+        });
   }
 
   int _statusIndexFromFirebase(String status) {
@@ -13433,9 +13499,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String _senderTrackingStateForBackendStatus(String status) {
     final normalized = status.trim().toLowerCase().replaceAll(
-          RegExp(r'[-\s]+'),
-          '_',
-        );
+      RegExp(r'[-\s]+'),
+      '_',
+    );
     const mapping = {
       'requested': 'finding_rider',
       'pending': 'finding_rider',
@@ -13594,8 +13660,7 @@ class _DesktopPortalLayout extends StatelessWidget {
       _SenderStep.payment ||
       _SenderStep.tracking ||
       _SenderStep.healthPlus ||
-      _SenderStep.business =>
-        true,
+      _SenderStep.business => true,
       _ => false,
     };
     if (step == _SenderStep.dashboard) {
@@ -13624,16 +13689,16 @@ class _DesktopPortalLayout extends StatelessWidget {
                         message: deliveryLoadError!,
                       )
                     : activeDelivery == null
-                        ? _DesktopNoActiveDelivery(
-                            colors: colors,
-                            onSendParcel: onSendParcel,
-                            onViewHistory: onViewHistory,
-                          )
-                        : _DesktopActiveDeliveryStatus(
-                            colors: colors,
-                            delivery: activeDelivery!,
-                            onCancelBooking: onCancelBooking,
-                          ),
+                    ? _DesktopNoActiveDelivery(
+                        colors: colors,
+                        onSendParcel: onSendParcel,
+                        onViewHistory: onViewHistory,
+                      )
+                    : _DesktopActiveDeliveryStatus(
+                        colors: colors,
+                        delivery: activeDelivery!,
+                        onCancelBooking: onCancelBooking,
+                      ),
               ),
             ),
           ),
@@ -14104,8 +14169,8 @@ class _SenderAccessGate extends StatelessWidget {
                       onPressed: busy
                           ? null
                           : signupMode
-                              ? onSignUp
-                              : onSignIn,
+                          ? onSignUp
+                          : onSignIn,
                       icon: busy
                           ? const SizedBox(
                               width: 18,
@@ -14117,8 +14182,8 @@ class _SenderAccessGate extends StatelessWidget {
                         busy
                             ? 'Please wait'
                             : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
+                            ? 'Create account'
+                            : 'Sign in',
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.text,
@@ -14749,19 +14814,22 @@ class _BusinessCentreStep extends StatelessWidget {
           ].contains(delivery.status.toLowerCase()),
         )
         .toList();
-    final outstandingInvoices =
-        invoices.where((invoice) => !_invoicePaid(invoice)).toList();
+    final outstandingInvoices = invoices
+        .where((invoice) => !_invoicePaid(invoice))
+        .toList();
     final monthlySpend = businessDeliveries.fold<double>(
       0,
       (total, delivery) => total + delivery.pricePaid,
     );
     final members = _teamMembers;
     final accountName = '${account?['businessName'] ?? 'Circum Business'}';
-    final recognitionLabel =
-        account == null ? null : _businessRecognitionLabel(account!);
+    final recognitionLabel = account == null
+        ? null
+        : _businessRecognitionLabel(account!);
 
-    final teamMemberCount =
-        members.where((member) => member['status'] != 'removed').length;
+    final teamMemberCount = members
+        .where((member) => member['status'] != 'removed')
+        .length;
     final rothBalance = _money(
       wallet?['balance'] ?? wallet?['availableBalance'],
     );
@@ -14873,8 +14941,8 @@ class _BusinessCentreStep extends StatelessWidget {
   }
 
   static bool _invoicePaid(Map<String, dynamic> invoice) {
-    final status =
-        '${invoice['status'] ?? invoice['paymentStatus'] ?? ''}'.toLowerCase();
+    final status = '${invoice['status'] ?? invoice['paymentStatus'] ?? ''}'
+        .toLowerCase();
     return status == 'paid' || status == 'paid_manually';
   }
 
@@ -14890,7 +14958,8 @@ class _BusinessCentreStep extends StatelessWidget {
     );
     final awarded = patron['awarded'] == true || account['isPatron'] == true;
     if (!awarded) return null;
-    final number = (patron['number'] as num?)?.toInt() ??
+    final number =
+        (patron['number'] as num?)?.toInt() ??
         (account['patronNumber'] as num?)?.toInt();
     return number == null
         ? 'Patron'
@@ -14928,7 +14997,8 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
     final initial = accountName.trim().isEmpty
         ? 'C'
         : accountName.trim().characters.first.toUpperCase();
-    final active = accountStatus.toLowerCase() == 'approved' ||
+    final active =
+        accountStatus.toLowerCase() == 'approved' ||
         accountStatus.toLowerCase() == 'active';
     return _BusinessSurface(
       colors: colors,
@@ -15071,18 +15141,18 @@ class _BusinessNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border),
-        ),
-        child: Text(
-          message,
-          style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
-        ),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: colors.border),
+    ),
+    child: Text(
+      message,
+      style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+    ),
+  );
 }
 
 class _BusinessSkeleton extends StatelessWidget {
@@ -15092,21 +15162,21 @@ class _BusinessSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Loading Business'),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(color: colors.text),
-            const SizedBox(height: 10),
-            Text(
-              'Loading company workspace, invoices, team and delivery records.',
-              style: TextStyle(color: colors.mutedText),
-            ),
-          ],
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Loading Business'),
+        const SizedBox(height: 12),
+        LinearProgressIndicator(color: colors.text),
+        const SizedBox(height: 10),
+        Text(
+          'Loading company workspace, invoices, team and delivery records.',
+          style: TextStyle(color: colors.mutedText),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _BusinessOnboardingPanel extends StatelessWidget {
@@ -15138,104 +15208,104 @@ class _BusinessOnboardingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final twoColumn = constraints.maxWidth >= 760;
-          final create = _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Create company'),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: companyName,
-                  hint: 'Company name',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: businessType,
-                  hint: 'Business type',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: businessEmail,
-                  hint: 'Business email',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: businessPhone,
-                  hint: 'Business phone',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: businessAddress,
-                  hint: 'Registered address',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: vatNumber,
-                  hint: 'VAT number optional',
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: busy ? null : onCreateBusiness,
-                    icon: const Icon(Icons.business_center_outlined),
-                    label: const Text('Create Business workspace'),
-                  ),
-                ),
-              ],
+    builder: (context, constraints) {
+      final twoColumn = constraints.maxWidth >= 760;
+      final create = _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Create company'),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: companyName,
+              hint: 'Company name',
             ),
-          );
-          final join = _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Join company'),
-                const SizedBox(height: 10),
-                Text(
-                  'Enter the company code from your Business owner or admin.',
-                  style: TextStyle(color: colors.mutedText, height: 1.4),
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: companyCode,
-                  hint: 'Company code',
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : onJoinBusiness,
-                    icon: const Icon(Icons.group_add_outlined),
-                    label: const Text('Request access'),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessType,
+              hint: 'Business type',
             ),
-          );
-          if (!twoColumn) {
-            return Column(children: [create, const SizedBox(height: 14), join]);
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: create),
-              const SizedBox(width: 14),
-              Expanded(child: join),
-            ],
-          );
-        },
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessEmail,
+              hint: 'Business email',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessPhone,
+              hint: 'Business phone',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessAddress,
+              hint: 'Registered address',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: vatNumber,
+              hint: 'VAT number optional',
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onCreateBusiness,
+                icon: const Icon(Icons.business_center_outlined),
+                label: const Text('Create Business workspace'),
+              ),
+            ),
+          ],
+        ),
       );
+      final join = _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Join company'),
+            const SizedBox(height: 10),
+            Text(
+              'Enter the company code from your Business owner or admin.',
+              style: TextStyle(color: colors.mutedText, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: companyCode,
+              hint: 'Company code',
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onJoinBusiness,
+                icon: const Icon(Icons.group_add_outlined),
+                label: const Text('Request access'),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (!twoColumn) {
+        return Column(children: [create, const SizedBox(height: 14), join]);
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: create),
+          const SizedBox(width: 14),
+          Expanded(child: join),
+        ],
+      );
+    },
+  );
 }
 
 enum _BusinessTone { neutral, success, warning, danger, blue, roth }
@@ -15253,24 +15323,24 @@ class _BusinessSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: padding,
-        decoration: BoxDecoration(
-          color: colors.dark
-              ? const Color(0xff0d111c).withValues(alpha: 0.92)
-              : colors.panel,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xff3b82f6).withValues(alpha: 0.08),
-              blurRadius: 26,
-              offset: const Offset(0, 16),
-            ),
-          ],
+    width: double.infinity,
+    padding: padding,
+    decoration: BoxDecoration(
+      color: colors.dark
+          ? const Color(0xff0d111c).withValues(alpha: 0.92)
+          : colors.panel,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xff3b82f6).withValues(alpha: 0.08),
+          blurRadius: 26,
+          offset: const Offset(0, 16),
         ),
-        child: child,
-      );
+      ],
+    ),
+    child: child,
+  );
 }
 
 class _BusinessSectionLabel extends StatelessWidget {
@@ -15281,17 +15351,17 @@ class _BusinessSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: colors.mutedText,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: colors.mutedText,
+        fontSize: 10.5,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
+    ),
+  );
 }
 
 class _BusinessOperationalPill extends StatelessWidget {
@@ -15371,49 +15441,51 @@ class _BusinessDeliveriesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Delivery management'),
-            const SizedBox(height: 8),
-            if (deliveries.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.local_shipping_outlined,
-                title: 'No Business deliveries yet',
-                body:
-                    'Create a Business delivery to see live tracking, scheduled jobs, repeat jobs and history here.',
-                action: 'Create delivery',
-                onAction: onCreateDelivery,
-              )
-            else ...[
-              Text(
-                '${activeDeliveries.length} active · ${deliveries.length} total',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  fontWeight: FontWeight.w800,
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Delivery management'),
+        const SizedBox(height: 8),
+        if (deliveries.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.local_shipping_outlined,
+            title: 'No Business deliveries yet',
+            body:
+                'Create a Business delivery to see live tracking, scheduled jobs, repeat jobs and history here.',
+            action: 'Create delivery',
+            onAction: onCreateDelivery,
+          )
+        else ...[
+          Text(
+            '${activeDeliveries.length} active · ${deliveries.length} total',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...deliveries
+              .take(8)
+              .map(
+                (delivery) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.route_outlined,
+                  title: _displayDeliveryReference(
+                    delivery.trackingReference.isEmpty
+                        ? delivery.requestId
+                        : delivery.trackingReference,
+                  ),
+                  subtitle:
+                      '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
+                  trailing: _displayStatusLabel(delivery.status),
                 ),
               ),
-              const SizedBox(height: 10),
-              ...deliveries.take(8).map(
-                    (delivery) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.route_outlined,
-                      title: _displayDeliveryReference(
-                        delivery.trackingReference.isEmpty
-                            ? delivery.requestId
-                            : delivery.trackingReference,
-                      ),
-                      subtitle:
-                          '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
-                      trailing: _displayStatusLabel(delivery.status),
-                    ),
-                  ),
-            ],
-          ],
-        ),
-      );
+        ],
+      ],
+    ),
+  );
 }
 
 class _BusinessInvoicesPanel extends StatelessWidget {
@@ -15433,57 +15505,57 @@ class _BusinessInvoicesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Invoices'),
-            const SizedBox(height: 8),
-            if (invoices.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.receipt_long_outlined,
-                title: 'No invoices yet',
-                body:
-                    'Business invoices will appear here with Stripe, Roth and part-payment actions.',
-              )
-            else
-              ...invoices.take(10).map((invoice) {
-                final id = '${invoice['id']}';
-                final status =
-                    '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
-                final total = _BusinessCentreStep._money(
-                  invoice['balanceDue'] ?? invoice['total'],
-                );
-                final paid = status.toLowerCase() == 'paid';
-                return _BusinessRecordRow(
-                  colors: colors,
-                  icon: Icons.receipt_long_outlined,
-                  title: '${invoice['invoiceNumber'] ?? id}',
-                  subtitle:
-                      'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
-                  trailing: paid ? 'Paid' : 'Pay',
-                  actions: [
-                    TextButton(
-                      onPressed: () => onDownloadInvoice(invoice),
-                      child: const Text('Download PDF'),
-                    ),
-                    if (!paid) ...[
-                      TextButton(
-                        onPressed: () => onPayInvoice(id),
-                        child: const Text('Stripe'),
-                      ),
-                      TextButton(
-                        onPressed: () => onPayInvoiceWithRoth(id),
-                        child: const Text('Roth'),
-                      ),
-                    ],
-                  ],
-                );
-              }),
-          ],
-        ),
-      );
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Invoices'),
+        const SizedBox(height: 8),
+        if (invoices.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.receipt_long_outlined,
+            title: 'No invoices yet',
+            body:
+                'Business invoices will appear here with Stripe, Roth and part-payment actions.',
+          )
+        else
+          ...invoices.take(10).map((invoice) {
+            final id = '${invoice['id']}';
+            final status =
+                '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
+            final total = _BusinessCentreStep._money(
+              invoice['balanceDue'] ?? invoice['total'],
+            );
+            final paid = status.toLowerCase() == 'paid';
+            return _BusinessRecordRow(
+              colors: colors,
+              icon: Icons.receipt_long_outlined,
+              title: '${invoice['invoiceNumber'] ?? id}',
+              subtitle:
+                  'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
+              trailing: paid ? 'Paid' : 'Pay',
+              actions: [
+                TextButton(
+                  onPressed: () => onDownloadInvoice(invoice),
+                  child: const Text('Download PDF'),
+                ),
+                if (!paid) ...[
+                  TextButton(
+                    onPressed: () => onPayInvoice(id),
+                    child: const Text('Stripe'),
+                  ),
+                  TextButton(
+                    onPressed: () => onPayInvoiceWithRoth(id),
+                    child: const Text('Roth'),
+                  ),
+                ],
+              ],
+            );
+          }),
+      ],
+    ),
+  );
 }
 
 class _BusinessTeamPanel extends StatelessWidget {
@@ -15544,7 +15616,9 @@ class _BusinessTeamPanel extends StatelessWidget {
                   'Team members and roles appear after onboarding or access approval.',
             )
           else
-            ...members.where((member) => member['status'] != 'removed').map(
+            ...members
+                .where((member) => member['status'] != 'removed')
+                .map(
                   (member) => _BusinessTeamRow(
                     colors: colors,
                     member: member,
@@ -15604,7 +15678,8 @@ class _BusinessTeamPanel extends StatelessWidget {
       final role = '${member['role'] ?? ''}'.trim().toLowerCase();
       final status = '${member['status'] ?? 'active'}'.trim().toLowerCase();
       final sameUser = uid.isNotEmpty && member['userId'] == uid;
-      final sameEmail = email.isNotEmpty &&
+      final sameEmail =
+          email.isNotEmpty &&
           '${member['email'] ?? ''}'.trim().toLowerCase() == email;
       if ((sameUser || sameEmail) &&
           status != 'removed' &&
@@ -15766,14 +15841,15 @@ class _BusinessTeamRow extends StatelessWidget {
           ? const []
           : [
               DropdownButton<String>(
-                value: [
-                  'admin',
-                  'manager',
-                  'dispatcher',
-                  'finance',
-                  'viewer',
-                  'member',
-                ].contains(role)
+                value:
+                    [
+                      'admin',
+                      'manager',
+                      'dispatcher',
+                      'finance',
+                      'viewer',
+                      'member',
+                    ].contains(role)
                     ? role
                     : 'member',
                 dropdownColor: colors.panel,
@@ -16152,43 +16228,43 @@ class _BusinessTabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(999),
+    onTap: onPressed,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? const Color(0xff3b82f6).withValues(alpha: 0.14)
+            : colors.panel,
         borderRadius: BorderRadius.circular(999),
-        onTap: onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xff3b82f6).withValues(alpha: 0.14)
-                : colors.panel,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xff3b82f6).withValues(alpha: 0.5)
-                  : colors.border,
+        border: Border.all(
+          color: selected
+              ? const Color(0xff3b82f6).withValues(alpha: 0.5)
+              : colors.border,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+            size: 16,
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+              fontWeight: FontWeight.w900,
+              fontSize: 12.5,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: selected ? const Color(0xffdce7ff) : colors.mutedText,
-                size: 16,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? const Color(0xffdce7ff) : colors.mutedText,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _BusinessSuiteOverviewPanel extends StatelessWidget {
@@ -16434,8 +16510,9 @@ class _BusinessStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final valueColor =
-        tone == _BusinessTone.roth ? const Color(0xffc9a227) : colors.text;
+    final valueColor = tone == _BusinessTone.roth
+        ? const Color(0xffc9a227)
+        : colors.text;
     return _BusinessSurface(
       colors: colors,
       padding: const EdgeInsets.all(14),
@@ -16498,53 +16575,53 @@ class _BusinessActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _BusinessSurface(
-        colors: colors,
-        padding: EdgeInsets.zero,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: colors.field,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: colors.text, size: 18),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.mutedText,
-                    height: 1.3,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+    colors: colors,
+    padding: EdgeInsets.zero,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: colors.text, size: 18),
             ),
-          ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+                fontSize: 13.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.3,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _BusinessProductParityPanel extends StatelessWidget {
@@ -16689,20 +16766,22 @@ class _BusinessProductParityPanel extends StatelessWidget {
   }
 
   List<SenderDeliveryRecord> _matchingDeliveries(List<String> needles) {
-    return deliveries.where((delivery) {
-      final haystack = [
-        delivery.status,
-        delivery.raw['category'],
-        delivery.raw['deliveryCategory'],
-        delivery.raw['service'],
-        delivery.raw['product'],
-        delivery.raw['workflow'],
-        delivery.raw['deliveryType'],
-        delivery.raw['requestType'],
-        delivery.raw['notes'],
-      ].join(' ').toLowerCase();
-      return needles.any(haystack.contains);
-    }).toList(growable: false);
+    return deliveries
+        .where((delivery) {
+          final haystack = [
+            delivery.status,
+            delivery.raw['category'],
+            delivery.raw['deliveryCategory'],
+            delivery.raw['service'],
+            delivery.raw['product'],
+            delivery.raw['workflow'],
+            delivery.raw['deliveryType'],
+            delivery.raw['requestType'],
+            delivery.raw['notes'],
+          ].join(' ').toLowerCase();
+          return needles.any(haystack.contains);
+        })
+        .toList(growable: false);
   }
 
   static bool _active(String status) {
@@ -16718,8 +16797,8 @@ class _BusinessProductParityPanel extends StatelessWidget {
 
   static bool _hasVanguard(SenderDeliveryRecord delivery) {
     final raw = delivery.raw;
-    final category =
-        '${raw['category'] ?? raw['deliveryCategory'] ?? ''}'.toLowerCase();
+    final category = '${raw['category'] ?? raw['deliveryCategory'] ?? ''}'
+        .toLowerCase();
     final protection = raw['vanguardProtection'];
     return raw['vanguardEnabled'] == true ||
         raw['vanguardRequired'] == true ||
@@ -16759,93 +16838,95 @@ class _BusinessProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Icon(icon, color: colors.text),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+            Icon(icon, color: colors.text),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
                 ),
-                if (badgeLabel != null) _HealthChip(label: badgeLabel!),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: TextStyle(
-                color: colors.mutedText,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricPill(
-                    colors: colors,
-                    label: primaryLabel,
-                    value: primaryMetric,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MetricPill(
-                    colors: colors,
-                    label: secondaryLabel,
-                    value: secondaryMetric,
-                  ),
-                ),
-              ],
+            if (badgeLabel != null) _HealthChip(label: badgeLabel!),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: primaryLabel,
+                value: primaryMetric,
+              ),
             ),
-            const SizedBox(height: 10),
-            if (records.isEmpty)
-              Text(
-                'No ${title.toLowerCase()} records yet.',
-                style: TextStyle(color: colors.mutedText),
-              )
-            else
-              ...records.take(2).map(
-                    (record) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.route_outlined,
-                      title: _displayDeliveryReference(
-                        record.trackingReference.isEmpty
-                            ? record.requestId
-                            : record.trackingReference,
-                      ),
-                      subtitle: record.dropoffAddress,
-                      trailing: _displayStatusLabel(record.status),
-                    ),
-                  ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: onAction,
-                icon: const Icon(Icons.arrow_forward),
-                label: Text(actionLabel),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: secondaryLabel,
+                value: secondaryMetric,
               ),
             ),
           ],
         ),
-      );
+        const SizedBox(height: 10),
+        if (records.isEmpty)
+          Text(
+            'No ${title.toLowerCase()} records yet.',
+            style: TextStyle(color: colors.mutedText),
+          )
+        else
+          ...records
+              .take(2)
+              .map(
+                (record) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.route_outlined,
+                  title: _displayDeliveryReference(
+                    record.trackingReference.isEmpty
+                        ? record.requestId
+                        : record.trackingReference,
+                  ),
+                  subtitle: record.dropoffAddress,
+                  trailing: _displayStatusLabel(record.status),
+                ),
+              ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onAction,
+            icon: const Icon(Icons.arrow_forward),
+            label: Text(actionLabel),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BusinessFinanceProductCard extends StatelessWidget {
@@ -16865,80 +16946,80 @@ class _BusinessFinanceProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined, color: colors.text),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Finance',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+            Icon(Icons.account_balance_wallet_outlined, color: colors.text),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Finance',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Business invoices, printable records, Stripe payment and Roth payment are available from web.',
-              style: TextStyle(
-                color: colors.mutedText,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricPill(
-                    colors: colors,
-                    label: 'Business Roth',
-                    value: '£${rothBalance.toStringAsFixed(2)}',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MetricPill(
-                    colors: colors,
-                    label: 'Outstanding',
-                    value: '$outstandingInvoices',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _BusinessRecordRow(
-              colors: colors,
-              icon: Icons.receipt_long_outlined,
-              title: 'Invoice records',
-              subtitle: '$invoiceCount invoices available for print or PDF',
-              trailing: '$invoiceCount',
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: onBuyRoth,
-                icon: const Icon(Icons.add_card_outlined),
-                label: const Text('Add Business Roth'),
               ),
             ),
           ],
         ),
-      );
+        const SizedBox(height: 8),
+        Text(
+          'Business invoices, printable records, Stripe payment and Roth payment are available from web.',
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: 'Business Roth',
+                value: '£${rothBalance.toStringAsFixed(2)}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: 'Outstanding',
+                value: '$outstandingInvoices',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _BusinessRecordRow(
+          colors: colors,
+          icon: Icons.receipt_long_outlined,
+          title: 'Invoice records',
+          subtitle: '$invoiceCount invoices available for print or PDF',
+          trailing: '$invoiceCount',
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onBuyRoth,
+            icon: const Icon(Icons.add_card_outlined),
+            label: const Text('Add Business Roth'),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BusinessAnalyticsPanel extends StatelessWidget {
@@ -16962,8 +17043,9 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
           ].contains(delivery.status.toLowerCase()),
         )
         .length;
-    final successRate =
-        deliveries.isEmpty ? 0 : completed / deliveries.length * 100;
+    final successRate = deliveries.isEmpty
+        ? 0
+        : completed / deliveries.length * 100;
     final spend = deliveries.fold<double>(
       0,
       (total, delivery) => total + delivery.pricePaid,
@@ -17023,7 +17105,9 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...topDestinations.take(3).map(
+            ...topDestinations
+                .take(3)
+                .map(
                   (entry) => _BusinessRecordRow(
                     colors: colors,
                     icon: Icons.place_outlined,
@@ -17067,66 +17151,65 @@ class _BusinessSettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Settings'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: companyName,
+          hint: 'Company name',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessType,
+          hint: 'Business type',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessEmail,
+          hint: 'Billing email',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessAddress,
+          hint: 'Business address',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(colors: colors, controller: vatNumber, hint: 'VAT number'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: website,
+          hint: 'Website / brand URL',
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            _SectionTitle(colors: colors, title: 'Settings'),
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: companyName,
-              hint: 'Company name',
+            FilledButton.icon(
+              onPressed: busy ? null : onSaveProfile,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Business settings'),
             ),
-            const SizedBox(height: 10),
-            _InputBox(
+            _StatusPill(
               colors: colors,
-              controller: businessType,
-              hint: 'Business type',
-            ),
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: businessEmail,
-              hint: 'Billing email',
-            ),
-            const SizedBox(height: 10),
-            _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: businessAddress,
-              hint: 'Business address',
-            ),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors, controller: vatNumber, hint: 'VAT number'),
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: website,
-              hint: 'Website / brand URL',
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: busy ? null : onSaveProfile,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save Business settings'),
-                ),
-                _StatusPill(
-                  colors: colors,
-                  label:
-                      '${account['approvalStatus'] ?? account['status'] ?? 'pending'}',
-                ),
-              ],
+              label:
+                  '${account['approvalStatus'] ?? account['status'] ?? 'pending'}',
             ),
           ],
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _BusinessAuditPanel extends StatelessWidget {
@@ -17137,32 +17220,34 @@ class _BusinessAuditPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Audit history'),
-            const SizedBox(height: 8),
-            if (auditLogs.isEmpty)
-              Text(
-                'Business audit events will appear here.',
-                style: TextStyle(color: colors.mutedText),
-              )
-            else
-              ...auditLogs.take(8).map(
-                    (log) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.fact_check_outlined,
-                      title: '${log['action'] ?? 'Business event'}',
-                      subtitle: _adminDateText(log['createdAt']),
-                      trailing: '${log['actorUserId'] ?? ''}'.isEmpty
-                          ? 'System'
-                          : 'User',
-                    ),
-                  ),
-          ],
-        ),
-      );
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Audit history'),
+        const SizedBox(height: 8),
+        if (auditLogs.isEmpty)
+          Text(
+            'Business audit events will appear here.',
+            style: TextStyle(color: colors.mutedText),
+          )
+        else
+          ...auditLogs
+              .take(8)
+              .map(
+                (log) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.fact_check_outlined,
+                  title: '${log['action'] ?? 'Business event'}',
+                  subtitle: _adminDateText(log['createdAt']),
+                  trailing: '${log['actorUserId'] ?? ''}'.isEmpty
+                      ? 'System'
+                      : 'User',
+                ),
+              ),
+      ],
+    ),
+  );
 }
 
 class _BusinessMiniMetric extends StatelessWidget {
@@ -17178,9 +17263,9 @@ class _BusinessMiniMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 150,
-        child: _MetricPill(colors: colors, label: label, value: value),
-      );
+    width: 150,
+    child: _MetricPill(colors: colors, label: label, value: value),
+  );
 }
 
 class _BusinessRecordRow extends StatelessWidget {
@@ -17202,48 +17287,47 @@ class _BusinessRecordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(icon, color: colors.text),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: colors.mutedText, height: 1.35),
-                  ),
-                ],
-              ),
-            ),
-            if (actions.isEmpty)
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: colors.border),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, color: colors.text),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                trailing,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-              )
-            else
-              Wrap(spacing: 4, children: actions),
-          ],
+                title,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(color: colors.mutedText, height: 1.35),
+              ),
+            ],
+          ),
         ),
-      );
+        if (actions.isEmpty)
+          Text(
+            trailing,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+          )
+        else
+          Wrap(spacing: 4, children: actions),
+      ],
+    ),
+  );
 }
 
 class _BusinessEmptyState extends StatelessWidget {
@@ -17265,31 +17349,31 @@ class _BusinessEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: colors.text),
+        const SizedBox(height: 10),
+        Text(
+          title,
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: colors.text),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 4),
-            Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
-            if (action != null && onAction != null) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: onAction, child: Text(action!)),
-            ],
-          ],
-        ),
-      );
+        const SizedBox(height: 4),
+        Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
+        if (action != null && onAction != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onAction, child: Text(action!)),
+        ],
+      ],
+    ),
+  );
 }
 
 class _LegendBadge extends StatelessWidget {
@@ -17299,22 +17383,22 @@ class _LegendBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xffa78bfa), Color(0xff38bdf8), Color(0xff5eead4)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          'LEGEND #$number',
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xffa78bfa), Color(0xff38bdf8), Color(0xff5eead4)],
+      ),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      'LEGEND #$number',
+      style: const TextStyle(
+        color: Colors.black,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _LegendCard extends StatelessWidget {
@@ -17336,103 +17420,97 @@ class _LegendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: const Color(0xff070b17),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xff7dd3fc)),
-          boxShadow: const [
-            BoxShadow(color: Color(0x5538bdf8), blurRadius: 30)
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      color: const Color(0xff070b17),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xff7dd3fc)),
+      boxShadow: const [BoxShadow(color: Color(0x5538bdf8), blurRadius: 30)],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Color(0xff5eead4)),
-                const SizedBox(width: 9),
-                const Expanded(
-                  child: Text(
-                    'CIRCUM LEGEND',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ),
-                if (onClose != null)
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close, color: Colors.white),
-                  ),
-              ],
-            ),
-            if (celebratory) ...[
-              const SizedBox(height: 14),
-              const Text(
-                'You’re officially a Circum Legend.',
+            const Icon(Icons.auto_awesome, color: Color(0xff5eead4)),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text(
+                'CIRCUM LEGEND',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            Text(
-              name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 21,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 7),
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [
-                  Color(0xffc084fc),
-                  Color(0xff38bdf8),
-                  Color(0xff5eead4)
-                ],
-              ).createShader(bounds),
-              child: Text(
-                'Legend #$number',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
                 ),
               ),
             ),
-            const SizedBox(height: 7),
-            Text(
-              'Awarded ${_readableDate(awardedAt)}',
-              style: const TextStyle(color: Color(0xffcbd5e1)),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Legend status is a recognition badge and may unlock future Circum perks. It does not represent shares, equity, ownership, or financial rights.',
-              style: TextStyle(color: Color(0xff94a3b8), height: 1.4),
-            ),
-            if (celebratory) ...[
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onClose,
-                  child: const Text('View my Legend card'),
-                ),
+            if (onClose != null)
+              IconButton(
+                tooltip: 'Close',
+                onPressed: onClose,
+                icon: const Icon(Icons.close, color: Colors.white),
               ),
-            ],
           ],
         ),
-      );
+        if (celebratory) ...[
+          const SizedBox(height: 14),
+          const Text(
+            'You’re officially a Circum Legend.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
+        Text(
+          name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 7),
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xffc084fc), Color(0xff38bdf8), Color(0xff5eead4)],
+          ).createShader(bounds),
+          child: Text(
+            'Legend #$number',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          'Awarded ${_readableDate(awardedAt)}',
+          style: const TextStyle(color: Color(0xffcbd5e1)),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Legend status is a recognition badge and may unlock future Circum perks. It does not represent shares, equity, ownership, or financial rights.',
+          style: TextStyle(color: Color(0xff94a3b8), height: 1.4),
+        ),
+        if (celebratory) ...[
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onClose,
+              child: const Text('View my Legend card'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _SenderProfileStep extends StatelessWidget {
@@ -17662,8 +17740,9 @@ class _SenderProfileStep extends StatelessWidget {
                 const SizedBox(height: 18),
                 GridView.count(
                   shrinkWrap: true,
-                  crossAxisCount:
-                      MediaQuery.sizeOf(context).width < 720 ? 2 : 4,
+                  crossAxisCount: MediaQuery.sizeOf(context).width < 720
+                      ? 2
+                      : 4,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   childAspectRatio: 1.55,
@@ -17749,8 +17828,9 @@ class _SenderProfileStep extends StatelessWidget {
         if (profile?.isLegend == true && profile?.legendNumber != null) ...[
           _LegendCard(
             colors: colors,
-            name:
-                profile!.fullName.isEmpty ? 'Circum member' : profile!.fullName,
+            name: profile!.fullName.isEmpty
+                ? 'Circum member'
+                : profile!.fullName,
             number: profile!.legendNumber!,
             awardedAt: profile!.legendAwardedAt,
           ),
@@ -18172,8 +18252,8 @@ class _SenderProofOfDeliveryPanel extends StatelessWidget {
     final badgeColor = proof.statusLabel.toLowerCase().contains('available')
         ? const Color(0xFF34D399)
         : proof.statusLabel.toLowerCase().contains('review')
-            ? const Color(0xFFFBBF24)
-            : const Color(0xFFF87171);
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 4),
@@ -18484,22 +18564,23 @@ class _DetailsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matchingHasStarted = checkoutState == _CheckoutState.matchingRiders ||
+    final matchingHasStarted =
+        checkoutState == _CheckoutState.matchingRiders ||
         checkoutState == _CheckoutState.riderAssigned;
     final validating = analyzing || checkoutState == _CheckoutState.validating;
     final ctaLabel = matchingHasStarted
         ? 'Delivery is connecting'
         : validating
-            ? 'Checking options...'
-            : canSubmit
-                ? 'See delivery options'
-                : !pickupVerified || !dropoffVerified
-                    ? 'Verify addresses before pricing'
-                    : !contactDetailsReady
-                        ? 'Add contact details before pricing'
-                        : deliveryTimingType == null
-                            ? 'Choose delivery timing'
-                            : 'Complete delivery timing';
+        ? 'Checking options...'
+        : canSubmit
+        ? 'See delivery options'
+        : !pickupVerified || !dropoffVerified
+        ? 'Verify addresses before pricing'
+        : !contactDetailsReady
+        ? 'Add contact details before pricing'
+        : deliveryTimingType == null
+        ? 'Choose delivery timing'
+        : 'Complete delivery timing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -19231,9 +19312,10 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
   bool _healthStepComplete(int step) {
     return switch (step) {
       0 => widget.pickups.isNotEmpty,
-      1 => widget.fullName.text.trim().isNotEmpty &&
-          widget.phone.text.trim().isNotEmpty &&
-          widget.email.text.trim().isNotEmpty,
+      1 =>
+        widget.fullName.text.trim().isNotEmpty &&
+            widget.phone.text.trim().isNotEmpty &&
+            widget.email.text.trim().isNotEmpty,
       2 => widget.pharmacyVerified,
       3 => widget.deliveryVerified,
       4 => true,
@@ -20047,61 +20129,60 @@ class _HealthParityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: colors.field,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: section.complete
-                  ? colors.success.withValues(alpha: .42)
-                  : colors.border,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        border: Border.all(
+          color: section.complete
+              ? colors.success.withValues(alpha: .42)
+              : colors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    section.icon,
-                    color: section.complete ? colors.success : colors.text,
-                    size: 19,
-                  ),
-                  const Spacer(),
-                  Icon(
-                    section.complete
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    color: section.complete ? colors.success : colors.mutedText,
-                    size: 17,
-                  ),
-                ],
+              Icon(
+                section.icon,
+                color: section.complete ? colors.success : colors.text,
+                size: 19,
               ),
-              const SizedBox(height: 8),
-              Text(
-                section.title,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                section.value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.mutedText,
-                  fontSize: 12,
-                  height: 1.25,
-                  fontWeight: FontWeight.w700,
-                ),
+              const Spacer(),
+              Icon(
+                section.complete
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: section.complete ? colors.success : colors.mutedText,
+                size: 17,
               ),
             ],
           ),
-        ),
-      );
+          const SizedBox(height: 8),
+          Text(
+            section.title,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            section.value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.25,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _HealthChip extends StatelessWidget {
@@ -20780,23 +20861,23 @@ class _IrisImageInsight {
   }
 
   Map<String, dynamic> toJson() => {
-        'analysisId': analysisId,
-        'inferredItemName': inferredItemName,
-        'inferredCategory': inferredCategory,
-        'estimatedWeightKg': estimatedWeightKg,
-        'weightClass': weightClass,
-        'confidenceScore': confidenceScore,
-        'fragilityRisk': fragilityRisk,
-        'valueRisk': valueRisk,
-        'handlingNotes': handlingNotes,
-        'riderGuidance': riderGuidance,
-        'needsHumanReview': needsHumanReview,
-        'fileName': fileName,
-        'fileSizeBytes': fileSizeBytes,
-        'source': analysisId == null
-            ? 'parcel_photo_and_item_details'
-            : 'parcel_photo_analysis',
-      };
+    'analysisId': analysisId,
+    'inferredItemName': inferredItemName,
+    'inferredCategory': inferredCategory,
+    'estimatedWeightKg': estimatedWeightKg,
+    'weightClass': weightClass,
+    'confidenceScore': confidenceScore,
+    'fragilityRisk': fragilityRisk,
+    'valueRisk': valueRisk,
+    'handlingNotes': handlingNotes,
+    'riderGuidance': riderGuidance,
+    'needsHumanReview': needsHumanReview,
+    'fileName': fileName,
+    'fileSizeBytes': fileSizeBytes,
+    'source': analysisId == null
+        ? 'parcel_photo_and_item_details'
+        : 'parcel_photo_analysis',
+  };
 }
 
 class _WeightPricingDecision {
@@ -20855,7 +20936,8 @@ class _AddressSuggestion {
       lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId: placeId ??
+      locationId:
+          placeId ??
           _stableLocationId(displayAddress, resolvedLat, resolvedLng),
       placeId: placeId,
       buildingNumber: components['buildingNumber'],
@@ -20929,34 +21011,34 @@ class _ValidatedAddress {
   }
 
   Map<String, dynamic> toJson() => {
-        'rawInput': rawInput,
-        'displayAddress': displayAddress,
-        'postcode': postcode,
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'confidenceBand': confidenceBand,
-        'validationStatus': isVerified ? 'verified' : 'requires_confirmation',
-        'addressSource': provider,
-        'provider': provider,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        if (buildingNumber != null) 'buildingNumber': buildingNumber,
-        if (street != null) 'street': street,
-        if (city != null) 'city': city,
-        if (county != null) 'county': county,
-        if (country != null) 'country': country,
-      };
+    'rawInput': rawInput,
+    'displayAddress': displayAddress,
+    'postcode': postcode,
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'confidenceBand': confidenceBand,
+    'validationStatus': isVerified ? 'verified' : 'requires_confirmation',
+    'addressSource': provider,
+    'provider': provider,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    if (buildingNumber != null) 'buildingNumber': buildingNumber,
+    if (street != null) 'street': street,
+    if (city != null) 'city': city,
+    if (county != null) 'county': county,
+    if (country != null) 'country': country,
+  };
 
   Map<String, dynamic> toPositionMap() => {
-        'geopoint': GeoPoint(lat, lng),
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        'provider': provider,
-      };
+    'geopoint': GeoPoint(lat, lng),
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    'provider': provider,
+  };
 }
 
 extension _SavedSenderAddressValidation on SavedSenderAddress {
@@ -21026,9 +21108,9 @@ String _cleanGoogleAddress(String address) {
 
 String _stableLocationId(String address, double lat, double lng) {
   final normalized = address.toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]+'),
-        '-',
-      );
+    RegExp(r'[^a-z0-9]+'),
+    '-',
+  );
   return '${normalized.substring(0, math.min(normalized.length, 48))}'
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
@@ -21088,7 +21170,8 @@ double? _coordinateDistanceMiles(
   final dLng = _degreesToRadians(dropoffLng - pickupLng);
   final lat1 = _degreesToRadians(pickupLat);
   final lat2 = _degreesToRadians(dropoffLat);
-  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
@@ -21191,7 +21274,8 @@ class _VehicleStep extends StatelessWidget {
       selectedVehicle.name,
       vehicleSuitability,
     );
-    final canContinue = vehicleValid &&
+    final canContinue =
+        vehicleValid &&
         selectedSpeed.trim().isNotEmpty &&
         locationsConfirmed &&
         weightReady &&
@@ -21199,14 +21283,14 @@ class _VehicleStep extends StatelessWidget {
     final disabledReason = !vehicleValid
         ? 'Choose a safe vehicle for this parcel.'
         : selectedSpeed.trim().isEmpty
-            ? 'Choose a delivery speed.'
-            : !locationsConfirmed
-                ? 'Confirm pickup and drop-off addresses.'
-                : !weightReady
-                    ? 'Confirm the parcel weight.'
-                    : !priceReady
-                        ? 'Pricing is not ready yet.'
-                        : null;
+        ? 'Choose a delivery speed.'
+        : !locationsConfirmed
+        ? 'Confirm pickup and drop-off addresses.'
+        : !weightReady
+        ? 'Confirm the parcel weight.'
+        : !priceReady
+        ? 'Pricing is not ready yet.'
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -21627,7 +21711,8 @@ class _PaymentStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSchedule = scheduledPickupDate.isNotEmpty ||
+    final hasSchedule =
+        scheduledPickupDate.isNotEmpty ||
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
@@ -21908,8 +21993,8 @@ class _PaymentStep extends StatelessWidget {
           child: FilledButton.icon(
             onPressed:
                 weightConfirmed && locationsConfirmed && !processingPayment
-                    ? onPay
-                    : null,
+                ? onPay
+                : null,
             icon: processingPayment
                 ? const SizedBox(
                     width: 18,
@@ -21921,12 +22006,12 @@ class _PaymentStep extends StatelessWidget {
               processingPayment
                   ? 'Processing payment...'
                   : !locationsConfirmed
-                      ? 'Confirm pickup and drop-off before payment'
-                      : weightConfirmed
-                          ? stripeAmount > 0
-                              ? 'Pay £${stripeAmount.toStringAsFixed(2)} & Broadcast'
-                              : 'Confirm & Broadcast'
-                          : 'Confirm parcel weight before payment',
+                  ? 'Confirm pickup and drop-off before payment'
+                  : weightConfirmed
+                  ? stripeAmount > 0
+                        ? 'Pay £${stripeAmount.toStringAsFixed(2)} & Broadcast'
+                        : 'Confirm & Broadcast'
+                  : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -22034,8 +22119,10 @@ class _TrackingStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final analysedItemName = irisItemName?.trim();
-    final status = _trackingStatuses[
-        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
+    final status =
+        _trackingStatuses[statusIndex
+            .clamp(0, _trackingStatuses.length - 1)
+            .toInt()];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -22491,8 +22578,9 @@ class _WebDeliveryPriceLine extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color:
-                    strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+                color: strong
+                    ? const Color(0xfff5f7fb)
+                    : const Color(0xff9ca3af),
                 fontSize: strong ? 16 : 13.5,
                 fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -22602,9 +22690,11 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     final riderLat = _num(live?['latitude']);
     final riderLng = _num(live?['longitude']);
     final updatedAt = _dateTimeFromFirestore(live?['updatedAt']);
-    final fresh = updatedAt != null &&
+    final fresh =
+        updatedAt != null &&
         DateTime.now().difference(updatedAt).inSeconds <= 60;
-    final hasLiveTracking = fresh &&
+    final hasLiveTracking =
+        fresh &&
         pickup?.hasCoordinates == true &&
         dropoff?.hasCoordinates == true &&
         riderLat != null &&
@@ -22650,7 +22740,8 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     }
 
     final destination = statusIndex < 5 ? pickup! : dropoff!;
-    final remainingMiles = _coordinateDistanceMiles(
+    final remainingMiles =
+        _coordinateDistanceMiles(
           riderLat,
           riderLng,
           destination.lat,
@@ -22791,7 +22882,8 @@ class _FirebaseStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = online &&
+    final healthy =
+        online &&
         error == null &&
         (checkoutState == _CheckoutState.matchingRiders ||
             checkoutState == _CheckoutState.riderAssigned);
@@ -22826,12 +22918,13 @@ class _FirebaseStatusBanner extends StatelessWidget {
               healthy
                   ? 'This delivery is saved and live.'
                   : checkoutState.index < _CheckoutState.bookingCreated.index &&
-                          error == null
-                      ? '$message\nRider matching starts after payment and booking confirmation.'
-                      : message,
+                        error == null
+                  ? '$message\nRider matching starts after payment and booking confirmation.'
+                  : message,
               style: TextStyle(
-                color:
-                    healthy ? const Color(0xff166534) : const Color(0xff9a3412),
+                color: healthy
+                    ? const Color(0xff166534)
+                    : const Color(0xff9a3412),
                 fontSize: 12,
                 height: 1.3,
                 fontWeight: FontWeight.w800,
@@ -22855,10 +22948,10 @@ class _VanguardCustomerPanel extends StatelessWidget {
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final handoffCompleted = collectionVerified && deliveryVerified;
-    final collectionContact =
-        (data['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
+    final collectionContact = (data['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (data['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the collection contact'}'
             .trim();
@@ -23541,14 +23634,10 @@ class _AddressFieldState extends State<_AddressField> {
     String input,
   ) async {
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('searchFreeUkAddresses')
-              .call<Map<String, dynamic>>({
+      final body = await callAddressPlaces('searchFreeUkAddresses', {
         'query': input,
         'sessionToken': _placesSessionToken,
-      }).timeout(const Duration(seconds: 6));
-      final body = Map<String, dynamic>.from(response.data);
+      });
       if ('${body['status']}' != 'OK') return const [];
       final results = body['results'] as List<dynamic>? ?? const [];
       return results
@@ -23582,14 +23671,10 @@ class _AddressFieldState extends State<_AddressField> {
     final placeId = suggestion.placeId;
     if (placeId == null) return suggestion;
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('resolveUkAddressPlace')
-              .call<Map<String, dynamic>>({
+      final result = await callAddressPlaces('resolveUkAddressPlace', {
         'placeId': placeId,
         'sessionToken': _placesSessionToken,
-      }).timeout(const Duration(seconds: 6));
-      final result = Map<String, dynamic>.from(response.data);
+      });
       final lat = (result['lat'] as num?)?.toDouble();
       final lng = (result['lng'] as num?)?.toDouble();
       if (lat == null || lng == null) return null;
@@ -23660,8 +23745,8 @@ class _AddressFieldState extends State<_AddressField> {
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
         : suggestion.provider == 'google_places'
-            ? await _googlePlaceDetails(suggestion)
-            : suggestion;
+        ? await _googlePlaceDetails(suggestion)
+        : suggestion;
     if (!mounted) return;
     if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
       setState(() {
@@ -23747,8 +23832,8 @@ class _AddressFieldState extends State<_AddressField> {
                             suggestion.isPopularPlace
                                 ? Icons.star_rounded
                                 : widget.pharmacyMode
-                                    ? Icons.local_pharmacy
-                                    : Icons.place_outlined,
+                                ? Icons.local_pharmacy
+                                : Icons.place_outlined,
                             color: colors.text,
                             size: 16,
                           ),
@@ -24608,8 +24693,9 @@ class _ScheduleDateButtonState extends State<_ScheduleDateButton> {
     final current = DateTime.tryParse(widget.controller.text);
     final selected = await showDatePicker(
       context: context,
-      initialDate:
-          current != null && !current.isBefore(firstDate) ? current : firstDate,
+      initialDate: current != null && !current.isBefore(firstDate)
+          ? current
+          : firstDate,
       firstDate: firstDate,
       lastDate: now.add(const Duration(days: 365)),
     );
@@ -24949,9 +25035,10 @@ class _VehicleTile extends StatelessWidget {
     final surcharge = DeliveryPricing.calculateVehicleSurcharge(vehicle.name);
     final priceLabel = switch (vehicle.name) {
       'Motorbike' => 'No surcharge',
-      'Car' => surcharge == 0
-          ? 'Standard vehicle'
-          : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
+      'Car' =>
+        surcharge == 0
+            ? 'Standard vehicle'
+            : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
       'Van' => '+£${surcharge.toStringAsFixed(2)} surcharge',
       _ =>
         surcharge == 0 ? 'No surcharge' : '+£${surcharge.toStringAsFixed(2)}',
@@ -25256,19 +25343,18 @@ class _DriverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = driver ??
-        DriverProfile.fromMap(
-            'preview-rider',
-            {
-              'fullName': 'Marcus A.',
-              'vehicleType': vehicle.name,
-              'vehicleMakeModel':
-                  vehicle.name == 'Motorbike' ? 'Honda PCX' : 'Toyota Prius',
-              'vehicleColour': 'Blue',
-              'plateNumber': 'CIR 24K',
-              'verificationStatus': 'verified',
-            },
-            performance: metric);
+    final profile =
+        driver ??
+        DriverProfile.fromMap('preview-rider', {
+          'fullName': 'Marcus A.',
+          'vehicleType': vehicle.name,
+          'vehicleMakeModel': vehicle.name == 'Motorbike'
+              ? 'Honda PCX'
+              : 'Toyota Prius',
+          'vehicleColour': 'Blue',
+          'plateNumber': 'CIR 24K',
+          'verificationStatus': 'verified',
+        }, performance: metric);
     final performance = metric ?? profile.performance;
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
@@ -25399,8 +25485,8 @@ class _DriverCard extends StatelessWidget {
                         rating.feedbackText.trim().isNotEmpty
                             ? rating.feedbackText.trim()
                             : rating.feedbackTags
-                                .map(_DriverRatingPrompt.labelForTag)
-                                .join(', '),
+                                  .map(_DriverRatingPrompt.labelForTag)
+                                  .join(', '),
                         style: TextStyle(
                           color: colors.mutedText,
                           fontWeight: FontWeight.w700,
@@ -25513,22 +25599,21 @@ Widget senderWebRatingPromptPreview({
   Set<String> selectedTags = const {},
   bool submitted = false,
   String? message,
-}) =>
-    _DriverRatingPrompt(
-      colors: const _CircumColors(true),
-      driver: null,
-      stars: stars,
-      feedback: feedback,
-      selectedTags: selectedTags,
-      selectedTipAmount: 0,
-      submitting: false,
-      submitted: submitted,
-      message: message,
-      onRatingChanged: (_) {},
-      onTag: (_) {},
-      onTipChanged: (_) {},
-      onSubmit: () {},
-    );
+}) => _DriverRatingPrompt(
+  colors: const _CircumColors(true),
+  driver: null,
+  stars: stars,
+  feedback: feedback,
+  selectedTags: selectedTags,
+  selectedTipAmount: 0,
+  submitting: false,
+  submitted: submitted,
+  message: message,
+  onRatingChanged: (_) {},
+  onTag: (_) {},
+  onTipChanged: (_) {},
+  onSubmit: () {},
+);
 
 class _DriverRatingPrompt extends StatelessWidget {
   static const _tags = [
@@ -25625,8 +25710,9 @@ class _DriverRatingPrompt extends StatelessWidget {
               final selected = selectedTags.contains(tag.$1);
               return FilterChip(
                 selected: selected,
-                onSelected:
-                    submitting || submitted ? null : (_) => onTag(tag.$1),
+                onSelected: submitting || submitted
+                    ? null
+                    : (_) => onTag(tag.$1),
                 label: Text(tag.$2),
                 selectedColor: colors.text,
                 checkmarkColor: colors.inverseText,
@@ -25707,8 +25793,8 @@ class _DriverRatingPrompt extends StatelessWidget {
                 submitted
                     ? 'Rating submitted'
                     : submitting
-                        ? 'Saving...'
-                        : 'Submit rating',
+                    ? 'Saving...'
+                    : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: colors.text,
@@ -25923,13 +26009,13 @@ class _Timeline extends StatelessWidget {
                   completed
                       ? Icons.check_circle
                       : current
-                          ? Icons.radio_button_checked
-                          : Icons.circle_outlined,
+                      ? Icons.radio_button_checked
+                      : Icons.circle_outlined,
                   color: completed
                       ? colors.success
                       : current
-                          ? colors.adminAccent
-                          : colors.mutedText,
+                      ? colors.adminAccent
+                      : colors.mutedText,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -26617,85 +26703,85 @@ class _CompliancePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SelectionArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 820),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CIRCUM',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 42),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 38,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    intro,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontSize: 17,
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  ...sections.map(
-                    (section) => Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: colors.panel,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              section.title,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              section.body,
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontSize: 15,
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Wrap(spacing: 18, runSpacing: 12, children: actions),
-                ],
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CIRCUM',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
               ),
-            ),
+              const SizedBox(height: 42),
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                intro,
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 17,
+                  height: 1.55,
+                ),
+              ),
+              const SizedBox(height: 28),
+              ...sections.map(
+                (section) => Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: colors.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          section.title,
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          section.body,
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Wrap(spacing: 18, runSpacing: 12, children: actions),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _AccountDeletionPage extends StatelessWidget {
@@ -26703,49 +26789,49 @@ class _AccountDeletionPage extends StatelessWidget {
   const _AccountDeletionPage({super.key, required this.colors});
 
   Future<void> _requestDeletion() => launchUrl(
-        Uri.parse(
-          'mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.')}',
-        ),
-      );
+    Uri.parse(
+      'mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.')}',
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => _CompliancePage(
-        colors: colors,
-        title: 'Delete your CIRCUM account',
-        intro:
-            'This page applies to CIRCUM and Circum Rider, operated by Circum Technologies Ltd.',
-        sections: const [
-          _ComplianceSection(
-            'Delete account',
-            'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.',
+    colors: colors,
+    title: 'Delete your CIRCUM account',
+    intro:
+        'This page applies to CIRCUM and Circum Rider, operated by Circum Technologies Ltd.',
+    sections: const [
+      _ComplianceSection(
+        'Delete account',
+        'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.',
+      ),
+      _ComplianceSection(
+        'Delete particular data',
+        'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.',
+      ),
+      _ComplianceSection(
+        'Retention',
+        'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.',
+      ),
+    ],
+    actions: [
+      TextButton(
+        onPressed: _requestDeletion,
+        child: const Text('Request account deletion'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(
+            path: '/privacy_policy',
+            queryParameters: {},
+            fragment: '',
           ),
-          _ComplianceSection(
-            'Delete particular data',
-            'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.',
-          ),
-          _ComplianceSection(
-            'Retention',
-            'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.',
-          ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: _requestDeletion,
-            child: const Text('Request account deletion'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(
-                path: '/privacy_policy',
-                queryParameters: {},
-                fragment: '',
-              ),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Privacy Policy'),
-          ),
-        ],
-      );
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Privacy Policy'),
+      ),
+    ],
+  );
 }
 
 class _SupportPage extends StatelessWidget {
@@ -26754,46 +26840,45 @@ class _SupportPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _CompliancePage(
-        colors: colors,
-        title: 'CIRCUM Support',
-        intro: 'Get help with your CIRCUM account, deliveries, and payments.',
-        sections: const [
-          _ComplianceSection(
-            'Account support',
-            'Get help with signup or sign-in problems, account access, and account closure.',
-          ),
-          _ComplianceSection(
-            'Delivery support',
-            'Contact us for booking and delivery help, Rider or delivery issues, and delivery status support.',
-          ),
-          _ComplianceSection(
-            'Payment support',
-            'Get help with card payment issues, Apple Pay, Google Pay, refunds, and payment queries.',
-          ),
-          _ComplianceSection(
-            'Contact',
-            'Email: support@circumuk.com\nPhone: +44 7756 800319',
-          ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: () =>
-                launchUrl(Uri.parse('mailto:support@circumuk.com')),
-            child: const Text('Email support'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(Uri.parse('tel:+447756800319')),
-            child: const Text('Call support'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('CIRCUM home'),
-          ),
-        ],
-      );
+    colors: colors,
+    title: 'CIRCUM Support',
+    intro: 'Get help with your CIRCUM account, deliveries, and payments.',
+    sections: const [
+      _ComplianceSection(
+        'Account support',
+        'Get help with signup or sign-in problems, account access, and account closure.',
+      ),
+      _ComplianceSection(
+        'Delivery support',
+        'Contact us for booking and delivery help, Rider or delivery issues, and delivery status support.',
+      ),
+      _ComplianceSection(
+        'Payment support',
+        'Get help with card payment issues, Apple Pay, Google Pay, refunds, and payment queries.',
+      ),
+      _ComplianceSection(
+        'Contact',
+        'Email: support@circumuk.com\nPhone: +44 7756 800319',
+      ),
+    ],
+    actions: [
+      TextButton(
+        onPressed: () => launchUrl(Uri.parse('mailto:support@circumuk.com')),
+        child: const Text('Email support'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(Uri.parse('tel:+447756800319')),
+        child: const Text('Call support'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('CIRCUM home'),
+      ),
+    ],
+  );
 }
 
 class _PrivacyPolicyPage extends StatelessWidget {
@@ -26802,125 +26887,124 @@ class _PrivacyPolicyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _CompliancePage(
-        colors: colors,
-        title: 'Privacy Policy',
-        intro:
-            'Version 2.0. Effective 19 September 2026. This policy explains how Circum Technologies Ltd uses personal data across the Circum User and Circum Rider services, our websites, applications, and related delivery, payment, support, and communications services. All User and Rider account holders must be at least 18 years old.',
-        sections: const [
-          _ComplianceSection(
-            'Who we are and scope',
-            'Circum Technologies Ltd, company number 13931698, of 124 City Road, London, England EC1V 2NX, is the controller of the personal data described here unless we say otherwise. This policy covers Circum User, Circum Rider, Business Centre, Circum Gifts and Gift Stories, Health+, Vanguard, IRIS, Roth, delivery and tracking services, support, newsletters, and related operational systems in the United Kingdom.',
+    colors: colors,
+    title: 'Privacy Policy',
+    intro:
+        'Version 2.0. Effective 19 September 2026. This policy explains how Circum Technologies Ltd uses personal data across the Circum User and Circum Rider services, our websites, applications, and related delivery, payment, support, and communications services. All User and Rider account holders must be at least 18 years old.',
+    sections: const [
+      _ComplianceSection(
+        'Who we are and scope',
+        'Circum Technologies Ltd, company number 13931698, of 124 City Road, London, England EC1V 2NX, is the controller of the personal data described here unless we say otherwise. This policy covers Circum User, Circum Rider, Business Centre, Circum Gifts and Gift Stories, Health+, Vanguard, IRIS, Roth, delivery and tracking services, support, newsletters, and related operational systems in the United Kingdom.',
+      ),
+      _ComplianceSection(
+        'Who this policy covers',
+        'This policy applies to Users, Riders, delivery recipients, pickup contacts, authorised business users, Gift participants, Health+ recipients, newsletter subscribers, website visitors, and people who contact us or take part in a complaint, claim, dispute, or investigation. Account holders must share another person’s information only where necessary and authorised.',
+      ),
+      _ComplianceSection(
+        'Personal data we collect',
+        'Depending on the service, we process identity and account information; contact details; Rider eligibility, right-to-work, licence, insurance, vehicle and verification records; pickup and delivery addresses; recipient and parcel details; photos, PIN events, custody and proof records; precise or approximate location and route data; chats, support, ratings and complaints; payment, payout, invoice, tip and Roth records; device, push-token, App Check, security and log data; newsletter choices and consent records; and IRIS, dispatch, safety, fraud and service assessments derived from this information.',
+      ),
+      _ComplianceSection(
+        'How we obtain personal data',
+        'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Mailchimp; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
+      ),
+      _ComplianceSection(
+        'Why we use data and lawful bases',
+        'We use personal data to create and secure accounts; provide, price, match, route, track and complete deliveries; assess Rider eligibility and suitability; process payments, refunds, subscriptions, tips, Roth, invoices and payouts; provide support; prevent fraud and unsafe activity; resolve disputes; improve reliability; send essential messages; and comply with law. Depending on the purpose, we rely on contract, steps before a contract, legal obligation, legitimate interests, consent, legal claims, or vital interests in an emergency. You may withdraw consent at any time where consent applies.',
+      ),
+      _ComplianceSection(
+        'User and Rider services',
+        'We use User information to create and manage delivery requests, calculate prices, provide tracking, process payments and maintain history. We use Rider identity, eligibility, right-to-work, vehicle, insurance, licence, availability, location and financial information to manage onboarding, suitable work, safe deliveries, earnings, payouts, ratings and investigations. Telephone numbers are operational contact information after authentication and are not the sole basis for account identity.',
+      ),
+      _ComplianceSection(
+        'Deliveries recipients photos and verification',
+        'A User may provide a recipient’s name, contact details, address and instructions. We share the minimum necessary information with the assigned Rider. Parcel descriptions, photos, weight or size, collection and delivery PINs, timestamps and other evidence help us classify and safely handle deliveries, verify custody and completion, prevent fraud, and resolve disputes. Do not place PINs in public notes or share them unnecessarily.',
+      ),
+      _ComplianceSection(
+        'Location and live tracking',
+        'We may process pickup and drop-off coordinates, a Rider’s precise location while available or completing a delivery, background location where enabled and needed, route, distance, estimated arrival time, progress and security indicators. We use this for matching, navigation, live progress, safety, delivery verification and disputes. Continuous Rider location is not intended to be public. Disabling required permissions may prevent availability, matching, tracking or completion.',
+      ),
+      _ComplianceSection(
+        'IRIS dispatch and automated processing',
+        'IRIS and dispatch tools may use parcel descriptions, photos, catalogue or historical weight information, declared and Rider-verified weight, dimensions, service type, route, location, vehicle, availability, delivery history and risk indicators. They may assess parcel category, likely weight or size, handling, pricing weight, vehicle suitability, routing, matches, fraud, safety and operational review. We do not intend to make solely automated decisions with legal or similarly significant effects unless permitted by law with safeguards. Material adverse outcomes such as suspension, fraud enforcement, verification failure or Rider eligibility can be reviewed by an authorised person. Contact us to request human review, express your view or challenge an outcome.',
+      ),
+      _ComplianceSection(
+        'Chat support Business Gifts Health+ and Vanguard',
+        'Delivery chats may connect a User, assigned Rider and authorised support staff. Business Centre processes authorised users, roles, deliveries, invoices and memberships. Gifts and Gift Stories may use organiser, participant, recipient, message, media, payment and fulfilment information. Health+ supports prescription collection and delivery but does not prescribe or provide medical advice; provide health information only where necessary for safe service. Vanguard uses stronger identity, custody, PIN, photo, route and proof controls for protected handling.',
+      ),
+      _ComplianceSection(
+        'Payments Roth tips and financial records',
+        'Stripe supports card payments, subscriptions, refunds, connected Rider accounts and payouts. Apple Pay or Google Pay may be available through compatible flows. Payment providers receive credentials directly; Circum generally receives references, status, limited card descriptors and settlement information rather than complete card details. Roth records balances, credits, debits, reservations and adjustments. We process tips and Rider earnings to allocate, pay, refund, reverse and answer disputes.',
+      ),
+      _ComplianceSection(
+        'Service messages push notifications and marketing',
+        'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
+      ),
+      _ComplianceSection(
+        'Newsletter and Mailchimp',
+        'If you choose to subscribe, we process your email address, selected topics, signup source, policy and consent version, timestamps and preference or unsubscribe events. We use Mailchimp to manage subscribers and send selected marketing emails. Consent is a clear positive choice: we do not use pre-ticked boxes or make marketing consent a condition of the delivery service. Every marketing email identifies Circum and provides a simple unsubscribe route. We keep the minimum suppression information needed to honour your choice. Unsubscribing from marketing does not stop essential service messages.',
+      ),
+      _ComplianceSection(
+        'Cookies and similar technologies',
+        'Our websites and applications may use cookies, local storage, software development kits, tokens or similar technologies for sessions, security, authentication, App Check, preferences, accessibility, reliability and, with consent where required, analytics or marketing. Strictly necessary technologies operate where permitted without consent. We ask before using non-essential technologies where consent is required. See the Cookie and Storage Technologies Policy for the technologies currently in use and your controls.',
+      ),
+      _ComplianceSection(
+        'Who we share data with',
+        'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Mailchimp; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+      ),
+      _ComplianceSection(
+        'International transfers',
+        'Some providers or support teams may process data outside the United Kingdom. For restricted transfers, we use a lawful safeguard such as UK adequacy regulations, the UK International Data Transfer Agreement, the UK Addendum to approved EU standard contractual clauses, or another recognised mechanism. Contact info@circumuk.com for information about the safeguard used for a relevant transfer, subject to lawful confidentiality limits.',
+      ),
+      _ComplianceSection(
+        'Retention',
+        'Accounts and profiles are kept while active and normally up to 6 years after closure. Delivery and transaction records are normally kept for 6 years. Precise or live Rider location is normally kept for no more than 90 days after the relevant delivery. Rider identity, vehicle, verification and right-to-work records are kept during the relationship and normally for 2 years afterward. Chats and support records are normally kept for 3 years after closure of the delivery or case. Payment, invoice, accounting and tax records are kept for at least 6 years. Newsletter consent evidence is kept while subscribed and normally for 6 years after withdrawal; minimum suppression information is kept as long as reasonably needed to prevent re-addition. Safety, fraud, disputes, legal holds and law may require longer retention, and we may delete or anonymise sooner where no continuing need applies.',
+      ),
+      _ComplianceSection(
+        'Account closure and deletion',
+        'Closing an account stops ordinary future use but does not erase every record immediately. We delete or anonymise information that is no longer needed while retaining limited transaction, payout, refund, tax, accounting, fraud, suppression, safety, dispute and legal-claim records where required. Shared delivery, chat, invoice, payout or claim records may need to be preserved. See /delete_account for closure and particular-data requests.',
+      ),
+      _ComplianceSection(
+        'Security',
+        'We use authenticated access, role and ownership controls, server-authoritative operational changes, App Check where applicable, encryption in transit, restricted production access, logs, audit records, token ownership controls, testing, backups and incident response. No online service can guarantee absolute security. Protect your device and account, do not share PINs or authentication material, and report suspected unauthorised access promptly.',
+      ),
+      _ComplianceSection(
+        'Your rights and complaints',
+        'Under UK data protection law, you may have rights to be informed, access, correct, erase or restrict data, object to processing, receive portable data, withdraw consent, and obtain safeguards for solely automated significant decisions. Email info@circumuk.com. We may verify identity and normally respond within one calendar month, subject to lawful extensions and exceptions. You can object to direct marketing at any time. You may complain to the UK Information Commissioner’s Office at ico.org.uk/make-a-complaint/.',
+      ),
+      _ComplianceSection(
+        'Changes and contact',
+        'We may update this policy when services, providers, law or practices change. We will publish the revised version and effective date and provide additional notice or seek fresh consent where required. For privacy questions, requests or complaints, contact Circum Technologies Ltd, 124 City Road, London, England EC1V 2NX, or email info@circumuk.com. Do not send identity documents or sensitive delivery information by ordinary email unless we ask you to use an approved secure method.',
+      ),
+    ],
+    actions: [
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(
+            path: '/delete_account',
+            queryParameters: {},
+            fragment: '',
           ),
-          _ComplianceSection(
-            'Who this policy covers',
-            'This policy applies to Users, Riders, delivery recipients, pickup contacts, authorised business users, Gift participants, Health+ recipients, newsletter subscribers, website visitors, and people who contact us or take part in a complaint, claim, dispute, or investigation. Account holders must share another person’s information only where necessary and authorised.',
-          ),
-          _ComplianceSection(
-            'Personal data we collect',
-            'Depending on the service, we process identity and account information; contact details; Rider eligibility, right-to-work, licence, insurance, vehicle and verification records; pickup and delivery addresses; recipient and parcel details; photos, PIN events, custody and proof records; precise or approximate location and route data; chats, support, ratings and complaints; payment, payout, invoice, tip and Roth records; device, push-token, App Check, security and log data; newsletter choices and consent records; and IRIS, dispatch, safety, fraud and service assessments derived from this information.',
-          ),
-          _ComplianceSection(
-            'How we obtain personal data',
-            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Mailchimp; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
-          ),
-          _ComplianceSection(
-            'Why we use data and lawful bases',
-            'We use personal data to create and secure accounts; provide, price, match, route, track and complete deliveries; assess Rider eligibility and suitability; process payments, refunds, subscriptions, tips, Roth, invoices and payouts; provide support; prevent fraud and unsafe activity; resolve disputes; improve reliability; send essential messages; and comply with law. Depending on the purpose, we rely on contract, steps before a contract, legal obligation, legitimate interests, consent, legal claims, or vital interests in an emergency. You may withdraw consent at any time where consent applies.',
-          ),
-          _ComplianceSection(
-            'User and Rider services',
-            'We use User information to create and manage delivery requests, calculate prices, provide tracking, process payments and maintain history. We use Rider identity, eligibility, right-to-work, vehicle, insurance, licence, availability, location and financial information to manage onboarding, suitable work, safe deliveries, earnings, payouts, ratings and investigations. Telephone numbers are operational contact information after authentication and are not the sole basis for account identity.',
-          ),
-          _ComplianceSection(
-            'Deliveries recipients photos and verification',
-            'A User may provide a recipient’s name, contact details, address and instructions. We share the minimum necessary information with the assigned Rider. Parcel descriptions, photos, weight or size, collection and delivery PINs, timestamps and other evidence help us classify and safely handle deliveries, verify custody and completion, prevent fraud, and resolve disputes. Do not place PINs in public notes or share them unnecessarily.',
-          ),
-          _ComplianceSection(
-            'Location and live tracking',
-            'We may process pickup and drop-off coordinates, a Rider’s precise location while available or completing a delivery, background location where enabled and needed, route, distance, estimated arrival time, progress and security indicators. We use this for matching, navigation, live progress, safety, delivery verification and disputes. Continuous Rider location is not intended to be public. Disabling required permissions may prevent availability, matching, tracking or completion.',
-          ),
-          _ComplianceSection(
-            'IRIS dispatch and automated processing',
-            'IRIS and dispatch tools may use parcel descriptions, photos, catalogue or historical weight information, declared and Rider-verified weight, dimensions, service type, route, location, vehicle, availability, delivery history and risk indicators. They may assess parcel category, likely weight or size, handling, pricing weight, vehicle suitability, routing, matches, fraud, safety and operational review. We do not intend to make solely automated decisions with legal or similarly significant effects unless permitted by law with safeguards. Material adverse outcomes such as suspension, fraud enforcement, verification failure or Rider eligibility can be reviewed by an authorised person. Contact us to request human review, express your view or challenge an outcome.',
-          ),
-          _ComplianceSection(
-            'Chat support Business Gifts Health+ and Vanguard',
-            'Delivery chats may connect a User, assigned Rider and authorised support staff. Business Centre processes authorised users, roles, deliveries, invoices and memberships. Gifts and Gift Stories may use organiser, participant, recipient, message, media, payment and fulfilment information. Health+ supports prescription collection and delivery but does not prescribe or provide medical advice; provide health information only where necessary for safe service. Vanguard uses stronger identity, custody, PIN, photo, route and proof controls for protected handling.',
-          ),
-          _ComplianceSection(
-            'Payments Roth tips and financial records',
-            'Stripe supports card payments, subscriptions, refunds, connected Rider accounts and payouts. Apple Pay or Google Pay may be available through compatible flows. Payment providers receive credentials directly; Circum generally receives references, status, limited card descriptors and settlement information rather than complete card details. Roth records balances, credits, debits, reservations and adjustments. We process tips and Rider earnings to allocate, pay, refund, reverse and answer disputes.',
-          ),
-          _ComplianceSection(
-            'Service messages push notifications and marketing',
-            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
-          ),
-          _ComplianceSection(
-            'Newsletter and Mailchimp',
-            'If you choose to subscribe, we process your email address, selected topics, signup source, policy and consent version, timestamps and preference or unsubscribe events. We use Mailchimp to manage subscribers and send selected marketing emails. Consent is a clear positive choice: we do not use pre-ticked boxes or make marketing consent a condition of the delivery service. Every marketing email identifies Circum and provides a simple unsubscribe route. We keep the minimum suppression information needed to honour your choice. Unsubscribing from marketing does not stop essential service messages.',
-          ),
-          _ComplianceSection(
-            'Cookies and similar technologies',
-            'Our websites and applications may use cookies, local storage, software development kits, tokens or similar technologies for sessions, security, authentication, App Check, preferences, accessibility, reliability and, with consent where required, analytics or marketing. Strictly necessary technologies operate where permitted without consent. We ask before using non-essential technologies where consent is required. See the Cookie and Storage Technologies Policy for the technologies currently in use and your controls.',
-          ),
-          _ComplianceSection(
-            'Who we share data with',
-            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Mailchimp; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
-          ),
-          _ComplianceSection(
-            'International transfers',
-            'Some providers or support teams may process data outside the United Kingdom. For restricted transfers, we use a lawful safeguard such as UK adequacy regulations, the UK International Data Transfer Agreement, the UK Addendum to approved EU standard contractual clauses, or another recognised mechanism. Contact info@circumuk.com for information about the safeguard used for a relevant transfer, subject to lawful confidentiality limits.',
-          ),
-          _ComplianceSection(
-            'Retention',
-            'Accounts and profiles are kept while active and normally up to 6 years after closure. Delivery and transaction records are normally kept for 6 years. Precise or live Rider location is normally kept for no more than 90 days after the relevant delivery. Rider identity, vehicle, verification and right-to-work records are kept during the relationship and normally for 2 years afterward. Chats and support records are normally kept for 3 years after closure of the delivery or case. Payment, invoice, accounting and tax records are kept for at least 6 years. Newsletter consent evidence is kept while subscribed and normally for 6 years after withdrawal; minimum suppression information is kept as long as reasonably needed to prevent re-addition. Safety, fraud, disputes, legal holds and law may require longer retention, and we may delete or anonymise sooner where no continuing need applies.',
-          ),
-          _ComplianceSection(
-            'Account closure and deletion',
-            'Closing an account stops ordinary future use but does not erase every record immediately. We delete or anonymise information that is no longer needed while retaining limited transaction, payout, refund, tax, accounting, fraud, suppression, safety, dispute and legal-claim records where required. Shared delivery, chat, invoice, payout or claim records may need to be preserved. See /delete_account for closure and particular-data requests.',
-          ),
-          _ComplianceSection(
-            'Security',
-            'We use authenticated access, role and ownership controls, server-authoritative operational changes, App Check where applicable, encryption in transit, restricted production access, logs, audit records, token ownership controls, testing, backups and incident response. No online service can guarantee absolute security. Protect your device and account, do not share PINs or authentication material, and report suspected unauthorised access promptly.',
-          ),
-          _ComplianceSection(
-            'Your rights and complaints',
-            'Under UK data protection law, you may have rights to be informed, access, correct, erase or restrict data, object to processing, receive portable data, withdraw consent, and obtain safeguards for solely automated significant decisions. Email info@circumuk.com. We may verify identity and normally respond within one calendar month, subject to lawful extensions and exceptions. You can object to direct marketing at any time. You may complain to the UK Information Commissioner’s Office at ico.org.uk/make-a-complaint/.',
-          ),
-          _ComplianceSection(
-            'Changes and contact',
-            'We may update this policy when services, providers, law or practices change. We will publish the revised version and effective date and provide additional notice or seek fresh consent where required. For privacy questions, requests or complaints, contact Circum Technologies Ltd, 124 City Road, London, England EC1V 2NX, or email info@circumuk.com. Do not send identity documents or sensitive delivery information by ordinary email unless we ask you to use an approved secure method.',
-          ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(
-                path: '/delete_account',
-                queryParameters: {},
-                fragment: '',
-              ),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Account deletion'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base
-                  .replace(path: '/terms', queryParameters: {}, fragment: ''),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Terms & Conditions'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('CIRCUM home'),
-          ),
-        ],
-      );
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Account deletion'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(path: '/terms', queryParameters: {}, fragment: ''),
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Terms & Conditions'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('CIRCUM home'),
+      ),
+    ],
+  );
 }
 
 class _CookiePolicyPage extends StatelessWidget {
@@ -26935,58 +27019,58 @@ class _CookiePolicyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _CompliancePage(
-        colors: colors,
-        title: 'Cookie & Storage Technologies Policy',
-        intro:
-            'This policy explains the cookies and storage technologies used by the public CIRCUM website, operated by Circum Technologies Ltd.',
-        sections: const [
-          _ComplianceSection(
-            'What we use',
-            'The website uses browser storage for your optional analytics preference. Strictly necessary browser and hosting technologies support page delivery, navigation, security, and requested functionality.',
+    colors: colors,
+    title: 'Cookie & Storage Technologies Policy',
+    intro:
+        'This policy explains the cookies and storage technologies used by the public CIRCUM website, operated by Circum Technologies Ltd.',
+    sections: const [
+      _ComplianceSection(
+        'What we use',
+        'The website uses browser storage for your optional analytics preference. Strictly necessary browser and hosting technologies support page delivery, navigation, security, and requested functionality.',
+      ),
+      _ComplianceSection(
+        'Optional visitor analytics',
+        'If you choose Accept optional, the website may send a visit record containing the page, URL, query parameters, app mode, and, where you are signed in, the account context available to the service. This is used for visitor analytics and service improvement. It is off by default and is not required to browse the website.',
+      ),
+      _ComplianceSection(
+        'Storage and duration',
+        'The preference is stored in your browser under a CIRCUM preference key until you remove it, clear site data, or change your choice. The website does not claim a fixed duration for other strictly necessary browser or hosting technologies where the browser or provider controls that duration.',
+      ),
+      _ComplianceSection(
+        'Your choices',
+        'You can reject optional analytics, accept it, or reopen these choices from this page. You can also clear CIRCUM site data in your browser settings. Rejecting optional analytics does not disable necessary service functionality.',
+      ),
+      _ComplianceSection(
+        'Relationship with privacy information',
+        'The Privacy Policy at /privacy_policy explains wider personal-information processing, including service providers, location, communications, and rights. This policy concerns website cookies, storage, and access technologies.',
+      ),
+      _ComplianceSection(
+        'PECR and data protection',
+        'CIRCUM applies the UK Privacy and Electronic Communications Regulations and the UK data-protection framework to technologies used on this website. We will review this policy before introducing analytics, advertising, tracking pixels, behavioural tracking, fingerprinting, or other optional technologies.',
+      ),
+      _ComplianceSection(
+        'Contact',
+        'For questions about this policy, contact support@circumuk.com.',
+      ),
+    ],
+    actions: [
+      TextButton(
+        onPressed: onManageConsent,
+        child: const Text('Manage preferences'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(
+            path: '/privacy_policy',
+            queryParameters: {},
+            fragment: '',
           ),
-          _ComplianceSection(
-            'Optional visitor analytics',
-            'If you choose Accept optional, the website may send a visit record containing the page, URL, query parameters, app mode, and, where you are signed in, the account context available to the service. This is used for visitor analytics and service improvement. It is off by default and is not required to browse the website.',
-          ),
-          _ComplianceSection(
-            'Storage and duration',
-            'The preference is stored in your browser under a CIRCUM preference key until you remove it, clear site data, or change your choice. The website does not claim a fixed duration for other strictly necessary browser or hosting technologies where the browser or provider controls that duration.',
-          ),
-          _ComplianceSection(
-            'Your choices',
-            'You can reject optional analytics, accept it, or reopen these choices from this page. You can also clear CIRCUM site data in your browser settings. Rejecting optional analytics does not disable necessary service functionality.',
-          ),
-          _ComplianceSection(
-            'Relationship with privacy information',
-            'The Privacy Policy at /privacy_policy explains wider personal-information processing, including service providers, location, communications, and rights. This policy concerns website cookies, storage, and access technologies.',
-          ),
-          _ComplianceSection(
-            'PECR and data protection',
-            'CIRCUM applies the UK Privacy and Electronic Communications Regulations and the UK data-protection framework to technologies used on this website. We will review this policy before introducing analytics, advertising, tracking pixels, behavioural tracking, fingerprinting, or other optional technologies.',
-          ),
-          _ComplianceSection(
-            'Contact',
-            'For questions about this policy, contact support@circumuk.com.',
-          ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: onManageConsent,
-            child: const Text('Manage preferences'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(
-                path: '/privacy_policy',
-                queryParameters: {},
-                fragment: '',
-              ),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Privacy Policy'),
-          ),
-        ],
-      );
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Privacy Policy'),
+      ),
+    ],
+  );
 }
 
 class _CookieConsentBanner extends StatelessWidget {
@@ -27004,44 +27088,44 @@ class _CookieConsentBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Positioned(
-        left: 16,
-        right: 16,
-        bottom: 16,
-        child: Material(
-          elevation: 8,
-          color: colors.panel,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 10,
-              children: [
-                const SizedBox(
-                  width: 420,
-                  child: Text(
-                    'CIRCUM uses optional visitor analytics only with your permission. Necessary technologies remain active.',
-                  ),
-                ),
-                TextButton(
-                  onPressed: onManage,
-                  child: const Text('Manage preferences'),
-                ),
-                OutlinedButton(
-                  onPressed: onReject,
-                  child: const Text('Reject optional'),
-                ),
-                FilledButton(
-                  onPressed: onAccept,
-                  child: const Text('Accept optional'),
-                ),
-              ],
+    left: 16,
+    right: 16,
+    bottom: 16,
+    child: Material(
+      elevation: 8,
+      color: colors.panel,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 10,
+          children: [
+            const SizedBox(
+              width: 420,
+              child: Text(
+                'CIRCUM uses optional visitor analytics only with your permission. Necessary technologies remain active.',
+              ),
             ),
-          ),
+            TextButton(
+              onPressed: onManage,
+              child: const Text('Manage preferences'),
+            ),
+            OutlinedButton(
+              onPressed: onReject,
+              child: const Text('Reject optional'),
+            ),
+            FilledButton(
+              onPressed: onAccept,
+              child: const Text('Accept optional'),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _TermsPage extends StatelessWidget {
@@ -27050,77 +27134,77 @@ class _TermsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _CompliancePage(
-        colors: colors,
-        title: 'Terms & Conditions',
-        intro:
-            'These Terms & Conditions apply to customers using CIRCUM and participants using Circum Rider, operated by Circum Technologies Ltd. They govern use of the service, delivery requests, and participation in delivery work.',
-        sections: const [
-          _ComplianceSection(
-            'Using CIRCUM',
-            'You must provide accurate information, keep your account secure, use the service lawfully, and follow instructions for pickup, delivery, payment, safety, and communications. You remain responsible for the information and items you submit.',
+    colors: colors,
+    title: 'Terms & Conditions',
+    intro:
+        'These Terms & Conditions apply to customers using CIRCUM and participants using Circum Rider, operated by Circum Technologies Ltd. They govern use of the service, delivery requests, and participation in delivery work.',
+    sections: const [
+      _ComplianceSection(
+        'Using CIRCUM',
+        'You must provide accurate information, keep your account secure, use the service lawfully, and follow instructions for pickup, delivery, payment, safety, and communications. You remain responsible for the information and items you submit.',
+      ),
+      _ComplianceSection(
+        'Bookings and delivery services',
+        'CIRCUM may offer parcel, scheduled, Express, Gifts, Health+, Business, and Vanguard services where available. Pickup and drop-off details, timing, service level, price, availability, and operational requirements are shown during booking. A booking is not confirmed until CIRCUM confirms it and any required payment is completed.',
+      ),
+      _ComplianceSection(
+        'Items and safety',
+        'Do not request delivery of unlawful, unsafe, dangerous, prohibited, restricted, or improperly packaged items. You must provide accurate item, weight, access, and handling information. CIRCUM may refuse, pause, inspect, or escalate a request where safety, legal, payment, or service requirements are not met.',
+      ),
+      _ComplianceSection(
+        'Payments, cancellations, and liability',
+        'Prices and payment requirements are shown before confirmation. Cancellations, refunds, adjustments, loss, damage, delays, and liability are handled according to the service details, applicable law, and the facts of the request. Nothing in these terms limits rights that cannot lawfully be limited.',
+      ),
+      _ComplianceSection(
+        'Health+ and Gifts',
+        'Health+ is a delivery-coordination service for eligible prescription and pharmacy collections. CIRCUM does not diagnose or treat medical conditions. Gifts may include recipient details, media, messages, and named collection locations. You must have the rights and permissions needed to provide information or media about another person.',
+      ),
+      _ComplianceSection(
+        'Scheduled deliveries',
+        'Scheduled requests may be matched or reserved before their pickup time. Reservation does not mean collection starts immediately. Pickup, arrival, collection, and other operational stages remain subject to the scheduled timing and service requirements.',
+      ),
+      _ComplianceSection(
+        'Circum Rider participation',
+        'Riders must meet the eligibility, identity, right-to-work, vehicle, insurance, safety, document, and service requirements that apply to their chosen activity. Riders must accept only work they can perform safely, follow pickup and delivery instructions, protect customer information, provide required evidence, and complete accepted work accurately.',
+      ),
+      _ComplianceSection(
+        'Rider status and earnings',
+        'Rider participation, offers, availability, earnings, and payouts depend on completed service, eligibility, applicable pricing, payment status, operational records, and these terms. A Rider may be unable to receive work or may have participation restricted when safety, compliance, account, or service requirements are not met.',
+      ),
+      _ComplianceSection(
+        'Suspension, termination, and complaints',
+        'We may restrict, suspend, or close access where required for safety, fraud prevention, non-payment, legal compliance, misuse, inaccurate information, or breach of these terms. Contact support@circumuk.com with a complaint or service question. We will review it using the information available and applicable legal requirements.',
+      ),
+      _ComplianceSection(
+        'Intellectual property and governing law',
+        'CIRCUM materials, names, software, and content belong to Circum Technologies Ltd or its licensors. You may use them only as permitted by the service. These terms are governed by the law of England and Wales, subject to any mandatory consumer or other legal rights that apply.',
+      ),
+    ],
+    actions: [
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(
+            path: '/privacy_policy',
+            queryParameters: {},
+            fragment: '',
           ),
-          _ComplianceSection(
-            'Bookings and delivery services',
-            'CIRCUM may offer parcel, scheduled, Express, Gifts, Health+, Business, and Vanguard services where available. Pickup and drop-off details, timing, service level, price, availability, and operational requirements are shown during booking. A booking is not confirmed until CIRCUM confirms it and any required payment is completed.',
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Privacy Policy'),
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.base.replace(
+            path: '/delete_account',
+            queryParameters: {},
+            fragment: '',
           ),
-          _ComplianceSection(
-            'Items and safety',
-            'Do not request delivery of unlawful, unsafe, dangerous, prohibited, restricted, or improperly packaged items. You must provide accurate item, weight, access, and handling information. CIRCUM may refuse, pause, inspect, or escalate a request where safety, legal, payment, or service requirements are not met.',
-          ),
-          _ComplianceSection(
-            'Payments, cancellations, and liability',
-            'Prices and payment requirements are shown before confirmation. Cancellations, refunds, adjustments, loss, damage, delays, and liability are handled according to the service details, applicable law, and the facts of the request. Nothing in these terms limits rights that cannot lawfully be limited.',
-          ),
-          _ComplianceSection(
-            'Health+ and Gifts',
-            'Health+ is a delivery-coordination service for eligible prescription and pharmacy collections. CIRCUM does not diagnose or treat medical conditions. Gifts may include recipient details, media, messages, and named collection locations. You must have the rights and permissions needed to provide information or media about another person.',
-          ),
-          _ComplianceSection(
-            'Scheduled deliveries',
-            'Scheduled requests may be matched or reserved before their pickup time. Reservation does not mean collection starts immediately. Pickup, arrival, collection, and other operational stages remain subject to the scheduled timing and service requirements.',
-          ),
-          _ComplianceSection(
-            'Circum Rider participation',
-            'Riders must meet the eligibility, identity, right-to-work, vehicle, insurance, safety, document, and service requirements that apply to their chosen activity. Riders must accept only work they can perform safely, follow pickup and delivery instructions, protect customer information, provide required evidence, and complete accepted work accurately.',
-          ),
-          _ComplianceSection(
-            'Rider status and earnings',
-            'Rider participation, offers, availability, earnings, and payouts depend on completed service, eligibility, applicable pricing, payment status, operational records, and these terms. A Rider may be unable to receive work or may have participation restricted when safety, compliance, account, or service requirements are not met.',
-          ),
-          _ComplianceSection(
-            'Suspension, termination, and complaints',
-            'We may restrict, suspend, or close access where required for safety, fraud prevention, non-payment, legal compliance, misuse, inaccurate information, or breach of these terms. Contact support@circumuk.com with a complaint or service question. We will review it using the information available and applicable legal requirements.',
-          ),
-          _ComplianceSection(
-            'Intellectual property and governing law',
-            'CIRCUM materials, names, software, and content belong to Circum Technologies Ltd or its licensors. You may use them only as permitted by the service. These terms are governed by the law of England and Wales, subject to any mandatory consumer or other legal rights that apply.',
-          ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(
-                path: '/privacy_policy',
-                queryParameters: {},
-                fragment: '',
-              ),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Privacy Policy'),
-          ),
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.base.replace(
-                path: '/delete_account',
-                queryParameters: {},
-                fragment: '',
-              ),
-              webOnlyWindowName: '_self',
-            ),
-            child: const Text('Account deletion'),
-          ),
-        ],
-      );
+          webOnlyWindowName: '_self',
+        ),
+        child: const Text('Account deletion'),
+      ),
+    ],
+  );
 }
 
 class _LandingFooter extends StatelessWidget {
@@ -27572,8 +27656,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         setState(
           () => _message = switch (error.code) {
             'invalid-credential' ||
-            'wrong-password' =>
-              'The email or password is incorrect.',
+            'wrong-password' => 'The email or password is incorrect.',
             'invalid-email' => 'Enter a valid email address.',
             _ => 'We could not sign you in. Please try again.',
           },
@@ -27623,7 +27706,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       );
       if (mounted) {
         setState(
-          () => _message = error.message ??
+          () => _message =
+              error.message ??
               'We could not confirm payment yet. Please refresh shortly.',
         );
       }
@@ -27711,8 +27795,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _message = null;
     });
     try {
-      final giftDraftId =
-          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc().id;
+      final giftDraftId = FirebaseFirestore.instance
+          .collection('giftPaymentDrafts')
+          .doc()
+          .id;
       final photoUrls = <String>[];
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
@@ -27737,16 +27823,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'relationship': _relationship,
         'occasion': _occasion,
         'giftMode': _giftMode,
-        'anonymousGiftType':
-            _giftMode == 'anonymous_gift' ? _anonymousGiftType : null,
+        'anonymousGiftType': _giftMode == 'anonymous_gift'
+            ? _anonymousGiftType
+            : null,
         'senderRevealMode': _giftMode == 'anonymous_gift'
             ? _senderRevealMode
             : 'reveal_immediately',
-        'senderRevealConsent':
-            _giftMode == 'anonymous_gift' ? 'not_requested' : 'granted',
+        'senderRevealConsent': _giftMode == 'anonymous_gift'
+            ? 'not_requested'
+            : 'granted',
         'recipientRevealRequestStatus': 'none',
-        'selfGiftFrequency':
-            _giftMode == 'gift_myself' ? _selfGiftFrequency : null,
+        'selfGiftFrequency': _giftMode == 'gift_myself'
+            ? _selfGiftFrequency
+            : null,
         'deliveryAddress': _deliveryAddress.text.trim(),
         'deliveryAddressData': _validatedGiftAddress!.toJson(),
         'deliveryPostcode': _validatedGiftAddress!.postcode,
@@ -27783,8 +27872,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         },
         'giftType':
             _giftMode == 'anonymous_gift' && _anonymousGiftType == 'campaign'
-                ? 'campaign'
-                : 'standard',
+            ? 'campaign'
+            : 'standard',
         'paymentStatus': 'payment_pending',
         'giftStatus': 'draft',
         'status': 'draft',
@@ -27805,15 +27894,18 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'contentUsageScope': 'private',
         'contentConsentWithdrawnAt': null,
         'contentStatus': 'not_started',
-        'campaignId':
-            _anonymousGiftType == 'campaign' ? 'bringing-london-closer' : null,
-        'campaignName':
-            _anonymousGiftType == 'campaign' ? 'Bringing London Closer' : null,
+        'campaignId': _anonymousGiftType == 'campaign'
+            ? 'bringing-london-closer'
+            : null,
+        'campaignName': _anonymousGiftType == 'campaign'
+            ? 'Bringing London Closer'
+            : null,
         'campaignTagline': _anonymousGiftType == 'campaign'
             ? '100 Londoners. 100 gifts. 100 stories.'
             : null,
-        'campaignType':
-            _anonymousGiftType == 'campaign' ? 'anonymous_gifting' : null,
+        'campaignType': _anonymousGiftType == 'campaign'
+            ? 'anonymous_gifting'
+            : null,
         'participantConsentRequired': _anonymousGiftType == 'campaign',
         'recordingConsentRequired': _anonymousGiftType == 'campaign',
         'mutualRevealAllowed': _anonymousGiftType == 'campaign',
@@ -27846,9 +27938,9 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           () => _message = error is StateError
               ? error.message
               : error is FirebaseFunctionsException
-                  ? (error.message ??
-                      'Could not start Stripe Checkout. Please try again.')
-                  : 'Could not start Stripe Checkout. Please try again.',
+              ? (error.message ??
+                    'Could not start Stripe Checkout. Please try again.')
+              : 'Could not start Stripe Checkout. Please try again.',
         );
       }
     } finally {
@@ -28051,19 +28143,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                               decoration: const InputDecoration(
                                 labelText: 'Gift mode',
                               ),
-                              items: const {
-                                'gift_someone': 'Gift someone',
-                                'gift_myself': 'Gift myself',
-                                'anonymous_gift': 'Anonymous gift',
-                              }
-                                  .entries
-                                  .map(
-                                    (entry) => DropdownMenuItem(
-                                      value: entry.key,
-                                      child: Text(entry.value),
-                                    ),
-                                  )
-                                  .toList(),
+                              items:
+                                  const {
+                                        'gift_someone': 'Gift someone',
+                                        'gift_myself': 'Gift myself',
+                                        'anonymous_gift': 'Anonymous gift',
+                                      }.entries
+                                      .map(
+                                        (entry) => DropdownMenuItem(
+                                          value: entry.key,
+                                          child: Text(entry.value),
+                                        ),
+                                      )
+                                      .toList(),
                               onChanged: (value) => setState(
                                 () => _giftMode = value ?? _giftMode,
                               ),
@@ -28075,19 +28167,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                 decoration: const InputDecoration(
                                   labelText: 'Anonymous gift type',
                                 ),
-                                items: const {
-                                  'direct': 'Direct anonymous gift',
-                                  'campaign':
-                                      'Campaign · Bringing London Closer',
-                                }
-                                    .entries
-                                    .map(
-                                      (entry) => DropdownMenuItem(
-                                        value: entry.key,
-                                        child: Text(entry.value),
-                                      ),
-                                    )
-                                    .toList(),
+                                items:
+                                    const {
+                                          'direct': 'Direct anonymous gift',
+                                          'campaign':
+                                              'Campaign · Bringing London Closer',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (value) => setState(
                                   () => _anonymousGiftType =
                                       value ?? _anonymousGiftType,
@@ -28099,22 +28191,24 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                 decoration: const InputDecoration(
                                   labelText: 'Identity reveal',
                                 ),
-                                items: const {
-                                  'anonymous_forever': 'Anonymous forever',
-                                  'reveal_after_delivery':
-                                      'Reveal after delivery',
-                                  'anonymous_until_consent':
-                                      'Reveal only with later consent',
-                                  'reveal_immediately': 'Reveal immediately',
-                                }
-                                    .entries
-                                    .map(
-                                      (entry) => DropdownMenuItem(
-                                        value: entry.key,
-                                        child: Text(entry.value),
-                                      ),
-                                    )
-                                    .toList(),
+                                items:
+                                    const {
+                                          'anonymous_forever':
+                                              'Anonymous forever',
+                                          'reveal_after_delivery':
+                                              'Reveal after delivery',
+                                          'anonymous_until_consent':
+                                              'Reveal only with later consent',
+                                          'reveal_immediately':
+                                              'Reveal immediately',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (value) => setState(
                                   () => _senderRevealMode =
                                       value ?? _senderRevealMode,
@@ -28136,20 +28230,20 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                 decoration: const InputDecoration(
                                   labelText: 'Self-gift frequency',
                                 ),
-                                items: const {
-                                  'one_off': 'One-off',
-                                  'monthly': 'Monthly',
-                                  'quarterly': 'Quarterly',
-                                  'custom': 'Custom',
-                                }
-                                    .entries
-                                    .map(
-                                      (entry) => DropdownMenuItem(
-                                        value: entry.key,
-                                        child: Text(entry.value),
-                                      ),
-                                    )
-                                    .toList(),
+                                items:
+                                    const {
+                                          'one_off': 'One-off',
+                                          'monthly': 'Monthly',
+                                          'quarterly': 'Quarterly',
+                                          'custom': 'Custom',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (value) => setState(
                                   () => _selfGiftFrequency =
                                       value ?? _selfGiftFrequency,
@@ -28298,19 +28392,20 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                               decoration: const InputDecoration(
                                 labelText: 'Preferred fit',
                               ),
-                              items: const [
-                                'Slim',
-                                'Regular',
-                                'Relaxed',
-                                'Oversized',
-                              ]
-                                  .map(
-                                    (v) => DropdownMenuItem(
-                                      value: v,
-                                      child: Text(v),
-                                    ),
-                                  )
-                                  .toList(),
+                              items:
+                                  const [
+                                        'Slim',
+                                        'Regular',
+                                        'Relaxed',
+                                        'Oversized',
+                                      ]
+                                      .map(
+                                        (v) => DropdownMenuItem(
+                                          value: v,
+                                          child: Text(v),
+                                        ),
+                                      )
+                                      .toList(),
                               onChanged: (v) => setState(
                                 () => _preferredFit = v ?? _preferredFit,
                               ),
@@ -28365,7 +28460,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                         lastDate: DateTime.now().add(
                                           const Duration(days: 365),
                                         ),
-                                        initialDate: _deliveryDate ??
+                                        initialDate:
+                                            _deliveryDate ??
                                             DateTime.now().add(
                                               const Duration(days: 2),
                                             ),
@@ -28389,18 +28485,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     decoration: const InputDecoration(
                                       labelText: 'Time window',
                                     ),
-                                    items: const [
-                                      'Morning',
-                                      'Afternoon',
-                                      'Evening',
-                                    ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
+                                    items:
+                                        const [
+                                              'Morning',
+                                              'Afternoon',
+                                              'Evening',
+                                            ]
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
                                     onChanged: (v) => setState(
                                       () => _timeWindow = v ?? _timeWindow,
                                     ),

@@ -60,11 +60,12 @@ const usesStaticMapsCredential = read('scripts/build_public_web.sh')
 if (usesStaticMapsCredential) {
   assertContains('.github/workflows/rc1_release_build.yml', 'PUBLIC_WEB_STATIC_MAPS_API_KEY',
     'Public Web CI Static Maps secret');
-  assertContains('.github/workflows/deploy_functions.yml', 'BACKEND_GOOGLE_PLACES_API_KEY',
-    'Backend Places secret isolation');
-  assertContains('lib/website/shared/circum_website_app.dart', 'searchFreeUkAddresses',
+  assertContains('server/functions/cloud-run-address-places.js',
+    'process.env.BACKEND_GOOGLE_PLACES_API_KEY',
+    'Cloud Run Secret Manager Places linkage');
+  assertContains('lib/website/shared/circum_website_app.dart', 'callAddressPlaces',
     'Public Web server-side Places autocomplete proxy');
-  assertContains('lib/website/shared/circum_website_app.dart', 'resolveUkAddressPlace',
+  assertContains('lib/shared/address_places_api.dart', 'resolveUkAddressPlace',
     'Public Web server-side Places details proxy');
   for (const file of [
     '.github/workflows/deploy_functions.yml',

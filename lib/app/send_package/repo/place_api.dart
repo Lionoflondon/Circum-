@@ -1,4 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:circum/shared/address_places_api.dart';
 
 import '../../platform/address_engine.dart';
 import '../models/place_coordinates.m.dart';
@@ -14,17 +14,13 @@ class PlaceApiProvider {
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
     final query = input.trim();
     if (query.length < 3) return [];
-    final response = await FirebaseFunctions.instance
-        .httpsCallable('searchFreeUkAddresses')
-        .call({
+    final data = await callAddressPlaces('searchFreeUkAddresses', {
       'query': query,
       'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
-    final data = response.data is Map
-        ? Map<String, dynamic>.from(response.data as Map)
-        : <String, dynamic>{};
-    final results =
-        data['results'] is Iterable ? data['results'] as Iterable : const [];
+    });
+    final results = data['results'] is Iterable
+        ? data['results'] as Iterable
+        : const [];
     final suggestions = results
         .map((item) {
           final map = Map<String, dynamic>.from(item as Map);
@@ -42,15 +38,10 @@ class PlaceApiProvider {
     if (suggestion?.lat != null && suggestion?.lng != null) {
       return PlaceCoordinate(lat: suggestion!.lat!, lng: suggestion.lng!);
     }
-    final response = await FirebaseFunctions.instance
-        .httpsCallable('resolveUkAddressPlace')
-        .call({
+    final data = await callAddressPlaces('resolveUkAddressPlace', {
       'placeId': placeId,
       'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
-    final data = response.data is Map
-        ? Map<String, dynamic>.from(response.data as Map)
-        : <String, dynamic>{};
+    });
     final resolved = AddressEngine.suggestionFromBackend(data);
     _suggestionCache[resolved.placeId] = resolved;
     _suggestionCache[placeId] = resolved;
