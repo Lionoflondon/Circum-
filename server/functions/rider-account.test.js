@@ -47,14 +47,14 @@ const websiteSource = fs.readFileSync(
     "utf8",
 );
 
-test("Rider self-service authority callables are exported", () => {
+test("Rider self-service authority callables retain their intended runtime owners", () => {
   assert.match(source, /exports\.updateRiderProfile\s*=\s*riderCallable/);
   assert.match(source, /exports\.requestRiderEmailChange\s*=\s*riderCallable/);
   assert.match(source, /exports\.createWeightAdjustedNotification\s*=\s*riderCallable/);
   assert.match(source, /exports\.submitRiderApplication\s*=\s*riderCallable/);
   assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*riderCallable/);
   assert.match(source, /exports\.submitRiderDocument\s*=\s*riderCallable/);
-  assert.match(indexSource, /exports\.updateRiderProfile\s*=\s*accountBootstrapGen2\.updateRiderProfile/);
+  assert.doesNotMatch(indexSource, /exports\.updateRiderProfile\s*=/);
   assert.match(indexSource, /exports\.requestRiderEmailChange\s*=\s*riderAccount\.requestRiderEmailChange/);
   assert.match(indexSource, /exports\.createWeightAdjustedNotification\s*=\s*riderAccount\.createWeightAdjustedNotification/);
   assert.match(indexSource, /exports\.submitRiderApplication\s*=\s*riderAccount\.submitRiderApplication/);

@@ -37,7 +37,7 @@ test("runtime declaration changes include every exported Function", () => {
   const names = scope(["server/functions/package.json"]);
   assert.ok(names.length > 0);
   assert.equal(names.includes("submitRiderApplication"), true);
-  assert.equal(names.includes("updateRiderProfile"), true);
+  assert.equal(names.includes("updateRiderProfile"), false);
 });
 
 test("cycle traversal is finite and deduplicated", () => {

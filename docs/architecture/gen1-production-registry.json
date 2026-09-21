@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 273,
+  "sourceExportCount": 270,
   "gen1ExportCount": 268,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
@@ -4171,44 +4171,6 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
       "migrationStatus": "MIGRATE TO CLOUD RUN",
-      "retirementStatus": "not-retired"
-    },
-    {
-      "functionName": "ensureSenderAccount",
-      "sourceFile": "server/functions/account-bootstrap-gen2.js",
-      "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 2",
-      "productionPurpose": "accountBootstrapGen2.ensureSenderAccount",
-      "callers": [
-        "lib/app/sender_mobile/account_bootstrap_api.dart",
-        "lib/app/sender_mobile/sender_profile_authority.dart",
-        "lib/website/shared/account_bootstrap_api.dart",
-        "lib/website/shared/circum_website_app.dart",
-        "server/functions/account-bootstrap-gen2.test.js",
-        "server/functions/cloud-run-account-bootstrap.js",
-        "server/functions/cloud-run-account-bootstrap.test.js",
-        "server/functions/firestore-sender-bootstrap-rules.test.js",
-        "server/functions/firestore-starter-roth-rules.test.js",
-        "server/functions/sender-account-authority.test.js",
-        "server/functions/sender-account.js",
-        "test/sender_account_bootstrap_api_test.dart",
-        "test/website_account_bootstrap_api_test.dart",
-        "test/website_sender_auth_deterministic_contract_test.dart"
-      ],
-      "criticality": "P0/P1-review-required",
-      "authRequired": false,
-      "appCheckRequired": true,
-      "secrets": [],
-      "firestoreCollections": [],
-      "externalProviders": [],
-      "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 2 (Cloud Run managed) export",
-      "cloudRunReplacement": [
-        "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
-      ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9938,40 +9900,6 @@
       "retirementStatus": "not-retired"
     },
     {
-      "functionName": "updateRiderProfile",
-      "sourceFile": "server/functions/account-bootstrap-gen2.js",
-      "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 2",
-      "productionPurpose": "accountBootstrapGen2.updateRiderProfile",
-      "callers": [
-        "lib/website/shared/account_bootstrap_api.dart",
-        "lib/website/shared/circum_website_app.dart",
-        "scripts/scoped_functions_deploy_list.test.js",
-        "server/functions/account-bootstrap-gen2.test.js",
-        "server/functions/cloud-run-account-bootstrap.js",
-        "server/functions/cloud-run-account-bootstrap.test.js",
-        "server/functions/rider-account.js",
-        "server/functions/rider-account.test.js",
-        "server/functions/rider-onboarding-flow.emulator.test.js",
-        "test/website_rider_onboarding_hardening_test.dart"
-      ],
-      "criticality": "review-required",
-      "authRequired": false,
-      "appCheckRequired": true,
-      "secrets": [],
-      "firestoreCollections": [],
-      "externalProviders": [],
-      "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 2 (Cloud Run managed) export",
-      "cloudRunReplacement": [
-        "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
-      ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
-    },
-    {
       "functionName": "updateRiderPushToken",
       "sourceFile": "server/functions/rider-account.js",
       "triggerType": "callable",
@@ -10275,39 +10203,6 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
       "migrationStatus": "MIGRATE TO CLOUD RUN",
-      "retirementStatus": "not-retired"
-    },
-    {
-      "functionName": "verifyRiderAccountAccess",
-      "sourceFile": "server/functions/account-bootstrap-gen2.js",
-      "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 2",
-      "productionPurpose": "accountBootstrapGen2.verifyRiderAccountAccess",
-      "callers": [
-        "lib/website/shared/account_bootstrap_api.dart",
-        "lib/website/shared/circum_website_app.dart",
-        "server/functions/account-bootstrap-gen2.test.js",
-        "server/functions/cloud-run-account-bootstrap.js",
-        "server/functions/cloud-run-account-bootstrap.test.js",
-        "server/functions/rider-account.js",
-        "server/functions/rider-onboarding-flow.emulator.test.js",
-        "test/website_account_bootstrap_api_test.dart",
-        "test/website_rider_onboarding_hardening_test.dart"
-      ],
-      "criticality": "P0/P1-review-required",
-      "authRequired": false,
-      "appCheckRequired": true,
-      "secrets": [],
-      "firestoreCollections": [],
-      "externalProviders": [],
-      "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 2 (Cloud Run managed) export",
-      "cloudRunReplacement": [
-        "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
-      ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     }
   ]
