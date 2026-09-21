@@ -3959,9 +3959,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _saveRiderProfile(User user) async {
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateRiderProfile')
-        .call({
+    await callAccountBootstrap('updateRiderProfile', {
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
