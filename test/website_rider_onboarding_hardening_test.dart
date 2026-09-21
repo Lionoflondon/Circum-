@@ -57,9 +57,17 @@ void main() {
     final access = source.substring(
         source.indexOf('  Future<bool> _allowRiderUser('),
         source.indexOf('  Future<Set<CircumRole>> _rolesForUser('));
-    expect(access,
-        contains("callAccountBootstrap('verifyRiderAccountAccess'"));
+    expect(access, contains("callAccountBootstrap('verifyRiderAccountAccess'"));
     expect(access, contains("callAccountBootstrap('updateRiderProfile'"));
     expect(access, contains('CircumRole.unknown'));
+    final saveStart =
+        source.indexOf('Future<void> _saveRiderProfile(User user)');
+    final saveEnd =
+        source.indexOf('\n  void _listenToRiderOnboarding', saveStart);
+    final save = source.substring(saveStart, saveEnd);
+    expect(save, contains("callAccountBootstrap('updateRiderProfile'"));
+    expect(save, contains("'vehicleRegistration': _plateNumber.text.trim()"));
+    expect(save, contains("'availability': _availability.text.trim()"));
+    expect(save, isNot(contains("httpsCallable('updateRiderProfile')")));
   });
 }
