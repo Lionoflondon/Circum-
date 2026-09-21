@@ -7,10 +7,23 @@ const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const deviceTokenAuthority = require("./device-token-authority");
+const riderAccount = require("./rider-account");
 const rothLedger = require("./roth-ledger");
 
 const MAX_BODY_BYTES = 32 * 1024;
-const ROUTES = new Set(["ensureSenderAccount", "updateSenderPushToken", "updateRiderPushToken", "sendRiderUpdate"]);
+const ROUTES = new Set([
+  "ensureSenderAccount",
+  "updateRiderProfile",
+  "verifyRiderAccountAccess",
+  "updateSenderPushToken",
+  "updateRiderPushToken",
+  "sendRiderUpdate",
+]);
+const RIDER_APP_CHECK_ROUTES = new Set([
+  "updateRiderProfile",
+  "verifyRiderAccountAccess",
+  "updateRiderPushToken",
+]);
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -32,6 +45,8 @@ function createHandlers(options = {}) {
   const registerProfileToken = options.registerProfileToken || deviceTokenAuthority.registerProfileToken;
   const serverTimestamp = options.serverTimestamp || (() => FieldValue.serverTimestamp());
   const grantSenderWelcomeRoth = options.grantSenderWelcomeRoth || rothLedger.grantSenderWelcomeRoth;
+  const updateRiderProfile = options.updateRiderProfile || ((data, context) => riderAccount.updateRiderProfile.run(data, context));
+  const verifyRiderAccountAccess = options.verifyRiderAccountAccess || ((data, context) => riderAccount.verifyRiderAccountAccess.run(data, context));
   return {
     async ensureSenderAccount(_data, context) {
       const uid = context.auth.uid;
@@ -120,6 +135,8 @@ function createHandlers(options = {}) {
       delete result.starterRothEligible;
       return {ok: true, ...result};
     },
+    updateRiderProfile,
+    verifyRiderAccountAccess,
     async updateSenderPushToken(data, context) {
       const token = clean(data && data.fcmToken);
       if (!token) throw callableError("invalid-argument", "Push token is required.");
@@ -183,7 +200,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderPushToken|updateRiderPushToken|sendRiderUpdate)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateRiderProfile|verifyRiderAccountAccess|updateSenderPushToken|updateRiderPushToken|sendRiderUpdate)$/.exec(pathname);
   return match && ROUTES.has(match[1]) ? match[1] : null;
 }
 
@@ -215,14 +232,18 @@ function createServer(options = {}) {
         if (!dependencies) dependencies = dependenciesFactory();
         const decoded = await dependencies.verifyIdToken(idToken);
         if (!decoded || !(decoded.uid || decoded.sub)) throw callableError("unauthenticated", "Invalid authentication token.");
-        if (name === "updateRiderPushToken") {
+        let decodedAppCheck = null;
+        if (RIDER_APP_CHECK_ROUTES.has(name)) {
           const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
           if (!appCheckToken) throw callableError("failed-precondition", "Circum Rider security verification is required.");
-          await dependencies.verifyAppCheck(appCheckToken);
+          decodedAppCheck = await dependencies.verifyAppCheck(appCheckToken);
         }
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!Object.prototype.hasOwnProperty.call(payload, "data")) throw callableError("invalid-argument", "Callable request must contain data.");
-        const context = {auth: {uid: decoded.uid || decoded.sub, token: decoded}};
+        const context = {
+          auth: {uid: decoded.uid || decoded.sub, token: decoded},
+          ...(decodedAppCheck ? {app: decodedAppCheck} : {}),
+        };
         const result = await dependencies.handlers[name](payload.data, context);
         return writeJson(response, 200, {result});
       } catch (error) {
