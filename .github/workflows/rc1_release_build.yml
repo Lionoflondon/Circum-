@@ -186,6 +186,7 @@ jobs:
           rm -rf android/app/release-signing
 
   sender-android-runtime:
+    if: ${{ !inputs.android_only }}
     name: Sender Android API ${{ matrix.api }} runtime certification
     runs-on: ubuntu-latest
     timeout-minutes: 35
