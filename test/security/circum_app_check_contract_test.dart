@@ -185,9 +185,17 @@ void main() {
       expect(source, isNot(matches(hardcodedMapsKey)), reason: path);
     }
 
+    final websiteSource =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     expect(
-      File('lib/website/shared/circum_website_app.dart').readAsStringSync(),
-      contains("String.fromEnvironment('GOOGLE_PLACES_API_KEY')"),
+      websiteSource,
+      contains("String.fromEnvironment(\n  'GOOGLE_STATIC_MAPS_API_KEY',"),
+    );
+    expect(websiteSource, contains("httpsCallable('searchFreeUkAddresses')"));
+    expect(websiteSource, contains("httpsCallable('resolveUkAddressPlace')"));
+    expect(
+      websiteSource,
+      isNot(contains("String.fromEnvironment('GOOGLE_PLACES_API_KEY')")),
     );
     final senderRouteSource =
         File('lib/app/send_package/bloc/send_package_bloc.dart')
