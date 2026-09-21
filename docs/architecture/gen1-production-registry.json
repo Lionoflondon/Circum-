@@ -9963,6 +9963,7 @@
         "server/functions/rider-account.js",
         "server/functions/rider-account.test.js",
         "server/functions/rider-onboarding-flow.emulator.test.js",
+        "test/website_account_bootstrap_api_test.dart",
         "test/website_rider_onboarding_hardening_test.dart"
       ],
       "criticality": "review-required",

@@ -164,9 +164,8 @@ test("profile completion initializes authority defaults only without prior revie
   assert.doesNotMatch(source, /existing\.approvalStatus\s*\|\|\s*"pending"[\s\S]{0,120}onboardingStatus === "profile_complete"/);
 });
 
-test("Rider Web routes profile updates through account bootstrap Cloud Run", () => {
-  assert.match(websiteSource, /callAccountBootstrap\(\s*'updateRiderProfile'/);
-  assert.doesNotMatch(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
+test("Rider Web routes operational self-service mutations through callables", () => {
+  assert.match(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);
   assert.match(websiteSource, /httpsCallable\('submitRiderApplication'\)/);
   assert.match(websiteSource, /httpsCallable\('submitRiderDocument'\)/);
