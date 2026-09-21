@@ -300,8 +300,12 @@
     },
     {
       "products": ["website", "backend"],
-      "files": ["server/functions/rider-account.test.js"],
-      "reason": "This backend contract test verifies the public website Rider profile caller uses account-bootstrap Cloud Run."
+      "files": [
+        "server/functions/rider-account.test.js",
+        "test/website_account_bootstrap_api_test.dart",
+        "test/website_rider_onboarding_hardening_test.dart"
+      ],
+      "reason": "These contract tests verify the public website Rider profile caller uses account-bootstrap Cloud Run."
     }
   ],
   "blockedPrefixes": [
