@@ -66,8 +66,9 @@ const staleSourceNotDeployed = classification ?
 const classificationMatches = Boolean(classification) &&
   unexpectedDeployedMissing.length === 0 && staleDeployedMissing.length === 0 &&
   unexpectedSourceNotDeployed.length === 0 && staleSourceNotDeployed.length === 0;
-const exactRestorableScope = allowRestorableScope && deploymentScope.length === 1 &&
-  scopeNotDeployed.length === 1 && restorableCompatibility.has(scopeNotDeployed[0]);
+const exactRestorableScope = allowRestorableScope && deploymentScope.length > 0 &&
+  deploymentScope.length === scopeNotDeployed.length &&
+  scopeNotDeployed.every((name) => restorableCompatibility.has(name));
 const unsafeScopeNotDeployed = exactRestorableScope ? [] : scopeNotDeployed;
 
 console.log(JSON.stringify({

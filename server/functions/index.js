@@ -154,6 +154,7 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.requestRiderCancellation = require("./rider-cancellation").requestRiderCancellation;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
 exports.ensureSenderAccount = accountBootstrapCompat.ensureSenderAccount;
+exports.updateRiderProfile = accountBootstrapCompat.updateRiderProfile;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.completeDelivery = require("./delivery-completion-reconciled").completeDelivery;

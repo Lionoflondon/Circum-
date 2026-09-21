@@ -351,6 +351,11 @@
       "owner": "circum-newsletter"
     },
     {
+      "name": "updateRiderProfile",
+      "category": "RESTORABLE_COMPATIBILITY",
+      "owner": "circum-account-bootstrap"
+    },
+    {
       "name": "handleStripeConnectWebhook",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-stripe-connect-webhook"

@@ -2,11 +2,11 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 271
-- Gen 1 exports: 269
+- Source exports: 272
+- Gen 1 exports: 270
 - Files importing Firebase Functions v1: 64
 - MIGRATE TO CLOUD RUN: 177
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 49
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 50
 - REPLACE WITH CLOUD RUN + EVENTARC: 27
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
@@ -276,6 +276,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | updateRiderApplicationSection | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-account.test.js<br>server/functions/rider-document-emulator-integration.test.js<br>server/functions/rider-onboarding-flow.emulator.test.js |
 | updateRiderNotificationState | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart<br>server/functions/firestore-chat-notification-rules.test.js |
 | updateRiderPresence | server/functions/rider-presence.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-presence-core.test.js |
+| updateRiderProfile | server/functions/account-bootstrap-compat.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/account_bootstrap_api.dart<br>lib/website/shared/circum_website_app.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/account-bootstrap-compat.test.js<br>server/functions/account-bootstrap-gen2.js<br>server/functions/account-bootstrap-gen2.test.js<br>server/functions/check-functions-inventory.test.js<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/production-functions-inventory.json<br>server/functions/rider-account.js<br>server/functions/rider-account.test.js<br>server/functions/rider-onboarding-flow.emulator.test.js<br>test/website_rider_onboarding_hardening_test.dart |
 | updateRiderPushToken | server/functions/rider-account.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/repo/token_callable_api.dart<br>lib/website/shared/circum_website_app.dart<br>lib/website/shared/token_callable_api.dart<br>server/functions/cloud-run-token-callables.js<br>server/functions/cloud-run-token-callables.test.js<br>test/website_token_callable_api_test.dart |
 | updateSenderHealthPlusBooking | server/functions/health-plus.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/health_plus/view/health_plus.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/firestore-health-plus-authority-rules.test.js<br>server/functions/health-plus-checkout-security.test.js |
 | updateSenderLocation | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/authentication/bloc/auth_bloc.dart |

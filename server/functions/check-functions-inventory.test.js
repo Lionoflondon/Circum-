@@ -103,6 +103,24 @@ test("restored compatibility callable matches inventory after activation", () =>
   assert.match(result.stdout, /"classificationMatches": true/);
 });
 
+test("exact scoped restoration includes only classified compatibility callables", () => {
+  const names = ["ensureSenderAccount", "updateRiderProfile"];
+  const deployed = exportsList.filter((item) => !names.includes(item));
+  const allowed = runClassifiedInventory(deployed, names, null, {
+    restorable: true,
+    scope: names.map((name) => `functions:${name}`).join(","),
+    allowRestorable: true,
+  });
+  assert.equal(allowed.status, 0);
+
+  const blocked = runClassifiedInventory(deployed, names, null, {
+    restorable: true,
+    scope: `functions:${names[0]},functions:${names[1]},functions:${exportsList[0]}`,
+    allowRestorable: true,
+  });
+  assert.equal(blocked.status, 1);
+});
+
 test("reviewed legacy and Cloud Run ownership makes an exact inventory pass", () => {
   const sourceOnly = exportsList[0];
   const deployed = [

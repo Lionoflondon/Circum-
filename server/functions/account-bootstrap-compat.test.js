@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {createEnsureSenderAccountCompat} = require("./account-bootstrap-compat");
+const {createAccountBootstrapCompat} = require("./account-bootstrap-compat");
 
 const context = {
   auth: {uid: "sender-1"},
@@ -11,7 +11,7 @@ const context = {
 
 test("ensureSenderAccount compatibility callable forwards auth and callable data", async () => {
   let request;
-  const call = createEnsureSenderAccountCompat({
+  const call = createAccountBootstrapCompat("ensureSenderAccount", {
     endpoint: "https://account.example/ensureSenderAccount",
     fetchImpl: async (url, options) => {
       request = {url, options};
@@ -31,7 +31,7 @@ test("ensureSenderAccount compatibility callable forwards auth and callable data
 
 test("ensureSenderAccount compatibility callable rejects unauthenticated requests before forwarding", async () => {
   let forwarded = false;
-  const call = createEnsureSenderAccountCompat({
+  const call = createAccountBootstrapCompat("ensureSenderAccount", {
     fetchImpl: async () => {
       forwarded = true;
       return {ok: true, json: async () => ({result: {ok: true}})};
@@ -43,7 +43,7 @@ test("ensureSenderAccount compatibility callable rejects unauthenticated request
 });
 
 test("ensureSenderAccount compatibility callable maps Cloud Run errors to callable errors", async () => {
-  const call = createEnsureSenderAccountCompat({
+  const call = createAccountBootstrapCompat("ensureSenderAccount", {
     fetchImpl: async () => ({
       ok: false,
       status: 403,
@@ -59,7 +59,7 @@ test("ensureSenderAccount compatibility callable maps Cloud Run errors to callab
 });
 
 test("ensureSenderAccount compatibility callable reports Cloud Run transport failures as unavailable", async () => {
-  const call = createEnsureSenderAccountCompat({fetchImpl: async () => {
+  const call = createAccountBootstrapCompat("ensureSenderAccount", {fetchImpl: async () => {
     throw new Error("upstream unavailable");
   }});
 
@@ -67,4 +67,41 @@ test("ensureSenderAccount compatibility callable reports Cloud Run transport fai
     assert.match(error.code, /unavailable$/);
     return true;
   });
+});
+
+test("updateRiderProfile compatibility callable requires and forwards App Check", async () => {
+  let request;
+  const call = createAccountBootstrapCompat("updateRiderProfile", {
+    endpoint: "https://account.example/updateRiderProfile",
+    fetchImpl: async (url, options) => {
+      request = {url, options};
+      return {ok: true, json: async () => ({result: {ok: true}})};
+    },
+  });
+  const riderContext = {
+    auth: {uid: "rider-1"},
+    app: {appId: "circum-rider-app"},
+    rawRequest: {headers: {
+      authorization: "Bearer firebase-id-token",
+      "x-firebase-appcheck": "firebase-app-check-token",
+    }},
+  };
+
+  assert.deepEqual(await call({displayName: "Rider"}, riderContext), {ok: true});
+  assert.equal(request.url, "https://account.example/updateRiderProfile");
+  assert.equal(request.options.headers.authorization, "Bearer firebase-id-token");
+  assert.equal(request.options.headers["x-firebase-appcheck"], "firebase-app-check-token");
+});
+
+test("updateRiderProfile compatibility callable rejects requests without App Check", async () => {
+  let forwarded = false;
+  const call = createAccountBootstrapCompat("updateRiderProfile", {
+    fetchImpl: async () => {
+      forwarded = true;
+      return {ok: true, json: async () => ({result: {ok: true}})};
+    },
+  });
+
+  await assert.rejects(call({}, context), /security verification is required/);
+  assert.equal(forwarded, false);
 });
