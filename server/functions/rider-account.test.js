@@ -54,7 +54,7 @@ test("Rider self-service authority callables retain their intended runtime owner
   assert.match(source, /exports\.submitRiderApplication\s*=\s*riderCallable/);
   assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*riderCallable/);
   assert.match(source, /exports\.submitRiderDocument\s*=\s*riderCallable/);
-  assert.doesNotMatch(indexSource, /exports\.updateRiderProfile\s*=/);
+  assert.match(indexSource, /exports\.updateRiderProfile\s*=\s*accountBootstrapCompat\.updateRiderProfile/);
   assert.match(indexSource, /exports\.requestRiderEmailChange\s*=\s*riderAccount\.requestRiderEmailChange/);
   assert.match(indexSource, /exports\.createWeightAdjustedNotification\s*=\s*riderAccount\.createWeightAdjustedNotification/);
   assert.match(indexSource, /exports\.submitRiderApplication\s*=\s*riderAccount\.submitRiderApplication/);

@@ -26,7 +26,7 @@ function runInventory(deployed, scope = "") {
   return result;
 }
 
-function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = null) {
+function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = null, options = {}) {
   const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "circum-function-classification-"));
   const deployedPath = path.join(temporaryDir, "deployed.json");
   const classificationPath = path.join(temporaryDir, "classification.json");
@@ -35,12 +35,14 @@ function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = n
   fs.writeFileSync(classificationPath, JSON.stringify({
     deployedMissingSource: (classifiedMissing || missing)
         .map((name) => ({name, category: "INTENTIONALLY_LEGACY"})),
-    sourceNotDeployed: sourceOnly.map((name) => ({name, category: "CLOUD_RUN_SUPERSEDED"})),
+    sourceNotDeployed: sourceOnly.map((name) => ({name, category: options.restorable ? "RESTORABLE_COMPATIBILITY" : "CLOUD_RUN_SUPERSEDED"})),
   }));
   const result = childProcess.spawnSync(process.execPath, [
     script,
     `--deployed-json=${deployedPath}`,
     `--classification-json=${classificationPath}`,
+    ...(options.scope ? [`--scope=${options.scope}`] : []),
+    ...(options.allowRestorable ? ["--allow-restorable-scope"] : []),
   ], {encoding: "utf8"});
   fs.rmSync(temporaryDir, {recursive: true, force: true});
   return result;
@@ -73,6 +75,50 @@ test("scope cannot silently recreate a source-only function", () => {
   );
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Unsafe Functions scope/);
+});
+
+test("restorable compatibility callable requires its exact explicit scope", () => {
+  const name = "ensureSenderAccount";
+  const deployed = exportsList.filter((item) => item !== name);
+  const blocked = runClassifiedInventory(deployed, [name], null, {
+    restorable: true,
+    scope: `functions:${name}`,
+  });
+  assert.equal(blocked.status, 1);
+  assert.match(blocked.stderr, /Unsafe Functions scope/);
+
+  const allowed = runClassifiedInventory(deployed, [name], null, {
+    restorable: true,
+    scope: `functions:${name}`,
+    allowRestorable: true,
+  });
+  assert.equal(allowed.status, 0);
+  assert.match(allowed.stdout, /"scopeNotDeployed": \[\s*"ensureSenderAccount"/);
+});
+
+test("restored compatibility callable matches inventory after activation", () => {
+  const name = "ensureSenderAccount";
+  const result = runClassifiedInventory(exportsList, [name], null, {restorable: true});
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /"classificationMatches": true/);
+});
+
+test("exact scoped restoration includes only classified compatibility callables", () => {
+  const names = ["ensureSenderAccount", "updateRiderProfile"];
+  const deployed = exportsList.filter((item) => !names.includes(item));
+  const allowed = runClassifiedInventory(deployed, names, null, {
+    restorable: true,
+    scope: names.map((name) => `functions:${name}`).join(","),
+    allowRestorable: true,
+  });
+  assert.equal(allowed.status, 0);
+
+  const blocked = runClassifiedInventory(deployed, names, null, {
+    restorable: true,
+    scope: `functions:${names[0]},functions:${names[1]},functions:${exportsList[0]}`,
+    allowRestorable: true,
+  });
+  assert.equal(blocked.status, 1);
 });
 
 test("reviewed legacy and Cloud Run ownership makes an exact inventory pass", () => {

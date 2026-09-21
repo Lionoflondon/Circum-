@@ -74,6 +74,7 @@ const senderFinance = require("./sender-finance");
 const {senderPaymentCallable} = require("./sender-app-check");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
+const accountBootstrapCompat = require("./account-bootstrap-compat");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
@@ -152,6 +153,8 @@ exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.requestRiderCancellation = require("./rider-cancellation").requestRiderCancellation;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
+exports.ensureSenderAccount = accountBootstrapCompat.ensureSenderAccount;
+exports.updateRiderProfile = accountBootstrapCompat.updateRiderProfile;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.completeDelivery = require("./delivery-completion-reconciled").completeDelivery;

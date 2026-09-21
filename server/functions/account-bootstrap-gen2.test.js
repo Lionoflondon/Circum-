@@ -18,12 +18,11 @@ test("account bootstrap uses Gen 2 callable infrastructure", () => {
   assert.doesNotMatch(source, /firebase-functions\/v1/);
 });
 
-test("retired managed account bootstrap exports cannot be recreated", () => {
+test("retired managed exports stay retired while legacy callables use compatibility edges", () => {
   assert.doesNotMatch(indexSource, /accountBootstrapGen2/);
-  assert.doesNotMatch(indexSource, /exports\.ensureSenderAccount/);
+  assert.match(indexSource, /exports\.ensureSenderAccount = accountBootstrapCompat\.ensureSenderAccount/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess/);
-  assert.doesNotMatch(indexSource, /exports\.updateRiderProfile/);
-  assert.doesNotMatch(indexSource, /exports\.ensureSenderAccount = senderAccount\.ensureSenderAccount/);
+  assert.match(indexSource, /exports\.updateRiderProfile = accountBootstrapCompat\.updateRiderProfile/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess = riderAccount\.verifyRiderAccountAccess/);
   assert.doesNotMatch(indexSource, /exports\.updateRiderProfile = riderAccount\.updateRiderProfile/);
 });
