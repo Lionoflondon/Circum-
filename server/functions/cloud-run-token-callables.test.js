@@ -108,6 +108,28 @@ test("handlers register canonical sender and rider ownership and write audits", 
   assert.equal(db.writes[1].data.riderId, "rider-1");
 });
 
+test("Rider bootstrap handlers preserve legacy behavior with verified context", async () => {
+  const calls = [];
+  const handlers = createHandlers({
+    db: fakeDb(),
+    updateRiderProfile: async (data, context) => {
+      calls.push(["profile", data, context]);
+      return {ok: true, riderId: context.auth.uid};
+    },
+    verifyRiderAccountAccess: async (data, context) => {
+      calls.push(["access", data, context]);
+      return {ok: true, riderId: context.auth.uid, profileExists: true};
+    },
+  });
+  const context = {auth: {uid: "rider-1", token: {email: "rider@example.invalid"}}, app: {appId: "rider-app"}};
+  assert.deepEqual(await handlers.updateRiderProfile({fullName: "Rider One"}, context), {ok: true, riderId: "rider-1"});
+  assert.deepEqual(await handlers.verifyRiderAccountAccess({}, context), {ok: true, riderId: "rider-1", profileExists: true});
+  assert.deepEqual(calls.map(([name, data, received]) => [name, data, received.auth.uid, received.app.appId]), [
+    ["profile", {fullName: "Rider One"}, "rider-1", "rider-app"],
+    ["access", {}, "rider-1", "rider-app"],
+  ]);
+});
+
 test("callable transport rejects missing auth and requires Rider App Check", async () => {
   const calls = [];
   const server = createServer({dependenciesFactory: () => ({
@@ -115,6 +137,8 @@ test("callable transport rejects missing auth and requires Rider App Check", asy
     verifyAppCheck: async (token) => token === "valid-app" ? {appId: "app-1"} : Promise.reject(Object.assign(new Error("Bad App Check token."), {code: "app-check/invalid-argument"})),
     handlers: {
       ensureSenderAccount: async (_data, context) => (calls.push(["ensure", context.auth.uid]), {ok: true, allowed: true}),
+      updateRiderProfile: async (_data, context) => (calls.push(["profile", context.auth.uid, context.app.appId]), {ok: true}),
+      verifyRiderAccountAccess: async (_data, context) => (calls.push(["access", context.auth.uid, context.app.appId]), {ok: true, profileExists: true}),
       updateSenderPushToken: async (_data, context) => (calls.push(["sender", context.auth.uid]), {ok: true}),
       updateRiderPushToken: async (_data, context) => (calls.push(["rider", context.auth.uid]), {ok: true}),
       sendRiderUpdate: async () => {
@@ -134,7 +158,18 @@ test("callable transport rejects missing auth and requires Rider App Check", asy
     response = await fetch(`${url}/updateRiderPushToken`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {fcmToken: "token"}})});
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {result: {ok: true}});
-    assert.deepEqual(calls, [["ensure", "verified-uid"], ["rider", "verified-uid"]]);
+    response = await fetch(`${url}/verifyRiderAccountAccess`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true, profileExists: true}});
+    response = await fetch(`${url}/updateRiderProfile`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {fullName: "Verified Rider"}})});
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true}});
+    assert.deepEqual(calls, [
+      ["ensure", "verified-uid"],
+      ["rider", "verified-uid"],
+      ["access", "verified-uid", "app-1"],
+      ["profile", "verified-uid", "app-1"],
+    ]);
   });
 });
 
