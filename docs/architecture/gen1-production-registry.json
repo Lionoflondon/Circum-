@@ -4181,10 +4181,8 @@
       "generation": "Gen 2",
       "productionPurpose": "accountBootstrapGen2.ensureSenderAccount",
       "callers": [
-        "lib/app/send_package/repo/token_callable_api.dart",
         "lib/app/sender_mobile/sender_profile_authority.dart",
         "lib/website/shared/circum_website_app.dart",
-        "lib/website/shared/token_callable_api.dart",
         "server/functions/account-bootstrap-gen2.test.js",
         "server/functions/cloud-run-token-callables.js",
         "server/functions/cloud-run-token-callables.test.js",
@@ -4192,7 +4190,6 @@
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
-        "test/sender_token_callable_api_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],
       "criticality": "P0/P1-review-required",
