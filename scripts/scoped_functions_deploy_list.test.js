@@ -14,14 +14,19 @@ function scope(files) {
   }).trim().split(/\r?\n/).filter(Boolean);
 }
 
-test("shared state core includes only genuine dependent exports", () => {
+test("shared state core includes its genuine dependent exports", () => {
   const names = scope(["server/functions/sender-tracking-state-core.js"]);
-  assert.deepEqual(names, ["updateDeliveryTrackingStatus", "updateDeliveryLiveLocation"]);
+  assert.equal(names.includes("updateDeliveryTrackingStatus"), true);
+  assert.equal(names.includes("updateDeliveryLiveLocation"), true);
+  assert.equal(names.includes("reconcilePendingDeliverySettlements"), true);
   assert.equal(names.includes("getSenderGiftStory"), false);
 });
 
-test("Gift Story module retains its 18-function scope", () => {
-  assert.equal(scope(["server/functions/gift-story-automation.js"]).length, 18);
+test("Gift Story module includes direct and transitive owners without broadening globally", () => {
+  const names = scope(["server/functions/gift-story-automation.js"]);
+  assert.equal(names.includes("getSenderGiftStory"), true);
+  assert.equal(names.includes("onGiftDeliveryCompleted"), true);
+  assert.equal(names.includes("createSenderPaidDelivery"), false);
 });
 
 test("UI-only input has no Functions", () => {

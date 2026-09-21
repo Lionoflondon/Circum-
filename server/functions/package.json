@@ -11,6 +11,7 @@
     "test:iris": "node --test iris-core.test.js iris-security.test.js",
     "test:adjustments": "node --test delivery-adjustment-core.test.js",
     "check:functions-inventory": "node check-functions-inventory.js",
+    "test:functions-inventory": "node --test check-functions-inventory.test.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",

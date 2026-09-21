@@ -8,9 +8,10 @@ service firebase.storage {
 
     function hasRole(role) {
       return signedIn() && (
-        request.auth.token.adminRole == role ||
-        request.auth.token.role == role ||
-        (request.auth.token.roles is list && role in request.auth.token.roles)
+        request.auth.token.get('adminRole', '') == role ||
+        request.auth.token.get('role', '') == role ||
+        (request.auth.token.get('roles', []) is list &&
+          role in request.auth.token.get('roles', []))
       );
     }
 
@@ -60,29 +61,29 @@ service firebase.storage {
     function isAssignedHealthRider(pickupId) {
       return signedIn() &&
         ((firestore.exists(/databases/(default)/documents/deliveryRequests/$('health_' + pickupId)) &&
-          (delivery('health_' + pickupId).assignedRiderId == request.auth.uid ||
-           delivery('health_' + pickupId).riderId == request.auth.uid ||
-           delivery('health_' + pickupId).assignedDriverId == request.auth.uid)) ||
+          (delivery('health_' + pickupId).get('assignedRiderId', '') == request.auth.uid ||
+           delivery('health_' + pickupId).get('riderId', '') == request.auth.uid ||
+           delivery('health_' + pickupId).get('assignedDriverId', '') == request.auth.uid)) ||
          (firestore.exists(/databases/(default)/documents/prescriptionPickups/$(pickupId)) &&
-          healthPickup(pickupId).assignedDriverId == request.auth.uid));
+          healthPickup(pickupId).get('assignedDriverId', '') == request.auth.uid));
     }
 
     function isAssignedDeliveryRider(deliveryId) {
       return signedIn() &&
         firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
-        (delivery(deliveryId).riderId == request.auth.uid ||
-         delivery(deliveryId).driverId == request.auth.uid ||
-         delivery(deliveryId).assignedRiderId == request.auth.uid ||
-         delivery(deliveryId).assignedDriverId == request.auth.uid);
+        (delivery(deliveryId).get('riderId', '') == request.auth.uid ||
+         delivery(deliveryId).get('driverId', '') == request.auth.uid ||
+         delivery(deliveryId).get('assignedRiderId', '') == request.auth.uid ||
+         delivery(deliveryId).get('assignedDriverId', '') == request.auth.uid);
     }
 
     match /delivery-discrepancies/{deliveryId}/{riderId}/{fileName} {
       allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId);
       allow create: if resource == null && request.auth.uid == riderId && isAssignedDeliveryRider(deliveryId) && evidenceDeliveryOpen(deliveryId) &&
         isSafeUpload() &&
-        request.resource.metadata.deliveryId == deliveryId &&
-        request.resource.metadata.uploadedBy == request.auth.uid &&
-        request.resource.metadata.evidenceType == 'weight_discrepancy';
+        request.resource.metadata.get('deliveryId', '') == deliveryId &&
+        request.resource.metadata.get('uploadedBy', '') == request.auth.uid &&
+        request.resource.metadata.get('evidenceType', '') == 'weight_discrepancy';
       allow update, delete: if false;
     }
 
@@ -112,9 +113,9 @@ service firebase.storage {
         fileName.matches('[0-9]+\\.jpg') &&
         request.resource.size > 0 && request.resource.size <= 15 * 1024 * 1024 &&
         request.resource.contentType == 'image/jpeg' &&
-        request.resource.metadata.deliveryId == deliveryId &&
-        request.resource.metadata.uploadedBy == request.auth.uid &&
-        request.resource.metadata.evidenceType == 'weight_discrepancy';
+        request.resource.metadata.get('deliveryId', '') == deliveryId &&
+        request.resource.metadata.get('uploadedBy', '') == request.auth.uid &&
+        request.resource.metadata.get('evidenceType', '') == 'weight_discrepancy';
       allow update, delete: if false;
     }
 
@@ -123,9 +124,9 @@ service firebase.storage {
       allow read: if isAdmin() || isAssignedHealthRider(pickupId);
       allow create: if resource == null && isAssignedHealthRider(pickupId) && isSafeUpload() &&
         evidenceType.matches('pickup|custody|handover|verification|exception') &&
-        request.resource.metadata.pickupId == pickupId &&
-        request.resource.metadata.uploadedBy == request.auth.uid &&
-        request.resource.metadata.evidenceType == evidenceType;
+        request.resource.metadata.get('pickupId', '') == pickupId &&
+        request.resource.metadata.get('uploadedBy', '') == request.auth.uid &&
+        request.resource.metadata.get('evidenceType', '') == evidenceType;
       allow update, delete: if false;
     }
 
