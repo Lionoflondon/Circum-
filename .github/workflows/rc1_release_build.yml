@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      android_only:
+        description: Build only the Sender Android AAB, skipping website and Sender Web artifacts
+        required: false
+        default: false
+        type: boolean
       payment_environment:
         description: Stripe/wallet environment for this artifact
         required: true
@@ -19,7 +24,7 @@ on:
 
 jobs:
   web:
-    if: ${{ !inputs.runtime_only }}
+    if: ${{ !inputs.runtime_only && !inputs.android_only }}
     name: Build Public Website and Sender Web
     runs-on: ubuntu-latest
     steps:
