@@ -26,6 +26,26 @@ function runInventory(deployed, scope = "") {
   return result;
 }
 
+function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = null) {
+  const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "circum-function-classification-"));
+  const deployedPath = path.join(temporaryDir, "deployed.json");
+  const classificationPath = path.join(temporaryDir, "classification.json");
+  fs.writeFileSync(deployedPath, JSON.stringify({result: deployed.map((id) => ({id}))}));
+  const missing = deployed.filter((name) => !exportsList.includes(name));
+  fs.writeFileSync(classificationPath, JSON.stringify({
+    deployedMissingSource: (classifiedMissing || missing)
+        .map((name) => ({name, category: "INTENTIONALLY_LEGACY"})),
+    sourceNotDeployed: sourceOnly.map((name) => ({name, category: "CLOUD_RUN_SUPERSEDED"})),
+  }));
+  const result = childProcess.spawnSync(process.execPath, [
+    script,
+    `--deployed-json=${deployedPath}`,
+    `--classification-json=${classificationPath}`,
+  ], {encoding: "utf8"});
+  fs.rmSync(temporaryDir, {recursive: true, force: true});
+  return result;
+}
+
 test("complete production inventory passes", () => {
   assert.equal(runInventory(exportsList).status, 0);
 });
@@ -53,4 +73,25 @@ test("scope cannot silently recreate a source-only function", () => {
   );
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Unsafe Functions scope/);
+});
+
+test("reviewed legacy and Cloud Run ownership makes an exact inventory pass", () => {
+  const sourceOnly = exportsList[0];
+  const deployed = [
+    ...exportsList.filter((name) => name !== sourceOnly),
+    "reviewedLegacyFunction",
+  ];
+  const result = runClassifiedInventory(deployed, [sourceOnly]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /"classificationMatches": true/);
+});
+
+test("classification drift fails closed", () => {
+  const result = runClassifiedInventory(
+      [...exportsList, "unexpectedFunction"],
+      [],
+      ["reviewedLegacyFunction"],
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /differs from the reviewed classification/);
 });

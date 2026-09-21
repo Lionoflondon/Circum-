@@ -5,9 +5,10 @@ const assert = require("node:assert/strict");
 process.env.FIREBASE_CONFIG = JSON.stringify({projectId: "demo-rider-online-intent"});
 process.env.GCLOUD_PROJECT = "demo-rider-online-intent";
 
-const admin = require("firebase-admin");
-if (!admin.apps.length) admin.initializeApp({projectId: process.env.GCLOUD_PROJECT});
-const db = admin.firestore();
+const {getApps, initializeApp} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
+if (!getApps().length) initializeApp({projectId: process.env.GCLOUD_PROJECT});
+const db = getFirestore();
 const presenceApi = require("./rider-presence");
 const {getOffers} = require("./rider-offers");
 const acceptRideRequests = require("./accept-ride-requests");

@@ -22,10 +22,12 @@ fs.writeFileSync(credentialsPath, JSON.stringify({
 }));
 process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
 
-const admin = require("firebase-admin");
+const {getAuth} = require("firebase-admin/auth");
+const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 require("./index");
-const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const db = getFirestore();
+const bucket = getStorage().bucket();
 
 
 const presence = require("./rider-presence");
@@ -36,7 +38,7 @@ const context = (uid) => ({auth: {uid, token: {email: uid + "@example.test"}}});
 
 test("full Auth/application/PDF/image/review flow preserves zero wallet and approved online authority", async () => {
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_STORAGE_EMULATOR_HOST, "emulators required");
-  const user = await admin.auth().createUser({email: "flow@example.test", password: "Emulator-only-123!"});
+  const user = await getAuth().createUser({email: "flow@example.test", password: "Emulator-only-123!"});
   const ctx = context(user.uid);
   assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, false);
   await account.updateRiderProfile.run(profile, ctx);

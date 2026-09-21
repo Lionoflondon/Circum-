@@ -36,7 +36,7 @@ jobs:
       - run: node scripts/deploy_guard.self_test.js
       - run: flutter analyze lib/app/sender_mobile/sender_ui_baseline.dart lib/app/sender_mobile/sender_page_shell.dart lib/app/sender_mobile/sender_mobile_home.dart lib/app/sender_mobile/sender_activity.dart lib/app/sender_mobile/sender_wallet.dart lib/app/sender_mobile/sender_mobile_profile.dart
       - run: flutter test test/sender_mobile/sender_app_boot_contract_test.dart test/sender_mobile/sender_first_frame_layout_test.dart test/sender_mobile/sender_visual_baseline_contract_test.dart
-      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" scripts/build_public_web.sh
+      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" PUBLIC_WEB_STATIC_MAPS_API_KEY="${{ secrets.PUBLIC_WEB_STATIC_MAPS_API_KEY }}" scripts/build_public_web.sh
       - name: Build Sender Web
         env:
           CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}

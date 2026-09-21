@@ -3,9 +3,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const admin = require("firebase-admin");
+const {getApps, initializeApp} = require("firebase-admin/app");
 process.env.GCLOUD_PROJECT = "demo-payment-runtime";
-if (!admin.apps.length) admin.initializeApp({projectId: "demo-payment-runtime"});
+if (!getApps().length) initializeApp({projectId: "demo-payment-runtime"});
 
 const modules = {
   "business-payments": require("./business-payments"),
