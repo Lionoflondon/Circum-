@@ -4181,6 +4181,7 @@
       "generation": "Gen 2",
       "productionPurpose": "accountBootstrapGen2.ensureSenderAccount",
       "callers": [
+        "lib/app/sender_mobile/account_bootstrap_api.dart",
         "lib/app/sender_mobile/sender_profile_authority.dart",
         "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -4191,6 +4192,7 @@
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
+        "test/sender_account_bootstrap_api_test.dart",
         "test/website_account_bootstrap_api_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],

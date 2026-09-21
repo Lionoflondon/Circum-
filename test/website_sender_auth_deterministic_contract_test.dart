@@ -38,7 +38,8 @@ void main() {
     final authority =
         File('lib/app/sender_mobile/sender_profile_authority.dart')
             .readAsStringSync();
-    expect('$home$authority', contains("httpsCallable('ensureSenderAccount')"));
+    expect(authority, contains('ensureSenderAccountViaCloudRun(auth: auth)'));
+    expect(authority, isNot(contains("httpsCallable('ensureSenderAccount')")));
     expect(home, contains(".load('sender_mobile.auth.profile')"));
     expect(home, contains('getIdToken(true)'));
     expect(home, contains('.timeout('));
