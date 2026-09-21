@@ -84,5 +84,6 @@ jobs:
 
           (cd server/functions && xargs ./node_modules/.bin/eslint < "${files}")
       - run: npm --prefix server/functions test
+      - run: npm --prefix server/functions run check:gen1-architecture
       - run: npm install -g firebase-tools
       - run: npm --prefix server/functions run test:rules

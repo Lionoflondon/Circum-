@@ -10277,12 +10277,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final allowed = await ensureWebSenderBootstrap(
       roles: roles,
       ensureAccount: () async {
-        final result =
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('ensureSenderAccount')
-                .call<Map<String, dynamic>>()
-                .timeout(_senderAuthOperationTimeout);
-        return result.data;
+        return callTokenCallable(
+          'ensureSenderAccount',
+          const <String, dynamic>{},
+        ).timeout(_senderAuthOperationTimeout);
       },
     );
     if (!mounted || !allowed) return false;
