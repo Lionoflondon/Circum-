@@ -34,6 +34,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
+      - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$BACKEND_GOOGLE_PLACES_API_KEY" > server/functions/.env
+        env:
+          BACKEND_GOOGLE_PLACES_API_KEY: ${{ secrets.BACKEND_GOOGLE_PLACES_API_KEY }}
       - name: Resolve affected Functions
         id: functions-scope
         env:
