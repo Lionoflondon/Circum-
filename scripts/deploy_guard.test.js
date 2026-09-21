@@ -32,6 +32,7 @@ function fixture() {
   fs.mkdirSync(path.join(cwd, 'scripts'));
   fs.mkdirSync(path.join(cwd, 'lib/app/sender_mobile'), { recursive: true });
   fs.mkdirSync(path.join(cwd, 'lib/website'), { recursive: true });
+  fs.mkdirSync(path.join(cwd, 'docs/architecture'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'scripts/deploy_guard.js'), fs.readFileSync(sourceGuard));
   fs.writeFileSync(path.join(cwd, 'deploy-manifest.json'), JSON.stringify(manifest));
   fs.writeFileSync(path.join(cwd, 'analysis_options.yaml'), 'analyzer:\n');
@@ -66,6 +67,16 @@ test('Sender-only PR passes despite incidental lock/config changes', () => {
   fs.appendFileSync(path.join(cwd, 'pubspec.lock'), 'dirty\n');
   fs.appendFileSync(path.join(cwd, 'analysis_options.yaml'), 'dirty\n');
   assert.equal(runGuard(cwd, 'sender-app', base, head).status, 0);
+});
+
+test('Sender caller cutover may refresh only the generated architecture registry', () => {
+  const cwd = fixture();
+  const base = git(cwd, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(cwd, 'lib/app/sender_mobile/bootstrap.dart'), 'sender\n');
+  fs.writeFileSync(path.join(cwd, 'docs/architecture/GEN1_PRODUCTION_EXIT.md'), 'generated\n');
+  fs.writeFileSync(path.join(cwd, 'docs/architecture/gen1-production-registry.json'), '{}\n');
+  const head = commit(cwd, 'sender registry refresh');
+  assert.equal(runGuard(cwd, 'sender-app', base, head, true).status, 0);
 });
 
 test('Web-only PR passes', () => {
