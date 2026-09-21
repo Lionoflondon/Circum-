@@ -267,7 +267,7 @@
         "test/sender_mobile/sender_mobile_profile_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],
-      "reason": "Sender account closure must coordinate client-owned Firebase Auth deletion with backend-owned anonymisation and idempotent delivery-state checks."
+      "reason": "Sender account lifecycle changes coordinate client-owned Auth flows with backend authority; generated Gen 1 registry artifacts record reviewed caller cutovers."
     },
     {
       "products": ["website", "admin", "backend"],
