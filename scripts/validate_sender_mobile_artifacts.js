@@ -49,16 +49,33 @@ assertContains('scripts/build_sender_app_web.sh', 'CIRCUM_WEB_GOOGLE_MAPS_API_KE
   'Sender Web Maps secret validation');
 assertContains('scripts/build_sender_app_web.sh', 'maps.googleapis.com/maps/api/js',
   'Sender Web Maps JavaScript injection');
-assertContains('scripts/build_public_web.sh', 'GOOGLE_PLACES_API_KEY',
-  'Public Web Places key validation');
+assertContains('scripts/build_public_web.sh', 'PUBLIC_WEB_STATIC_MAPS_API_KEY',
+  'Public Web Static Maps key validation');
 assertContains('.github/workflows/rc1_release_build.yml', 'SENDER_ANDROID_GOOGLE_MAPS_API_KEY',
   'Sender Android CI Maps secret');
 assertContains('lib/app/send_package/bloc/send_package_bloc.dart', 'getSenderRoutePreview',
   'Sender backend route preview contract');
 assertContains('.github/workflows/rc1_release_build.yml', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
   'Sender Web CI Maps secret');
-assertContains('.github/workflows/rc1_release_build.yml', 'GOOGLE_PLACES_API_KEY',
-  'Public Web CI Places secret');
+assertContains('.github/workflows/rc1_release_build.yml', 'PUBLIC_WEB_STATIC_MAPS_API_KEY',
+  'Public Web CI Static Maps secret');
+assertContains('.github/workflows/deploy_functions.yml', 'BACKEND_GOOGLE_PLACES_API_KEY',
+  'Backend Places secret isolation');
+assertContains('lib/website/shared/circum_website_app.dart', 'searchFreeUkAddresses',
+  'Public Web server-side Places autocomplete proxy');
+assertContains('lib/website/shared/circum_website_app.dart', 'resolveUkAddressPlace',
+  'Public Web server-side Places details proxy');
+for (const file of [
+  '.github/workflows/deploy_functions.yml',
+  '.github/workflows/deploy_website.yml',
+  '.github/workflows/rc1_deploy.yml',
+  '.github/workflows/rc1_release_build.yml',
+]) {
+  assertNotContains(file, 'secrets.GOOGLE_PLACES_API_KEY',
+    'Legacy shared Places secret reference');
+  assertNotContains(file, 'PUBLIC_WEB_GOOGLE_PLACES_API_KEY',
+    'Obsolete public Places secret reference');
+}
 assertContains('lib/app/security/circum_app_check.dart',
   'AndroidProvider.playIntegrity',
   'Sender Android App Check provider');
