@@ -194,7 +194,7 @@ void main() {
     expect(websiteSource, contains("callAddressPlaces('searchFreeUkAddresses'"));
     expect(websiteSource, contains("callAddressPlaces('resolveUkAddressPlace'"));
     final addressTransport =
-        File('lib/shared/address_places_api.dart').readAsStringSync();
+        File('lib/website/shared/address_places_api.dart').readAsStringSync();
     expect(addressTransport, contains('x-firebase-appcheck'));
     expect(addressTransport, contains('authorization'));
     expect(addressTransport, isNot(matches(hardcodedMapsKey)));

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:circum/shared/address_places_api.dart';
+import 'package:circum/app/send_package/repo/address_places_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -77,3 +77,4 @@ void main() {
     expect(source, isNot(contains('BACKEND_GOOGLE_PLACES_API_KEY')));
   });
 }
+

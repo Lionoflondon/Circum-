@@ -89,3 +89,4 @@ Future<Map<String, dynamic>> invokeAddressPlaces(
     if (ownsClient) transport.close();
   }
 }
+

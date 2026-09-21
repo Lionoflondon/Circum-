@@ -26,7 +26,7 @@ import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
-import 'package:circum/shared/address_places_api.dart';
+import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';

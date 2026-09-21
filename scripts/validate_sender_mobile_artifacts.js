@@ -65,7 +65,7 @@ if (usesStaticMapsCredential) {
     'Cloud Run Secret Manager Places linkage');
   assertContains('lib/website/shared/circum_website_app.dart', 'callAddressPlaces',
     'Public Web server-side Places autocomplete proxy');
-  assertContains('lib/shared/address_places_api.dart', 'resolveUkAddressPlace',
+  assertContains('lib/website/shared/address_places_api.dart', 'resolveUkAddressPlace',
     'Public Web server-side Places details proxy');
   for (const file of [
     '.github/workflows/deploy_functions.yml',

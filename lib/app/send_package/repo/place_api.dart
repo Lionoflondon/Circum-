@@ -1,4 +1,4 @@
-import 'package:circum/shared/address_places_api.dart';
+import 'address_places_api.dart';
 
 import '../../platform/address_engine.dart';
 import '../models/place_coordinates.m.dart';

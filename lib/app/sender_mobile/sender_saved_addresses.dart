@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:circum/shared/address_places_api.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../platform/address_engine.dart';
+import '../send_package/repo/address_places_api.dart';
 import '../send_package/models/suggestions.m.dart';
 import 'design_system/sender_design_system.dart';
 

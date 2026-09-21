@@ -341,7 +341,8 @@ void main() {
     expect(source, contains("callAddressPlaces('searchFreeUkAddresses'"));
     expect(source, contains("callAddressPlaces('resolveUkAddressPlace'"));
     expect(source, contains("'sessionToken': '\$sessionToken'"));
-    final transport = read('lib/shared/address_places_api.dart');
+    final transport =
+        read('lib/app/send_package/repo/address_places_api.dart');
     expect(transport, contains(".timeout(const Duration(seconds: 8))"));
     expect(transport, contains('x-firebase-appcheck'));
     expect(source, isNot(contains('maps.googleapis.com')));
