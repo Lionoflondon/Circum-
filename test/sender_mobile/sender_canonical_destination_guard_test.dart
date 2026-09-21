@@ -338,10 +338,13 @@ void main() {
     final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
     final event = read('lib/app/send_package/bloc/send_package_event.dart');
 
-    expect(source, contains("httpsCallable('searchFreeUkAddresses')"));
-    expect(source, contains("httpsCallable('resolveUkAddressPlace')"));
+    expect(source, contains("callAddressPlaces('searchFreeUkAddresses'"));
+    expect(source, contains("callAddressPlaces('resolveUkAddressPlace'"));
     expect(source, contains("'sessionToken': '\$sessionToken'"));
-    expect(source, contains(".timeout(const Duration(seconds: 8))"));
+    final transport =
+        read('lib/app/send_package/repo/address_places_api.dart');
+    expect(transport, contains(".timeout(const Duration(seconds: 8))"));
+    expect(transport, contains('x-firebase-appcheck'));
     expect(source, isNot(contains('maps.googleapis.com')));
     expect(bloc, contains('const Duration(milliseconds: 400)'));
     expect(bloc, contains('_addressSessionTokens'));
