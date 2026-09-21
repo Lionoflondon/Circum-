@@ -68,7 +68,7 @@ const movementLedger = require("./movement-ledger");
 const movementTimeline = require("./movement-timeline");
 const giftStoryAutomation = require("./gift-story-automation");
 const riderPresence = require("./rider-presence");
-const freeAddressSearch = require("./free-address-search");
+const addressPlacesCompat = require("./address-places-compat");
 const senderBooking = require("./sender-booking");
 const senderFinance = require("./sender-finance");
 const {senderPaymentCallable} = require("./sender-app-check");
@@ -397,8 +397,8 @@ exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
 exports.markStaleRiderPresenceOffline =
   riderPresence.markStaleRiderPresenceOffline;
-exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
-exports.resolveUkAddressPlace = freeAddressSearch.resolveUkAddressPlace;
+exports.searchFreeUkAddresses = addressPlacesCompat.searchFreeUkAddresses;
+exports.resolveUkAddressPlace = addressPlacesCompat.resolveUkAddressPlace;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.getSenderRoutePreview = senderBooking.getSenderRoutePreview;
 exports.getSenderPaymentMode = senderPaymentCallable((_data, context) => {

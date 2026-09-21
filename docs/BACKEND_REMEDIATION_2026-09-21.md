@@ -101,6 +101,8 @@ The conservative classification preserves every active production owner because 
 | Export | Ownership | Replacement evidence | Action |
 |---|---|---|---|
 | `createHealthPlusBillingPortalSession` | Cloud Run | circum-health-plus-payments / circum-health-plus-payments-00002-4cl | Keep absent; inventory gate blocks managed-Function recreation. |
+| `searchFreeUkAddresses` | Cloud Run + Gen 2 compatibility facade | circum-address-places | Canonical traffic uses Cloud Run; same-name Gen 2 callable preserves installed-client URLs without Gen 1. |
+| `resolveUkAddressPlace` | Cloud Run + Gen 2 compatibility facade | circum-address-places | Canonical traffic uses Cloud Run; same-name Gen 2 callable preserves installed-client URLs without Gen 1. |
 | `handleStripeConnectWebhook` | Cloud Run | circum-stripe-connect-webhook / circum-stripe-connect-webhook-00003-4rq | Keep absent; inventory gate blocks managed-Function recreation. |
 | `onDeliveryCreated` | Cloud Run + Eventarc | circum-delivery-created-events / circum-delivery-created-events-00005-kbt | Keep absent; inventory gate blocks managed-Function recreation. |
 | `reconcilePendingSenderCancellations` | Cloud Run + Scheduler | circum-sender-cancellation-reconciler / circum-sender-cancellation-reconciler-00002-hrh | Keep absent; inventory gate blocks managed-Function recreation. |
