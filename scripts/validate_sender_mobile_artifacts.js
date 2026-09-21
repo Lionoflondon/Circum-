@@ -51,6 +51,14 @@ assertContains('scripts/build_sender_app_web.sh', 'maps.googleapis.com/maps/api/
   'Sender Web Maps JavaScript injection');
 assertContains('.github/workflows/rc1_release_build.yml', 'SENDER_ANDROID_GOOGLE_MAPS_API_KEY',
   'Sender Android CI Maps secret');
+assertContains('.github/workflows/rc1_release_build.yml', 'android_only:',
+  'Sender Android-only release build input');
+assertContains('.github/workflows/rc1_release_build.yml',
+  'if: ${{ !inputs.runtime_only && !inputs.android_only }}',
+  'Sender Android-only release build skips web artifacts');
+assertContains('.github/workflows/rc1_release_build.yml',
+  'name: Build Sender Android AAB',
+  'Sender Android release job remains available for Android-only builds');
 assertContains('lib/app/send_package/bloc/send_package_bloc.dart', 'getSenderRoutePreview',
   'Sender backend route preview contract');
 assertContains('.github/workflows/rc1_release_build.yml', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
