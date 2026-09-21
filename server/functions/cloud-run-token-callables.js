@@ -9,7 +9,14 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const deviceTokenAuthority = require("./device-token-authority");
 
 const MAX_BODY_BYTES = 32 * 1024;
-const ROUTES = new Set(["updateSenderPushToken", "updateRiderPushToken", "sendRiderUpdate"]);
+const ROUTES = new Set([
+  "updateSenderPushToken",
+  "updateRiderPushToken",
+  "sendRiderUpdate",
+]);
+const RIDER_APP_CHECK_ROUTES = new Set([
+  "updateRiderPushToken",
+]);
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -126,14 +133,18 @@ function createServer(options = {}) {
         if (!dependencies) dependencies = dependenciesFactory();
         const decoded = await dependencies.verifyIdToken(idToken);
         if (!decoded || !(decoded.uid || decoded.sub)) throw callableError("unauthenticated", "Invalid authentication token.");
-        if (name === "updateRiderPushToken") {
+        let decodedAppCheck = null;
+        if (RIDER_APP_CHECK_ROUTES.has(name)) {
           const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
           if (!appCheckToken) throw callableError("failed-precondition", "Circum Rider security verification is required.");
-          await dependencies.verifyAppCheck(appCheckToken);
+          decodedAppCheck = await dependencies.verifyAppCheck(appCheckToken);
         }
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!Object.prototype.hasOwnProperty.call(payload, "data")) throw callableError("invalid-argument", "Callable request must contain data.");
-        const context = {auth: {uid: decoded.uid || decoded.sub, token: decoded}};
+        const context = {
+          auth: {uid: decoded.uid || decoded.sub, token: decoded},
+          ...(decodedAppCheck ? {app: decodedAppCheck} : {}),
+        };
         const result = await dependencies.handlers[name](payload.data, context);
         return writeJson(response, 200, {result});
       } catch (error) {
