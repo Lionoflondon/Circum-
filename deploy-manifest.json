@@ -297,6 +297,11 @@
         "test/admin_newsletter_test.dart"
       ],
       "reason": "Newsletter signup, suppression, audience administration, persistence, and public signup UI form one explicitly reviewed cross-product capability."
+    },
+    {
+      "products": ["website", "backend"],
+      "files": ["server/functions/rider-account.test.js"],
+      "reason": "This backend contract test verifies the public website Rider profile caller uses account-bootstrap Cloud Run."
     }
   ],
   "blockedPrefixes": [
