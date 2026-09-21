@@ -15,20 +15,13 @@ async function listen(server, run) {
 
 function fakeDb() {
   const writes = [];
-  return {
-    writes,
-    collection: (collection) => ({doc: () => ({set: async (data) => writes.push({collection, data})})}),
-  };
+  return {writes, collection: (collection) => ({doc: () => ({set: async (data) => writes.push({collection, data})})})};
 }
 
 test("handlers register canonical sender and rider ownership and write audits", async () => {
   const db = fakeDb();
   const registrations = [];
-  const handlers = createHandlers({
-    db,
-    registerProfileToken: async (entry) => registrations.push(entry),
-    serverTimestamp: () => "server-time",
-  });
+  const handlers = createHandlers({db, registerProfileToken: async (entry) => registrations.push(entry), serverTimestamp: () => "server-time"});
   assert.deepEqual(await handlers.updateSenderPushToken({fcmToken: " sender-token "}, {auth: {uid: "sender-1", token: {email: "sender@example.invalid"}}}), {ok: true});
   assert.deepEqual(await handlers.updateRiderPushToken({fcmToken: " rider-token "}, {auth: {uid: "rider-1", token: {email: "rider@example.invalid"}}}), {ok: true});
   assert.deepEqual(registrations.map(({uid, role, token}) => ({uid, role, token})), [
@@ -69,11 +62,7 @@ test("callable transport rejects missing auth and requires Rider App Check", asy
 
 test("sendRiderUpdate remains authenticated and permanently disabled", async () => {
   const handlers = createHandlers({db: fakeDb()});
-  const server = createServer({dependenciesFactory: () => ({
-    verifyIdToken: async () => ({uid: "verified-uid"}),
-    verifyAppCheck: async () => ({appId: "unused"}),
-    handlers,
-  })});
+  const server = createServer({dependenciesFactory: () => ({verifyIdToken: async () => ({uid: "verified-uid"}), verifyAppCheck: async () => ({appId: "unused"}), handlers})});
   await listen(server, async (url) => {
     let response = await fetch(`${url}/sendRiderUpdate`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: {token: "must-never-send"}})});
     assert.equal(response.status, 401);
