@@ -23,30 +23,6 @@ void main() {
     expect(jsonDecode(captured.body), {'data': {'fcmToken': 'token-1'}});
   });
 
-  test('sender account bootstrap uses the Cloud Run callable envelope', () async {
-    late http.Request captured;
-    final client = MockClient((request) async {
-      captured = request;
-      return http.Response(
-        jsonEncode({
-          'result': {'ok': true, 'allowed': true}
-        }),
-        200,
-      );
-    });
-    final result = await invokeTokenCallable(
-      'ensureSenderAccount',
-      const {},
-      idToken: 'firebase-id-token',
-      client: client,
-    );
-    expect(result, {'ok': true, 'allowed': true});
-    expect(captured.url.toString(),
-        '$tokenCallableServiceUrl/ensureSenderAccount');
-    expect(captured.headers['authorization'], 'Bearer firebase-id-token');
-    expect(jsonDecode(captured.body), {'data': {}});
-  });
-
   test('sender adapter preserves callable-compatible errors', () async {
     final client = MockClient((_) async => http.Response(
           jsonEncode({

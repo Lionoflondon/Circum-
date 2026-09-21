@@ -5,8 +5,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../send_package/repo/token_callable_api.dart';
-
 enum SenderProfileDiagnosticCode {
   authUnavailable('PROFILE_AUTH_UNAVAILABLE'),
   notFound('PROFILE_NOT_FOUND'),
@@ -65,8 +63,6 @@ class SenderProfileAuthority {
 
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
-  // Retained for constructor compatibility while callers migrate; no Sender
-  // bootstrap operation is dispatched through this Gen 1 client.
   final FirebaseFunctions functions;
 
   SenderProfileAuthority({
@@ -140,13 +136,11 @@ class SenderProfileAuthority {
       event: 'ensure_begin',
     );
     try {
-      final result = await callTokenCallable(
-        'ensureSenderAccount',
-        const <String, dynamic>{},
-        auth: auth,
-      )
+      final result = await functions
+          .httpsCallable('ensureSenderAccount')
+          .call<Map<String, dynamic>>()
           .timeout(senderAccountEnsureTimeout);
-      if (result['allowed'] != true) {
+      if (result.data['allowed'] != true) {
         throw FirebaseFunctionsException(
           code: 'permission-denied',
           message: 'This account cannot access Sender.',
@@ -158,7 +152,7 @@ class SenderProfileAuthority {
         path: 'functions/ensureSenderAccount',
         event: 'ensure_complete',
       );
-      return result;
+      return Map<String, dynamic>.from(result.data);
     } on TimeoutException catch (error, stack) {
       logSenderProfileDiagnostic(
         code: SenderProfileDiagnosticCode.startupRace,
@@ -174,18 +168,17 @@ class SenderProfileAuthority {
         phase: phase,
         documentId: user.uid,
       );
-    } on TokenCallableException catch (error, stack) {
-      final code = error.status == 'PERMISSION_DENIED'
+    } on FirebaseFunctionsException catch (error, stack) {
+      final code = error.code == 'permission-denied'
           ? SenderProfileDiagnosticCode.permissionDenied
-          : const {'UNAVAILABLE', 'DEADLINE_EXCEEDED', 'INTERNAL'}
-                  .contains(error.status)
+          : _isTransientFunctionsFailure(error.code)
               ? SenderProfileDiagnosticCode.startupRace
               : SenderProfileDiagnosticCode.repositoryFailure;
       logSenderProfileDiagnostic(
         code: code,
         uid: user.uid,
         phase: phase,
-        path: 'cloud-run/ensureSenderAccount',
+        path: 'functions/ensureSenderAccount',
         error: error,
         stack: stack,
       );
@@ -411,6 +404,18 @@ class SenderProfileAuthority {
       documentId: user.uid,
     );
   }
+}
+
+bool _isTransientFunctionsFailure(String code) {
+  return const {
+    'aborted',
+    'cancelled',
+    'deadline-exceeded',
+    'internal',
+    'resource-exhausted',
+    'unavailable',
+    'unknown',
+  }.contains(code);
 }
 
 String profileMessageFor(SenderProfileDiagnosticCode code) {
