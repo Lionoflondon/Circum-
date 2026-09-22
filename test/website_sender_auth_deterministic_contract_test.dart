@@ -73,11 +73,12 @@ void main() {
     );
   });
 
-  test('legacy Sender AuthBloc auth operations are bounded and do not rethrow',
+  test('Sender AuthBloc requires canonical account bootstrap before entry',
       () {
     expect(authBloc, contains('_authOperationTimeout'));
     expect(authBloc, contains('_hydrateSenderSession'));
-    expect(authBloc, contains('_hydrateSenderSessionRecoverably'));
+    expect(authBloc, contains('_hydrateSenderSessionRequired'));
+    expect(authBloc, contains("FirebaseAuthException(code: 'profile-bootstrap-failed')"));
     expect(authBloc, contains('SenderProfileDiagnosticCode.permissionDenied'));
     expect(authBloc, contains("FirebaseAuthException(code: 'wrong-surface')"));
     expect(authBloc, contains('_updateSenderProfileRecoverably'));
@@ -132,10 +133,10 @@ void main() {
       apple,
       isNot(contains('accessToken: appleCredential.authorizationCode')),
     );
-    expect(apple, contains('_hydrateSenderSessionRecoverably'));
+    expect(apple, contains('_hydrateSenderSessionRequired'));
     expect(apple, contains('status: Status.failure'));
     expect(google, contains('if (googleSignInAccount == null)'));
-    expect(google, contains('_hydrateSenderSessionRecoverably'));
+    expect(google, contains('_hydrateSenderSessionRequired'));
     expect(apple, contains('_updateSenderProfileRecoverably'));
     expect(google, contains('_updateSenderProfileRecoverably'));
     expect(google, contains('status: Status.failure'));

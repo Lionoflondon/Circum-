@@ -153,8 +153,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     return null;
   }
 
-  Future<String?> _hydrateSenderSessionRecoverably(
-      User user, String phase) async {
+  Future<String?> _hydrateSenderSessionRequired(User user, String phase) async {
     try {
       return await _hydrateSenderSession(user, phase)
           .timeout(_authOperationTimeout);
@@ -166,11 +165,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         } catch (_) {}
         throw FirebaseAuthException(code: 'wrong-surface');
       }
-      _logRecoverableAuthError('$phase.deferred', error, stack);
-      return null;
+      _logRecoverableAuthError('$phase.failed', error, stack);
+      try {
+        await auth.signOut().timeout(_authOperationTimeout);
+      } catch (_) {}
+      throw FirebaseAuthException(code: 'profile-bootstrap-failed');
     } catch (error, stack) {
-      _logRecoverableAuthError('$phase.deferred', error, stack);
-      return null;
+      _logRecoverableAuthError('$phase.failed', error, stack);
+      try {
+        await auth.signOut().timeout(_authOperationTimeout);
+      } catch (_) {}
+      throw FirebaseAuthException(code: 'profile-bootstrap-failed');
     }
   }
 
@@ -208,7 +213,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
       final phone =
-          await _hydrateSenderSessionRecoverably(user, 'auth.restore.profile');
+          await _hydrateSenderSessionRequired(user, 'auth.restore.profile');
       emit(state.copyWith(
         currentState: AppState.authenticated,
         username: user.displayName,
@@ -358,7 +363,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       }
       final phone =
-          await _hydrateSenderSessionRecoverably(user, 'auth.apple.profile');
+          await _hydrateSenderSessionRequired(user, 'auth.apple.profile');
 
       emit(state.copyWith(
           username: user.displayName ?? fullName,
@@ -423,7 +428,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       }
       final phone =
-          await _hydrateSenderSessionRecoverably(user, 'auth.google.profile');
+          await _hydrateSenderSessionRequired(user, 'auth.google.profile');
 
       emit(state.copyWith(
           username: user.displayName,
@@ -514,7 +519,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ));
       } else {
         final phone =
-            await _hydrateSenderSessionRecoverably(user, 'auth.email.profile');
+            await _hydrateSenderSessionRequired(user, 'auth.email.profile');
         if (user.displayName == null) {
           emit(state.copyWith(
               authenticatedStatus: AuthenticatedStatus.incompleteData,
@@ -547,6 +552,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'wrong-password') {
         emit(state.copyWith(errorMessage: 'Password incorrect'));
       }
+      if (e.code == 'wrong-surface') {
+        emit(state.copyWith(
+            errorMessage: 'This account belongs to another Circum app.'));
+      }
+      if (e.code == 'profile-bootstrap-failed') {
+        emit(state.copyWith(
+            errorMessage:
+                'We could not open your Circum account. Please try again.'));
+      }
     } catch (error, stack) {
       _logRecoverableAuthError('email_sign_in', error, stack);
       emit(state.copyWith(
@@ -573,7 +587,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ));
         return;
       }
-      await _hydrateSenderSessionRecoverably(user, 'auth.signup.profile');
+      await _hydrateSenderSessionRequired(user, 'auth.signup.profile');
       final verificationSent =
           await _sendVerificationEmail(user, 'auth.signup.verification');
       emit(state.copyWith(
@@ -597,6 +611,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'weak-password') {
         emit(state.copyWith(errorMessage: 'Use a strong password'));
       }
+      if (e.code == 'profile-bootstrap-failed') {
+        emit(state.copyWith(
+            errorMessage:
+                'Your account was created, but setup could not finish. Sign in and try again.'));
+      }
     } catch (error, stack) {
       _logRecoverableAuthError('email_sign_up', error, stack);
       emit(state.copyWith(
@@ -612,6 +631,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(status: Status.loading));
       await auth.currentUser?.reload().timeout(_authOperationTimeout);
       if (auth.currentUser?.emailVerified == true) {
+        final user = auth.currentUser;
+        if (user == null) {
+          throw FirebaseAuthException(code: 'user-not-found');
+        }
+        await _hydrateSenderSessionRequired(
+          user,
+          'auth.email_verification.profile',
+        );
         if (auth.currentUser?.displayName == null) {
           emit(state.copyWith(
             authenticatedStatus: AuthenticatedStatus.incompleteData,
