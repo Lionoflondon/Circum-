@@ -28,6 +28,14 @@ final SendPackageBloc sendPackageBloc = SendPackageBloc();
 final AccountBloc accountBloc = AccountBloc();
 final NotificationService _notificationService = NotificationService();
 
+const AndroidNotificationChannel _senderNotificationChannel =
+    AndroidNotificationChannel(
+  'circum_general',
+  'Circum updates',
+  description: 'Delivery, account, and service updates from Circum.',
+  importance: Importance.high,
+);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await runSenderStartup(
@@ -114,6 +122,10 @@ Future<void> _configureNotifications() async {
   );
 
   await flutterLocalNotificationsPlugin.initialize(settings);
+  final android =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(_senderNotificationChannel);
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
     badge: true,

@@ -65,7 +65,7 @@ void main() {
   test('auth bootstrap avoids a duplicate canonical profile read', () {
     final start = authBloc.indexOf('Future<String?> _hydrateSenderSession(');
     final end = authBloc.indexOf(
-        'Future<String?> _hydrateSenderSessionRecoverably', start);
+        'Future<String?> _hydrateSenderSessionRequired', start);
     final body = authBloc.substring(start, end);
     expect(body, contains('ensureCanonicalSenderAccount'));
     expect(body, isNot(contains('authority.load(')));
