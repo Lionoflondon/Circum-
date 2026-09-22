@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 272
 - Gen 1 exports: 270
 - Files importing Firebase Functions v1: 64
-- MIGRATE TO CLOUD RUN: 177
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 50
+- MIGRATE TO CLOUD RUN: 176
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 51
 - REPLACE WITH CLOUD RUN + EVENTARC: 27
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
@@ -258,7 +258,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | submitDeliveryTip | server/functions/ratings-tipping.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/view/ratings.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/QA-LIFECYCLE.md<br>server/functions/cloud-run-payment-family.js<br>server/functions/cloud-run-payment-family.test.js<br>server/functions/tips-authority.emulator.test.js<br>test/sender_mobile/ratings_tipping_v2_test.dart |
 | submitGiftStoryThankYou | server/functions/gift-story-automation.js | Gen 1 | http | MIGRATE TO CLOUD RUN | none found |
 | submitNewsletterSignup | server/functions/newsletter.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>docs/NEWSLETTER_RELEASE.md<br>lib/website/shared/newsletter/newsletter_widgets.dart<br>server/functions/cloud-run-newsletter.js<br>server/functions/cloud-run-newsletter.test.js<br>server/functions/newsletter.test.js<br>server/functions/production-functions-inventory.json<br>test/website_newsletter_test.dart |
-| submitRiderApplication | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/rider-account.test.js<br>server/functions/rider-onboarding-flow.emulator.test.js |
+| submitRiderApplication | server/functions/rider-account.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart |
 | submitRiderDocument | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart<br>server/functions/rider-account.test.js<br>server/functions/rider-certification-security.test.js<br>server/functions/rider-document-emulator-integration.test.js<br>server/functions/rider-onboarding-flow.emulator.test.js |
 | submitWebsiteSupportRequest | server/functions/communication-engine.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart<br>server/functions/communication-engine.test.js<br>server/functions/firestore-chat-notification-rules.test.js |
 | syncSenderTrustBaseline | server/functions/sender-trust.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | none found |

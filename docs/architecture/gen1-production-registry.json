@@ -9292,10 +9292,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.submitRiderApplication",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
-        "scripts/scoped_functions_deploy_list.test.js",
-        "server/functions/rider-account.test.js",
-        "server/functions/rider-onboarding-flow.emulator.test.js"
+        "lib/website/shared/circum_website_app.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -9320,8 +9317,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

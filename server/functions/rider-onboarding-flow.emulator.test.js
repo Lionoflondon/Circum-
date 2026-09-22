@@ -80,6 +80,26 @@ test("required fields and documents gate initial submission", async () => {
   await assert.rejects(account.submitRiderApplication.run({...profile, notes: ""}, context("no-docs")), (e) => e.code === "failed-precondition");
 });
 
+test("application retries cannot overwrite an already-reviewed Rider", async () => {
+  const uid = `reviewed-${crypto.randomUUID()}`;
+  const applicationRef = db.collection("riderApplications").doc(uid);
+  const profileRef = db.collection("riderProfiles").doc(uid);
+  const application = {status: "approved", fullName: "Reviewed Rider", reviewedBy: "admin-1"};
+  const riderProfile = {approvalStatus: "approved", verificationStatus: "approved", trustPoints: 42};
+  await applicationRef.set(application);
+  await profileRef.set(riderProfile);
+
+  const result = await account.submitRiderApplication.run({
+    ...profile,
+    fullName: "Untrusted replacement",
+    idempotencyKey: "reviewed-application-retry",
+  }, context(uid));
+
+  assert.deepEqual(result, {applicationId: uid, status: "approved", idempotent: true});
+  assert.deepEqual((await applicationRef.get()).data(), application);
+  assert.deepEqual((await profileRef.get()).data(), riderProfile);
+});
+
 test("wrong surface denied, shared idempotency keys cannot leak another Rider application", async () => {
   for (const role of ["sender", "admin"]) {
     await db.collection("users").doc(role).set({role});

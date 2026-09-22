@@ -15,6 +15,7 @@ const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
+  submitRiderApplication: {handler: riderAccount.submitRiderApplication, appCheckRequired: true},
 });
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
@@ -41,7 +42,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|updateRiderProfile)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -142,4 +143,3 @@ function createServer(options = {}) {
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
 
 module.exports = {createRateLimiter, createServer, productionDependencies, routeName, MAX_BODY_BYTES};
-

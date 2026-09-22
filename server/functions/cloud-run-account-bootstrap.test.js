@@ -35,15 +35,17 @@ function dependencies(overrides = {}) {
         ensureSenderAccount: handler("ensureSenderAccount"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         updateRiderProfile: handler("updateRiderProfile"),
+        submitRiderApplication: handler("submitRiderApplication"),
       },
       ...overrides,
     }),
   };
 }
 
-test("routes only the three account operations", () => {
+test("routes only the supported account operations", () => {
   assert.equal(routeName("/ensureSenderAccount"), "ensureSenderAccount");
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
+  assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
 
@@ -100,3 +102,50 @@ test("Rider operation accepts verified Auth and App Check", async () => {
   });
 });
 
+test("Rider application submission invokes the canonical callable with verified identity", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/submitRiderApplication`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {idempotencyKey: "rider-application-test"}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true, name: "submitRiderApplication"}});
+    assert.equal(deps.calls[0].name, "submitRiderApplication");
+    assert.equal(deps.calls[0].context.auth.uid, "user-1");
+    assert.equal(deps.calls[0].context.app.appId, "circum");
+  });
+});
+
+test("Rider application submission rejects unauthenticated callers", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/submitRiderApplication`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({data: {idempotencyKey: "rider-application-test"}}),
+    });
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).error.status, "UNAUTHENTICATED");
+    assert.equal(deps.calls.length, 0);
+  });
+});
+
+test("Rider application submission rejects invalid App Check before invoking the callable", async () => {
+  const deps = dependencies({
+    verifyAppCheck: async () => {
+      throw Object.assign(new Error("bad app"), {code: "app-check/invalid-token"});
+    },
+  });
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/submitRiderApplication`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "bad-app", "content-type": "application/json"},
+      body: JSON.stringify({data: {idempotencyKey: "rider-application-test"}}),
+    });
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).error.status, "UNAUTHENTICATED");
+    assert.equal(deps.calls.length, 0);
+  });
+});
