@@ -170,7 +170,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | onDisputeCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftCampaignParticipantUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftDeliveryCompleted | server/functions/gift-story-automation.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | scripts/scoped_functions_deploy_list.test.js<br>server/functions/scoped_functions_deploy_list.test.js |
-| onGiftEmailNotificationCreated | server/functions/gift-email-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
+| onGiftEmailNotificationCreated | server/functions/gift-email-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/production-functions-inventory.json |
 | onGiftMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftRequestCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftRequestUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |

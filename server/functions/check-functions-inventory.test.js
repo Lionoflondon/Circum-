@@ -32,10 +32,11 @@ function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = n
   const classificationPath = path.join(temporaryDir, "classification.json");
   fs.writeFileSync(deployedPath, JSON.stringify({result: deployed.map((id) => ({id}))}));
   const missing = deployed.filter((name) => !exportsList.includes(name));
+  const sourceCategory = options.sourceCategory || (options.restorable ? "RESTORABLE_COMPATIBILITY" : "CLOUD_RUN_SUPERSEDED");
   fs.writeFileSync(classificationPath, JSON.stringify({
     deployedMissingSource: (classifiedMissing || missing)
         .map((name) => ({name, category: "INTENTIONALLY_LEGACY"})),
-    sourceNotDeployed: sourceOnly.map((name) => ({name, category: options.restorable ? "RESTORABLE_COMPATIBILITY" : "CLOUD_RUN_SUPERSEDED"})),
+    sourceNotDeployed: sourceOnly.map((name) => ({name, category: sourceCategory})),
   }));
   const result = childProcess.spawnSync(process.execPath, [
     script,
@@ -43,6 +44,7 @@ function runClassifiedInventory(deployed, sourceOnly = [], classifiedMissing = n
     `--classification-json=${classificationPath}`,
     ...(options.scope ? [`--scope=${options.scope}`] : []),
     ...(options.allowRestorable ? ["--allow-restorable-scope"] : []),
+    ...(options.allowSource ? ["--allow-source-deployment-scope"] : []),
   ], {encoding: "utf8"});
   fs.rmSync(temporaryDir, {recursive: true, force: true});
   return result;
@@ -101,6 +103,26 @@ test("restored compatibility callable matches inventory after activation", () =>
   const result = runClassifiedInventory(exportsList, [name], null, {restorable: true});
   assert.equal(result.status, 0);
   assert.match(result.stdout, /"classificationMatches": true/);
+});
+
+test("approved source deployment requires exact explicit scope", () => {
+  const name = exportsList[0];
+  const deployed = exportsList.filter((item) => item !== name);
+  const blocked = runClassifiedInventory(deployed, [name], null, {
+    sourceCategory: "APPROVED_SOURCE_DEPLOYMENT",
+    scope: `functions:${name}`,
+  });
+  assert.equal(blocked.status, 1);
+  const allowed = runClassifiedInventory(deployed, [name], null, {
+    sourceCategory: "APPROVED_SOURCE_DEPLOYMENT",
+    scope: `functions:${name}`,
+    allowSource: true,
+  });
+  assert.equal(allowed.status, 0);
+  const activated = runClassifiedInventory(exportsList, [name], null, {
+    sourceCategory: "APPROVED_SOURCE_DEPLOYMENT",
+  });
+  assert.equal(activated.status, 0);
 });
 
 test("exact scoped restoration includes only classified compatibility callables", () => {

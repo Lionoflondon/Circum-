@@ -6092,7 +6092,9 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "giftEmailNotifications.onGiftEmailNotificationCreated",
-      "callers": [],
+      "callers": [
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": false,
       "appCheckRequired": false,

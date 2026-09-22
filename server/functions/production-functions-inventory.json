@@ -366,6 +366,11 @@
       "owner": "circum-delivery-created-events"
     },
     {
+      "name": "onGiftEmailNotificationCreated",
+      "category": "APPROVED_SOURCE_DEPLOYMENT",
+      "owner": "circum-transactional-email"
+    },
+    {
       "name": "reconcilePendingSenderCancellations",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-sender-cancellation-reconciler"

@@ -97,7 +97,7 @@ jobs:
             "--scope=$FUNCTION_SCOPE"
           )
           if [ -n "$FUNCTION_SCOPE_INPUT" ]; then
-            args+=(--allow-restorable-scope)
+            args+=(--allow-source-deployment-scope)
           fi
           npm --prefix server/functions run check:functions-inventory -- \
             "${args[@]}"
