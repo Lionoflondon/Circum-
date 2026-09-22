@@ -79,3 +79,27 @@ test("unconfigured email provider fails closed without pretending to send", asyn
     else process.env.RESEND_API_KEY = previousKey;
   }
 });
+
+test("permanent Resend failures become terminal without an Eventarc retry", async () => {
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.GIFTS_EMAIL_FROM;
+  process.env.RESEND_API_KEY = "test-key";
+  process.env.GIFTS_EMAIL_FROM = "Circum Gifts <gifts@example.com>";
+  const writes = [];
+  try {
+    const result = await emails.deliverGiftEmail({
+      data: () => ({notificationId: "gift_gift-123_gift_delivered", giftId: "gift-123", recipientEmail: "sender@example.com"}),
+      ref: {set: async (value) => writes.push(value)},
+    }, {
+      db: {collection: () => ({doc: () => ({get: async () => ({exists: true, data: () => ({recipientName: "Alex"})})})})},
+      fetchImpl: async () => ({ok: false, status: 400, json: async () => ({name: "invalid_request", message: "bad request"})}),
+    });
+    assert.deepEqual(result, {status: "failed_terminal"});
+    assert.equal(writes.at(-1).status, "failed_terminal");
+  } finally {
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+    if (previousFrom === undefined) delete process.env.GIFTS_EMAIL_FROM;
+    else process.env.GIFTS_EMAIL_FROM = previousFrom;
+  }
+});

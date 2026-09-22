@@ -1,10 +1,11 @@
 /* eslint-disable max-len, require-jsdoc */
-const functions = require("firebase-functions/v1");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 
 const EMAIL_PROVIDER = "resend";
 const EMAIL_API_URL = "https://api.resend.com/emails";
 const DEFAULT_FROM = "Circum <gifts@circumuk.com>";
+const MAX_DELIVERY_ATTEMPTS = 5;
+const PROVIDER_TIMEOUT_MS = 15000;
 
 const text = (value) => `${value || ""}`.trim();
 
@@ -97,43 +98,64 @@ async function queueGiftDeliveryEmail({giftId, gift = {}}) {
   return notificationId;
 }
 
+function retryableProviderStatus(status) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
 async function sendResendEmail({to, subject, textBody, htmlBody, idempotencyKey, fetchImpl = null}) {
   const {apiKey, from} = configuredEmail();
   if (!apiKey) return {status: "skipped", reason: "email_provider_not_configured"};
   const transport = fetchImpl || (typeof global !== "undefined" ? global.fetch : null);
   if (typeof transport !== "function") throw new Error("email_transport_unavailable");
-  const response = await transport(EMAIL_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject,
-      text: textBody,
-      html: htmlBody,
-      tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
-    }),
-  });
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS) : null;
+  let response;
+  try {
+    response = await transport(EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        text: textBody,
+        html: htmlBody,
+        tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
+      }),
+      ...(controller ? {signal: controller.signal} : {}),
+    });
+  } catch (error) {
+    error.retryable = true;
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(text(payload.message) || `email_provider_http_${response.status}`);
     error.providerCode = text(payload.name) || `http_${response.status}`;
+    error.retryable = retryableProviderStatus(response.status);
     throw error;
   }
   return {status: "sent", providerId: text(payload.id)};
 }
 
-async function deliverGiftEmail(snapshot) {
+async function deliverGiftEmail(snapshot, options = {}) {
   const data = snapshot.data() || {};
   if (data.status === "sent" || data.status === "skipped") return data;
   const ref = snapshot.ref;
+  const db = options.db || getFirestore();
   const attempts = Number(data.attempts || 0) + 1;
+  if (data.suppressed === true) {
+    await ref.set({status: "skipped", failureReason: "recipient_suppressed", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    return {status: "skipped", reason: "recipient_suppressed"};
+  }
   await ref.set({attempts, lastAttemptAt: FieldValue.serverTimestamp()}, {merge: true});
-  const gift = await getFirestore().collection("giftRequests").doc(text(data.giftId)).get();
+  const gift = await db.collection("giftRequests").doc(text(data.giftId)).get();
   const email = normalizeEmail(data.recipientEmail);
   if (!email || !gift.exists) {
     await ref.set({status: "skipped", failureReason: !email ? "recipient_email_missing" : "gift_not_found", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
@@ -147,6 +169,7 @@ async function deliverGiftEmail(snapshot) {
       textBody: message.text,
       htmlBody: message.html,
       idempotencyKey: data.notificationId,
+      fetchImpl: options.fetchImpl || null,
     });
     await ref.set({
       status: result.status,
@@ -158,21 +181,17 @@ async function deliverGiftEmail(snapshot) {
     }, {merge: true});
     return result;
   } catch (error) {
+    const terminal = error.retryable === false || attempts >= MAX_DELIVERY_ATTEMPTS;
     await ref.set({
-      status: "failed",
+      status: terminal ? "failed_terminal" : "failed",
       provider: EMAIL_PROVIDER,
       failureReason: text(error && (error.providerCode || error.message)) || "email_send_failed",
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    throw error;
+    if (!terminal) throw error;
+    return {status: "failed_terminal"};
   }
 }
-
-exports.onGiftEmailNotificationCreated = functions.runWith({
-  failurePolicy: true,
-  timeoutSeconds: 30,
-  secrets: ["RESEND_API_KEY", "GIFTS_EMAIL_FROM"],
-}).firestore.document("giftEmailNotifications/{notificationId}").onCreate((snapshot) => deliverGiftEmail(snapshot));
 
 module.exports.normalizeEmail = normalizeEmail;
 module.exports.giftDeliveryEmail = giftDeliveryEmail;
@@ -180,3 +199,4 @@ module.exports.emailNotificationId = emailNotificationId;
 module.exports.queueGiftDeliveryEmail = queueGiftDeliveryEmail;
 module.exports.sendResendEmail = sendResendEmail;
 module.exports.deliverGiftEmail = deliverGiftEmail;
+module.exports.MAX_DELIVERY_ATTEMPTS = MAX_DELIVERY_ATTEMPTS;
