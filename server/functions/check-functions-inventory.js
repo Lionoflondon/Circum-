@@ -14,6 +14,7 @@ function argValue(name) {
 const deployedPath = argValue("--deployed-json");
 const classificationPath = argValue("--classification-json");
 const allowRestorableScope = process.argv.includes("--allow-restorable-scope");
+const allowSourceDeploymentScope = process.argv.includes("--allow-source-deployment-scope");
 const deploymentScope = argValue("--scope")
     .split(",")
     .map((target) => target.trim())
@@ -52,7 +53,13 @@ const classifiedAbsent = new Set((classification && classification.sourceNotDepl
 const restorableCompatibility = new Set((classification && classification.sourceNotDeployed || [])
     .filter((item) => item.category === "RESTORABLE_COMPATIBILITY")
     .map((item) => item.name));
+const approvedSourceDeployment = new Set((classification && classification.sourceNotDeployed || [])
+    .filter((item) => item.category === "APPROVED_SOURCE_DEPLOYMENT")
+    .map((item) => item.name));
 for (const name of restorableCompatibility) {
+  if (deployedSet.has(name)) classifiedAbsent.delete(name);
+}
+for (const name of approvedSourceDeployment) {
   if (deployedSet.has(name)) classifiedAbsent.delete(name);
 }
 const unexpectedDeployedMissing = classification ?
@@ -69,7 +76,10 @@ const classificationMatches = Boolean(classification) &&
 const exactRestorableScope = allowRestorableScope && deploymentScope.length > 0 &&
   deploymentScope.length === scopeNotDeployed.length &&
   scopeNotDeployed.every((name) => restorableCompatibility.has(name));
-const unsafeScopeNotDeployed = exactRestorableScope ? [] : scopeNotDeployed;
+const exactApprovedSourceScope = allowSourceDeploymentScope && deploymentScope.length > 0 &&
+  scopeNotDeployed.length > 0 &&
+  scopeNotDeployed.every((name) => approvedSourceDeployment.has(name));
+const unsafeScopeNotDeployed = exactRestorableScope || exactApprovedSourceScope ? [] : scopeNotDeployed;
 
 console.log(JSON.stringify({
   deployed: deployed.length,
@@ -78,7 +88,7 @@ console.log(JSON.stringify({
   sourceNotDeployed,
   deploymentScope,
   scopeNotDeployed,
-  allowRestorableScope,
+  allowSourceDeploymentScope,
   classificationMatches,
   classificationDrift: {
     unexpectedDeployedMissing,
