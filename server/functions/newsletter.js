@@ -24,6 +24,8 @@ const EVENTS = new Set([
 ]);
 const RATE_WINDOW_MS = 15 * 60 * 1000;
 const RATE_MAX = 5;
+const RESEND_CONTACTS_URL = "https://api.resend.com/contacts";
+const RESEND_TIMEOUT_MS = 15 * 1000;
 
 function clean(value, max = 240) {
   return `${value || ""}`.trim().slice(0, max);
@@ -105,7 +107,52 @@ function providerBoundary() {
   };
 }
 
-function createService({db = getFirestore(), provider = providerBoundary(), now = () => Date.now(), tokenFactory = randomToken} = {}) {
+function resendNewsletterProvider({apiKey = process.env.RESEND_NEWSLETTER_API_KEY, fetchImpl = global.fetch} = {}) {
+  if (!apiKey || typeof fetchImpl !== "function") return providerBoundary();
+
+  async function request(method, url, body) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RESEND_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(url, {
+        method,
+        headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      return response;
+    } catch (_) {
+      throw new Error("resend_request_failed");
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function requireSuccess(response) {
+    if (!response || !response.ok) {
+      throw new Error(`resend_http_${response && response.status || "unknown"}`);
+    }
+    return {status: "synced"};
+  }
+
+  return {
+    async upsertAudienceMember({email, status}) {
+      const unsubscribed = status !== "active";
+      const contactUrl = `${RESEND_CONTACTS_URL}/${encodeURIComponent(email)}`;
+      const body = {email, unsubscribed};
+      const update = await request("PATCH", contactUrl, body);
+      if (update.status === 404) {
+        return requireSuccess(await request("POST", RESEND_CONTACTS_URL, body));
+      }
+      if (update.status === 409 || update.status === 422) {
+        return requireSuccess(await request("POST", RESEND_CONTACTS_URL, body));
+      }
+      return requireSuccess(update);
+    },
+  };
+}
+
+function createService({db = getFirestore(), provider = resendNewsletterProvider(), now = () => Date.now(), tokenFactory = randomToken} = {}) {
   async function syncProvider(ref, payload, revision) {
     // Adapters must apply revision monotonically and recheck local suppression
     // before any send. Audience synchronization is never proof of delivery.
@@ -388,4 +435,4 @@ exports.adminExportNewsletterSubscribers = adminCallable(async (data, context) =
     nextCursor: snapshot.docs.length > 500 ? docs.at(-1).id : null};
 });
 
-exports._private = {normalizeEmail, sha256, normalizeCategories, createService, limitPublicRequest, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};
+exports._private = {normalizeEmail, sha256, normalizeCategories, createService, limitPublicRequest, resendNewsletterProvider, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};
