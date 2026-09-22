@@ -2814,15 +2814,12 @@
       "generation": "Gen 1",
       "productionPurpose": "require(\"./delivery-completion-reconciled\").completeDelivery",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
-        "lib/website/shared/rider_delivery_authority_api.dart",
         "server/functions/cloud-run-rider-delivery-authority.js",
         "server/functions/cloud-run-rider-delivery-authority.test.js",
         "server/functions/delivery-completion-reconciled.js",
         "server/functions/delivery-evidence-reconciled.emulator.test.js",
         "server/functions/delivery-lifecycle.emulator.test.js",
-        "server/functions/sender-booking.js",
-        "test/website_rider_delivery_authority_api_test.dart"
+        "server/functions/sender-booking.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -4637,11 +4634,9 @@
       "callers": [
         "docs/project_memory.md",
         "lib/website/shared/circum_website_app.dart",
-        "lib/website/shared/rider_delivery_authority_api.dart",
         "scripts/scoped_functions_deploy_list.test.js",
         "server/functions/cloud-run-rider-delivery-authority.js",
-        "server/functions/cloud-run-rider-delivery-authority.test.js",
-        "test/website_rider_delivery_authority_api_test.dart"
+        "server/functions/cloud-run-rider-delivery-authority.test.js"
       ],
       "criticality": "review-required",
       "authRequired": false,
@@ -9693,8 +9688,7 @@
         "server/functions/delivery-evidence-reconciled.emulator.test.js",
         "server/functions/delivery-lifecycle.emulator.test.js",
         "server/functions/rider-cancellation.emulator.test.js",
-        "test/sender_mobile/ratings_tipping_v2_test.dart",
-        "test/website_rider_delivery_authority_api_test.dart"
+        "test/sender_mobile/ratings_tipping_v2_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
