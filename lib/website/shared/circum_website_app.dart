@@ -28,6 +28,7 @@ import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/website/shared/account_bootstrap_api.dart';
+import 'package:circum/website/shared/rider_delivery_authority_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -4087,11 +4088,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   ) async* {
     while (mounted && _riderUser?.uid == riderId) {
       try {
-        final response =
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('getAvailableRequests')
-                .call(<String, dynamic>{}).timeout(const Duration(seconds: 15));
-        final data = Map<String, dynamic>.from(response.data as Map);
+        final data = await callRiderDeliveryAuthority(
+          'getAvailableRequests',
+          const <String, dynamic>{},
+        ).timeout(const Duration(seconds: 15));
         final rows = data['nearestRequests'];
         if (data['riderId'] != riderId ||
             data['eligible'] != true ||
@@ -4423,6 +4423,26 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       region: 'us-central1',
     ).httpsCallable('updateDeliveryTrackingStatus');
     for (final action in actions) {
+      final evidence = <String, dynamic>{
+        if (verificationPatch?['riderVerifiedWeightKg'] != null)
+          'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
+        if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
+                ?.isNotEmpty ==
+            true)
+          'photoUrl':
+              (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
+        'conditionConfirmed': true,
+        'riderDeclarationAccepted': true,
+      };
+      if (action == 'verify_receiver_pin') {
+        await callRiderDeliveryAuthority('completeDelivery', {
+          'deliveryId': requestId,
+          if (vanguardPatch?['enteredPin'] != null)
+            'deliveryPin': vanguardPatch!['enteredPin'],
+          'evidence': evidence,
+        });
+        continue;
+      }
       await callable.call({
         'deliveryId': requestId,
         'action': action,
@@ -4430,17 +4450,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             action == 'verify_receiver_pin') ...{
           if (vanguardPatch?['enteredPin'] != null)
             'pin': vanguardPatch!['enteredPin'],
-          'evidence': {
-            if (verificationPatch?['riderVerifiedWeightKg'] != null)
-              'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
-            if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
-                    ?.isNotEmpty ==
-                true)
-              'photoUrl':
-                  (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
-            'conditionConfirmed': true,
-            'riderDeclarationAccepted': true,
-          },
+          'evidence': evidence,
         },
       });
     }
