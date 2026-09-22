@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {normalizeEmail, normalizeCategories, sha256, CATEGORIES, createService, limitPublicRequest} = require("./newsletter")._private;
+const {normalizeEmail, normalizeCategories, sha256, CATEGORIES, createService, limitPublicRequest, resendNewsletterProvider} = require("./newsletter")._private;
 
 class FakeDb {
   constructor() {
@@ -149,6 +149,48 @@ test("provider failure is explicit retry work and does not pretend email deliver
 }}});
   await service.signup({email: "provider@example.com", source: "homepage"});
   assert.equal(db.records.get(`newsletterSubscribers/${sha256("provider@example.com")}`).providerSyncStatus, "retry_required");
+});
+
+test("Resend newsletter adapter upserts contacts without sending campaign email", async () => {
+  const calls = [];
+  const provider = resendNewsletterProvider({
+    apiKey: "test-newsletter-key",
+    fetchImpl: async (url, options) => {
+      calls.push({url, options});
+      return {ok: options.method === "POST", status: options.method === "POST" ? 201 : 404};
+    },
+  });
+  const {db, service} = fixture({provider});
+  await service.signup({email: "resend@example.com", source: "homepage", categories: ["circum_updates"]});
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].url, "https://api.resend.com/contacts");
+  assert.equal(calls[1].options.headers.Authorization, "Bearer test-newsletter-key");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {email: "resend@example.com", unsubscribed: false});
+  assert.equal(db.records.get(`newsletterSubscribers/${sha256("resend@example.com")}`).providerSyncStatus, "synced");
+});
+
+test("Resend newsletter adapter applies local unsubscribe suppression", async () => {
+  const calls = [];
+  const provider = resendNewsletterProvider({
+    apiKey: "test-newsletter-key",
+    fetchImpl: async (url, options) => {
+      calls.push({url, options});
+      return {ok: true, status: options.method === "PATCH" ? 200 : 201};
+    },
+  });
+  const {service} = fixture({provider});
+  await service.signup({email: "suppressed@example.com", source: "homepage"});
+  await service.unsubscribe({token: "token-1".padEnd(40, "x")});
+  assert.equal(calls.at(-1).options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {email: "suppressed@example.com", unsubscribed: true});
+});
+
+test("missing Resend newsletter credentials preserve dormant provider configuration", async () => {
+  const {db, service} = fixture({provider: resendNewsletterProvider({apiKey: ""})});
+  await service.signup({email: "pending@example.com", source: "homepage"});
+  assert.equal(db.records.get(`newsletterSubscribers/${sha256("pending@example.com")}`).providerSyncStatus, "pending_configuration");
 });
 
 test("analytics persists only event metadata, never email or token PII", async () => {
