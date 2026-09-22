@@ -6,6 +6,7 @@ const {riderMatchesIris} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
 const communicationEngine = require("./communication-engine");
 const {processOnce} = require("./cloud-run-notification-events");
+const giftEmailNotifications = require("./gift-email-notifications");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -318,10 +319,11 @@ async function notifyGiftStatus({before = {}, after = {}, giftId}) {
   if (!copy) return null;
   const senderId = text(after.senderId || after.userId || after.uid);
   if (!senderId) return null;
-  return notify({
+  const eventType = copy[0];
+  const notificationId = await notify({
     recipientId: senderId,
     recipientRole: "shipper",
-    type: copy[0],
+    type: eventType,
     title: copy[1],
     body: copy[2],
     bookingId: text(after.deliveryId || after.requestId || giftId),
@@ -330,7 +332,12 @@ async function notifyGiftStatus({before = {}, after = {}, giftId}) {
       giftId,
       giftType: text(after.giftType || after.type || "gift"),
     },
+    dedupeKey: `gift_status:${giftId}:${eventType}:${senderId}`,
   });
+  if (eventType === "gift_delivered") {
+    await giftEmailNotifications.queueGiftDeliveryEmail({giftId, gift: after});
+  }
+  return notificationId;
 }
 
 function customerWaitingCharge(data) {

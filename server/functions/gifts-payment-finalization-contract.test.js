@@ -33,6 +33,11 @@ test("native Gift wallets use a server PaymentIntent and retain the selected met
   assert.doesNotMatch(source, /clientSecret:\s*intent\.client_secret,[\s\S]*?ref\.set/);
 });
 
+test("all Stripe Gift payments request a receipt for the authenticated sender", () => {
+  assert.match(source, /receipt_email: gift\.senderEmail/);
+  assert.match(source, /payment_intent_data: \{receipt_email: gift\.senderEmail\}/);
+});
+
 test("Gift totals reconcile exactly and Roth debit is deterministic", () => {
   assert.match(source, /roundMoney\(rothApplied \+ externalAmount\) !== gross/);
   assert.match(source, /doc\(`gift_roth_\$\{giftDraftId\}`\)/);

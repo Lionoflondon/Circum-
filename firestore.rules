@@ -813,6 +813,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /giftEmailNotifications/{notificationId} {
+      allow read, write: if false;
+    }
+
     match /giftPaymentDrafts/{giftDraftId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&

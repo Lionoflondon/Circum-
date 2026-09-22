@@ -107,6 +107,14 @@ test("Gift request statuses map to backend-owned notification events", () => {
   assert.equal(_private.giftStatusNotification("draft"), null);
 });
 
+test("Gift delivery notification uses one durable identity and queues the sender email", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  const block = source.slice(source.indexOf("async function notifyGiftStatus"), source.indexOf("function customerWaitingCharge"));
+  assert.match(block, /dedupeKey: `gift_status:\$\{giftId\}:\$\{eventType\}:\$\{senderId\}`/);
+  assert.match(block, /eventType === "gift_delivered"/);
+  assert.match(block, /queueGiftDeliveryEmail\(\{giftId, gift: after\}\)/);
+});
+
 test("unclaimed delivery reminder reuses the rider profile snapshot per run", () => {
   const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
   assert.match(source, /let riderProfileDocs = null;/);
