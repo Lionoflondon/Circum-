@@ -35,6 +35,35 @@ const account = require("./rider-account");
 const location = {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, permission: "always", gpsStatus: "active"};
 const profile = {fullName: "Test Rider", phoneNumber: "07700900123", postcode: "SW1A 1AA", homeAddress: "Test address", vehicleType: "car", vehicleRegistration: "AB12 CDE"};
 const context = (uid) => ({auth: {uid, token: {email: uid + "@example.test"}}});
+async function uploadRequiredRiderDocuments(uid, keyPrefix) {
+  const riderContext = context(uid);
+  const fixtures = [
+    ["passport", "application/pdf", "%PDF-1.4 test"],
+    ["driving_licence", "application/pdf", "%PDF-1.4 licence"],
+    ["insurance", "application/pdf", "%PDF-1.4 insurance"],
+    ["vehicle_registration", "image/png", "image-emulator-bytes"],
+    ["mot", "application/pdf", "%PDF-1.4 mot"],
+    ["right_to_work", "application/pdf", "%PDF-1.4 rtw"],
+  ];
+  for (const [type, contentType, body] of fixtures) {
+    const encoded = Buffer.from(body).toString("base64");
+    const data = type === "driving_licence" ? {
+      documentType: type,
+      files: [
+        {side: "front", mimeType: contentType, base64: encoded, fileName: `${type}-front`},
+        {side: "back", mimeType: contentType, base64: encoded, fileName: `${type}-back`},
+      ],
+      idempotencyKey: `${keyPrefix}-${type}`,
+    } : {
+      documentType: type,
+      contentType,
+      fileBase64: encoded,
+      fileName: type,
+      idempotencyKey: `${keyPrefix}-${type}`,
+    };
+    await account.submitRiderDocument.run(data, riderContext);
+  }
+}
 
 test("full Auth/application/PDF/image/review flow preserves zero wallet and approved online authority", async () => {
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_STORAGE_EMULATOR_HOST, "emulators required");
@@ -45,9 +74,7 @@ test("full Auth/application/PDF/image/review flow preserves zero wallet and appr
   assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, true);
   await account.ensureRiderRothWallet.run({}, ctx);
   assert.equal((await db.collection("riderRothWallets").doc(user.uid).get()).data().balance, 0);
-  for (const [type, contentType, body] of [["passport", "application/pdf", "%PDF-1.4 test"], ["driving_licence", "application/pdf", "%PDF-1.4 licence"], ["insurance", "application/pdf", "%PDF-1.4 insurance"], ["vehicle_registration", "image/png", "image-emulator-bytes"], ["mot", "application/pdf", "%PDF-1.4 mot"], ["right_to_work", "application/pdf", "%PDF-1.4 rtw"]]) {
-    await account.submitRiderDocument.run({documentType: type, contentType, fileBase64: Buffer.from(body).toString("base64"), fileName: type, idempotencyKey: "flow-" + type}, ctx);
-  }
+  await uploadRequiredRiderDocuments(user.uid, `flow-${user.uid}`);
   const request = {idempotencyKey: "onboarding-flow"};
   const [first, retry] = await Promise.all([account.submitRiderApplication.run(request, ctx), account.submitRiderApplication.run(request, ctx)]);
   assert.equal(first.applicationId, retry.applicationId);
@@ -117,6 +144,8 @@ test("wrong surface denied, shared idempotency keys cannot leak another Rider ap
   await assert.rejects(account.verifyRiderAccountAccess.run({}, context("legacy-sender")), (e) => e.code === "permission-denied");
   await db.collection("riderProfiles").doc("legacy-rider").set({approvalStatus: "pending"});
   await account.verifyRiderAccountAccess.run({}, context("legacy-rider"));
+  await uploadRequiredRiderDocuments("rider-a", "shared-a");
+  await uploadRequiredRiderDocuments("rider-b", "shared-b");
   const a = await account.submitRiderApplication.run({...profile, idempotencyKey: "shared-key"}, context("rider-a"));
   const b = await account.submitRiderApplication.run({...profile, idempotencyKey: "shared-key"}, context("rider-b"));
   assert.notEqual(a.applicationId, b.applicationId);
