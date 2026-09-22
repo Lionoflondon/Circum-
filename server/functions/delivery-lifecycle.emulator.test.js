@@ -178,6 +178,33 @@ test(
   },
 );
 test(
+  "legacy completeDelivery path cannot bypass the scheduled pickup restriction",
+  {skip: !enabled},
+  async () => {
+    await db.doc("deliveryRequests/scheduled-completion").set({
+      riderId: "rider",
+      status: "arrived_at_dropoff",
+      isScheduled: true,
+      scheduledAt: Date.now() + 3600000,
+      paymentStatus: "paid",
+      serviceType: "standard",
+    });
+    await db.doc("riders/rider").set({status: "active"});
+    await assert.rejects(
+      require("./delivery-completion-reconciled").completeDelivery.run(
+        {deliveryId: "scheduled-completion"},
+        context,
+      ),
+      /not ready for pickup/,
+    );
+    assert.equal(
+      (await db.doc("deliveryRequests/scheduled-completion").get()).data()
+        .status,
+      "arrived_at_dropoff",
+    );
+  },
+);
+test(
   "old adjustment cannot cancel a completed delivery",
   {skip: !enabled},
   async () => {

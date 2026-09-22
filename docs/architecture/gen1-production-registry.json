@@ -2816,6 +2816,7 @@
       "callers": [
         "server/functions/delivery-completion-reconciled.js",
         "server/functions/delivery-evidence-reconciled.emulator.test.js",
+        "server/functions/delivery-lifecycle.emulator.test.js",
         "server/functions/sender-booking.js"
       ],
       "criticality": "P0/P1-review-required",
