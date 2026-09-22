@@ -3,17 +3,20 @@
 ## Status
 
 The implementation is dormant by default. This document is not production,
-delivery, legal-approval or recipient proof. No provider is configured by this
-feature. Do not activate merely because tests or protected CI pass.
+delivery, legal-approval or recipient proof. Resend is the configured audience
+provider, but no campaign or signup is active. Do not activate merely because
+tests or protected CI pass.
 
 ## Approval and activation prerequisites
 
 1. Approve and publish the amendment in `NEWSLETTER_PRIVACY_POLICY_AMENDMENT.md`,
    including retention periods, processor details and the real policy version.
 2. Select/approve the marketing provider and its secret-management binding.
-   Replace `providerBoundary()` with the approved adapter. The present adapter
-   returns `pending_configuration`; setting environment flags does not configure
-   a provider. No marketing email is currently sent.
+   The Resend audience adapter uses the dedicated `RESEND_NEWSLETTER_API_KEY`
+   Secret Manager binding to create/update contacts and apply unsubscribe
+   suppression. It does not send campaign email. The existing Gifts sending key
+   is separate and is not reused. If the binding is absent, the adapter returns
+   `pending_configuration`; no marketing email is currently sent.
 3. Adapter requirements: bounded timeouts; revision-aware, idempotent audience
    updates; suppression precedence; category-specific consent checks and a fresh
    local suppression check before every send. Deliver HTTPS preference/withdrawal
