@@ -3,7 +3,7 @@ const functions = require("firebase-functions/v1");
 const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
-const {canonicalDocumentId, DOCUMENT_MATRIX, requiredDocumentIds} = require("./rider-certification-policy");
+const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
 const documentChunks = require("./rider-document-chunks");
 const deviceTokenAuthority = require("./device-token-authority");
@@ -141,22 +141,6 @@ function cleanSectionStatus(value) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported Rider application section status.");
   }
   return normalized;
-}
-
-function submittedDocumentIds(documents = [], riderId) {
-  const submitted = new Set();
-  for (const document of documents) {
-    const status = lower(document.status || document.verificationStatus, 80);
-    const type = canonicalDocumentId(document.type || document.documentType);
-    const storagePath = text(document.storagePath, 500);
-    if (document.riderId === riderId &&
-        document.source === "cloud-functions" &&
-        storagePath.startsWith(`rider_documents/${riderId}/`) &&
-        ["pending", "uploaded", "submitted", "under_review", "approved", "verified"].includes(status)) {
-      submitted.add(type);
-    }
-  }
-  return submitted;
 }
 
 function safeFileName(value) {
@@ -792,11 +776,10 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
 
-    const [riderSnap, profileSnap, applicationSnap, documentSnap] = await Promise.all([
+    const [riderSnap, profileSnap, applicationSnap] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
       transaction.get(applicationRef),
-      transaction.get(db.collection("riderDocuments").where("riderId", "==", rider.uid)),
     ]);
     const riderData = riderSnap.data() || {};
     const profileData = profileSnap.data() || {};
@@ -844,17 +827,6 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
       ["vehicleRegistration", "Enter your vehicle registration."],
     ]) {
       if (!application[field]) throw new functions.https.HttpsError("invalid-argument", message);
-    }
-    const requiredDocuments = requiredDocumentIds(application.vehicleType)
-        .filter((type) => type !== "profile_photo");
-    const submittedDocuments = submittedDocumentIds(
-        documentSnap.docs.map((snapshot) => snapshot.data() || {}), rider.uid);
-    const missingDocuments = requiredDocuments.filter((type) => !submittedDocuments.has(type));
-    if (missingDocuments.length) {
-      throw new functions.https.HttpsError(
-          "failed-precondition",
-          "Upload every required Rider document before submitting your application.",
-      );
     }
     application.status = ["needs_information", "rejected"].includes(applicationData.status) ? "resubmitted" : "submitted";
     transaction.set(applicationRef, {

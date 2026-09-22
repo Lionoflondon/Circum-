@@ -45,16 +45,16 @@ test("full Auth/application/PDF/image/review flow preserves zero wallet and appr
   assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, true);
   await account.ensureRiderRothWallet.run({}, ctx);
   assert.equal((await db.collection("riderRothWallets").doc(user.uid).get()).data().balance, 0);
-  for (const [type, contentType, body] of [["passport", "application/pdf", "%PDF-1.4 test"], ["driving_licence", "application/pdf", "%PDF-1.4 licence"], ["insurance", "application/pdf", "%PDF-1.4 insurance"], ["vehicle_registration", "image/png", "image-emulator-bytes"], ["mot", "application/pdf", "%PDF-1.4 mot"], ["right_to_work", "application/pdf", "%PDF-1.4 rtw"]]) {
-    await account.submitRiderDocument.run({documentType: type, contentType, fileBase64: Buffer.from(body).toString("base64"), fileName: type, idempotencyKey: "flow-" + type}, ctx);
-  }
   const request = {idempotencyKey: "onboarding-flow"};
   const [first, retry] = await Promise.all([account.submitRiderApplication.run(request, ctx), account.submitRiderApplication.run(request, ctx)]);
   assert.equal(first.applicationId, retry.applicationId);
   assert.equal((await db.collection("riderApplications").doc(user.uid).get()).data().status, "submitted");
   assert.equal((await db.collection("riderProfiles").doc(user.uid).get()).data().vehicleType, "car");
+  for (const [type, contentType, body] of [["passport", "application/pdf", "%PDF-1.4 test"], ["vehicle_registration", "image/png", "image-emulator-bytes"]]) {
+    await account.submitRiderDocument.run({documentType: type, contentType, fileBase64: Buffer.from(body).toString("base64"), fileName: type, idempotencyKey: "flow-" + type}, ctx);
+  }
   const docs = await db.collection("riderDocuments").where("riderId", "==", user.uid).get();
-  assert.deepEqual(docs.docs.map((d) => d.data().type).sort(), ["driving_licence", "identity", "insurance", "mot", "registration_v5c", "right_to_work"]);
+  assert.deepEqual(docs.docs.map((d) => d.data().type).sort(), ["identity", "registration_v5c"]);
   assert.ok(docs.docs.every((d) => d.data().status === "pending"));
   const pendingOnline = await presence.goOnline.run({location}, ctx);
   assert.equal(pendingOnline.onlineIntent, true);
@@ -73,11 +73,12 @@ test("full Auth/application/PDF/image/review flow preserves zero wallet and appr
   assert.equal(approved.riderRank, "senior");
 });
 
-test("required fields and documents gate initial submission", async () => {
+test("required fields are precise; documents and optional notes never gate initial submission", async () => {
   for (const [field, message] of [["fullName", "Enter your full name."], ["phoneNumber", "Enter your phone number."], ["postcode", "Enter your postcode."], ["homeAddress", "Enter your address."], ["vehicleType", "Choose Motorbike, Car or Van."], ["vehicleRegistration", "Enter your vehicle registration."]]) {
     await assert.rejects(account.submitRiderApplication.run({...profile, [field]: ""}, context("missing-" + field)), (e) => e.code === "invalid-argument" && e.message === message);
   }
-  await assert.rejects(account.submitRiderApplication.run({...profile, notes: ""}, context("no-docs")), (e) => e.code === "failed-precondition");
+  const result = await account.submitRiderApplication.run({...profile, notes: ""}, context("no-docs"));
+  assert.equal(result.status, "submitted");
 });
 
 test("wrong surface denied, shared idempotency keys cannot leak another Rider application", async () => {

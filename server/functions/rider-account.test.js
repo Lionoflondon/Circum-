@@ -66,8 +66,10 @@ test("Rider application submission is non-blocking while lifecycle authority sta
   const start = source.indexOf("exports.submitRiderApplication");
   const end = source.indexOf("exports.updateRiderApplicationSection", start);
   const body = source.slice(start, end);
-  assert.match(body, /requiredDocumentIds\(application\.vehicleType\)/);
-  assert.match(body, /Upload every required Rider document before submitting your application/);
+  assert.doesNotMatch(body, /data\.rightToWorkConfirmed !== true/);
+  assert.doesNotMatch(body, /data\.sealedPackageConsent !== true/);
+  assert.match(body, /rightToWorkConfirmed: data\.rightToWorkConfirmed === undefined/);
+  assert.match(body, /sealedPackageConsent: data\.sealedPackageConsent === undefined/);
   assert.match(body, /status: "submitted"/);
   assert.match(body, /approvalStatus: "pending"/);
   assert.match(body, /verificationStatus: "pending"/);
