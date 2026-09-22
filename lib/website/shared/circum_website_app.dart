@@ -5528,9 +5528,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('submitRiderApplication')
-          .call<Map<String, dynamic>>({
+      final result = await callAccountBootstrap('submitRiderApplication', {
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
@@ -5544,7 +5542,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'sealedPackageConsent': _sealedPackageConsent,
         'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
       }).timeout(const Duration(seconds: 25));
-      final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
+      final applicationId = '${result['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
       }

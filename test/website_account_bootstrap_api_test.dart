@@ -73,6 +73,45 @@ void main() {
     expect(result, {'ok': true});
   });
 
+  test('Rider application submission uses authenticated Cloud Run callable',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {'applicationId': 'rider-1', 'status': 'submitted'},
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeAccountBootstrap(
+      'submitRiderApplication',
+      const {'idempotencyKey': 'website-rider-application:rider-1'},
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/submitRiderApplication');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+    expect(jsonDecode(captured.body), {
+      'data': {'idempotencyKey': 'website-rider-application:rider-1'},
+    });
+    expect(result, {'applicationId': 'rider-1', 'status': 'submitted'});
+  });
+
+  test('Rider Website application caller no longer invokes the Gen 1 callable',
+      () {
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    expect(source, contains("callAccountBootstrap('submitRiderApplication'"));
+    expect(source, isNot(contains("httpsCallable('submitRiderApplication')")));
+  });
+
   test('structured account errors are preserved', () async {
     final client = MockClient((_) async => http.Response(
           jsonEncode({

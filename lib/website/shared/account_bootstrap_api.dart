@@ -27,6 +27,7 @@ Future<Map<String, dynamic>> callAccountBootstrap(
   const riderOperations = {
     'verifyRiderAccountAccess',
     'updateRiderProfile',
+    'submitRiderApplication',
   };
   if (operation != 'ensureSenderAccount' &&
       !riderOperations.contains(operation)) {
@@ -75,8 +76,7 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
           headers: {
             'content-type': 'application/json',
             'authorization': 'Bearer $idToken',
-            if (appCheckToken != null)
-              'x-firebase-appcheck': appCheckToken,
+            if (appCheckToken != null) 'x-firebase-appcheck': appCheckToken,
           },
           body: jsonEncode({'data': data}),
         )
@@ -94,4 +94,3 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
     if (ownsClient) transport.close();
   }
 }
-
