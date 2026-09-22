@@ -74,6 +74,25 @@ function projection(id, d, expiresAt) {
     d.estimatedDurationMinutes,
     journey.route && journey.route.durationMinutes,
   );
+  const deliveryTime = d.deliveryTime && typeof d.deliveryTime === "object" ?
+    d.deliveryTime : {};
+  const serviceLevelValue = text(
+    d.serviceLevel || d.selectedServiceLevel || d.selectedTier ||
+      (d.urgent === true ? "Express" : "Standard"),
+  ).toLowerCase();
+  const deliveryTimeProjection = Object.fromEntries(
+    [
+      "type",
+      "scheduledAt",
+      "scheduledDate",
+      "scheduledWindow",
+      "customWindowStart",
+      "customWindowEnd",
+      "summary",
+    ]
+      .filter((key) => deliveryTime[key] !== undefined && deliveryTime[key] !== null)
+      .map((key) => [key, deliveryTime[key]]),
+  );
   return {
     id,
     deliveryId: id,
@@ -115,6 +134,7 @@ function projection(id, d, expiresAt) {
     isHeavyDuty: d.isHeavyDuty === true || d.isHeavy === true,
     requiresVanguard:
       d.requiresVanguard === true || d.vanguardProtocolEnabled === true,
+    serviceLevel: serviceLevelValue === "express" ? "Express" : "Standard",
     isScheduled:
       d.isScheduled === true ||
       Boolean(
@@ -122,6 +142,7 @@ function projection(id, d, expiresAt) {
           (d.deliveryTime && d.deliveryTime.type === "scheduled"),
       ),
     scheduledAt: timestampMillis(d.scheduledAt) || null,
+    deliveryTime: deliveryTimeProjection,
     handlingSummary: (Array.isArray(recommendation.handlingFlags) ?
       recommendation.handlingFlags :
       []
@@ -155,12 +176,12 @@ async function getOffers(_data, context, db = getFirestore()) {
     localityProfile.data() || {},
   );
   return db.runTransaction(async (tx) => {
-    const [profile, rider, presence, old] = await Promise.all([
-      tx.get(db.doc(`riderProfiles/${uid}`)),
-      tx.get(db.doc(`riders/${uid}`)),
-      tx.get(db.doc(`riderPresence/${uid}`)),
-      tx.get(db.collection(`riderOfferProjections/${uid}/offers`)),
-    ]);
+    const profile = await tx.get(db.doc(`riderProfiles/${uid}`));
+    const rider = await tx.get(db.doc(`riders/${uid}`));
+    const presence = await tx.get(db.doc(`riderPresence/${uid}`));
+    const old = await tx.get(
+      db.collection(`riderOfferProjections/${uid}/offers`),
+    );
     const p = profile.data() || {};
     const r = rider.data() || {};
     const state = presence.data() || {};
@@ -176,18 +197,21 @@ async function getOffers(_data, context, db = getFirestore()) {
         combined.currentDeliveryId ||
         state.activeDeliveryId,
     );
-    const activeResults = await Promise.all(
-      ["riderId", "driverId", "assignedRiderId", "assignedDriverId"].map(
-        (field) =>
-          tx.get(
-            db
-              .collection("deliveryRequests")
-              .where(field, "==", uid)
-              .where("status", "in", ACTIVE)
-              .limit(1),
-          ),
-      ),
-    );
+    const activeResults = [];
+    for (const field of [
+      "riderId",
+      "driverId",
+      "assignedRiderId",
+      "assignedDriverId",
+    ]) {
+      activeResults.push(await tx.get(
+        db
+          .collection("deliveryRequests")
+          .where(field, "==", uid)
+          .where("status", "in", ACTIVE)
+          .limit(1),
+      ));
+    }
     active = active || activeResults.some((q) => !q.empty);
     const eligible =
       profile.exists &&

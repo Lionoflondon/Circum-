@@ -26,6 +26,8 @@ const {
   publishDeliveryCompleted,
 } = require("./delivery-completed-event");
 const evidenceAuthority = require("./delivery-evidence")._private;
+const scheduledOperationalTransitionAllowed =
+  require("./delivery-tracking")._private.scheduledOperationalTransitionAllowed;
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -464,6 +466,17 @@ async function updateDeliveryTrackingStatusHandler(
       throw new functions.https.HttpsError(
         "failed-precondition",
         transitionDecision.message,
+      );
+    }
+    const scheduleDecision = scheduledOperationalTransitionAllowed(
+      delivery,
+      nextStatus,
+    );
+    if (!scheduleDecision.allowed) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This scheduled delivery is not ready for pickup yet.",
+        {reason: scheduleDecision.reason, pickupAt: scheduleDecision.pickupAt},
       );
     }
     if (nextStatus === "delivered" && !standardSettlementAllowed(delivery)) {
