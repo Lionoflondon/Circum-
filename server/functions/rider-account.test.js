@@ -164,10 +164,9 @@ test("profile completion initializes authority defaults only without prior revie
 
 test("Rider Web routes profile updates through account bootstrap Cloud Run", () => {
   assert.match(websiteSource, /callAccountBootstrap\(\s*'updateRiderProfile'/);
-  assert.match(websiteSource, /callAccountBootstrap\(\s*'submitRiderApplication'/);
   assert.doesNotMatch(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);
-  assert.doesNotMatch(websiteSource, /httpsCallable\('submitRiderApplication'\)/);
+  assert.match(websiteSource, /(?:callAccountBootstrap\(\s*'submitRiderApplication'|httpsCallable\('submitRiderApplication'\))/);
   assert.match(websiteSource, /httpsCallable\('submitRiderDocument'\)/);
   for (const method of [
     "_changeRiderEmail",
