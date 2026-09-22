@@ -105,7 +105,7 @@ jobs:
         if: steps.functions-scope.outputs.resolver_status == '0' && steps.functions-scope.outputs.scope != ''
         env:
           FUNCTION_SCOPE: ${{ steps.functions-scope.outputs.scope }}
-        run: firebase deploy --only "$FUNCTION_SCOPE" --project circum-2797c
+        run: firebase deploy --only "$FUNCTION_SCOPE" --project circum-2797c --force
       - name: Report empty Functions scope
         if: steps.functions-scope.outputs.resolver_status != '0' || steps.functions-scope.outputs.scope == ''
         run: echo "No affected Functions; skipping source deployment."
