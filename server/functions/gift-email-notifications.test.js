@@ -27,55 +27,26 @@ test("delivery email identity is deterministic and email addresses are normalize
   assert.equal(emails.emailNotificationId("gift/123", "gift_delivered"), "gift_gift_123_gift_delivered");
 });
 
-test("Resend transport sends a transactional payload with idempotency", async () => {
-  const previousKey = process.env.RESEND_API_KEY;
-  const previousFrom = process.env.GIFTS_EMAIL_FROM;
-  process.env.RESEND_API_KEY = "test-key";
-  process.env.GIFTS_EMAIL_FROM = "Circum Gifts <gifts@example.com>";
-  let request;
-  try {
-    const result = await emails.sendResendEmail({
-      to: "sender@example.com",
-      subject: "Your Circum gift was delivered",
-      textBody: "Delivered.",
-      htmlBody: "<p>Delivered.</p>",
-      idempotencyKey: "gift_gift-123_gift_delivered",
-      fetchImpl: async (_url, options) => {
-        request = options;
-        return {ok: true, status: 200, json: async () => ({id: "email-1"})};
-      },
-    });
-    assert.deepEqual(result, {status: "sent", providerId: "email-1"});
-    assert.equal(request.headers.Authorization, "Bearer test-key");
-    assert.equal(request.headers["Idempotency-Key"], "gift_gift-123_gift_delivered");
-    const payload = JSON.parse(request.body);
-    assert.deepEqual(payload.to, ["sender@example.com"]);
-    assert.equal(payload.tags[0].value, "gifts");
-    assert.equal(payload.tags[1].value, "gift_delivered");
-  } finally {
-    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
-    else process.env.RESEND_API_KEY = previousKey;
-    if (previousFrom === undefined) delete process.env.GIFTS_EMAIL_FROM;
-    else process.env.GIFTS_EMAIL_FROM = previousFrom;
-  }
-});
-
-test("unconfigured email provider fails closed without pretending to send", async () => {
-  const previousKey = process.env.RESEND_API_KEY;
-  delete process.env.RESEND_API_KEY;
-  try {
-    assert.deepEqual(await emails.sendResendEmail({
-      to: "sender@example.com",
-      subject: "Subject",
-      textBody: "Body",
-      htmlBody: "<p>Body</p>",
-      idempotencyKey: "idempotent",
-      fetchImpl: () => {
-        throw new Error("network must not be called");
-      },
-    }), {status: "skipped", reason: "email_provider_not_configured"});
-  } finally {
-    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
-    else process.env.RESEND_API_KEY = previousKey;
-  }
+test("gift delivery publisher uses the canonical emailQueue identity", async () => {
+  const writes = [];
+  const db = {
+    collection: (name) => ({
+      doc: (id) => ({
+        set: async (value) => writes.push({name, id, value}),
+        get: async () => ({exists: false}),
+      }),
+    }),
+  };
+  const result = await emails.queueGiftDeliveryEmail({
+    db,
+    giftId: "gift-123",
+    gift: {senderEmail: " Sender@Example.COM ", recipientName: "Alex", status: "delivered"},
+  });
+  assert.equal(result, "gift_gift-123_gift_delivered");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].name, "emailQueue");
+  assert.equal(writes[0].id, result);
+  assert.equal(writes[0].value.sourceCollection, "giftRequests");
+  assert.equal(writes[0].value.sourceRequiredStatus, "delivered");
+  assert.equal(writes[0].value.to, "sender@example.com");
 });

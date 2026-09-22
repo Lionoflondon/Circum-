@@ -430,8 +430,9 @@ async function findGift(db, delivery) {
 async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = ""}) {
   if (!email || !email.includes("@")) return false;
   const sender = role === "sender";
-  const suffix = retryId ? `_${retryId}` : "";
-  const ref = db.collection("emailQueue").doc(`gift_story_${giftId}_${role}${suffix}`);
+  // Retries update one logical email identity. They must not create a second
+  // provider idempotency key or allow a manual retry to send a duplicate.
+  const ref = db.collection("emailQueue").doc(`gift_story_${giftId}_${role}`);
   const secureStoryUrl = storyLink(token);
   await ref.set({
     to: email,
@@ -440,10 +441,13 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
       `Hello,\n\nYour Circum Gift Story is ready.\n\nWatch your story:\n${secureStoryUrl}\n\nThis secure private link expires according to Gift Story policy.\n\nThoughtful gifting, delivered by Circum.\n\n— Circum` :
       `Hello,\n\nYour Circum Gift Story is ready.\n\nView your secure story here:\n${secureStoryUrl}\n\nThis private link has been created just for you and expires according to Gift Story policy.\n\n— Circum`,
     type: "gift_story_ready",
+    eventType: "gift_story_ready",
     recipientRole: role,
     giftRequestId: giftId,
+    sourceCollection: "giftRequests",
+    sourceDocumentId: giftId,
     status: "queued",
-    attempts: FieldValue.increment(1),
+    maxAttempts: 5,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   }, {merge: true});

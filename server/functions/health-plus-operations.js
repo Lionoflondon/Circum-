@@ -54,10 +54,15 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       to: pickup.email,
       subject: title,
       text: body,
-      status: "pending",
+      status: "queued",
+      eventType: `health_plus_${type}`,
       source: "health_plus",
+      sourceCollection: "prescriptionPickups",
+      sourceDocumentId: pickup.id,
       relatedEntityId: pickup.id,
+      maxAttempts: 5,
       createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   }
 }
