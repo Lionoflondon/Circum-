@@ -2,12 +2,12 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 272
-- Gen 1 exports: 270
-- Files importing Firebase Functions v1: 64
+- Source exports: 273
+- Gen 1 exports: 271
+- Files importing Firebase Functions v1: 65
 - MIGRATE TO CLOUD RUN: 171
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 56
-- REPLACE WITH CLOUD RUN + EVENTARC: 27
+- REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
 
@@ -170,6 +170,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | onDisputeCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftCampaignParticipantUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftDeliveryCompleted | server/functions/gift-story-automation.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | scripts/scoped_functions_deploy_list.test.js<br>server/functions/scoped_functions_deploy_list.test.js |
+| onGiftEmailNotificationCreated | server/functions/gift-email-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftRequestCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onGiftRequestUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |

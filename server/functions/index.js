@@ -67,6 +67,7 @@ const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
 const movementTimeline = require("./movement-timeline");
 const giftStoryAutomation = require("./gift-story-automation");
+const giftEmailNotifications = require("./gift-email-notifications");
 const riderPresence = require("./rider-presence");
 const addressPlacesCompat = require("./address-places-compat");
 const senderBooking = require("./sender-booking");
@@ -202,6 +203,8 @@ exports.onGiftRequestCreated = platformNotifications.onGiftRequestCreated;
 exports.onGiftRequestUpdated = platformNotifications.onGiftRequestUpdated;
 exports.onGiftCampaignParticipantUpdated =
   platformNotifications.onGiftCampaignParticipantUpdated;
+exports.onGiftEmailNotificationCreated =
+  giftEmailNotifications.onGiftEmailNotificationCreated;
 exports.awardFoundingRiderOnApproval = legends.awardFoundingRiderOnApproval;
 exports.awardFoundingRiderOnRiderApproval =
   legends.awardFoundingRiderOnRiderApproval;

@@ -347,6 +347,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
         amount: split.stripeAmountMinor,
         currency: "gbp",
         customer: customerId,
+        receipt_email: gift.senderEmail,
         automatic_payment_methods: {enabled: true},
         ...(savedPaymentMethodId ? {payment_method: savedPaymentMethodId} : {}),
         description: `Gifts by Circum for ${gift.recipientName || "recipient"}`,
@@ -393,6 +394,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
       mode: "payment",
       expires_at: Math.floor(reservation.expiresAt / 1000),
       customer_email: gift.senderEmail,
+      payment_intent_data: {receipt_email: gift.senderEmail},
       line_items: [{
         quantity: 1,
         price_data: {

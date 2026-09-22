@@ -34,6 +34,30 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
+      - name: Provision Gifts email runtime secrets
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GIFTS_EMAIL_FROM: ${{ secrets.GIFTS_EMAIL_FROM }}
+        run: |
+          set -euo pipefail
+
+          provision_secret() {
+            local name="$1"
+            local value="$2"
+            if ! gcloud secrets describe "$name" --project=circum-2797c >/dev/null 2>&1; then
+              gcloud secrets create "$name" \
+                --replication-policy=automatic \
+                --project=circum-2797c >/dev/null
+            fi
+            printf '%s' "$value" | gcloud secrets versions add "$name" \
+              --data-file=- \
+              --project=circum-2797c >/dev/null
+          }
+
+          test -n "$RESEND_API_KEY"
+          test -n "$GIFTS_EMAIL_FROM"
+          provision_secret RESEND_API_KEY "$RESEND_API_KEY"
+          provision_secret GIFTS_EMAIL_FROM "$GIFTS_EMAIL_FROM"
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$BACKEND_GOOGLE_PLACES_API_KEY" > server/functions/.env
         env:
           BACKEND_GOOGLE_PLACES_API_KEY: ${{ secrets.BACKEND_GOOGLE_PLACES_API_KEY }}

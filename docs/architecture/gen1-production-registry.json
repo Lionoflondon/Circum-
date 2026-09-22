@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 272,
-  "gen1ExportCount": 270,
+  "sourceExportCount": 273,
+  "gen1ExportCount": 271,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -27,6 +27,7 @@
     "server/functions/delivery-tracking.js",
     "server/functions/founder-review-fixture.js",
     "server/functions/founder-rider-access.js",
+    "server/functions/gift-email-notifications.js",
     "server/functions/gift-story-automation.js",
     "server/functions/gift-voice-media.js",
     "server/functions/gifts-payment.js",
@@ -6070,6 +6071,38 @@
         "storyNotifications",
         "timeline",
         "users"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "onGiftEmailNotificationCreated",
+      "sourceFile": "server/functions/gift-email-notifications.js",
+      "triggerType": "firestore-event",
+      "triggerDefinition": {
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "eventFilters": {
+          "resource": "projects/circum-registry-audit/databases/(default)/documents/giftEmailNotifications/{notificationId}"
+        },
+        "retry": true
+      },
+      "generation": "Gen 1",
+      "productionPurpose": "giftEmailNotifications.onGiftEmailNotificationCreated",
+      "callers": [],
+      "criticality": "P0/P1-review-required",
+      "authRequired": false,
+      "appCheckRequired": false,
+      "secrets": [
+        "GIFTS_EMAIL_FROM",
+        "RESEND_API_KEY"
+      ],
+      "firestoreCollections": [
+        "giftEmailNotifications",
+        "giftRequests"
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
