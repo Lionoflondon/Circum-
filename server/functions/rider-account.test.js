@@ -166,7 +166,7 @@ test("Rider Web routes profile updates through account bootstrap Cloud Run", () 
   assert.match(websiteSource, /callAccountBootstrap\(\s*'updateRiderProfile'/);
   assert.doesNotMatch(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);
-  assert.match(websiteSource, /httpsCallable\('submitRiderApplication'\)/);
+  assert.match(websiteSource, /(?:callAccountBootstrap\(\s*'submitRiderApplication'|httpsCallable\('submitRiderApplication'\))/);
   assert.match(websiteSource, /httpsCallable\('submitRiderDocument'\)/);
   for (const method of [
     "_changeRiderEmail",

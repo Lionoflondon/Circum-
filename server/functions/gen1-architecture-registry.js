@@ -4,6 +4,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const {findCloudRunReplacements, productionCallers} = require("./cloud-run-replacement-registry");
 const root = path.resolve(__dirname, "../..");
 const registryPath = path.join(root, "docs/architecture/gen1-production-registry.json");
 const reportPath = path.join(root, "docs/architecture/GEN1_PRODUCTION_EXIT.md");
@@ -58,9 +59,10 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
     ...[...source.matchAll(/["']([A-Z][A-Z0-9_]{3,})["']/g)].map((item) => item[1]).filter((item) => /SECRET|KEY|TOKEN|WEBHOOK/.test(item)),
     ...(endpoint.secretEnvironmentVariables || []).map((item) => item.key),
   ])].sort();
-  const replacements = files.filter((file) => /^cloud-run-.*\.js$/.test(path.basename(file)) && new RegExp(`\\b${name}\\b`).test(textByFile.get(file))).map((file) => path.basename(file));
+  const replacements = findCloudRunReplacements(name, files, textByFile);
   const generation = endpoint.platform === "gcfv2" ? "Gen 2" : "Gen 1";
   const migrationStatus = generation === "Gen 2" || replacements.length ? "ALREADY MIGRATED — CUT OVER REMAINING CALLERS" : triggerType === "firestore-event" ? "REPLACE WITH CLOUD RUN + EVENTARC" : triggerType === "schedule" ? "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER" : ["RetrieveCardDetails", "calculateEarnings", "endTrip"].includes(name) ? "RETIRE — no legitimate production dependency" : "MIGRATE TO CLOUD RUN";
+  const scannedCallers = callers.sort();
   return {
     functionName: name,
     sourceFile: `server/functions/${sourceFile}`,
@@ -68,7 +70,7 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
     triggerDefinition: endpoint.eventTrigger || endpoint.scheduleTrigger || endpoint.httpsTrigger || endpoint.callableTrigger || null,
     generation,
     productionPurpose: expression,
-    callers: callers.sort(),
+    callers: productionCallers(name, scannedCallers),
     criticality: /ensure|auth|account|delivery|payment|stripe|dispatch|tracking|complete|settle|notification|message|online|offline/i.test(name) ? "P0/P1-review-required" : "review-required",
     authRequired: /context\.auth|verifyIdToken|require[A-Z]/.test(source),
     appCheckRequired: /app.?check|enforceAppCheck/i.test(source),
