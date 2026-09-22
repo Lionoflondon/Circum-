@@ -76,7 +76,7 @@ class _BusinessAccessViewState extends State<BusinessAccessView> {
               : _error != null
                   ? AppEmptyState(
                       icon: Icons.cloud_off_rounded,
-                      title: 'Business is unavailable',
+                      title: 'Reconnect Business',
                       body: _error!,
                       actionLabel: 'Retry',
                       onAction: _load,

@@ -571,7 +571,7 @@ class _StoryLoadError extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Gift Story unavailable',
+            'Gift Story could not load',
             textAlign: TextAlign.center,
             style: GoogleFonts.dmSerifDisplay(
               color: Colors.white,
@@ -865,7 +865,7 @@ class _VoiceNoteSlideState extends State<_VoiceNoteSlide> {
                               ? (_playing
                                   ? 'Pause voice note'
                                   : 'Play voice note')
-                              : 'Voice note unavailable',
+                              : 'No voice note',
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,

@@ -460,7 +460,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final uri = Uri.tryParse('${data['url'] ?? data['checkoutUrl'] ?? ''}');
     final paid = data['paid'] == true;
     if (!paid && (uri == null || !uri.hasScheme)) {
-      throw StateError('Secure invoice checkout is unavailable.');
+      throw StateError('Secure invoice checkout was not returned.');
     }
     return BusinessInvoicePaymentResult(
       paid: paid,
@@ -505,7 +505,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final data = Map<String, dynamic>.from(result.data as Map);
     final checkoutUrl = Uri.tryParse('${data['checkoutUrl'] ?? ''}');
     if (checkoutUrl == null || !checkoutUrl.hasScheme) {
-      throw StateError('Secure Roth checkout is unavailable.');
+      throw StateError('Secure Roth checkout was not returned.');
     }
     return BusinessRothCheckoutResult(
       checkoutUrl: checkoutUrl,

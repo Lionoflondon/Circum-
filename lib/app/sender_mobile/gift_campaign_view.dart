@@ -79,7 +79,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   var _paymentMethod = 'Card';
   var _applyRoth = false;
   var _rothLoading = true;
-  var _rothUnavailable = false;
+  var _rothLoadFailed = false;
   var _rothBalance = 0.0;
   var _submitting = false;
   String? _message;
@@ -718,8 +718,8 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           title: 'Available Roth',
           body: _rothLoading
               ? 'Checking Roth balance...'
-              : _rothUnavailable
-                  ? 'Roth unavailable'
+              : _rothLoadFailed
+                  ? 'Refresh Roth balance'
                   : '£${_rothBalance.toStringAsFixed(0)}',
         ),
         const SizedBox(height: 14),
@@ -978,14 +978,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       setState(() {
         _rothBalance = balance.toDouble();
         _rothLoading = false;
-        _rothUnavailable = false;
+        _rothLoadFailed = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _rothBalance = 0;
         _rothLoading = false;
-        _rothUnavailable = true;
+        _rothLoadFailed = true;
       });
     }
   }
@@ -1016,9 +1016,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       });
       return;
     }
-    if (_paymentMethod == 'Roth + Card' && _rothBalance <= 0) {
+    if ((_paymentMethod == 'Roth' || _paymentMethod == 'Roth + Card') &&
+        _rothLoadFailed) {
       setState(() {
-        _message = 'Roth is unavailable. Choose card to continue securely.';
+        _message = 'Refresh your Roth balance before continuing.';
       });
       return;
     }
