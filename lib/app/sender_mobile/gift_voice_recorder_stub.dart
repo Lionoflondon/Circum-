@@ -16,11 +16,11 @@ class SenderGiftVoiceRecorder {
   bool get isSupported => false;
 
   Future<void> start() async {
-    throw UnsupportedError('Voice recording is unavailable on this platform.');
+    throw UnsupportedError('Voice recording is not supported on this platform.');
   }
 
   Future<SenderGiftRecordedAudio> stop() async {
-    throw UnsupportedError('Voice recording is unavailable on this platform.');
+    throw UnsupportedError('Voice recording is not supported on this platform.');
   }
 
   void cancel() {}

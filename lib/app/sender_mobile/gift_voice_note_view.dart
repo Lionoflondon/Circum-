@@ -133,7 +133,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       setState(() {
         _state = GiftVoiceNoteState.uploadFailed;
         _statusMessage =
-            'Voice recording is unavailable on this device. You can skip this step.';
+            'Voice recording is not supported on this device.';
       });
       return;
     }

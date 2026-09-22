@@ -34,7 +34,7 @@ class SenderGiftVoiceRecorder {
   Future<void> start() async {
     if (!isSupported) {
       throw UnsupportedError(
-          'Voice recording is unavailable on this platform.');
+          'Voice recording is not supported on this platform.');
     }
     if (!await _recorder.hasPermission().timeout(_operationTimeout)) {
       throw StateError('Microphone permission denied.');
@@ -42,7 +42,7 @@ class SenderGiftVoiceRecorder {
     if (!await _recorder
         .isEncoderSupported(AudioEncoder.aacLc)
         .timeout(_operationTimeout)) {
-      throw UnsupportedError('AAC voice recording is unavailable.');
+      throw UnsupportedError('AAC voice recording is not supported.');
     }
     final directory = await _voiceDirectory();
     await cleanupStaleFiles(directory: directory);
@@ -73,7 +73,7 @@ class SenderGiftVoiceRecorder {
     final path = stoppedPath ?? expectedPath;
     final file = File(path);
     if (!await file.exists()) {
-      throw StateError('Recorded audio is unavailable.');
+      throw StateError('Recorded audio was not created.');
     }
     final bytes = await file.readAsBytes().timeout(_operationTimeout);
     if (bytes.isEmpty) {

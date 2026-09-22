@@ -35,7 +35,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   var _submitting = false;
   var _paymentComplete = false;
   var _rothLoading = true;
-  var _rothUnavailable = false;
+  var _rothLoadFailed = false;
   String? _message;
   String? _paymentMethod;
   bool _applyRoth = false;
@@ -135,14 +135,14 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       setState(() {
         _rothBalance = balance.toDouble();
         _rothLoading = false;
-        _rothUnavailable = false;
+        _rothLoadFailed = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _rothBalance = 0;
         _rothLoading = false;
-        _rothUnavailable = true;
+        _rothLoadFailed = true;
       });
     }
   }
@@ -198,10 +198,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         const SizedBox(height: 10),
         _RothBalanceSummary(
           loading: _rothLoading,
-          unavailable: _rothUnavailable,
+          loadFailed: _rothLoadFailed,
           balance: _rothBalance,
           applied: _rothApplied,
           remaining: _remainingCardAmount,
+          onRetry: _loadRothBalance,
         ),
         const SizedBox(height: 22),
         Text(
@@ -362,7 +363,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           .timeout(_backendTimeout);
       final modeData = Map<String, dynamic>.from(modeResult.data as Map);
       if (!Env.paymentModeMatchesBackend('${modeData['mode'] ?? ''}')) {
-        throw StateError('Gift payment configuration is unavailable.');
+        throw StateError('Gift payment configuration did not match.');
       }
       if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
       final payload = Map<String, Object?>.from(
@@ -535,7 +536,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   ) async {
     final clientSecret = '${paymentData['clientSecret'] ?? ''}'.trim();
     if (clientSecret.isEmpty) {
-      throw StateError('Gift payment confirmation is unavailable.');
+      throw StateError('Gift payment confirmation was not returned.');
     }
     if (_paymentMethod == 'Apple Pay') {
       final amount = (paymentData['remainingAmount'] as num?)?.toDouble() ?? 0;
@@ -716,25 +717,27 @@ class _RothToggleCard extends StatelessWidget {
 
 class _RothBalanceSummary extends StatelessWidget {
   final bool loading;
-  final bool unavailable;
+  final bool loadFailed;
   final double balance;
   final double applied;
   final double remaining;
+  final VoidCallback onRetry;
 
   const _RothBalanceSummary({
     required this.loading,
-    required this.unavailable,
+    required this.loadFailed,
     required this.balance,
     required this.applied,
     required this.remaining,
+    required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
     final balanceText = loading
         ? 'Loading...'
-        : unavailable
-        ? 'Unavailable'
+        : loadFailed
+        ? 'Refresh required'
         : '£${balance.toStringAsFixed(0)}';
     return Container(
       width: double.infinity,
@@ -760,16 +763,11 @@ class _RothBalanceSummary extends StatelessWidget {
             label: 'Remaining card amount',
             value: '£${remaining.toStringAsFixed(0)}',
           ),
-          if (unavailable) ...[
+          if (loadFailed) ...[
             const SizedBox(height: 10),
-            Text(
-              'Roth is currently unavailable. You can continue securely by card.',
-              style: GoogleFonts.inter(
-                color: const Color(0xFFB8AAB8),
-                fontSize: 11.5,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-              ),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Refresh Roth balance'),
             ),
           ],
         ],
