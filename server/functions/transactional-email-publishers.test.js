@@ -114,7 +114,7 @@ test("Rider decision email uses only the authoritative application status and co
     approvalStatus: "more_information_requested", email: "rider@example.test", riderAuthorityUpdatedAt: {seconds: 123},
   });
   const result = await publishFromEvent({db, ...input});
-  assert.equal(result.id, "rider_application_rider-1_more_information_requested_123");
+  assert.equal(result.id, "rider_application_rider-1_more_information_requested_123_0");
   assert.equal(db.read("emailQueue", result.id).to, "rider@example.test");
   assert.doesNotMatch(db.read("emailQueue", result.id).text, /document|internal|reason/i);
 });

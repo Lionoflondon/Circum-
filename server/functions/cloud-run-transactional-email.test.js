@@ -241,6 +241,36 @@ test("recipient is revalidated against the current authoritative source before p
   assert.equal(calls, 0);
 });
 
+test("Rider decision uses approvalStatus as an authoritative source state", async () => {
+  const db = fakeDb({
+    "emailQueue/rider-decision": record({sourceCollection: "riderProfiles", sourceDocumentId: "rider-1", sourceRequiredStatus: "approved", sourceRecipientField: "email", to: "rider@example.test"}),
+    "riderProfiles/rider-1": {approvalStatus: "approved", email: "rider@example.test"},
+  });
+  const result = await processEmailQueueRecord({
+    db, emailId: "rider-decision", eventId: "rider-decision-event", apiKey: "test-key",
+    fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "provider-rider"})}),
+  });
+  assert.equal(result.status, "sent");
+});
+
+test("referral queue item revalidates both finalized role ledgers at send time", async () => {
+  const db = fakeDb({
+    "emailQueue/referral-email": record({eventType: "referral_award_finalized", sourceCollection: "referrals", sourceDocumentId: "referred-1", sourceRequiredStatus: "roth_awarded", sourceRecipientField: "referrerEmail", to: "inviter@example.test"}),
+    "referrals/referred-1": {status: "roth_awarded", referrerEmail: "inviter@example.test"},
+    "walletTransactions/referral_reward_referred-1_referrer": {status: "completed"},
+    "walletTransactions/referral_reward_referred-1_referred": {status: "pending"},
+  });
+  let calls = 0;
+  assert.deepEqual(await processEmailQueueRecord({
+    db, emailId: "referral-email", eventId: "referral-event", apiKey: "test-key",
+    fetchImpl: async () => {
+      calls++;
+      return {ok: true, status: 200, json: async () => ({id: "not-sent"})};
+    },
+  }), {status: "suppressed", reason: "source_state_changed"});
+  assert.equal(calls, 0);
+});
+
 test("permanent provider rejection ends as failed, not suppressed", async () => {
   const db = fakeDb({"emailQueue/email-1": record()});
   const result = await processEmailQueueRecord({

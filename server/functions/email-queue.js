@@ -59,11 +59,23 @@ function queueRecord({
   };
 }
 
-async function enqueueEmail(db, record) {
+async function createEmailQueueRecord(db, id, payload, queueCollection = null) {
+  const ref = (queueCollection || db.collection("emailQueue")).doc(id);
+  try {
+    await ref.create(payload);
+    return {status: "queued", notificationId: id};
+  } catch (error) {
+    if (error.code === 6 || error.code === "already-exists" || /already exists/i.test(text(error.message))) {
+      return {status: "duplicate", notificationId: id};
+    }
+    throw error;
+  }
+}
+
+async function enqueueEmail(db, record, queueCollection = null) {
   const payload = queueRecord(record);
   if (!payload) return {status: "skipped", reason: "invalid_email_queue_record"};
-  await db.collection(EMAIL_QUEUE_COLLECTION).doc(payload.notificationId).set(payload, {merge: true});
-  return {status: "queued", notificationId: payload.notificationId};
+  return createEmailQueueRecord(db, payload.notificationId, payload, queueCollection);
 }
 
 module.exports = {
@@ -72,5 +84,6 @@ module.exports = {
   safeEmailQueueId,
   emailQueueId,
   queueRecord,
+  createEmailQueueRecord,
   enqueueEmail,
 };

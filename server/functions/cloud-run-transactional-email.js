@@ -100,7 +100,8 @@ function sourceDescriptor(record = {}) {
 
 function sourceState(data = {}) {
   return [data.status, data.state, data.deliveryStatus, data.giftStatus, data.lifecycleStatus,
-    data.paymentStatus, data.paymentState, data.settlementStatus, data.cancellationSettlementStatus]
+    data.paymentStatus, data.paymentState, data.settlementStatus, data.cancellationSettlementStatus,
+    data.approvalStatus, data.verificationStatus]
       .map((value) => text(value).toLowerCase())
       .filter(Boolean);
 }
@@ -115,6 +116,13 @@ async function revalidateSource(db, record) {
     return {status: "suppressed", reason: "source_state_changed"};
   }
   const sourceData = snapshot.data() || {};
+  for (const [field, expected] of Object.entries(record.sourceRequiredFields || {})) {
+    const allowed = Array.isArray(expected) ? expected : [expected];
+    const actual = sourceData[field];
+    const valid = allowed.some((value) => typeof value === "number" ? Number(actual) === value :
+      text(actual).toLowerCase() === text(value).toLowerCase());
+    if (!valid) return {status: "suppressed", reason: "source_state_changed"};
+  }
   if (record.eventType === "referral_award_finalized") {
     const [inviter, referred] = await Promise.all([
       db.collection("walletTransactions").doc(`referral_reward_${source.id}_referrer`).get(),

@@ -3,6 +3,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {buildCustodyEvent, buildHealthPlusPlanFields} = require("./health-plus-core");
+const {createEmailQueueRecord} = require("./email-queue");
 
 const STATUS_EVENTS = {
   scheduled: ["booking_created", "Your Health+ collection has been scheduled.", "scheduled"],
@@ -50,7 +51,8 @@ async function queueHealthNotification(db, pickup, type, title, body) {
   };
   await db.collection("healthPlusNotifications").doc(notificationId).set(payload, {merge: true});
   if (pickup.email) {
-    await db.collection("emailQueue").doc(notificationId).set({
+    await createEmailQueueRecord(db, notificationId, {
+      notificationId,
       to: pickup.email,
       subject: title,
       text: body,
@@ -62,8 +64,9 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       relatedEntityId: pickup.id,
       maxAttempts: 5,
       createdAt: FieldValue.serverTimestamp(),
+      sourceRecipientField: "email",
       updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+    }, db.collection("emailQueue"));
   }
 }
 

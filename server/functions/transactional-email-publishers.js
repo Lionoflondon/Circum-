@@ -56,6 +56,14 @@ function emailId(...parts) {
   return parts.map((part) => text(part).replace(/[^A-Za-z0-9_-]/g, "_")).join("_").slice(0, 200);
 }
 
+function timestampKey(value) {
+  if (value && typeof value === "object" && (value.seconds != null || value._seconds != null)) {
+    return `${value.seconds ?? value._seconds}_${value.nanos ?? value._nanoseconds ?? 0}`;
+  }
+  if (value instanceof Date) return `${value.getTime()}`;
+  return text(value);
+}
+
 function isOrdinaryDelivery(data = {}) {
   const kind = lower(data.sourceModule || data.serviceType || data.type);
   return data.businessMode !== true && data.isBusiness !== true &&
@@ -69,7 +77,7 @@ function paymentConfirmed(data = {}) {
 
 function finalDelivery(data = {}) {
   return ["delivered", "completed"].includes(lower(data.status || data.deliveryStatus)) &&
-    (!data.settlementStatus || lower(data.settlementStatus) === "completed");
+    lower(data.settlementStatus) === "completed";
 }
 
 async function publishFromEvent({db, eventType, eventId, decoded}) {
@@ -85,6 +93,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       body: `Your paid Circum delivery booking is confirmed. Booking reference: ${deliveryId}. Open Circum to view your delivery.`,
       eventType: "delivery_booking_paid", collection: "deliveryRequests", sourceId: deliveryId,
       required: "paid", recipientField: after.senderEmail ? "senderEmail" : "email", extra: {recipientId: text(after.senderId)}});
+    if (payload) payload.sourceRequiredFields = {paymentStatus: ["paid", "succeeded", "success", "roth_paid", "stripe_paid"]};
     return createOnly(db, emailId("delivery_booking_paid", deliveryId), payload);
   }
   if (deliveryId && eventType === UPDATED && isOrdinaryDelivery(after) && !finalDelivery(before) && finalDelivery(after)) {
@@ -93,6 +102,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       body: `Your Circum delivery has been completed. Booking reference: ${deliveryId}. Open Circum to view the delivery details.`,
       eventType: "delivery_completed", collection: "deliveryRequests", sourceId: deliveryId,
       required: lower(after.status || after.deliveryStatus), recipientField: after.senderEmail ? "senderEmail" : "email", extra: {recipientId: text(after.senderId)}});
+    if (payload) payload.sourceRequiredFields = {settlementStatus: "completed"};
     return createOnly(db, emailId("delivery_completed", deliveryId), payload);
   }
 
@@ -107,6 +117,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       body: `The cancellation for your Circum delivery has been settled. Booking reference: ${settlementId}. Open Circum to view the account details.`,
       eventType: "delivery_cancellation_settled", collection: "deliveryRequests", sourceId: settlementId,
       required: "settled", recipientField: delivery.senderEmail ? "senderEmail" : "email", extra: {recipientId: text(delivery.senderId)}});
+    if (payload) payload.sourceRequiredFields = {cancellationSettlementStatus: "settled"};
     return createOnly(db, emailId("delivery_cancellation_settled", settlementId), payload);
   }
 
@@ -119,6 +130,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       body: `Payment for Circum Business invoice ${ref} is complete. Sign in to Circum Business to view the invoice.`,
       eventType: "business_invoice_paid", collection: "businessInvoices", sourceId: invoiceId,
       required: lower(after.status), recipientField: "billingEmail", extra: {businessId: text(after.businessId), invoiceId}});
+    if (payload) payload.sourceRequiredFields = {balanceDue: 0};
     return createOnly(db, emailId("business_invoice_paid", invoiceId), payload);
   }
 
@@ -163,11 +175,12 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       (after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt)) {
     const label = decision === "more_information_requested" ? "needs more information" : decision;
     const decisionKey = after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt;
+    const decisionId = timestampKey(decisionKey);
     const payload = record({to: after.email, subject: "Circum Rider application update",
       body: `Your Circum Rider application ${label}. Open the Rider app to view the next steps.`,
       eventType: "rider_application_decision", collection: "riderProfiles", sourceId: riderId,
-      required: decision, recipientField: "email", extra: {recipientId: riderId, decisionKey: String(decisionKey.seconds || decisionKey._seconds || decisionKey)}});
-    return createOnly(db, emailId("rider_application", riderId, decision, decisionKey.seconds || decisionKey._seconds || decisionKey), payload);
+      required: decision, recipientField: "email", extra: {recipientId: riderId, decisionKey: decisionId}});
+    return createOnly(db, emailId("rider_application", riderId, decision, decisionId), payload);
   }
 
   const pickupId = asId(path, "prescriptionPickups");
