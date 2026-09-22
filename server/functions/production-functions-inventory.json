@@ -317,6 +317,11 @@
     {
       "name": "updateGiftProcurement",
       "category": "INTENTIONALLY_LEGACY"
+    },
+    {
+      "name": "onGiftEmailNotificationCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-transactional-email"
     }
   ],
   "sourceNotDeployed": [
@@ -364,11 +369,6 @@
       "name": "onDeliveryCreated",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-delivery-created-events"
-    },
-    {
-      "name": "onGiftEmailNotificationCreated",
-      "category": "APPROVED_SOURCE_DEPLOYMENT",
-      "owner": "circum-transactional-email"
     },
     {
       "name": "reconcilePendingSenderCancellations",
