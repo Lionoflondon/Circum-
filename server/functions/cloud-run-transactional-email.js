@@ -6,8 +6,10 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {decodeEventarcPayload} = require("./cloud-run-notification-events");
 const {normalizeEmail} = require("./email-queue");
+const emailPublishers = require("./transactional-email-publishers");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
+const ACCEPTED_EVENT_TYPES = new Set([EVENT_TYPE, emailPublishers.UPDATED]);
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -97,7 +99,8 @@ function sourceDescriptor(record = {}) {
 }
 
 function sourceState(data = {}) {
-  return [data.status, data.state, data.deliveryStatus, data.giftStatus, data.lifecycleStatus]
+  return [data.status, data.state, data.deliveryStatus, data.giftStatus, data.lifecycleStatus,
+    data.paymentStatus, data.paymentState, data.settlementStatus, data.cancellationSettlementStatus]
       .map((value) => text(value).toLowerCase())
       .filter(Boolean);
 }
@@ -111,7 +114,27 @@ async function revalidateSource(db, record) {
   if (required && !sourceState(snapshot.data() || {}).includes(required)) {
     return {status: "suppressed", reason: "source_state_changed"};
   }
-  return {status: "valid", source: snapshot.data() || {}};
+  const sourceData = snapshot.data() || {};
+  if (record.eventType === "referral_award_finalized") {
+    const [inviter, referred] = await Promise.all([
+      db.collection("walletTransactions").doc(`referral_reward_${source.id}_referrer`).get(),
+      db.collection("walletTransactions").doc(`referral_reward_${source.id}_referred`).get(),
+    ]);
+    if (!inviter.exists || !referred.exists ||
+        text(inviter.data().status).toLowerCase() !== "completed" ||
+        text(referred.data().status).toLowerCase() !== "completed") {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
+  const recipientField = text(record.sourceRecipientField);
+  if (recipientField) {
+    const authoritativeRecipient = normalizeEmail(sourceData[recipientField]);
+    const queuedRecipient = normalizeEmail(record.to || record.recipientEmail);
+    if (!authoritativeRecipient || authoritativeRecipient !== queuedRecipient) {
+      return {status: "suppressed", reason: "source_recipient_changed"};
+    }
+  }
+  return {status: "valid", source: sourceData};
 }
 
 function recipientFor(record) {
@@ -163,7 +186,10 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
 
 async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, nowMs = Date.now(), apiKey, from}) {
   const claim = await claimEmail({db, emailId, eventId, nowMs});
-  if (["duplicate", "missing", "deferred", "failed"].includes(claim.status)) return claim;
+  if (claim.status === "deferred") {
+    throw Object.assign(new Error("email_retry_deferred"), {statusCode: 503});
+  }
+  if (["duplicate", "missing", "failed"].includes(claim.status)) return claim;
   if (claim.status === "busy") throw Object.assign(new Error("email_already_processing"), {statusCode: 503});
   const ref = claimRef(db, emailId);
   const snapshot = await ref.get();
@@ -196,14 +222,14 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     const maxAttempts = Number(claim.maxAttempts || DEFAULT_MAX_ATTEMPTS);
     const terminal = !retryable || attempt >= maxAttempts;
     await updateQueue(db, emailId, {
-      status: terminal ? "suppressed" : "retryable_failed",
+      status: terminal ? "failed" : "retryable_failed",
       failureReason: text(error && (error.providerCode || error.message)) || "email_send_failed",
       nextAttemptAt: terminal ? null : Timestamp.fromMillis(nowMs + RETRY_BACKOFF_MS[Math.min(attempt - 1, RETRY_BACKOFF_MS.length - 1)]),
       leaseOwner: null,
       leaseExpiresAt: Timestamp.fromMillis(nowMs),
     });
     if (retryable && !terminal) throw Object.assign(error, {statusCode: 503});
-    return {status: terminal ? "suppressed" : "failed", reason: text(error && error.message)};
+    return {status: terminal ? "failed" : "retryable_failed", reason: text(error && error.message)};
   }
 }
 
@@ -232,7 +258,8 @@ function createServer(options = {}) {
       });
     }
     if (req.method !== "POST" || req.url !== "/") return json(res, 404, {error: "not_found"});
-    if (text(req.headers["ce-type"]) !== EVENT_TYPE) return json(res, 400, {error: "invalid_event_type"});
+    const eventType = text(req.headers["ce-type"]);
+    if (!ACCEPTED_EVENT_TYPES.has(eventType)) return json(res, 400, {error: "invalid_event_type"});
     const eventId = text(req.headers["ce-id"]);
     if (!eventId || eventId.length > 256) return json(res, 400, {error: "invalid_event_id"});
     let size = 0;
@@ -250,10 +277,11 @@ function createServer(options = {}) {
         } catch (error) {
           throw Object.assign(error, {statusCode: Number(error.statusCode) || 400});
         }
-        const emailId = queueEmailIdFromName(decoded.documentName || req.headers["ce-subject"]);
-        if (!emailId) return json(res, 400, {error: "invalid_email_queue_document"});
         if (!db) db = dbFactory();
-        const result = await processRecord({db, emailId, eventId});
+        const emailId = queueEmailIdFromName(decoded.documentName || req.headers["ce-subject"]);
+        const result = emailId && eventType === EVENT_TYPE ?
+          await processRecord({db, emailId, eventId}) :
+          await emailPublishers.publishFromEvent({db, eventType, eventId, decoded});
         return json(res, 200, {ok: true, ...result});
       } catch (error) {
         console.error("transactional_email_failed", {eventId, reason: text(error && error.message) || "unknown"});
@@ -267,6 +295,7 @@ if (require.main === module) createServer().listen(Number(process.env.PORT || 80
 
 module.exports = {
   EVENT_TYPE,
+  ACCEPTED_EVENT_TYPES,
   CLAIM_LEASE_MS,
   queueEmailIdFromName,
   sourceDescriptor,

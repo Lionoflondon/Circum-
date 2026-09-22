@@ -26,6 +26,11 @@ function fakeDb(initial = {}) {
       const key = `${collection}/${id}`;
       data.set(key, options.merge ? {...(data.get(key) || {}), ...value} : {...value});
     },
+    create: async (value) => {
+      const key = `${collection}/${id}`;
+      if (data.has(key)) throw Object.assign(new Error("Already exists"), {code: 6});
+      data.set(key, {...value});
+    },
   });
   return {
     collection: (collection) => ({doc: (id) => refFor(collection, id)}),
@@ -147,6 +152,14 @@ test("429 is retryable and succeeds on the bounded retry", async () => {
   }), (error) => error.statusCode === 503);
   assert.equal(db.read("emailQueue", "email-1").status, "retryable_failed");
   const retryAt = db.read("emailQueue", "email-1").nextAttemptAt.toMillis();
+  await assert.rejects(processEmailQueueRecord({
+    db, emailId: "email-1", eventId: "early-retry", apiKey: "test-key", nowMs: retryAt - 1,
+    fetchImpl: async () => {
+      calls += 1;
+      return {ok: true, status: 200, json: async () => ({id: "too-early"})};
+    },
+  }), (error) => error.statusCode === 503);
+  assert.equal(calls, 0);
   const result = await processEmailQueueRecord({
     db, emailId: "email-1", eventId: "retry", apiKey: "test-key", nowMs: retryAt + 1,
     fetchImpl: async () => {
@@ -212,6 +225,32 @@ test("source-state revalidation suppresses a stale queue record", async () => {
   assert.equal(calls, 0);
 });
 
+test("recipient is revalidated against the current authoritative source before provider call", async () => {
+  const db = fakeDb({
+    "emailQueue/email-1": record({sourceCollection: "businessInvoices", sourceDocumentId: "invoice-1", sourceRequiredStatus: "paid", sourceRecipientField: "billingEmail"}),
+    "businessInvoices/invoice-1": {status: "paid", billingEmail: "changed@example.test"},
+  });
+  let calls = 0;
+  assert.deepEqual(await processEmailQueueRecord({
+    db, emailId: "email-1", eventId: "recipient-change", apiKey: "test-key",
+    fetchImpl: async () => {
+      calls += 1;
+      return {ok: true, status: 200, json: async () => ({id: "unexpected"})};
+    },
+  }), {status: "suppressed", reason: "source_recipient_changed"});
+  assert.equal(calls, 0);
+});
+
+test("permanent provider rejection ends as failed, not suppressed", async () => {
+  const db = fakeDb({"emailQueue/email-1": record()});
+  const result = await processEmailQueueRecord({
+    db, emailId: "email-1", eventId: "permanent-provider", apiKey: "test-key",
+    fetchImpl: async () => ({ok: false, status: 400, json: async () => ({name: "invalid_parameter"})}),
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(db.read("emailQueue", "email-1").status, "failed");
+});
+
 test("malformed Eventarc payload is rejected and health exposes only safe booleans", async () => {
   const server = createServer({processRecord: async () => ({status: "sent"})});
   server.listen(0, "127.0.0.1");
@@ -264,4 +303,33 @@ test("Eventarc Firestore create is handed to the single queue processor", async 
     server.close();
     await once(server, "close");
   }
+});
+
+test("Eventarc authoritative invoice update creates one queue item without invoking the provider", async () => {
+  const name = "projects/circum-2797c/databases/(default)/documents/businessInvoices/invoice-2";
+  const payload = DocumentEventData.encode({
+    oldValue: {name, fields: {status: {stringValue: "partially_paid"}}},
+    value: {name, fields: {
+      status: {stringValue: "paid"},
+      balanceDue: {doubleValue: 0},
+      invoiceNumber: {stringValue: "INV-2"},
+      businessId: {stringValue: "business-2"},
+      billingEmail: {stringValue: "billing@example.test"},
+    }},
+    updateMask: {paths: ["status", "balanceDue"]},
+  }).finish();
+  const body = Buffer.from(JSON.stringify({message: {data: Buffer.from(payload).toString("base64")}}));
+  const db = fakeDb();
+  const server = createServer({dbFactory: () => db});
+  server.listen(0);
+  await once(server, "listening");
+  const address = server.address();
+  const response = await fetch(`http://127.0.0.1:${address.port}/`, {
+    method: "POST",
+    headers: {"ce-type": "google.cloud.firestore.document.v1.updated", "ce-id": "invoice-event-1"},
+    body,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(db.read("emailQueue", "business_invoice_paid_invoice-2").to, "billing@example.test");
+  server.close();
 });

@@ -23,19 +23,35 @@ gcloud run deploy circum-transactional-email \
 
 Before production Eventarc, verify the service is READY, has 100% traffic on the new revision, returns `/health` only through an authenticated request, reports the merged source SHA, and passes the fixture certificate in `cloud-run-transactional-email.test.js`.
 
-The production trigger is created only after that gate:
+The production queue trigger is created only after the consumer fixture gate. Publisher source triggers below are created only after the publisher PR is merged and the new consumer revision is ready. All triggers target the same service and the same `emailQueue`; there is still exactly one sender.
 
 ```text
 gcloud eventarc triggers create circum-transactional-emailqueue-v1 \
-  --project=circum-2797c --location=us-central1 \
+  --project=circum-2797c --location=nam5 \
   --event-filters=type=google.cloud.firestore.document.v1.created \
   --event-filters=database='(default)' \
-  --event-filters-path-pattern="document=projects/circum-2797c/databases/(default)/documents/emailQueue/{emailId}" \
+  --event-filters-path-pattern="document=emailQueue/{emailId}" \
   --destination-run-service=circum-transactional-email \
   --destination-run-region=us-central1 \
   --destination-run-path=/ \
-  --service-account=circum-transactional-email-eventarc@circum-2797c.iam.gserviceaccount.com
+  --service-account=circum-tx-email-events@circum-2797c.iam.gserviceaccount.com
 ```
+
+The merged publisher implementation requires these additional exact Firestore source filters, all in Eventarc location `nam5`, using event type `google.cloud.firestore.document.v1.created` or `.updated` as indicated, database `(default)`, destination service `circum-transactional-email` in `us-central1`, path `/`, and the same Eventarc service account:
+
+| Event type | Document filter | Trigger name |
+|---|---|---|
+| created | `deliveryRequests/{deliveryId}` | `circum-tx-email-delivery-created-v1` |
+| updated | `deliveryRequests/{deliveryId}` | `circum-tx-email-delivery-updated-v1` |
+| updated | `deliveryCancellationSettlements/{deliveryId}` | `circum-tx-email-cancellation-updated-v1` |
+| updated | `businessInvoices/{invoiceId}` | `circum-tx-email-business-invoice-updated-v1` |
+| created | `walletTransactions/{transactionId}` | `circum-tx-email-wallet-created-v1` |
+| updated | `referrals/{referralId}` | `circum-tx-email-referral-updated-v1` |
+| updated | `riderProfiles/{riderId}` | `circum-tx-email-rider-decision-updated-v1` |
+| updated | `prescriptionPickups/{pickupId}` | `circum-tx-email-healthplus-updated-v1` |
+| updated | `giftRequests/{giftId}` | `circum-tx-email-gift-updated-v1` |
+
+Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 
 The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on `RESEND_API_KEY` and `GIFTS_EMAIL_FROM`; secret values are never printed or stored in source.
 

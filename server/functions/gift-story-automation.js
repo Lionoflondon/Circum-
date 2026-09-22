@@ -427,7 +427,7 @@ async function findGift(db, delivery) {
   return query.empty ? null : query.docs[0];
 }
 
-async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = ""}) {
+async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
   if (!email || !email.includes("@")) return false;
   const sender = role === "sender";
   // Retries update one logical email identity. They must not create a second
@@ -446,6 +446,8 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
     giftRequestId: giftId,
     sourceCollection: "giftRequests",
     sourceDocumentId: giftId,
+    sourceRequiredStatus: "unlocked",
+    ...(sourceRecipientField ? {sourceRecipientField} : {}),
     status: "queued",
     maxAttempts: 5,
     updatedAt: FieldValue.serverTimestamp(),
@@ -719,8 +721,9 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
   const recipientPhoneChannel = chooseRecipientLinkChannel(gift);
   const retryId = retryEmails ? `${Date.now()}` : "";
   const emailResults = await Promise.allSettled([
-    queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId)}),
-    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel}),
+    queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
+    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
+      sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
     queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),
     queueSenderStoryAppNotification(db, {giftId, userId: text(gift.senderId || gift.userId), token, retryId}),
   ]);
