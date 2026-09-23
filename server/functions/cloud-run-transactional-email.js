@@ -107,6 +107,11 @@ function sourceState(data = {}) {
 }
 
 async function revalidateSource(db, record) {
+  const eventType = text(record.eventType || record.type).toLowerCase();
+  if (eventType === "gift_story_ready" &&
+      (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField))) {
+    return {status: "suppressed", reason: "source_metadata_missing"};
+  }
   const source = sourceDescriptor(record);
   if (!source) return {status: "valid"};
   const snapshot = await db.collection(source.collection).doc(source.id).get();

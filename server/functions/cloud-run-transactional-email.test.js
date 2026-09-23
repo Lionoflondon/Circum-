@@ -225,6 +225,34 @@ test("source-state revalidation suppresses a stale queue record", async () => {
   assert.equal(calls, 0);
 });
 
+test("legacy Gift Story email without source and recipient revalidation is suppressed", async () => {
+  const db = fakeDb({
+    "emailQueue/legacy-gift-story": record({
+      notificationId: "",
+      type: "gift_story_ready",
+      eventType: "gift_story_ready",
+      giftRequestId: "gift-legacy",
+      sourceCollection: undefined,
+      sourceDocumentId: undefined,
+      sourceRequiredStatus: undefined,
+      sourceRecipientField: undefined,
+    }),
+    "giftRequests/gift-legacy": {status: "unlocked", senderEmail: "approved@example.com"},
+  });
+  let calls = 0;
+  assert.deepEqual(await processEmailQueueRecord({
+    db,
+    emailId: "legacy-gift-story",
+    eventId: "legacy-gift-story-replay",
+    apiKey: "test-key",
+    fetchImpl: async () => {
+      calls += 1;
+      return {ok: true, status: 200, json: async () => ({id: "unexpected"})};
+    },
+  }), {status: "suppressed", reason: "source_metadata_missing"});
+  assert.equal(calls, 0);
+});
+
 test("recipient is revalidated against the current authoritative source before provider call", async () => {
   const db = fakeDb({
     "emailQueue/email-1": record({sourceCollection: "businessInvoices", sourceDocumentId: "invoice-1", sourceRequiredStatus: "paid", sourceRecipientField: "billingEmail"}),
