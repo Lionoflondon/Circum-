@@ -27,7 +27,6 @@ tests or protected CI pass.
 4. Prove browser App Check on the public site, including signed-out withdrawal.
    Require both backend `NEWSLETTER_SIGNUP_ENABLED=true` and the actual
    `NEWSLETTER_PRIVACY_POLICY_VERSION`. Only then build the public website with
-   the explicit `enable_newsletter=true` workflow input, which passes
    `--dart-define=NEWSLETTER_SIGNUP_ENABLED=true`. Without that build flag the
    homepage form/footer entry are hidden; preference/withdrawal routes remain.
 5. Approve retention and enable the appropriate Firestore TTL policies. Rate
