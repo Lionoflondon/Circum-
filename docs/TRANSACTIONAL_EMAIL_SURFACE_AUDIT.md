@@ -11,7 +11,7 @@ This audit is derived from canonical `342db9d` and is intentionally separate fro
 | Claim | Queue-document lease plus terminal status and Resend idempotency key equal to the deterministic queue id |
 | Validation | Recipient normalization/suppression and authoritative source-document revalidation before provider call |
 | Provider | Resend, with `RESEND_API_KEY` and `GIFTS_EMAIL_FROM` secret bindings; values never logged |
-| Marketing | Newsletter uses the Resend audience adapter; campaign sending remains separate and inactive |
+| Marketing | Newsletter/Mailchimp remains separate and dormant; no marketing send is activated |
 
 ## Current source map
 
@@ -28,7 +28,7 @@ This audit is derived from canonical `342db9d` and is intentionally separate fro
 | Referral award | Referral status `roth_awarded` and both role-specific reward ledger entries completed | Referral `referrerEmail` and `referredEmail` | Cloud Run/Eventarc publisher on referral update | `referral_award_finalized`, `referral_award_{referralId}_{role}` | No email until both ledger writes are final |
 | Rider application decision | `riderProfiles.approvalStatus` transitions to approved, rejected, or more information requested through Rider authority | Canonical Rider profile email | Cloud Run/Eventarc publisher on profile update | `rider_application_decision`, `rider_application_{riderId}_{decision}_{decisionTimestamp}` | Privacy-safe status-only message; no documents/admin notes |
 | Auth | Firebase Authentication authority | Firebase Auth email | Firebase Auth-managed transport | Not `emailQueue` | Remains separate |
-| Newsletter/marketing | Newsletter provider/audience authority | Marketing subscriber | Resend audience adapter, independently gated | Not `emailQueue` | Website signup gated separately; campaign sending inactive |
+| Newsletter/marketing | Newsletter provider/audience authority | Marketing subscriber | Mailchimp/newsletter adapter, independently gated | Not `emailQueue` | Dormant; not activated |
 
 ## One-owner rule
 
