@@ -32,7 +32,7 @@ test("gift delivery publisher uses the canonical emailQueue identity", async () 
   const db = {
     collection: (name) => ({
       doc: (id) => ({
-        set: async (value) => writes.push({name, id, value}),
+        create: async (value) => writes.push({name, id, value}),
         get: async () => ({exists: false}),
       }),
     }),

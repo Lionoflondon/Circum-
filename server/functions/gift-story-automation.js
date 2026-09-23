@@ -4,6 +4,7 @@
 const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {createEmailQueueRecord} = require("./email-queue");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
@@ -427,14 +428,15 @@ async function findGift(db, delivery) {
   return query.empty ? null : query.docs[0];
 }
 
-async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = ""}) {
+async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
   if (!email || !email.includes("@")) return false;
   const sender = role === "sender";
-  // Retries update one logical email identity. They must not create a second
-  // provider idempotency key or allow a manual retry to send a duplicate.
-  const ref = db.collection("emailQueue").doc(`gift_story_${giftId}_${role}`);
+  // One logical story message is created once; publisher replay never resets a
+  // sent/terminal queue item to queued.
+  const notificationId = `gift_story_${giftId}_${role}`;
   const secureStoryUrl = storyLink(token);
-  await ref.set({
+  await createEmailQueueRecord(db, notificationId, {
+    notificationId,
     to: email,
     subject: sender ? "Your Circum Gift Story is ready" : "You have received a Circum Gift Story",
     body: sender ?
@@ -446,11 +448,13 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
     giftRequestId: giftId,
     sourceCollection: "giftRequests",
     sourceDocumentId: giftId,
+    sourceRequiredStatus: "unlocked",
+    ...(sourceRecipientField ? {sourceRecipientField} : {}),
     status: "queued",
     maxAttempts: 5,
-    updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+    updatedAt: FieldValue.serverTimestamp(),
+  }, db.collection("emailQueue"));
   await writeStoryNotification(db, {
     notificationId: storyNotificationId(giftId, `email_${role}`, retryId),
     giftStoryId: giftId,
@@ -719,8 +723,9 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
   const recipientPhoneChannel = chooseRecipientLinkChannel(gift);
   const retryId = retryEmails ? `${Date.now()}` : "";
   const emailResults = await Promise.allSettled([
-    queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId)}),
-    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel}),
+    queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
+    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
+      sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
     queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),
     queueSenderStoryAppNotification(db, {giftId, userId: text(gift.senderId || gift.userId), token, retryId}),
   ]);
