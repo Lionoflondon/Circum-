@@ -26815,7 +26815,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'How we obtain personal data',
-            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Mailchimp; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
+            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
           ),
           _ComplianceSection(
             'Why we use data and lawful bases',
@@ -26850,8 +26850,8 @@ class _PrivacyPolicyPage extends StatelessWidget {
             'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
           ),
           _ComplianceSection(
-            'Newsletter and Mailchimp',
-            'If you choose to subscribe, we process your email address, selected topics, signup source, policy and consent version, timestamps and preference or unsubscribe events. We use Mailchimp to manage subscribers and send selected marketing emails. Consent is a clear positive choice: we do not use pre-ticked boxes or make marketing consent a condition of the delivery service. Every marketing email identifies Circum and provides a simple unsubscribe route. We keep the minimum suppression information needed to honour your choice. Unsubscribing from marketing does not stop essential service messages.',
+            'Newsletter and Resend',
+            'If you choose to subscribe, we process your email address, selected topics, signup source, policy and consent version, timestamps and preference or unsubscribe events. We use Resend to manage newsletter subscriber records, selected topics and unsubscribe preferences. Newsletter campaigns are managed separately and are sent only to subscribers with the relevant active consent. Consent is a clear positive choice: we do not use pre-ticked boxes or make marketing consent a condition of the delivery service. Every marketing email identifies Circum and provides a simple unsubscribe route. We keep the minimum suppression information needed to honour your choice. Unsubscribing from marketing does not stop essential service messages.',
           ),
           _ComplianceSection(
             'Cookies and similar technologies',
@@ -26859,7 +26859,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Who we share data with',
-            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Mailchimp; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
           ),
           _ComplianceSection(
             'International transfers',
