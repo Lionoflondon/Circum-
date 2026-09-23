@@ -8,6 +8,7 @@ source "$ROOT_DIR/scripts/firebase_tools.sh"
 OUTPUT_DIR="$ROOT_DIR/build/public_web"
 WEB_RECAPTCHA_SITE_KEY="${PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:-}"
 PUBLIC_WEB_STATIC_MAPS_API_KEY="${PUBLIC_WEB_STATIC_MAPS_API_KEY:-}"
+NEWSLETTER_SIGNUP_ENABLED="${NEWSLETTER_SIGNUP_ENABLED:-false}"
 
 if [[ -z "$WEB_RECAPTCHA_SITE_KEY" ]]; then
   echo "Missing PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY for Public Web App Check." >&2
@@ -16,6 +17,11 @@ fi
 
 if [[ -z "$PUBLIC_WEB_STATIC_MAPS_API_KEY" ]]; then
   echo "Missing PUBLIC_WEB_STATIC_MAPS_API_KEY for public web map images." >&2
+  exit 1
+fi
+
+if [[ "$NEWSLETTER_SIGNUP_ENABLED" != "true" && "$NEWSLETTER_SIGNUP_ENABLED" != "false" ]]; then
+  echo "NEWSLETTER_SIGNUP_ENABLED must be true or false." >&2
   exit 1
 fi
 
@@ -31,6 +37,7 @@ rm -rf "$OUTPUT_DIR"
   --no-wasm-dry-run \
   --dart-define=PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
   --dart-define=GOOGLE_STATIC_MAPS_API_KEY="$PUBLIC_WEB_STATIC_MAPS_API_KEY" \
+  --dart-define=NEWSLETTER_SIGNUP_ENABLED="$NEWSLETTER_SIGNUP_ENABLED" \
   --target=lib/main_public_web.dart \
   --output="$OUTPUT_DIR"
 node "$ROOT_DIR/scripts/finalize_web_artifact.js" website "$OUTPUT_DIR"
