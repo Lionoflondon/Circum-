@@ -2,21 +2,23 @@
 
 ## Status
 
-The implementation is dormant by default. This document is not production,
-delivery, legal-approval or recipient proof. Resend is the configured audience
-provider, but no campaign or signup is active. Do not activate merely because
-tests or protected CI pass.
+The Resend audience adapter and newsletter backend are deployed. The backend
+currently reports `signupEnabled: true`, but the public website form remains
+hidden until the approved website build is deployed with its explicit enable
+flag. This document is not recipient or campaign-delivery proof. Signup and
+marketing campaign sending are separate release states.
 
 ## Approval and activation prerequisites
 
-1. Approve and publish the amendment in `NEWSLETTER_PRIVACY_POLICY_AMENDMENT.md`,
-   including retention periods, processor details and the real policy version.
-2. Select/approve the marketing provider and its secret-management binding.
-   The Resend audience adapter uses the dedicated `RESEND_NEWSLETTER_API_KEY`
-   Secret Manager binding to create/update contacts and apply unsubscribe
-   suppression. It does not send campaign email. The existing Gifts sending key
-   is separate and is not reused. If the binding is absent, the adapter returns
-   `pending_configuration`; no marketing email is currently sent.
+1. Publish the updated website Privacy Policy naming Resend, Version 2.0,
+   effective 19 September 2026, as approved by the owner. Retain the existing
+   policy's retention and international-transfer provisions.
+2. Resend is the approved audience provider and the dedicated
+   `RESEND_NEWSLETTER_API_KEY` Secret Manager binding exists. The audience
+   adapter upserts contacts and applies unsubscribe suppression; it does not
+   send campaign emails. The existing Gifts sending key is separate and is
+   not reused. If the binding is absent, the adapter returns
+   `pending_configuration`.
 3. Adapter requirements: bounded timeouts; revision-aware, idempotent audience
    updates; suppression precedence; category-specific consent checks and a fresh
    local suppression check before every send. Deliver HTTPS preference/withdrawal
@@ -29,10 +31,10 @@ tests or protected CI pass.
    `NEWSLETTER_PRIVACY_POLICY_VERSION`. Only then build the public website with
    `--dart-define=NEWSLETTER_SIGNUP_ENABLED=true`. Without that build flag the
    homepage form/footer entry are hidden; preference/withdrawal routes remain.
-5. Approve retention and enable the appropriate Firestore TTL policies. Rate
-   records contain `expiresAt` (24 hours); writing that field alone does not
-   enable deletion. Consent/suppression and analytics retention must follow the
-   approved policy, not an invented period.
+5. The signup rate-limit TTL uses the code-defined 24-hour `expiresAt` field.
+   Confirm its Firestore TTL policy reaches `ACTIVE` before exposing signup.
+   Consent/suppression and analytics retention follow the published policy;
+   do not invent additional retention periods.
 
 ## Exact prospective release boundary
 
@@ -65,11 +67,13 @@ from the exact protected SHA and deploy only `circum-newsletter` with zero
 minimum instances and three maximum instances. The service may accept
 unauthenticated network ingress because application access is gated by verified
 App Check (and Firebase Auth for Admin); do not bypass those checks. Health must
-report the exact source SHA and `signupEnabled: false` until approval.
+report the exact source SHA. Current production health reports source
+`6340e407383a02d91c8da03cbfbd7cc046137e1b` and `signupEnabled: true`; the
+public signup remains hidden until the website activation workflow is run.
 
-Separately review/publish the newsletter rule additions and the exact-SHA public
-website (`hosting:public`) and Admin (`hosting:admin`) builds. Never include
-`hosting:app`, Rider, Stripe/payments, dispatch, delivery or unrelated functions.
+Review/publish only the exact-SHA public website (`hosting:public`) build for
+this signup activation. Admin, app, Rider, Stripe/payments, dispatch, delivery
+and unrelated functions remain outside scope. Never include `hosting:app`.
 Firestore rules are a project-wide artifact: verify the complete current live
 rules diff before publishing, and preserve unrelated changes.
 
