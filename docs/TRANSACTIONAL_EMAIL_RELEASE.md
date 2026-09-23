@@ -31,6 +31,7 @@ gcloud eventarc triggers create circum-transactional-emailqueue-v1 \
   --event-filters=type=google.cloud.firestore.document.v1.created \
   --event-filters=database='(default)' \
   --event-filters-path-pattern="document=emailQueue/{emailId}" \
+  --event-data-content-type=application/protobuf \
   --destination-run-service=circum-transactional-email \
   --destination-run-region=us-central1 \
   --destination-run-path=/ \
@@ -38,6 +39,8 @@ gcloud eventarc triggers create circum-transactional-emailqueue-v1 \
 ```
 
 The merged publisher implementation requires these additional exact Firestore source filters, all in Eventarc location `nam5`, using event type `google.cloud.firestore.document.v1.created` or `.updated` as indicated, database `(default)`, destination service `circum-transactional-email` in `us-central1`, path `/`, and the same Eventarc service account:
+
+Set `--event-data-content-type=application/protobuf` on every Firestore trigger, including the source triggers below.
 
 | Event type | Document filter | Trigger name |
 |---|---|---|
