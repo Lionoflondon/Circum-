@@ -2,16 +2,15 @@
 
 ## Status
 
-The implementation defaults to dormant. The approved public policy is Version
-2.0, effective 19 September 2026. Resend is the configured audience provider;
-campaign sending remains separate and inactive. Signup activation is a distinct
-protected backend and public-site release.
+The implementation is dormant by default. This document is not production,
+delivery, legal-approval or recipient proof. Resend is the configured audience
+provider, but no campaign or signup is active. Do not activate merely because
+tests or protected CI pass.
 
 ## Approval and activation prerequisites
 
-1. The published policy is Version 2.0, effective 19 September 2026. Keep the
-   proposed amendment as the implementation reference; do not invent a second
-   policy version for the Resend handoff.
+1. Approve and publish the amendment in `NEWSLETTER_PRIVACY_POLICY_AMENDMENT.md`,
+   including retention periods, processor details and the real policy version.
 2. Select/approve the marketing provider and its secret-management binding.
    The Resend audience adapter uses the dedicated `RESEND_NEWSLETTER_API_KEY`
    Secret Manager binding to create/update contacts and apply unsubscribe
@@ -29,7 +28,7 @@ protected backend and public-site release.
    Require both backend `NEWSLETTER_SIGNUP_ENABLED=true` and the actual
    `NEWSLETTER_PRIVACY_POLICY_VERSION`. Only then build the public website with
    the explicit `enable_newsletter=true` workflow input, which passes
-   `--dart-define=NEWSLETTER_SIGNUP_ENABLED=true`. Without that input the
+   `--dart-define=NEWSLETTER_SIGNUP_ENABLED=true`. Without that build flag the
    homepage form/footer entry are hidden; preference/withdrawal routes remain.
 5. Approve retention and enable the appropriate Firestore TTL policies. Rate
    records contain `expiresAt` (24 hours); writing that field alone does not
