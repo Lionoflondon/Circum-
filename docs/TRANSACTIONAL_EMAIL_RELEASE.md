@@ -1,6 +1,6 @@
 # Transactional email release boundary
 
-This is the narrow deployment record for the canonical `emailQueue` consumer. It does not authorize a broad Functions deploy, a newsletter send, or a financial test mutation.
+This is the narrow deployment record for the canonical `emailQueue` consumer and the authoritative Sender-account welcome publisher. It does not authorize a broad Functions deploy, a newsletter send, or a financial test mutation.
 
 ## Build and deploy scope
 
@@ -69,6 +69,18 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 
 The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on the configured secrets. The current production deployment has `RESEND_API_KEY` and `GIFTS_EMAIL_FROM`; add `BUSINESS_EMAIL_FROM`, `HEALTH_EMAIL_FROM`, `INFO_EMAIL_FROM`, or `NOTIFICATIONS_EMAIL_FROM` only after that identity is verified in Resend. Secret values are never printed or stored in source.
+
+## Sender welcome boundary
+
+The Sender-account bootstrap and profile-update entrypoints, together with the pending-wallet repair path, call the authoritative Starter Roth grant first. Only after the grant is marked `granted` does the account path create `sender_welcome_{uid}` in `emailQueue`. The queue identity is create-only and is revalidated against `users/{uid}` plus the exact Starter Roth transaction before Resend. A wallet transaction replay for the Starter Roth grant is explicitly ignored by the generic Roth publisher, so one account cannot receive both a welcome and a generic Roth activity email.
+
+Account creation and the Starter Roth grant do not depend on the email provider. Missing, invalid, or suppressed email is recorded as a terminal queue/user state; queue-write failure records `welcomeEmailStatus=pending` for bootstrap repair. The retry path reuses the same queue identity and never creates another financial grant.
+
+The exact changed publisher owner is the existing `circum-account-bootstrap` Cloud Run service (plus its existing compatibility facade if the release system requires the facade source update). Deploy this owner only alongside `circum-transactional-email`; do not broad-deploy Functions or migrate healthy Gen 1 exports.
+
+## Corrective welcome send
+
+After protected merge, the new account-bootstrap and transactional-email revisions are fixture-certified, and live queue → claim → Resend persistence is healthy, use the authoritative existing Sender account for the explicitly authorized corrective send. Resolve the account by protected operator procedure, verify `starterRothGrantStatus=granted` and the existing `starterRothTransactionId`, and create only `sender_welcome_{uid}` with the new template. Do not create an account, write a ledger transaction, change balance, or reuse the old Roth activity queue identity. Repeating the operator action must return a create-only duplicate/no-op. Record only privacy-safe queue ID suffix, status, provider acceptance ID if policy permits, and the unchanged Roth transaction/balance evidence.
 
 ## Certification boundary
 
