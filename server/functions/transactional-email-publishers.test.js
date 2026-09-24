@@ -86,8 +86,20 @@ test("completed Roth ledger movement is the sole source of its queue email", asy
     status: "completed", walletType: "sender", userId: "u-1", userEmail: "roth@example.test",
   });
   const result = await publishFromEvent({db, ...input});
-  assert.equal(result.id, "roth_movement_completed_w-1");
+  assert.equal(result.id, "roth_activity_w-1");
   assert.equal(db.read("emailQueue", result.id).sourceCollection, "walletTransactions");
+});
+
+test("Starter Roth ledger creation does not create a second generic activity email", async () => {
+  const db = fakeDb();
+  const input = event("walletTransactions", "sender_welcome_roth_u-1", null, {
+    status: "completed", walletType: "sender", userId: "u-1", userEmail: "welcome@example.test",
+    metadata: {source: "sender_welcome_roth"},
+  });
+  assert.deepEqual(await publishFromEvent({db, ...input}), {
+    status: "ignored", reason: "starter_welcome_has_dedicated_email", eventId: input.eventId,
+  });
+  assert.equal(db.read("emailQueue", "roth_activity_sender_welcome_roth_u-1"), undefined);
 });
 
 test("referral award email waits for final referral and both authoritative ledger entries", async () => {

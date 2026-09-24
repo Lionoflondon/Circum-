@@ -73,10 +73,12 @@ test("transactional sender identity follows the activity family", async () => {
   assert.equal(senderCategoryForRecord({eventType: "business_invoice_paid"}), "business");
   assert.equal(senderCategoryForRecord({eventType: "health_plus_delivered"}), "health");
   assert.equal(senderCategoryForRecord({eventType: "roth_movement_completed"}), "info");
+  assert.equal(senderCategoryForRecord({eventType: "sender_welcome_ready"}), "info");
   assert.equal(fromForRecord({eventType: "gift_delivered"}, {}), "Circum Gifts <gifts@circumuk.com>");
   assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {}), "Circum <info@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "sender_welcome_ready"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {
     NOTIFICATIONS_EMAIL_FROM: "Circum Notifications <notifications@circumuk.com>",
   }), "Circum Notifications <notifications@circumuk.com>");
@@ -331,6 +333,44 @@ test("Rider decision uses approvalStatus as an authoritative source state", asyn
     fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "provider-rider"})}),
   });
   assert.equal(result.status, "sent");
+});
+
+test("welcome queue item revalidates the authoritative account and Starter Roth grant", async () => {
+  const db = fakeDb({
+    "emailQueue/sender_welcome_u-1": record({
+      notificationId: "sender_welcome_u-1",
+      eventType: "sender_welcome_ready",
+      senderCategory: "info",
+      sourceCollection: "users",
+      sourceDocumentId: "u-1",
+      sourceRequiredStatus: "active",
+      sourceRecipientField: "email",
+      sourceRequiredFields: {starterRothGrantStatus: "granted", starterRothTransactionId: "grant-u-1"},
+      to: "welcome@example.test",
+    }),
+    "users/u-1": {
+      status: "active", email: "welcome@example.test", starterRothGrantStatus: "granted",
+      starterRothTransactionId: "grant-u-1",
+    },
+  });
+  const result = await processEmailQueueRecord({
+    db, emailId: "sender_welcome_u-1", eventId: "welcome-event", apiKey: "test-key",
+    fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "provider-welcome"})}),
+  });
+  assert.equal(result.status, "sent");
+  const staleDb = fakeDb({
+    "emailQueue/sender_welcome_u-2": record({
+      notificationId: "sender_welcome_u-2", eventType: "sender_welcome_ready", sourceCollection: "users",
+      sourceDocumentId: "u-2", sourceRequiredStatus: "active", sourceRecipientField: "email",
+      sourceRequiredFields: {starterRothGrantStatus: "granted", starterRothTransactionId: "grant-u-2"},
+      to: "welcome@example.test",
+    }),
+    "users/u-2": {status: "active", email: "welcome@example.test", starterRothGrantStatus: "pending"},
+  });
+  assert.deepEqual(await processEmailQueueRecord({
+    db: staleDb, emailId: "sender_welcome_u-2", eventId: "welcome-stale", apiKey: "test-key",
+    fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "must-not-send"})}),
+  }), {status: "suppressed", reason: "source_state_changed"});
 });
 
 test("referral queue item revalidates both finalized role ledgers at send time", async () => {

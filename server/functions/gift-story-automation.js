@@ -9,6 +9,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
 const deviceTokenAuthority = require("./device-token-authority");
+const transactionalEmailTemplates = require("./transactional-email-templates");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -430,18 +431,23 @@ async function findGift(db, delivery) {
 
 async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
   if (!email || !email.includes("@")) return false;
-  const sender = role === "sender";
   // One logical story message is created once; publisher replay never resets a
   // sent/terminal queue item to queued.
   const notificationId = `gift_story_${giftId}_${role}`;
   const secureStoryUrl = storyLink(token);
+  const template = transactionalEmailTemplates.giftStory({role, storyUrl: secureStoryUrl});
   await createEmailQueueRecord(db, notificationId, {
     notificationId,
     to: email,
-    subject: sender ? "Your Circum Gift Story is ready" : "You have received a Circum Gift Story",
-    body: sender ?
-      `Hello,\n\nYour Circum Gift Story is ready.\n\nWatch your story:\n${secureStoryUrl}\n\nThis secure private link expires according to Gift Story policy.\n\nThoughtful gifting, delivered by Circum.\n\n— Circum` :
-      `Hello,\n\nYour Circum Gift Story is ready.\n\nView your secure story here:\n${secureStoryUrl}\n\nThis private link has been created just for you and expires according to Gift Story policy.\n\n— Circum`,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    preheader: template.preheader,
+    heading: template.heading,
+    ctaLabel: template.ctaLabel,
+    ctaUrl: template.ctaUrl,
+    templateId: template.templateId,
+    providerTags: template.providerTags,
     type: "gift_story_ready",
     eventType: "gift_story_ready",
     senderCategory: "gifts",

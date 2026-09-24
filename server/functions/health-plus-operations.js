@@ -4,6 +4,9 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {buildCustodyEvent, buildHealthPlusPlanFields} = require("./health-plus-core");
 const {createEmailQueueRecord} = require("./email-queue");
+const transactionalEmailTemplates = require("./transactional-email-templates");
+
+const text = (value) => `${value || ""}`.trim();
 
 const STATUS_EVENTS = {
   scheduled: ["booking_created", "Your Health+ collection has been scheduled.", "scheduled"],
@@ -51,11 +54,35 @@ async function queueHealthNotification(db, pickup, type, title, body) {
   };
   await db.collection("healthPlusNotifications").doc(notificationId).set(payload, {merge: true});
   if (pickup.email) {
+    const templateType = {
+      booking_created: "scheduled",
+      rider_assigned: "assigned",
+      en_route_to_collection: "en_route_pickup",
+      awaiting_collection: "awaiting_pharmacy_collection",
+      prescription_collected: "collected",
+      en_route_to_customer: "out_for_delivery",
+      delivered: "delivered",
+      prescription_not_ready: "prescription_not_ready",
+      customer_unavailable: "customer_unavailable",
+      escalated: "escalated",
+      rescheduled: "rescheduled",
+      override_completion: "override_completed",
+      reminder_24h: "reminder_24h",
+      reminder_2h: "reminder_2h",
+    }[type] || type;
+    const template = transactionalEmailTemplates.healthUpdate({type: templateType});
     await createEmailQueueRecord(db, notificationId, {
       notificationId,
       to: pickup.email,
-      subject: title,
-      text: body,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+      preheader: template.preheader,
+      heading: template.heading,
+      ctaLabel: template.ctaLabel,
+      ctaUrl: template.ctaUrl,
+      templateId: template.templateId,
+      providerTags: template.providerTags,
       status: "queued",
       eventType: `health_plus_${type}`,
       source: "health_plus",
@@ -63,6 +90,7 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       sourceCollection: "prescriptionPickups",
       sourceDocumentId: pickup.id,
       relatedEntityId: pickup.id,
+      sourceRequiredStatus: text(pickup.status || "scheduled"),
       maxAttempts: 5,
       createdAt: FieldValue.serverTimestamp(),
       sourceRecipientField: "email",

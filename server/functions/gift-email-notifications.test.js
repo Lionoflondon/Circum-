@@ -13,7 +13,7 @@ test("delivery email is clear and excludes private delivery details", () => {
       deliveredAt: "2026-09-22T13:00:00.000Z",
     },
   });
-  assert.equal(message.subject, "Your Circum gift was delivered");
+  assert.equal(message.subject, "Your CIRCUM gift was delivered");
   assert.match(message.text, /Alex & Sam/);
   assert.match(message.text, /Gift reference: gift-123/);
   assert.doesNotMatch(message.text, /Private Street/);

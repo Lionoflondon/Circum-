@@ -26,6 +26,7 @@ const {
 } = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
+const senderWelcomeEmail = require("./sender-welcome-email");
 
 const SENDER_WELCOME_ROTH_AMOUNT = 5;
 const SENDER_WELCOME_ROTH_REASON = "Welcome Roth credit";
@@ -128,19 +129,34 @@ async function repairPendingSenderWelcomeRoth(context, source) {
   const userRef = db.collection("users").doc(context.auth.uid);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() || {} : {};
-  if (!hasPendingSenderWelcomeRoth(user)) return null;
-  const grant = await grantSenderWelcomeRoth({
+  const grantPending = hasPendingSenderWelcomeRoth(user);
+  const welcomePending = `${user.welcomeEmailStatus || ""}`.trim().toLowerCase() === "pending";
+  if (!grantPending && !welcomePending) return null;
+  const grant = grantPending ? await grantSenderWelcomeRoth({
     uid: context.auth.uid,
     email: context.auth.token.email,
     source,
-  });
-  await userRef.set({
-    starterRothGrantStatus: "granted",
-    starterRothGrantedAt: FieldValue.serverTimestamp(),
-    starterRothAmount: SENDER_WELCOME_ROTH_AMOUNT,
+  }) : {
+    amount: SENDER_WELCOME_ROTH_AMOUNT,
+    transactionId: user.starterRothTransactionId,
+  };
+  if (grantPending) {
+    await userRef.set({
+      starterRothGrantStatus: "granted",
+      starterRothGrantedAt: FieldValue.serverTimestamp(),
+      starterRothAmount: SENDER_WELCOME_ROTH_AMOUNT,
+      starterRothTransactionId: grant.transactionId,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+  await senderWelcomeEmail.queueSenderWelcomeEmail({
+    db,
+    uid: context.auth.uid,
+    email: context.auth.token.email,
+    displayName: user.displayName || user.name || user.firstName || context.auth.token.name,
     starterRothTransactionId: grant.transactionId,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+    source,
+  });
   return grant;
 }
 
