@@ -76,5 +76,7 @@ test("welcome copy explains the account, Starter Roth and next step without raw 
   assert.match(copy.text, /eligible Circum services and deliveries/);
   assert.match(copy.text, /Explore Circum/);
   assert.match(copy.text, /The Circum team/);
+  assert.match(copy.html, /circum-welcome\.png/);
+  assert.match(copy.html, /alt="Welcome to Circum"/);
   assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
 });

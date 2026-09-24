@@ -2,6 +2,7 @@
 "use strict";
 
 const APP_URL = "https://circumuk.com";
+const WELCOME_IMAGE_URL = "https://circumuk.com/assets/assets/images/circum-welcome.png";
 const SUPPORT_TEXT = "Need help? Reply to this email or contact Circum support from your account.";
 const FORBIDDEN_CUSTOMER_TOKENS = [
   "roth_movement_completed",
@@ -47,18 +48,20 @@ function money(value) {
   return Number.isFinite(amount) && amount >= 0 ? `£${amount.toFixed(2)}` : "";
 }
 
-function layout({preheader, heading, paragraphs, ctaLabel = "", ctaUrl = "", footer = SUPPORT_TEXT}) {
+function layout({preheader, heading, paragraphs, ctaLabel = "", ctaUrl = "", footer = SUPPORT_TEXT, imageUrl = ""}) {
   const safeUrl = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(ctaUrl)) ? text(ctaUrl) : "";
+  const safeImageUrl = /^https:\/\/circumuk\.com\/(?:assets\/)+[A-Za-z0-9._/-]+\.(?:png|jpg|jpeg|webp)$/.test(text(imageUrl)) ? text(imageUrl) : "";
+  const image = safeImageUrl ? `<p><img src="${escapeHtml(safeImageUrl)}" alt="Welcome to Circum" style="display:block;width:100%;max-width:560px;height:auto;border:0"></p>` : "";
   const htmlParagraphs = paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
   const cta = safeUrl ? `<p><a href="${escapeHtml(safeUrl)}" style="display:inline-block;background:#5b21b6;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none">${escapeHtml(ctaLabel || "Open Circum")}</a></p>` : "";
   const textBody = [heading, ...paragraphs, safeUrl ? `${ctaLabel || "Open Circum"}: ${safeUrl}` : "", footer]
       .filter(Boolean).join("\n\n");
-  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17151f;line-height:1.6"><span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</span><h1>${escapeHtml(heading)}</h1>${htmlParagraphs}${cta}<p style="color:#635f70">${escapeHtml(footer)}</p></body></html>`;
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17151f;line-height:1.6"><span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</span>${image}<h1>${escapeHtml(heading)}</h1>${htmlParagraphs}${cta}<p style="color:#635f70">${escapeHtml(footer)}</p></body></html>`;
   return {preheader, heading, text: textBody, html, footer, ctaLabel: safeUrl ? ctaLabel || "Open Circum" : "", ctaUrl: safeUrl};
 }
 
-function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, senderCategory, tags = []}) {
-  const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl, footer});
+function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, imageUrl, senderCategory, tags = []}) {
+  const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, imageUrl});
   const copy = {templateId, subject, senderCategory, providerTags: tags, ...rendered};
   assertCustomerFacingContent(copy);
   return copy;
@@ -79,6 +82,7 @@ function welcome({displayName = "", amount = 5, ctaUrl = APP_URL} = {}) {
     ctaLabel: "Explore Circum",
     ctaUrl,
     footer: "Warmly,\n\nThe Circum team",
+    imageUrl: WELCOME_IMAGE_URL,
     senderCategory: "info",
     tags: [{name: "product", value: "account"}, {name: "message", value: "welcome"}],
   });
