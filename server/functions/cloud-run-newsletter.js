@@ -93,6 +93,10 @@ function createServer(options = {}) {
     if (request.method === "OPTIONS") return writeJson(response, 204, {});
     const pathname = new URL(request.url || "/", "http://localhost").pathname;
     if (pathname === MAILCHIMP_WEBHOOK_PATH) {
+      // Mailchimp probes a new callback with GET before saving it. Keep that
+      // verification separate from signed event delivery; only POST reaches
+      // the audience mutation path below.
+      if (request.method === "GET") return writeJson(response, 200, {ok: true, status: "ready"});
       if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}});
       if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/x-www-form-urlencoded")) return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "Form data required."}});
       const signingSecret = process.env.MAILCHIMP_AUDIENCE_WEBHOOK_SECRET;
