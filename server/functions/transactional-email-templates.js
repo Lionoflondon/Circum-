@@ -57,8 +57,8 @@ function layout({preheader, heading, paragraphs, ctaLabel = "", ctaUrl = "", foo
   return {preheader, heading, text: textBody, html, footer, ctaLabel: safeUrl ? ctaLabel || "Open Circum" : "", ctaUrl: safeUrl};
 }
 
-function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, senderCategory, tags = []}) {
-  const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl});
+function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, senderCategory, tags = []}) {
+  const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl, footer});
   const copy = {templateId, subject, senderCategory, providerTags: tags, ...rendered};
   assertCustomerFacingContent(copy);
   return copy;
@@ -68,16 +68,17 @@ function welcome({displayName = "", amount = 5, ctaUrl = APP_URL} = {}) {
   const name = safeName(displayName);
   return result({
     templateId: "sender-welcome",
-    subject: "Welcome to CIRCUM — your account is ready",
-    preheader: `${money(amount) || "£5"} Roth has been added to your wallet to help you get started.`,
-    heading: name ? `Welcome to CIRCUM, ${firstName(name)}` : "Welcome to CIRCUM",
+    subject: "Welcome to Circum — £5 Roth has been added to your wallet",
+    preheader: "Your Circum account is ready. Here’s a little something to help you get started.",
+    heading: name ? `Welcome to Circum, ${firstName(name)}` : "Welcome to Circum",
     paragraphs: [
-      "Your CIRCUM account is ready.",
-      `${money(amount) || "£5"} Roth has been added to your wallet to help you get started. Roth is CIRCUM service credit that can be used toward eligible Circum services and deliveries under the current product rules.`,
-      "You can now explore Circum and choose what you need.",
+      "Thanks for joining us — your account is ready to use.",
+      `To help you get started, we’ve added ${money(amount) || "£5"} Roth to your wallet. Roth is Circum credit that can be used toward eligible Circum services and deliveries, subject to our current service rules.`,
+      "Whenever you’re ready, you can explore Circum and see what’s available.",
     ],
-    ctaLabel: "Explore CIRCUM",
+    ctaLabel: "Explore Circum",
     ctaUrl,
+    footer: "Warmly,\n\nThe Circum team",
     senderCategory: "info",
     tags: [{name: "product", value: "account"}, {name: "message", value: "welcome"}],
   });

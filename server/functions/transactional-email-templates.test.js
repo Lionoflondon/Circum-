@@ -54,7 +54,7 @@ test("every transactional template has complete customer-facing structure", () =
     assert.ok(copy.footer);
     assert.match(copy.html, /display:none/);
     assert.match(copy.html, /<h1>/);
-    assert.match(copy.html, /Reply to this email|contact Circum support/);
+    assert.match(copy.html, /Reply to this email|contact Circum support|The Circum team/);
   }
 });
 
@@ -70,10 +70,11 @@ test("rendered customer content rejects snake_case and internal labels", () => {
 
 test("welcome copy explains the account, Starter Roth and next step without raw trigger names", () => {
   const copy = templates.welcome({displayName: "Vaughn Werner", amount: 5});
-  assert.equal(copy.subject, "Welcome to CIRCUM — your account is ready");
-  assert.match(copy.heading, /Welcome to CIRCUM, Vaughn/);
-  assert.match(copy.text, /£5\.00 Roth has been added to your wallet/);
+  assert.equal(copy.subject, "Welcome to Circum — £5 Roth has been added to your wallet");
+  assert.match(copy.heading, /Welcome to Circum, Vaughn/);
+  assert.match(copy.text, /(?:£5\.00 Roth has been added|we’ve added £5\.00 Roth) to your wallet/);
   assert.match(copy.text, /eligible Circum services and deliveries/);
-  assert.match(copy.text, /Explore CIRCUM/);
+  assert.match(copy.text, /Explore Circum/);
+  assert.match(copy.text, /The Circum team/);
   assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
 });
