@@ -543,6 +543,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -655,6 +656,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -1186,6 +1188,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -4879,6 +4882,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -7183,6 +7187,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -9297,6 +9302,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -9520,6 +9526,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
@@ -9854,6 +9861,7 @@
       "secrets": [],
       "firestoreCollections": [
         "consentEvents",
+        "mailchimpEvents",
         "newsletterAnalyticsEvents"
       ],
       "externalProviders": [],
