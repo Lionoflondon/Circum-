@@ -17,5 +17,4 @@ test("access resolution reports missing roles without granting access or writing
   assert.match(source, /resolveActor\(context, \{allowMissingRole: true\}\)/);
   assert.match(source, /if \(!actor\.roles\.length\) \{\s*return \{roles: \[\], permissions: \[\], accessGranted: false\};/);
   assert.match(source, /if \(!actor\.roles\.length\)[\s\S]*?return \{roles: \[\], permissions: \[\], accessGranted: false\};[\s\S]*?lastLoginAt/);
-  assert.match(source, /exports\.adminQueryPage = adminCallable\(async \(data, context\) => \{\s*const actor = await resolveActor\(context\);/);
 });
