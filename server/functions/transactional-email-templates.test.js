@@ -2,57 +2,78 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {IMPLEMENTED_TEMPLATE_EVENTS, renderTransactionalEmail} = require("./transactional-email-templates");
+const templates = require("./transactional-email-templates");
 
-const contextFor = (eventType) => ({
-  displayName: "Alex",
-  amount: 5,
-  reference: "INV-123",
-  recipientName: "Alex & Sam",
-  deliveredAt: "1 January 2026",
-  decision: eventType === "rider_application_decision" ? "more_information_requested" : "",
-  recipientRole: eventType === "gift_story_ready" ? "recipient" : "sender",
-  storyUrl: eventType === "gift_story_ready" ? "https://circumuk.com/gift-story/secure-token" : "",
-});
-
-function visibleCopy(message) {
-  return [message.subject, message.preheader, message.heading, ...(message.body || []), message.cta, message.footer]
-      .filter(Boolean).join("\n");
+function customerFields(copy) {
+  return [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer]
+      .filter(Boolean).join(" ");
 }
 
-function withoutAllowedTechnicalSyntax(value) {
-  return value
-      .replace(/https?:\/\/[^\s)]+/gi, "")
-      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "");
-}
-
-test("every implemented transactional template renders the customer contract", () => {
-  for (const eventType of IMPLEMENTED_TEMPLATE_EVENTS) {
-    const message = renderTransactionalEmail(eventType, contextFor(eventType));
-    assert.ok(message.subject, `${eventType} subject`);
-    assert.ok(message.preheader, `${eventType} preheader`);
-    assert.ok(message.heading, `${eventType} heading`);
-    assert.ok(message.body.length > 0, `${eventType} body`);
-    assert.ok(message.cta, `${eventType} CTA`);
-    assert.ok(message.footer, `${eventType} footer`);
-    assert.ok(message.text, `${eventType} text`);
+test("every transactional template has complete customer-facing structure", () => {
+  const copies = [
+    templates.welcome({displayName: "Vaughn Werner"}),
+    templates.bookingConfirmed({reference: "booking-1"}),
+    templates.deliveryCompleted({reference: "booking-1"}),
+    templates.cancellationSettled({reference: "booking-1"}),
+    templates.businessInvoicePaid({reference: "invoice-1"}),
+    templates.rothActivity({movement: "credited", amount: 5, reference: "wallet-1"}),
+    templates.rothActivity({movement: "debited", amount: 2.5, reference: "wallet-2"}),
+    templates.rothActivity({movement: "refunded", amount: 1, reference: "wallet-3"}),
+    templates.rothActivity({movement: "restored", amount: 1, reference: "wallet-4"}),
+    templates.referralReward(),
+    templates.riderDecision({decision: "approved"}),
+    templates.riderDecision({decision: "rejected"}),
+    templates.riderDecision({decision: "more_information_requested"}),
+    ...Object.keys({
+      scheduled: true,
+      assigned: true,
+      en_route_pickup: true,
+      awaiting_pharmacy_collection: true,
+      collected: true,
+      out_for_delivery: true,
+      delivered: true,
+      prescription_not_ready: true,
+      customer_unavailable: true,
+      escalated: true,
+      rescheduled: true,
+      override_completed: true,
+      reminder_24h: true,
+      reminder_2h: true,
+    }).map((type) => templates.healthUpdate({type})),
+    templates.giftDelivered({giftId: "gift-1", recipientName: "Alex", deliveredAt: "24 September 2026"}),
+    templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/token"}),
+    templates.giftStory({role: "recipient", storyUrl: "https://circumuk.com/story/token"}),
+  ];
+  for (const copy of copies) {
+    assert.ok(copy.templateId);
+    assert.ok(copy.subject);
+    assert.ok(copy.preheader);
+    assert.ok(copy.heading);
+    assert.ok(copy.text);
+    assert.ok(copy.html);
+    assert.ok(copy.footer);
+    assert.match(copy.html, /display:none/);
+    assert.match(copy.html, /<h1>/);
+    assert.match(copy.html, /Reply to this email|contact Circum support/);
   }
 });
 
-test("customer-visible copy contains no internal identifiers or developer strings", () => {
-  for (const eventType of IMPLEMENTED_TEMPLATE_EVENTS) {
-    const copy = withoutAllowedTechnicalSyntax(visibleCopy(renderTransactionalEmail(eventType, contextFor(eventType))));
-    assert.doesNotMatch(copy, /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/, eventType);
-    assert.doesNotMatch(copy, /emailQueue|walletTransactions|Firestore|sourceCollection|sender_|rider_|delivery_in_progress|roth_movement_completed/i, eventType);
+test("rendered customer content rejects snake_case and internal labels", () => {
+  const copy = templates.welcome({displayName: "A_User"});
+  assert.doesNotMatch(customerFields(copy), /[a-z][a-z0-9]*_[a-z0-9_]+/i);
+  for (const token of templates.FORBIDDEN_CUSTOMER_TOKENS) {
+    assert.doesNotMatch(customerFields(copy).toLowerCase(), new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   }
+  assert.throws(() => templates.assertCustomerFacingContent({subject: "roth_movement_completed"}), /snake_case|internal_token/);
+  assert.throws(() => templates.assertCustomerFacingContent({subject: "delivery_in_progress"}), /snake_case|internal_token/);
 });
 
-test("starter welcome is distinct from generic Roth activity", () => {
-  const welcome = renderTransactionalEmail("sender_welcome", {displayName: "Alex"});
-  const ordinary = renderTransactionalEmail("roth_movement_completed", {amount: 5});
-  assert.equal(welcome.subject, "Welcome to CIRCUM");
-  assert.match(welcome.text, /£5 Roth/);
-  assert.doesNotMatch(welcome.text, /wallet has been updated/i);
-  assert.match(ordinary.text, /wallet has been updated/i);
-  assert.doesNotMatch(ordinary.text, /Welcome to CIRCUM/);
+test("welcome copy explains the account, Starter Roth and next step without raw trigger names", () => {
+  const copy = templates.welcome({displayName: "Vaughn Werner", amount: 5});
+  assert.equal(copy.subject, "Welcome to CIRCUM — your account is ready");
+  assert.match(copy.heading, /Welcome to CIRCUM, Vaughn/);
+  assert.match(copy.text, /£5\.00 Roth has been added to your wallet/);
+  assert.match(copy.text, /eligible Circum services and deliveries/);
+  assert.match(copy.text, /Explore CIRCUM/);
+  assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
 });

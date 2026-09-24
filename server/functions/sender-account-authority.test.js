@@ -27,10 +27,12 @@ test("ensureSenderAccount returns explicit outcomes without changing the callabl
 test("new Sender profiles mark and grant the 5 Roth starter credit once", () => {
   assert.match(source, /const rothLedger = require\("\.\/roth-ledger"\);/);
   assert.match(source, /function starterRothPending\(existing = \{\}\)/);
+  assert.match(source, /function welcomeEmailPending\(existing = \{\}\)/);
   assert.match(source, /async function grantAndMarkSenderStarterRoth/);
+  assert.match(source, /senderWelcomeEmail\.queueSenderWelcomeEmail/);
   assert.match(source, /patch\.starterRothGrantStatus = "pending"/);
   assert.match(source, /patch\.starterRothAmount = rothLedger\.SENDER_WELCOME_ROTH_AMOUNT/);
-  assert.match(source, /starterRothEligible: starterRothPending\(existing\)/);
+  assert.match(source, /starterRothEligible,?/);
   assert.match(source, /starterRothGrantStatus: "pending"/);
   assert.match(source, /starterRothGranted = true/);
   assert.match(source, /delete result\.starterRothEligible/);
@@ -38,5 +40,6 @@ test("new Sender profiles mark and grant the 5 Roth starter credit once", () => 
 
 
 test("existing profiles require a pending grant regardless of legacy Sender role representation", () => {
-  assert.match(source, /const starterRothEligible = !userSnap\.exists \|\| starterRothPending\(existing\);/);
+  assert.match(source, /const grantPending = !userSnap\.exists \|\| starterRothPending\(existing\);/);
+  assert.match(source, /const starterRothEligible = grantPending \|\| welcomeEmailPending\(existing\);/);
 });

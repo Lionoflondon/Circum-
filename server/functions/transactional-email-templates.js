@@ -1,6 +1,23 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
 
+const APP_URL = "https://circumuk.com";
+const SUPPORT_TEXT = "Need help? Reply to this email or contact Circum support from your account.";
+const FORBIDDEN_CUSTOMER_TOKENS = [
+  "roth_movement_completed",
+  "sender_",
+  "rider_",
+  "delivery_in_progress",
+  "business_invoice_",
+  "health_plus_",
+  "gift_story_ready",
+  "firestore",
+  "eventarc",
+  "notificationid",
+  "sourcecollection",
+  "sourcerequiredstatus",
+];
+
 const text = (value) => `${value || ""}`.trim();
 
 function escapeHtml(value) {
@@ -13,226 +30,294 @@ function escapeHtml(value) {
   }[character]));
 }
 
-function displayName(value) {
-  const cleaned = text(value).replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim();
-  return cleaned || "there";
+function safeName(value) {
+  return text(value).replace(/[<>_]/g, " ").replace(/\s+/g, " ").slice(0, 80);
 }
 
-function pounds(value, fallback = "") {
+function firstName(value) {
+  return safeName(value).split(" ")[0] || "there";
+}
+
+function safeReference(value) {
+  return text(value).replace(/[^A-Za-z0-9 .#/-]/g, "").slice(0, 80);
+}
+
+function money(value) {
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount === 0) return fallback;
-  return `£${Math.abs(amount).toFixed(2).replace(/\.00$/, "")}`;
+  return Number.isFinite(amount) && amount >= 0 ? `£${amount.toFixed(2)}` : "";
 }
 
-function ctaFor(value) {
-  return text(value) || "Open CIRCUM";
+function layout({preheader, heading, paragraphs, ctaLabel = "", ctaUrl = "", footer = SUPPORT_TEXT}) {
+  const safeUrl = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(ctaUrl)) ? text(ctaUrl) : "";
+  const htmlParagraphs = paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  const cta = safeUrl ? `<p><a href="${escapeHtml(safeUrl)}" style="display:inline-block;background:#5b21b6;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none">${escapeHtml(ctaLabel || "Open Circum")}</a></p>` : "";
+  const textBody = [heading, ...paragraphs, safeUrl ? `${ctaLabel || "Open Circum"}: ${safeUrl}` : "", footer]
+      .filter(Boolean).join("\n\n");
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17151f;line-height:1.6"><span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</span><h1>${escapeHtml(heading)}</h1>${htmlParagraphs}${cta}<p style="color:#635f70">${escapeHtml(footer)}</p></body></html>`;
+  return {preheader, heading, text: textBody, html, footer, ctaLabel: safeUrl ? ctaLabel || "Open Circum" : "", ctaUrl: safeUrl};
 }
 
-function render({subject, preheader, heading, paragraphs, cta = "Open CIRCUM", footer = "This essential service email relates to activity on your CIRCUM account."}) {
-  const body = paragraphs.filter(Boolean).map(text);
-  const visibleCta = ctaFor(cta);
-  const textBody = [
-    heading,
-    "",
-    ...body,
-    "",
-    visibleCta,
-    "",
-    footer,
-  ].join("\n");
-  const htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17151f;line-height:1.6"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(preheader)}</div><h1>${escapeHtml(heading)}</h1>${body.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}<p><a href="https://circumuk.com" style="color:#5b21b6">${escapeHtml(visibleCta)}</a></p><p style="color:#635f70">${escapeHtml(footer)}</p></body></html>`;
-  return {subject, preheader, heading, body, cta: visibleCta, footer, text: textBody, html: htmlBody};
+function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, senderCategory, tags = []}) {
+  const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl});
+  const copy = {templateId, subject, senderCategory, providerTags: tags, ...rendered};
+  assertCustomerFacingContent(copy);
+  return copy;
 }
 
-function renderTransactionalEmail(eventType, context = {}) {
-  const name = displayName(context.displayName || context.firstName);
-  const reference = text(context.reference);
-  const amount = pounds(context.amount, "the amount");
-  const direction = Number(context.amount) < 0 ? "debit" : "credit";
-  const type = text(eventType).toLowerCase();
-
-  if (type === "sender_welcome") {
-    return render({
-      subject: "Welcome to CIRCUM",
-      preheader: "£5 Roth has been added to help you get started.",
-      heading: `Welcome to CIRCUM${name === "there" ? "" : `, ${name}`}`,
-      paragraphs: [
-        "Your CIRCUM account is ready.",
-        "We have added £5 Roth to your wallet to help you get started. Roth is CIRCUM's wallet balance for eligible CIRCUM services, and you can see it in the app.",
-        "No action is needed right now. Open CIRCUM whenever you are ready to explore.",
-      ],
-    });
-  }
-
-  if (type === "roth_movement_completed") {
-    const kind = context.refund === true ? "refund" : direction;
-    return render({
-      subject: "Your CIRCUM wallet has been updated",
-      preheader: `A Roth ${kind} has been recorded in your wallet.`,
-      heading: "Your CIRCUM wallet has been updated",
-      paragraphs: [
-        `A Roth ${kind} of ${amount} has been recorded in your wallet.`,
-        "This is a confirmation of account activity. You can open CIRCUM to review your current Roth balance.",
-      ],
-    });
-  }
-
-  if (type === "delivery_booking_paid") {
-    return render({
-      subject: "Your CIRCUM delivery booking is confirmed",
-      preheader: "Your paid delivery booking is now in our system.",
-      heading: "Your delivery booking is confirmed",
-      paragraphs: [
-        "Your paid CIRCUM delivery booking has been confirmed.",
-        "We will keep you updated as your delivery progresses.",
-      ],
-    });
-  }
-
-  if (type === "delivery_completed") {
-    return render({
-      subject: "Your CIRCUM delivery has been delivered",
-      preheader: "Your delivery has reached its destination.",
-      heading: "Your delivery has been delivered",
-      paragraphs: [
-        "Your CIRCUM delivery has been delivered.",
-        "You can open CIRCUM to review the delivery details.",
-      ],
-    });
-  }
-
-  if (type === "delivery_cancellation_settled") {
-    return render({
-      subject: "Your CIRCUM delivery cancellation is confirmed",
-      preheader: "Your delivery cancellation has been processed.",
-      heading: "Your delivery cancellation is confirmed",
-      paragraphs: [
-        "The cancellation of your CIRCUM delivery has been processed.",
-        "You can open CIRCUM to review the latest account details.",
-      ],
-    });
-  }
-
-  if (type === "business_invoice_paid") {
-    return render({
-      subject: "Your CIRCUM Business invoice is paid",
-      preheader: "Your invoice payment has been received.",
-      heading: "Your CIRCUM Business invoice is paid",
-      paragraphs: [
-        `Payment for your CIRCUM Business invoice${reference ? ` ${reference}` : ""} has been received.`,
-        "Sign in to CIRCUM Business to review the invoice and your account.",
-      ],
-      cta: "Open CIRCUM Business",
-    });
-  }
-
-  if (type === "referral_award_finalized") {
-    return render({
-      subject: "Your CIRCUM referral reward is ready",
-      preheader: "Your referral reward has been added to Roth.",
-      heading: "Your referral reward is ready",
-      paragraphs: [
-        "Your CIRCUM referral reward has been added to Roth.",
-        "Open CIRCUM to review your wallet and see what you can use it for.",
-      ],
-    });
-  }
-
-  if (type === "rider_application_decision") {
-    const decision = text(context.decision).toLowerCase();
-    const copy = decision === "approved" ? {
-      subject: "Your CIRCUM Rider application was approved",
-      preheader: "Your Rider application has been approved.",
-      heading: "Your Rider application was approved",
-      paragraphs: ["Your CIRCUM Rider application has been approved.", "Open the Rider app to review the next steps."],
-    } : decision === "rejected" ? {
-      subject: "An update on your CIRCUM Rider application",
-      preheader: "There is an update on your Rider application.",
-      heading: "An update on your Rider application",
-      paragraphs: ["We have reviewed your CIRCUM Rider application.", "Open the Rider app to view the latest decision and available next steps."],
-    } : {
-      subject: "We need a little more information for your Rider application",
-      preheader: "Your Rider application needs more information before it can continue.",
-      heading: "We need a little more information",
-      paragraphs: ["Your CIRCUM Rider application needs more information before it can continue.", "Open the Rider app to see what to do next."],
-    };
-    return render(copy);
-  }
-
-  if (type.startsWith("health_plus_")) {
-    const status = type.slice("health_plus_".length);
-    const health = {
-      booking_created: ["Your Health+ collection is scheduled", "Your Health+ collection has been scheduled.", "Your collection is now in the CIRCUM Health+ schedule."],
-      rider_assigned: ["A Health+ rider has been assigned", "A verified rider has been assigned to your Health+ collection.", "We will keep you updated as the collection progresses."],
-      en_route_to_collection: ["Your Health+ collection is on the way", "Your Health+ rider is travelling to the collection point.", "Please keep your phone available in case the rider needs to reach you."],
-      prescription_collected: ["Your prescription has been collected", "Your prescription has been collected securely through CIRCUM Health+.", "We will update you again when it is on the way."],
-      en_route_to_customer: ["Your Health+ delivery is on the way", "Your Health+ delivery is on the way.", "We will let you know when it has been delivered."],
-      delivered: ["Your Health+ delivery has been completed", "Your Health+ delivery has been completed.", "You can open CIRCUM to review the delivery details."],
-      rescheduled: ["Your Health+ collection has been rescheduled", "Your Health+ collection has been rescheduled.", "Open CIRCUM to review the updated timing."],
-      escalated: ["Your Health+ delivery needs review", "Your Health+ delivery has been referred to the CIRCUM team for review.", "We will contact you with the next update."],
-      prescription_not_ready: ["Your prescription was not ready", "The prescription was not ready at the collection point.", "CIRCUM is coordinating the next step and will keep you updated."],
-      customer_unavailable: ["We could not complete your Health+ delivery", "We could not complete your Health+ delivery.", "CIRCUM will help arrange the next step."],
-      override_completion: ["Your Health+ delivery is complete", "Your Health+ delivery was completed following a CIRCUM team review.", "You can open CIRCUM to review the delivery details."],
-    }[status];
-    if (health) return render({subject: health[0], preheader: health[1], heading: health[0], paragraphs: [health[1], health[2]]});
-  }
-
-  if (type === "gift_delivered") {
-    return render({
-      subject: "Your Circum gift was delivered",
-      preheader: "Your gift has reached its recipient.",
-      heading: "Your CIRCUM gift was delivered",
-      paragraphs: [
-        `Your gift to ${text(context.recipientName) || "your recipient"} was marked as delivered${text(context.deliveredAt) ? ` on ${text(context.deliveredAt)}` : ""}.`,
-        reference ? `Gift reference: ${reference}` : "",
-        "Open CIRCUM to view your Gifts history.",
-      ],
-      cta: "Open CIRCUM Gifts",
-      footer: "This essential service email confirms a gift you sent with CIRCUM.",
-    });
-  }
-
-  if (type === "gift_story_ready") {
-    const recipient = text(context.recipientRole) === "sender" ? "Your CIRCUM Gift Story is ready" : "You have received a CIRCUM Gift Story";
-    return render({
-      subject: recipient,
-      preheader: "Your private Gift Story is ready to view.",
-      heading: recipient,
-      paragraphs: [
-        "Your CIRCUM Gift Story is ready.",
-        text(context.storyUrl) ? `View your secure story here: ${text(context.storyUrl)}` : "Use the secure link in this email to view your private story.",
-        "The private link expires according to Gift Story policy.",
-      ],
-      cta: "View your Gift Story",
-      footer: "This message contains a private story link created for you by CIRCUM.",
-    });
-  }
-
-  throw new Error(`unsupported_transactional_email_template:${eventType}`);
+function welcome({displayName = "", amount = 5, ctaUrl = APP_URL} = {}) {
+  const name = safeName(displayName);
+  return result({
+    templateId: "sender-welcome",
+    subject: "Welcome to CIRCUM — your account is ready",
+    preheader: `${money(amount) || "£5"} Roth has been added to your wallet to help you get started.`,
+    heading: name ? `Welcome to CIRCUM, ${firstName(name)}` : "Welcome to CIRCUM",
+    paragraphs: [
+      "Your CIRCUM account is ready.",
+      `${money(amount) || "£5"} Roth has been added to your wallet to help you get started. Roth is CIRCUM service credit that can be used toward eligible Circum services and deliveries under the current product rules.`,
+      "You can now explore Circum and choose what you need.",
+    ],
+    ctaLabel: "Explore CIRCUM",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "account"}, {name: "message", value: "welcome"}],
+  });
 }
 
-const IMPLEMENTED_TEMPLATE_EVENTS = Object.freeze([
-  "sender_welcome",
-  "roth_movement_completed",
-  "delivery_booking_paid",
-  "delivery_completed",
-  "delivery_cancellation_settled",
-  "business_invoice_paid",
-  "referral_award_finalized",
-  "rider_application_decision",
-  "health_plus_booking_created",
-  "health_plus_rider_assigned",
-  "health_plus_en_route_to_collection",
-  "health_plus_prescription_collected",
-  "health_plus_en_route_to_customer",
-  "health_plus_delivered",
-  "health_plus_rescheduled",
-  "health_plus_escalated",
-  "health_plus_prescription_not_ready",
-  "health_plus_customer_unavailable",
-  "health_plus_override_completion",
-  "gift_delivered",
-  "gift_story_ready",
-]);
+function bookingConfirmed({reference = "", ctaUrl = APP_URL} = {}) {
+  const ref = safeReference(reference);
+  return result({
+    templateId: "delivery-booking-confirmed",
+    subject: "Your CIRCUM delivery booking is confirmed",
+    preheader: "Your payment has been confirmed and your delivery is ready to follow.",
+    heading: "Your delivery booking is confirmed",
+    paragraphs: [
+      "Your CIRCUM delivery booking is confirmed and your payment has been received.",
+      "You can follow the delivery in Circum as it moves through each stage.",
+      ref ? `Booking reference: ${ref}` : "",
+    ].filter(Boolean),
+    ctaLabel: "View delivery",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "delivery"}, {name: "message", value: "booking-confirmed"}],
+  });
+}
 
-module.exports = {IMPLEMENTED_TEMPLATE_EVENTS, renderTransactionalEmail, escapeHtml};
+function deliveryCompleted({reference = "", ctaUrl = APP_URL} = {}) {
+  const ref = safeReference(reference);
+  return result({
+    templateId: "delivery-completed",
+    subject: "Your CIRCUM delivery has arrived",
+    preheader: "Your delivery has been completed.",
+    heading: "Your delivery is complete",
+    paragraphs: [
+      "Your CIRCUM delivery has been completed. This message confirms the final handover.",
+      ref ? `Booking reference: ${ref}` : "",
+    ].filter(Boolean),
+    ctaLabel: "View delivery",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "delivery"}, {name: "message", value: "completed"}],
+  });
+}
+
+function cancellationSettled({reference = "", ctaUrl = APP_URL} = {}) {
+  const ref = safeReference(reference);
+  return result({
+    templateId: "delivery-cancellation-settled",
+    subject: "Your CIRCUM delivery cancellation is complete",
+    preheader: "Your cancellation and any applicable payment settlement have been completed.",
+    heading: "Your delivery cancellation is complete",
+    paragraphs: [
+      "The cancellation for your CIRCUM delivery has been completed.",
+      "Any applicable refund or fee settlement has been recorded against the booking.",
+      ref ? `Booking reference: ${ref}` : "",
+    ].filter(Boolean),
+    ctaLabel: "View payment details",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "delivery"}, {name: "message", value: "cancellation"}],
+  });
+}
+
+function businessInvoicePaid({reference = "", ctaUrl = APP_URL} = {}) {
+  const ref = safeReference(reference);
+  return result({
+    templateId: "business-invoice-paid",
+    subject: "Your CIRCUM Business invoice is paid",
+    preheader: "Your CIRCUM Business payment has been received and your invoice is settled.",
+    heading: "Your CIRCUM Business invoice is paid",
+    paragraphs: [
+      "We have received payment for your CIRCUM Business invoice.",
+      "Your account is up to date. Sign in to review the invoice and payment record.",
+      ref ? `Invoice reference: ${ref}` : "",
+    ].filter(Boolean),
+    ctaLabel: "View invoice",
+    ctaUrl,
+    senderCategory: "business",
+    tags: [{name: "product", value: "business"}, {name: "message", value: "invoice-paid"}],
+  });
+}
+
+function rothActivity({displayName = "", movement = "updated", amount = null, reference = "", ctaUrl = APP_URL} = {}) {
+  const amountText = money(amount);
+  const descriptions = {
+    credited: amountText ? `${amountText} Roth has been added to your wallet.` : "Roth has been added to your wallet.",
+    debited: amountText ? `${amountText} Roth has been used from your wallet.` : "Roth has been used from your wallet.",
+    refunded: amountText ? `${amountText} Roth has been returned to your wallet.` : "Roth has been returned to your wallet.",
+    restored: amountText ? `${amountText} Roth has been restored to your wallet.` : "Roth has been restored to your wallet.",
+    updated: "Your Roth wallet has been updated.",
+  };
+  const description = descriptions[movement] || descriptions.updated;
+  return result({
+    templateId: "roth-activity",
+    subject: "Your CIRCUM Roth wallet has been updated",
+    preheader: description,
+    heading: displayName ? `Your Roth wallet, ${firstName(displayName)}` : "Your Roth wallet has been updated",
+    paragraphs: [description, "Roth can be used toward eligible Circum services and deliveries under the current product rules.", reference ? `Reference: ${safeReference(reference)}` : ""].filter(Boolean),
+    ctaLabel: "View Roth wallet",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "roth"}, {name: "message", value: "wallet-update"}],
+  });
+}
+
+function referralReward({ctaUrl = APP_URL} = {}) {
+  return result({
+    templateId: "referral-reward",
+    subject: "Your CIRCUM referral reward is ready",
+    preheader: "Your referral reward has been added to your Roth wallet.",
+    heading: "Your referral reward is ready",
+    paragraphs: ["Your referral reward has been added to your Roth wallet.", "You can use Roth toward eligible Circum services and deliveries under the current product rules."],
+    ctaLabel: "View your wallet",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "referrals"}, {name: "message", value: "reward"}],
+  });
+}
+
+function riderDecision({decision, ctaUrl = APP_URL} = {}) {
+  const copy = {
+    approved: {
+      subject: "Your CIRCUM Rider application has been approved",
+      preheader: "Your Rider application has been approved. Review the next steps in the Rider app.",
+      heading: "Your Rider application is approved",
+      body: "Your Rider application has been approved. Open the Rider app to review the next steps before you begin.",
+    },
+    rejected: {
+      subject: "An update about your CIRCUM Rider application",
+      preheader: "There is an update about your Rider application.",
+      heading: "An update about your Rider application",
+      body: "There is an update about your Rider application. Open the Rider app to review the information available to you.",
+    },
+    more_information_requested: {
+      subject: "A little more information is needed for your CIRCUM Rider application",
+      preheader: "Please open the Rider app to see what is needed next.",
+      heading: "A little more information is needed",
+      body: "Please open the Rider app to see the next step for your application. We only ask for information needed to review your application.",
+    },
+  }[text(decision).toLowerCase()] || null;
+  if (!copy) throw new Error("Unsupported Rider application decision.");
+  return result({
+    templateId: `rider-application-${text(decision).toLowerCase()}`,
+    subject: copy.subject,
+    preheader: copy.preheader,
+    heading: copy.heading,
+    paragraphs: [copy.body],
+    ctaLabel: "Open Rider",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "application-update"}],
+  });
+}
+
+const HEALTH_COPY = Object.freeze({
+  scheduled: ["Your Health+ collection is scheduled", "Your Health+ collection has been scheduled. We will keep you updated as it progresses."],
+  assigned: ["A rider has been assigned to your Health+ collection", "A verified rider has been assigned to your Health+ collection."],
+  en_route_pickup: ["Your Health+ rider is on the way", "Your rider is travelling to the collection point."],
+  awaiting_pharmacy_collection: ["Your Health+ rider is ready at the collection point", "Your rider is ready to collect from the pharmacy."],
+  collected: ["Your Health+ prescription has been collected", "Your prescription has been collected securely and is now moving through the next step."],
+  out_for_delivery: ["Your Health+ delivery is on the way", "Your Health+ delivery is on its way to you."],
+  delivered: ["Your Health+ delivery is complete", "Your Health+ delivery has been completed."],
+  prescription_not_ready: ["Your Health+ collection needs an update", "The prescription was not ready when our rider arrived. Circum is coordinating the next step."],
+  customer_unavailable: ["We need to rearrange your Health+ delivery", "We could not complete the delivery. Circum will help arrange the next step."],
+  escalated: ["Your Health+ delivery needs our attention", "Your Health+ delivery has been referred to our team for review. We will update you when the next step is confirmed."],
+  rescheduled: ["Your Health+ collection has been rescheduled", "Your Health+ collection has been rescheduled. We will keep you updated with the arranged time."],
+  override_completed: ["Your Health+ delivery is complete", "Your Health+ delivery has been completed following a review."],
+  reminder_24h: ["Your Health+ collection is tomorrow", "Your Health+ collection is scheduled for tomorrow. Please keep the arranged time available."],
+  reminder_2h: ["Your Health+ collection is due soon", "Your Health+ collection is scheduled in approximately two hours."],
+});
+
+function healthUpdate({type, ctaUrl = APP_URL} = {}) {
+  const copy = HEALTH_COPY[text(type).toLowerCase()];
+  if (!copy) throw new Error("Unsupported Health+ notification.");
+  return result({
+    templateId: `health-update-${text(type).toLowerCase()}`,
+    subject: copy[0],
+    preheader: copy[1],
+    heading: copy[0],
+    paragraphs: [copy[1]],
+    ctaLabel: "View Health+",
+    ctaUrl,
+    senderCategory: "health",
+    tags: [{name: "product", value: "health-plus"}, {name: "message", value: "status-update"}],
+  });
+}
+
+function giftDelivered({giftId = "", recipientName = "", deliveredAt = "", ctaUrl = "https://circumuk.com/?app=gifts"} = {}) {
+  const recipient = safeName(recipientName) || "your recipient";
+  const timing = text(deliveredAt) ? ` on ${text(deliveredAt)}` : "";
+  return result({
+    templateId: "gift-delivered",
+    subject: "Your CIRCUM gift was delivered",
+    preheader: "Your gift has reached its recipient.",
+    heading: "Your CIRCUM gift was delivered",
+    paragraphs: [`Your gift to ${recipient} was marked as delivered${timing}.`, giftId ? `Gift reference: ${safeReference(giftId)}` : "", "This is an essential service message about a gift you sent with Circum."].filter(Boolean),
+    ctaLabel: "Open Circum Gifts",
+    ctaUrl,
+    senderCategory: "gifts",
+    tags: [{name: "product", value: "gifts"}, {name: "message", value: "delivered"}],
+  });
+}
+
+function giftStory({role, storyUrl} = {}) {
+  const sender = role === "sender";
+  const url = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(storyUrl)) ? text(storyUrl) : "";
+  if (!url) throw new Error("Gift Story link is required.");
+  return result({
+    templateId: sender ? "gift-story-sender" : "gift-story-recipient",
+    subject: sender ? "Your CIRCUM Gift Story is ready" : "You have received a CIRCUM Gift Story",
+    preheader: sender ? "Your private Gift Story is ready to view." : "A private Gift Story has been created for you.",
+    heading: sender ? "Your Gift Story is ready" : "You have received a Gift Story",
+    paragraphs: [sender ? "Your private CIRCUM Gift Story is ready to view." : "Someone has created a private CIRCUM Gift Story for you.", "This secure link is personal to you and expires according to Gift Story policy."],
+    ctaLabel: "View Gift Story",
+    ctaUrl: url,
+    senderCategory: "gifts",
+    tags: [{name: "product", value: "gifts"}, {name: "message", value: "story"}],
+  });
+}
+
+function assertCustomerFacingContent(copy) {
+  const fields = [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer].filter(Boolean).join(" ").toLowerCase();
+  if (/[a-z][a-z0-9]*_[a-z0-9_]+/.test(fields)) throw new Error("customer_copy_contains_snake_case");
+  for (const token of FORBIDDEN_CUSTOMER_TOKENS) {
+    if (fields.includes(token)) throw new Error(`customer_copy_contains_internal_token:${token}`);
+  }
+  return true;
+}
+
+module.exports = {
+  APP_URL,
+  FORBIDDEN_CUSTOMER_TOKENS,
+  assertCustomerFacingContent,
+  bookingConfirmed,
+  businessInvoicePaid,
+  cancellationSettled,
+  deliveryCompleted,
+  giftDelivered,
+  giftStory,
+  healthUpdate,
+  referralReward,
+  riderDecision,
+  rothActivity,
+  welcome,
+};

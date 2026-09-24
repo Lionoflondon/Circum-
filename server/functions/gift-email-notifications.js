@@ -1,7 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const {getFirestore} = require("firebase-admin/firestore");
 const {enqueueEmail, emailQueueId, normalizeEmail: normalizeQueueEmail} = require("./email-queue");
-const {renderTransactionalEmail} = require("./transactional-email-templates");
+const templates = require("./transactional-email-templates");
 
 const text = (value) => `${value || ""}`.trim();
 
@@ -25,10 +25,8 @@ function formatDeliveredAt(value) {
 }
 
 function giftDeliveryEmail({giftId, gift = {}}) {
-  const recipientName = text(gift.recipientName) || "your recipient";
   const deliveredAt = formatDeliveredAt(deliveredAtValue(gift));
-  const reference = text(giftId);
-  return renderTransactionalEmail("gift_delivered", {recipientName, deliveredAt, reference});
+  return templates.giftDelivered({giftId, recipientName: gift.recipientName, deliveredAt});
 }
 
 function emailNotificationId(giftId, eventType) {
@@ -64,7 +62,15 @@ async function queueGiftDeliveryEmail({giftId, gift = {}, db = getFirestore()}) 
     senderCategory: "gifts",
     recipientRole: "sender",
     tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
-    extra: {giftId: text(giftId), recipientId: senderId},
+    extra: {
+      giftId: text(giftId),
+      recipientId: senderId,
+      preheader: message.preheader,
+      heading: message.heading,
+      ctaLabel: message.ctaLabel,
+      ctaUrl: message.ctaUrl,
+      templateId: message.templateId,
+    },
   }, db.collection("emailQueue"));
   return notificationId;
 }

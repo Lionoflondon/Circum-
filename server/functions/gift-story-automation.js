@@ -5,11 +5,11 @@ const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {createEmailQueueRecord} = require("./email-queue");
-const {renderTransactionalEmail} = require("./transactional-email-templates");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
 const deviceTokenAuthority = require("./device-token-authority");
+const transactionalEmailTemplates = require("./transactional-email-templates");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -431,26 +431,23 @@ async function findGift(db, delivery) {
 
 async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
   if (!email || !email.includes("@")) return false;
-  const sender = role === "sender";
   // One logical story message is created once; publisher replay never resets a
   // sent/terminal queue item to queued.
   const notificationId = `gift_story_${giftId}_${role}`;
   const secureStoryUrl = storyLink(token);
-  const message = renderTransactionalEmail("gift_story_ready", {
-    recipientRole: role,
-    storyUrl: secureStoryUrl,
-  });
+  const template = transactionalEmailTemplates.giftStory({role, storyUrl: secureStoryUrl});
   await createEmailQueueRecord(db, notificationId, {
     notificationId,
     to: email,
-    subject: message.subject,
-    preheader: message.preheader,
-    heading: message.heading,
-    body: message.text,
-    text: message.text,
-    html: message.html,
-    cta: message.cta,
-    footer: message.footer,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    preheader: template.preheader,
+    heading: template.heading,
+    ctaLabel: template.ctaLabel,
+    ctaUrl: template.ctaUrl,
+    templateId: template.templateId,
+    providerTags: template.providerTags,
     type: "gift_story_ready",
     eventType: "gift_story_ready",
     senderCategory: "gifts",

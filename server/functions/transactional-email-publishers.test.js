@@ -86,34 +86,20 @@ test("completed Roth ledger movement is the sole source of its queue email", asy
     status: "completed", walletType: "sender", userId: "u-1", userEmail: "roth@example.test",
   });
   const result = await publishFromEvent({db, ...input});
-  assert.equal(result.id, "roth_movement_completed_w-1");
+  assert.equal(result.id, "roth_activity_w-1");
   assert.equal(db.read("emailQueue", result.id).sourceCollection, "walletTransactions");
 });
 
-test("completed Starter Roth grant publishes one welcome and never a second generic Roth email", async () => {
+test("Starter Roth ledger creation does not create a second generic activity email", async () => {
   const db = fakeDb();
   const input = event("walletTransactions", "sender_welcome_roth_u-1", null, {
-    status: "completed", walletType: "sender", userId: "u-1", uid: "u-1", userEmail: "new@example.test",
-    amount: 5, idempotencyKey: "sender_welcome_roth:u-1", metadata: {source: "sender_welcome_roth"},
+    status: "completed", walletType: "sender", userId: "u-1", userEmail: "welcome@example.test",
+    metadata: {source: "sender_welcome_roth"},
   });
-  const first = await publishFromEvent({db, ...input});
-  assert.equal(first.id, "sender_welcome_u-1_sender_welcome_roth_u-1");
-  assert.equal(db.read("emailQueue", first.id).eventType, "sender_welcome");
-  assert.equal(db.read("emailQueue", "roth_movement_completed_sender_welcome_roth_u-1"), undefined);
-  const replay = await publishFromEvent({db, ...input});
-  assert.deepEqual(replay, {status: "duplicate", id: first.id});
-});
-
-test("Starter Roth welcome with no recipient persists a terminal no-send record", async () => {
-  const db = fakeDb();
-  const input = event("walletTransactions", "sender_welcome_roth_u-2", null, {
-    status: "completed", walletType: "sender", userId: "u-2", uid: "u-2",
-    amount: 5, idempotencyKey: "sender_welcome_roth:u-2", metadata: {source: "sender_welcome_roth"},
+  assert.deepEqual(await publishFromEvent({db, ...input}), {
+    status: "ignored", reason: "starter_welcome_has_dedicated_email", eventId: input.eventId,
   });
-  const result = await publishFromEvent({db, ...input});
-  assert.equal(result.status, "queued");
-  assert.equal(db.read("emailQueue", "sender_welcome_u-2_sender_welcome_roth_u-2").status, "suppressed");
-  assert.equal(db.read("emailQueue", "sender_welcome_u-2_sender_welcome_roth_u-2").suppressionReason, "invalid_recipient");
+  assert.equal(db.read("emailQueue", "roth_activity_sender_welcome_roth_u-1"), undefined);
 });
 
 test("referral award email waits for final referral and both authoritative ledger entries", async () => {

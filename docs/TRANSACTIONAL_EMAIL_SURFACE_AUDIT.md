@@ -1,6 +1,6 @@
 # Circum transactional email surface audit
 
-This audit is derived from canonical `342db9d` and is intentionally separate from deployment and provider certification. It records only email behavior established by source or existing policy. A surface marked “not established” is not an authorization to invent a new customer email.
+This audit is derived from canonical `b4c5978` and the customer-copy release branch. It is intentionally separate from deployment and provider certification. It records only email behavior established by source or existing policy. A surface marked “not established” is not an authorization to invent a new customer email.
 
 ## Shared transport boundary
 
@@ -27,8 +27,31 @@ This audit is derived from canonical `342db9d` and is intentionally separate fro
 | Roth movement | `walletTransactions.status=completed`, sender wallet | Ledger `userEmail` | Cloud Run/Eventarc publisher on ledger create | `roth_movement_completed`, `roth_movement_completed_{transactionId}` | Generic account activity notice; ledger remains authoritative |
 | Referral award | Referral status `roth_awarded` and both role-specific reward ledger entries completed | Referral `referrerEmail` and `referredEmail` | Cloud Run/Eventarc publisher on referral update | `referral_award_finalized`, `referral_award_{referralId}_{role}` | No email until both ledger writes are final |
 | Rider application decision | `riderProfiles.approvalStatus` transitions to approved, rejected, or more information requested through Rider authority | Canonical Rider profile email | Cloud Run/Eventarc publisher on profile update | `rider_application_decision`, `rider_application_{riderId}_{decision}_{decisionTimestamp}` | Privacy-safe status-only message; no documents/admin notes |
+| Sender welcome | Authoritative Sender account initialization plus completed Starter Roth grant | Sender account email | `sender-account.js` / wallet-repair path → `sender-welcome-email.js` → `emailQueue` | `sender_welcome_ready`, `sender_welcome_{uid}` | Dedicated exactly-once welcome; never generic Roth activity |
 | Auth | Firebase Authentication authority | Firebase Auth email | Firebase Auth-managed transport | Not `emailQueue` | Remains separate |
 | Newsletter/marketing | Newsletter provider/audience authority | Marketing subscriber | Mailchimp/newsletter adapter, independently gated | Not `emailQueue` | Dormant; not activated |
+
+## Customer-copy inventory
+
+Every existing `emailQueue` publisher uses `transactional-email-templates.js`. Each rendered message contains a subject, preheader, human heading, plain-text body, HTML body with hidden preheader, support footer, and a canonical Circum CTA where one is safe.
+
+| Internal source/state | Customer meaning | Subject / heading family | Sender |
+|---|---|---|---|
+| New Sender account plus completed Starter Roth grant | Account is ready and the one-time £5 Roth starter credit is available | “Welcome to CIRCUM — your account is ready” / “Welcome to CIRCUM” | `info@circumuk.com` |
+| Paid ordinary delivery booking | Payment is confirmed and the booking can be followed | “Your CIRCUM delivery booking is confirmed” / “Your delivery booking is confirmed” | `info@circumuk.com` |
+| Final ordinary delivery with completed settlement | Delivery has reached completion | “Your CIRCUM delivery has arrived” / “Your delivery is complete” | `info@circumuk.com` |
+| Settled delivery cancellation | Cancellation and applicable payment settlement are complete | “Your CIRCUM delivery cancellation is complete” | `info@circumuk.com` |
+| Business invoice fully paid | Business payment is received and the invoice is settled | “Your CIRCUM Business invoice is paid” | `business@circumuk.com` when verified, otherwise `info@circumuk.com` |
+| Completed non-starter Roth ledger activity | Wallet credit, debit, refund, restoration, or update explained in plain English | “Your CIRCUM Roth wallet has been updated” | `info@circumuk.com` |
+| Referral reward with both role ledgers final | Referral reward is available in Roth | “Your CIRCUM referral reward is ready” | `info@circumuk.com` |
+| Rider authority decision | Approval, application update, or request for more information without admin/document detail | Decision-specific plain-English subject | `info@circumuk.com` |
+| Health+ operational status or reminder | Collection, rider, prescription, delivery, exception, reschedule, or reminder update | Status-specific Health+ subject | `health@circumuk.com` when verified, otherwise `info@circumuk.com` |
+| Gift delivered | Gift reached the recipient; no address is exposed | “Your CIRCUM gift was delivered” | `gifts@circumuk.com` |
+| Gift Story ready | Private story is available through a secure link; normal priority | “Your CIRCUM Gift Story is ready” or recipient equivalent | `gifts@circumuk.com` |
+
+Rendered customer-facing fields are rejected by automated tests if they contain snake_case, known raw event names, Firestore/Eventarc terms, source field names, or internal notification identifiers. Queue metadata may retain internal event identity for routing and audit; it is never copied into customer-facing fields.
+
+The following delivery lifecycle messages remain push/in-app only under current product policy: rider acceptance, rider en route to pickup, arrival at pickup, pickup confirmation, delivery in progress, approaching drop-off, rider-side cancellation, and payment-failure notices. Their existing customer strings are already plain English. No new email is introduced for those states by this release.
 
 ## One-owner rule
 
