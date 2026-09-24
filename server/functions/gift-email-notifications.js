@@ -82,6 +82,7 @@ async function queueGiftDeliveryEmail({giftId, gift = {}, db = getFirestore()}) 
     sourceRequiredStatus: "delivered",
     ...(normalizeEmail(gift.senderEmail) ? {sourceRecipientField: "senderEmail"} :
       normalizeEmail(gift.email) ? {sourceRecipientField: "email"} : {}),
+    senderCategory: "gifts",
     recipientRole: "sender",
     tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
     extra: {giftId: text(giftId), recipientId: senderId},

@@ -8,8 +8,11 @@ const {
   EVENT_TYPE,
   claimEmail,
   createServer,
+  fromForRecord,
   processEmailQueueRecord,
   queueEmailIdFromName,
+  senderCategoryForRecord,
+  sendResend,
 } = require("./cloud-run-transactional-email");
 
 function fakeDb(initial = {}) {
@@ -64,6 +67,29 @@ function record(overrides = {}) {
     ...overrides,
   };
 }
+
+test("transactional sender identity follows the activity family", async () => {
+  assert.equal(senderCategoryForRecord({eventType: "gift_delivered"}), "gifts");
+  assert.equal(senderCategoryForRecord({eventType: "business_invoice_paid"}), "business");
+  assert.equal(senderCategoryForRecord({eventType: "health_plus_delivered"}), "health");
+  assert.equal(senderCategoryForRecord({eventType: "roth_movement_completed"}), "info");
+  assert.equal(fromForRecord({eventType: "gift_delivered"}, {}), "Circum Gifts <gifts@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {}), "Circum Business <business@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {}), "Circum Health+ <health@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {}), "Circum <info@circumuk.com>");
+  let request;
+  await sendResend({
+    record: record({eventType: "business_invoice_paid"}),
+    to: "billing@example.test",
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      request = JSON.parse(options.body);
+      return {ok: true, status: 200, json: async () => ({id: "resend-business"})};
+    },
+    env: {BUSINESS_EMAIL_FROM: "Configured Business <business@circumuk.com>"},
+  });
+  assert.equal(request.from, "Configured Business <business@circumuk.com>");
+});
 
 function createdEvent(emailId = "email-1") {
   return DocumentEventData.encode({

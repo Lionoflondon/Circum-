@@ -15,9 +15,36 @@ const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 5;
 const RETRY_BACKOFF_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 1000, 2 * 60 * 60 * 1000];
 const EMAIL_API_URL = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Circum <gifts@circumuk.com>";
+const DEFAULT_FROM_BY_CATEGORY = Object.freeze({
+  gifts: "Circum Gifts <gifts@circumuk.com>",
+  business: "Circum Business <business@circumuk.com>",
+  health: "Circum Health+ <health@circumuk.com>",
+  info: "Circum <info@circumuk.com>",
+});
+const FROM_ENV_BY_CATEGORY = Object.freeze({
+  gifts: "GIFTS_EMAIL_FROM",
+  business: "BUSINESS_EMAIL_FROM",
+  health: "HEALTH_EMAIL_FROM",
+  info: "INFO_EMAIL_FROM",
+});
+const SENDER_CATEGORIES = new Set(Object.keys(DEFAULT_FROM_BY_CATEGORY));
 
 const text = (value) => `${value || ""}`.trim();
+
+function senderCategoryForRecord(record = {}) {
+  const explicit = text(record.senderCategory || record.senderFamily).toLowerCase();
+  if (SENDER_CATEGORIES.has(explicit)) return explicit;
+  const eventType = text(record.eventType || record.type).toLowerCase();
+  if (eventType.startsWith("gift")) return "gifts";
+  if (eventType.startsWith("business")) return "business";
+  if (eventType.startsWith("health_plus")) return "health";
+  return "info";
+}
+
+function fromForRecord(record = {}, env = process.env) {
+  const category = senderCategoryForRecord(record);
+  return text(env[FROM_ENV_BY_CATEGORY[category]]) || DEFAULT_FROM_BY_CATEGORY[category];
+}
 
 function queueEmailIdFromName(name) {
   const path = String(name || "").split("/documents/")[1] || String(name || "").replace(/^documents\//, "");
@@ -162,7 +189,7 @@ function retryableProviderStatus(status) {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RESEND_API_KEY, from = process.env.GIFTS_EMAIL_FROM || DEFAULT_FROM}) {
+async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RESEND_API_KEY, from = null, env = process.env}) {
   if (!text(apiKey)) {
     throw Object.assign(new Error("email_provider_not_configured"), {retryable: true, statusCode: 503});
   }
@@ -178,7 +205,7 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
       "Idempotency-Key": text(record.notificationId),
     },
     body: JSON.stringify({
-      from,
+      from: text(from) || fromForRecord(record, env),
       to: [to],
       subject: text(record.subject),
       text: text(record.text || record.body),
@@ -267,7 +294,8 @@ function createServer(options = {}) {
         service: "circum-transactional-email",
         sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown",
         providerConfigured: Boolean(text(process.env.RESEND_API_KEY)),
-        fromConfigured: Boolean(text(process.env.GIFTS_EMAIL_FROM || DEFAULT_FROM)),
+        fromConfigured: Boolean(text(process.env.GIFTS_EMAIL_FROM || process.env.BUSINESS_EMAIL_FROM ||
+          process.env.HEALTH_EMAIL_FROM || process.env.INFO_EMAIL_FROM || DEFAULT_FROM_BY_CATEGORY.info)),
       });
     }
     if (req.method !== "POST" || req.url !== "/") return json(res, 404, {error: "not_found"});
@@ -316,6 +344,8 @@ module.exports = {
   claimEmail,
   revalidateSource,
   sendResend,
+  senderCategoryForRecord,
+  fromForRecord,
   processEmailQueueRecord,
   createServer,
 };
