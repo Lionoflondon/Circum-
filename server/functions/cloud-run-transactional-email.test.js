@@ -86,8 +86,13 @@ test("transactional sender identity follows the activity family", async () => {
   assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {
     HEALTH_EMAIL_FROM: "Circum Health+ <health@circumuk.com>",
   }), "Circum Health+ <health@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {
+    NOTIFICATIONS_EMAIL_FROM: "Circum Notifications <notifications@circumuk.com>",
+  }), "Circum Notifications <notifications@circumuk.com>");
   assert.throws(() => fromForRecord({eventType: "roth_movement_completed", senderCategory: "gifts"}, {}), /sender_family_mismatch/);
   assert.throws(() => fromForRecord({eventType: "business_invoice_paid"}, {BUSINESS_EMAIL_FROM: "Circum Gifts <gifts@circumuk.com>"}), /sender_family_mismatch/);
+  assert.throws(() => fromForRecord({eventType: "business_invoice_paid"}, {BUSINESS_EMAIL_FROM: "Circum Health+ <health@circumuk.com>"}), /sender_family_mismatch/);
+  assert.throws(() => fromForRecord({eventType: "health_plus_delivered"}, {HEALTH_EMAIL_FROM: "Circum Business <business@circumuk.com>"}), /sender_family_mismatch/);
   let request;
   await sendResend({
     record: record({eventType: "business_invoice_paid"}),
