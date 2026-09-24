@@ -2,6 +2,7 @@
 "use strict";
 
 const {normalizeEmail} = require("./email-queue");
+const templates = require("./transactional-email-templates");
 
 const CREATED = "google.cloud.firestore.document.v1.created";
 const UPDATED = "google.cloud.firestore.document.v1.updated";
@@ -36,19 +37,26 @@ function createOnly(db, id, payload) {
   });
 }
 
-function record({to, subject, body, eventType, collection, sourceId, required, recipientField, senderCategory = "info", extra = {}}) {
+function record({to, template, eventType, collection, sourceId, required, recipientField, senderCategory = "info", extra = {}}) {
   const recipient = normalizeEmail(to);
-  if (!recipient) return null;
+  if (!recipient || !template) return null;
   return {
     to: recipient,
-    subject,
-    text: body,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    preheader: template.preheader,
+    heading: template.heading,
+    ctaLabel: template.ctaLabel,
+    ctaUrl: template.ctaUrl,
+    templateId: template.templateId,
     eventType,
     sourceCollection: collection,
     sourceDocumentId: sourceId,
     sourceRequiredStatus: required,
     sourceRecipientField: recipientField,
     senderCategory,
+    providerTags: template.providerTags,
     ...extra,
   };
 }
@@ -90,8 +98,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   if (deliveryId && eventType === CREATED && isOrdinaryDelivery(after) &&
       paymentConfirmed(after) && ["requested", "created", "pending"].includes(lower(after.status))) {
     const to = after.senderEmail || after.email;
-    const payload = record({to, subject: "Your Circum delivery booking is confirmed",
-      body: `Your paid Circum delivery booking is confirmed. Booking reference: ${deliveryId}. Open Circum to view your delivery.`,
+    const payload = record({to, template: templates.bookingConfirmed({reference: deliveryId}),
       eventType: "delivery_booking_paid", collection: "deliveryRequests", sourceId: deliveryId,
       required: "paid", recipientField: after.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(after.senderId)}});
@@ -100,8 +107,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   }
   if (deliveryId && eventType === UPDATED && isOrdinaryDelivery(after) && !finalDelivery(before) && finalDelivery(after)) {
     const to = after.senderEmail || after.email;
-    const payload = record({to, subject: "Your Circum delivery is complete",
-      body: `Your Circum delivery has been completed. Booking reference: ${deliveryId}. Open Circum to view the delivery details.`,
+    const payload = record({to, template: templates.deliveryCompleted({reference: deliveryId}),
       eventType: "delivery_completed", collection: "deliveryRequests", sourceId: deliveryId,
       required: lower(after.status || after.deliveryStatus), recipientField: after.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(after.senderId)}});
@@ -116,8 +122,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
     const delivery = deliverySnap.data() || {};
     if (lower(delivery.cancellationSettlementStatus) !== "settled") return {status: "skipped", reason: "settlement_not_authoritative"};
     const to = delivery.senderEmail || delivery.email;
-    const payload = record({to, subject: "Your Circum delivery cancellation is confirmed",
-      body: `The cancellation for your Circum delivery has been settled. Booking reference: ${settlementId}. Open Circum to view the account details.`,
+    const payload = record({to, template: templates.cancellationSettled({reference: settlementId}),
       eventType: "delivery_cancellation_settled", collection: "deliveryRequests", sourceId: settlementId,
       required: "settled", recipientField: delivery.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(delivery.senderId)}});
@@ -130,8 +135,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       ["paid", "paid_manually"].includes(lower(after.status)) && Number(after.balanceDue || 0) <= 0) {
     const to = after.billingEmail;
     const ref = text(after.invoiceNumber || invoiceId);
-    const payload = record({to, subject: "Your Circum Business invoice is paid",
-      body: `Payment for Circum Business invoice ${ref} is complete. Sign in to Circum Business to view the invoice.`,
+    const payload = record({to, template: templates.businessInvoicePaid({reference: ref}),
       eventType: "business_invoice_paid", collection: "businessInvoices", sourceId: invoiceId,
       required: lower(after.status), recipientField: "billingEmail", senderCategory: "business",
       extra: {businessId: text(after.businessId), invoiceId}});
@@ -142,12 +146,18 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   const walletTransactionId = asId(path, "walletTransactions");
   if (walletTransactionId && eventType === CREATED && lower(after.status) === "completed" &&
       lower(after.walletType || "sender") === "sender" && after.userId && after.userEmail) {
-    const payload = record({to: after.userEmail, subject: "Your Circum Roth activity is complete",
-      body: `A Roth account activity has been completed. Reference: ${walletTransactionId}. Open Circum to review your Roth activity.`,
-      eventType: "roth_movement_completed", collection: "walletTransactions", sourceId: walletTransactionId,
+    const isStarterWelcome = lower(after.metadata && after.metadata.source) === "sender_welcome_roth" ||
+      walletTransactionId.startsWith("sender_welcome_roth_");
+    if (isStarterWelcome) return {status: "ignored", reason: "starter_welcome_has_dedicated_email", eventId};
+    const amount = after.amount == null ? after.creditedAmount : after.amount;
+    const type = lower(after.balanceType || after.type || after.reason);
+    const movement = type.includes("refund") ? "refunded" : type.includes("debit") || type.includes("payment") ? "debited" : type.includes("restore") ? "restored" : type.includes("credit") || type.includes("reward") ? "credited" : "updated";
+    const payload = record({to: after.userEmail, template: templates.rothActivity({
+      amount, movement, reference: walletTransactionId,
+    }), eventType: "roth_activity_ready", collection: "walletTransactions", sourceId: walletTransactionId,
       required: "completed", recipientField: "userEmail", senderCategory: "info",
       extra: {recipientId: text(after.uid || after.userId)}});
-    return createOnly(db, emailId("roth_movement_completed", walletTransactionId), payload);
+    return createOnly(db, emailId("roth_activity", walletTransactionId), payload);
   }
 
   const referralId = asId(path, "referrals");
@@ -160,11 +170,10 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
     if (!inviter.exists || !referred.exists || lower(inviter.data().status) !== "completed" || lower(referred.data().status) !== "completed") {
       return {status: "skipped", reason: "referral_ledger_not_final"};
     }
-    const common = `Your Circum referral reward has been finalized in Roth. Open Circum to review your account.`;
-    const inviterEmail = record({to: after.referrerEmail, subject: "Your Circum referral reward is complete", body: common,
+    const inviterEmail = record({to: after.referrerEmail, template: templates.referralReward(),
       eventType: "referral_award_finalized", collection: "referrals", sourceId: referralId, required: "roth_awarded",
       recipientField: "referrerEmail", senderCategory: "info", extra: {recipientId: text(after.referrerUserId)}});
-    const referredEmail = record({to: after.referredEmail, subject: "Your Circum referral reward is complete", body: common,
+    const referredEmail = record({to: after.referredEmail, template: templates.referralReward(),
       eventType: "referral_award_finalized", collection: "referrals", sourceId: referralId, required: "roth_awarded",
       recipientField: "referredEmail", senderCategory: "info", extra: {recipientId: text(after.referredUserId || referralId)}});
     const results = await Promise.all([
@@ -179,11 +188,9 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   if (riderId && eventType === UPDATED && decision !== lower(before.approvalStatus) &&
       ["approved", "rejected", "more_information_requested"].includes(decision) &&
       (after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt)) {
-    const label = decision === "more_information_requested" ? "needs more information" : decision;
     const decisionKey = after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt;
     const decisionId = timestampKey(decisionKey);
-    const payload = record({to: after.email, subject: "Circum Rider application update",
-      body: `Your Circum Rider application ${label}. Open the Rider app to view the next steps.`,
+    const payload = record({to: after.email, template: templates.riderDecision({decision}),
       eventType: "rider_application_decision", collection: "riderProfiles", sourceId: riderId,
       required: decision, recipientField: "email", senderCategory: "info",
       extra: {recipientId: riderId, decisionKey: decisionId}});
@@ -201,9 +208,9 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
     escalated: ["escalated", "Your Health+ delivery has been escalated for review."],
   };
   if (pickupId && eventType === UPDATED && before.status !== after.status && healthEvents[pickupStatus]) {
-    const [type, body] = healthEvents[pickupStatus];
+    const [type] = healthEvents[pickupStatus];
     const to = after.email;
-    const payload = record({to, subject: "Health+ update", body,
+    const payload = record({to, template: templates.healthUpdate({type: pickupStatus}),
       eventType: `health_plus_${type}`, collection: "prescriptionPickups", sourceId: pickupId,
       required: pickupStatus, recipientField: "email", senderCategory: "health",
       extra: {pickupId, recipientId: text(after.userId || after.senderId)}});
