@@ -72,6 +72,12 @@ function assertAllowedSenderIdentity(category, from) {
   if (category !== "gifts" && address === "gifts@circumuk.com") {
     throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
   }
+  if (category === "business" && address === "health@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category === "health" && address === "business@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
   if (category === "info" && !["info@circumuk.com", "notifications@circumuk.com"].includes(address)) {
     throw Object.assign(new Error("info_sender_not_allowed"), {statusCode: 422});
   }
@@ -80,9 +86,8 @@ function assertAllowedSenderIdentity(category, from) {
 
 function fromForRecord(record = {}, env = process.env) {
   const category = senderCategoryForRecord(record);
-  const configured = category === "info" ?
-    text(env[FROM_ENV_BY_CATEGORY[category]] || env.NOTIFICATIONS_EMAIL_FROM) :
-    text(env[FROM_ENV_BY_CATEGORY[category]]);
+  const configured = text(env[FROM_ENV_BY_CATEGORY[category]] ||
+    env.INFO_EMAIL_FROM || env.NOTIFICATIONS_EMAIL_FROM);
   return assertAllowedSenderIdentity(category, configured || DEFAULT_FROM_BY_CATEGORY[category]);
 }
 
