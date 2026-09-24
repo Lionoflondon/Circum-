@@ -10,7 +10,7 @@ This audit is derived from canonical `342db9d` and is intentionally separate fro
 | Consumer | Private authenticated Cloud Run `circum-transactional-email` via Eventarc |
 | Claim | Queue-document lease plus terminal status and Resend idempotency key equal to the deterministic queue id |
 | Validation | Recipient normalization/suppression and authoritative source-document revalidation before provider call |
-| Provider | Resend, with `RESEND_API_KEY` and `GIFTS_EMAIL_FROM` secret bindings; values never logged |
+| Provider | Resend, with `RESEND_API_KEY`, Gifts sender binding, and optional verified Business/Health+/Info bindings; values never logged |
 | Marketing | Newsletter/Mailchimp remains separate and dormant; no marketing send is activated |
 
 ## Current source map

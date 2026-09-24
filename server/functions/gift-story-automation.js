@@ -444,6 +444,7 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
       `Hello,\n\nYour Circum Gift Story is ready.\n\nView your secure story here:\n${secureStoryUrl}\n\nThis private link has been created just for you and expires according to Gift Story policy.\n\n— Circum`,
     type: "gift_story_ready",
     eventType: "gift_story_ready",
+    senderCategory: "gifts",
     recipientRole: role,
     giftRequestId: giftId,
     sourceCollection: "giftRequests",

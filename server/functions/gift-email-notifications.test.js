@@ -48,5 +48,6 @@ test("gift delivery publisher uses the canonical emailQueue identity", async () 
   assert.equal(writes[0].id, result);
   assert.equal(writes[0].value.sourceCollection, "giftRequests");
   assert.equal(writes[0].value.sourceRequiredStatus, "delivered");
+  assert.equal(writes[0].value.senderCategory, "gifts");
   assert.equal(writes[0].value.to, "sender@example.com");
 });

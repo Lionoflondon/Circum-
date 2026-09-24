@@ -390,6 +390,7 @@ test("Gift Story selects one recipient phone channel instead of duplicating What
   assert.match(source, /storyNotificationId\(giftId, "sender_app"/);
   assert.match(source, /communicationEngine\.emitNotification/);
   assert.match(source, /dedupeKey: `gift_story_ready:\$\{giftId\}:\$\{uid\}`/);
+  assert.match(source, /senderCategory: "gifts"/);
   const senderAppNotification = source.slice(
       source.indexOf("async function queueSenderStoryAppNotification"),
       source.indexOf("async function queueRecipientLinkNotification"),

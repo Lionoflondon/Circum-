@@ -21,6 +21,18 @@ gcloud run deploy circum-transactional-email \
   --set-secrets=RESEND_API_KEY=RESEND_API_KEY:latest,GIFTS_EMAIL_FROM=GIFTS_EMAIL_FROM:latest
 ```
 
+The queue record carries an explicit sender category. Gifts resolve only to
+the configured/verified `Circum Gifts <gifts@circumuk.com>` identity. Business
+and Health+ use their configured/verified category identity only when that
+identity has been provisioned; otherwise both fall back to the approved
+`Circum <info@circumuk.com>` identity. General account, delivery, security,
+referral, Roth, and undefined activity use `info@circumuk.com` (or an
+explicitly configured `notifications@circumuk.com` fallback). Ordinary and
+scheduled delivery are therefore Info-family, not Gifts-family. Legacy queue
+records without the category are inferred from their event type; they never
+fall back to the Gifts identity. A configured identity is accepted only from
+the `circumuk.com` domain, and the consumer rejects cross-family overrides.
+
 Before production Eventarc, verify the service is READY, has 100% traffic on the new revision, returns `/health` only through an authenticated request, reports the merged source SHA, and passes the fixture certificate in `cloud-run-transactional-email.test.js`.
 
 The production queue trigger is created only after the consumer fixture gate. Publisher source triggers below are created only after the publisher PR is merged and the new consumer revision is ready. All triggers target the same service and the same `emailQueue`; there is still exactly one sender.
@@ -56,7 +68,7 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 
 Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 
-The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on `RESEND_API_KEY` and `GIFTS_EMAIL_FROM`; secret values are never printed or stored in source.
+The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on the configured secrets. The current production deployment has `RESEND_API_KEY` and `GIFTS_EMAIL_FROM`; add `BUSINESS_EMAIL_FROM`, `HEALTH_EMAIL_FROM`, `INFO_EMAIL_FROM`, or `NOTIFICATIONS_EMAIL_FROM` only after that identity is verified in Resend. Secret values are never printed or stored in source.
 
 ## Certification boundary
 

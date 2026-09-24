@@ -8,8 +8,11 @@ const {
   EVENT_TYPE,
   claimEmail,
   createServer,
+  fromForRecord,
   processEmailQueueRecord,
   queueEmailIdFromName,
+  senderCategoryForRecord,
+  sendResend,
 } = require("./cloud-run-transactional-email");
 
 function fakeDb(initial = {}) {
@@ -64,6 +67,55 @@ function record(overrides = {}) {
     ...overrides,
   };
 }
+
+test("transactional sender identity follows the activity family", async () => {
+  assert.equal(senderCategoryForRecord({eventType: "gift_delivered"}), "gifts");
+  assert.equal(senderCategoryForRecord({eventType: "business_invoice_paid"}), "business");
+  assert.equal(senderCategoryForRecord({eventType: "health_plus_delivered"}), "health");
+  assert.equal(senderCategoryForRecord({eventType: "roth_movement_completed"}), "info");
+  assert.equal(fromForRecord({eventType: "gift_delivered"}, {}), "Circum Gifts <gifts@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {}), "Circum <info@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {}), "Circum <info@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {}), "Circum <info@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {
+    NOTIFICATIONS_EMAIL_FROM: "Circum Notifications <notifications@circumuk.com>",
+  }), "Circum Notifications <notifications@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {
+    BUSINESS_EMAIL_FROM: "Circum Business <business@circumuk.com>",
+  }), "Circum Business <business@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {
+    HEALTH_EMAIL_FROM: "Circum Health+ <health@circumuk.com>",
+  }), "Circum Health+ <health@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {
+    NOTIFICATIONS_EMAIL_FROM: "Circum Notifications <notifications@circumuk.com>",
+  }), "Circum Notifications <notifications@circumuk.com>");
+  assert.throws(() => fromForRecord({eventType: "roth_movement_completed", senderCategory: "gifts"}, {}), /sender_family_mismatch/);
+  assert.throws(() => fromForRecord({eventType: "business_invoice_paid"}, {BUSINESS_EMAIL_FROM: "Circum Gifts <gifts@circumuk.com>"}), /sender_family_mismatch/);
+  assert.throws(() => fromForRecord({eventType: "business_invoice_paid"}, {BUSINESS_EMAIL_FROM: "Circum Health+ <health@circumuk.com>"}), /sender_family_mismatch/);
+  assert.throws(() => fromForRecord({eventType: "health_plus_delivered"}, {HEALTH_EMAIL_FROM: "Circum Business <business@circumuk.com>"}), /sender_family_mismatch/);
+  let request;
+  await sendResend({
+    record: record({eventType: "business_invoice_paid"}),
+    to: "billing@example.test",
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      request = JSON.parse(options.body);
+      return {ok: true, status: 200, json: async () => ({id: "resend-business"})};
+    },
+    env: {BUSINESS_EMAIL_FROM: "Configured Business <business@circumuk.com>"},
+  });
+  assert.equal(request.from, "Configured Business <business@circumuk.com>");
+});
+
+test("an explicit sender override cannot cross product families", async () => {
+  await assert.rejects(sendResend({
+    record: record({eventType: "roth_movement_completed"}),
+    to: "account@example.test",
+    apiKey: "test-key",
+    from: "Circum Gifts <gifts@circumuk.com>",
+    fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "should-not-send"})}),
+  }), /sender_family_mismatch/);
+});
 
 function createdEvent(emailId = "email-1") {
   return DocumentEventData.encode({

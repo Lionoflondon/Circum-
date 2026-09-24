@@ -15,9 +15,81 @@ const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 5;
 const RETRY_BACKOFF_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 1000, 2 * 60 * 60 * 1000];
 const EMAIL_API_URL = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Circum <gifts@circumuk.com>";
+const DEFAULT_FROM_BY_CATEGORY = Object.freeze({
+  gifts: "Circum Gifts <gifts@circumuk.com>",
+  business: "Circum <info@circumuk.com>",
+  health: "Circum <info@circumuk.com>",
+  info: "Circum <info@circumuk.com>",
+});
+const FROM_ENV_BY_CATEGORY = Object.freeze({
+  gifts: "GIFTS_EMAIL_FROM",
+  business: "BUSINESS_EMAIL_FROM",
+  health: "HEALTH_EMAIL_FROM",
+  info: "INFO_EMAIL_FROM",
+});
+const SENDER_CATEGORIES = new Set(Object.keys(DEFAULT_FROM_BY_CATEGORY));
 
 const text = (value) => `${value || ""}`.trim();
+
+const KNOWN_INFO_EVENT_PREFIXES = [
+  "account", "delivery", "notification", "password", "referral", "rider", "roth", "security",
+];
+
+function inferredSenderCategory(eventType) {
+  const value = text(eventType).toLowerCase();
+  if (value.startsWith("gift")) return "gifts";
+  if (value.startsWith("business")) return "business";
+  if (value.startsWith("health_plus")) return "health";
+  if (KNOWN_INFO_EVENT_PREFIXES.some((prefix) => value.startsWith(prefix))) return "info";
+  return null;
+}
+
+function senderCategoryForRecord(record = {}) {
+  const explicit = text(record.senderCategory || record.senderFamily).toLowerCase();
+  if (explicit && !SENDER_CATEGORIES.has(explicit)) {
+    throw Object.assign(new Error("invalid_sender_category"), {statusCode: 422});
+  }
+  const inferred = inferredSenderCategory(record.eventType || record.type);
+  if (explicit && inferred && explicit !== inferred) {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  return explicit || inferred || "info";
+}
+
+function senderAddress(value) {
+  const match = /<([^>]+)>/.exec(text(value));
+  return (match ? match[1] : text(value)).trim().toLowerCase();
+}
+
+function assertAllowedSenderIdentity(category, from) {
+  const address = senderAddress(from);
+  if (!/@circumuk\.com$/.test(address)) {
+    throw Object.assign(new Error("sender_domain_not_allowed"), {statusCode: 422});
+  }
+  if (category === "gifts" && address !== "gifts@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category !== "gifts" && address === "gifts@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category === "business" && address === "health@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category === "health" && address === "business@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category === "info" && !["info@circumuk.com", "notifications@circumuk.com"].includes(address)) {
+    throw Object.assign(new Error("info_sender_not_allowed"), {statusCode: 422});
+  }
+  return from;
+}
+
+function fromForRecord(record = {}, env = process.env) {
+  const category = senderCategoryForRecord(record);
+  const configured = text(env[FROM_ENV_BY_CATEGORY[category]] ||
+    env.INFO_EMAIL_FROM || env.NOTIFICATIONS_EMAIL_FROM);
+  return assertAllowedSenderIdentity(category, configured || DEFAULT_FROM_BY_CATEGORY[category]);
+}
 
 function queueEmailIdFromName(name) {
   const path = String(name || "").split("/documents/")[1] || String(name || "").replace(/^documents\//, "");
@@ -162,13 +234,17 @@ function retryableProviderStatus(status) {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RESEND_API_KEY, from = process.env.GIFTS_EMAIL_FROM || DEFAULT_FROM}) {
+async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RESEND_API_KEY, from = null, env = process.env}) {
   if (!text(apiKey)) {
     throw Object.assign(new Error("email_provider_not_configured"), {retryable: true, statusCode: 503});
   }
   const transport = fetchImpl || (typeof global !== "undefined" ? global.fetch : null);
   if (typeof transport !== "function") {
     throw Object.assign(new Error("email_transport_unavailable"), {retryable: true, statusCode: 503});
+  }
+  const resolvedFrom = fromForRecord(record, env);
+  if (text(from) && text(from) !== resolvedFrom) {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
   }
   const response = await transport(EMAIL_API_URL, {
     method: "POST",
@@ -178,7 +254,7 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
       "Idempotency-Key": text(record.notificationId),
     },
     body: JSON.stringify({
-      from,
+      from: resolvedFrom,
       to: [to],
       subject: text(record.subject),
       text: text(record.text || record.body),
@@ -267,7 +343,8 @@ function createServer(options = {}) {
         service: "circum-transactional-email",
         sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown",
         providerConfigured: Boolean(text(process.env.RESEND_API_KEY)),
-        fromConfigured: Boolean(text(process.env.GIFTS_EMAIL_FROM || DEFAULT_FROM)),
+        fromConfigured: Boolean(text(process.env.GIFTS_EMAIL_FROM || process.env.BUSINESS_EMAIL_FROM ||
+          process.env.HEALTH_EMAIL_FROM || process.env.INFO_EMAIL_FROM || DEFAULT_FROM_BY_CATEGORY.info)),
       });
     }
     if (req.method !== "POST" || req.url !== "/") return json(res, 404, {error: "not_found"});
@@ -316,6 +393,8 @@ module.exports = {
   claimEmail,
   revalidateSource,
   sendResend,
+  senderCategoryForRecord,
+  fromForRecord,
   processEmailQueueRecord,
   createServer,
 };
