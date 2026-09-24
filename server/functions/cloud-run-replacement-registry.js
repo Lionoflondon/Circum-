@@ -10,6 +10,10 @@ const verifiedBindings = Object.freeze({
 });
 
 function findCloudRunReplacements(name, files, textByFile) {
+  if (name === "adminResolveAccess") {
+    return files.filter((file) => ["cloud-run-admin-access.js", "cloud-run-admin-access.test.js"].includes(path.basename(file)) &&
+      /adminResolveAccess/.test(textByFile.get(file) || "")).map((file) => path.basename(file));
+  }
   const binding = verifiedBindings[name];
   if (binding) {
     return files.filter((file) => path.basename(file) === binding.file &&
@@ -21,6 +25,7 @@ function findCloudRunReplacements(name, files, textByFile) {
 
 function productionCallers(name, scannedCallers) {
   if (name === "submitRiderApplication") return ["lib/website/shared/circum_website_app.dart"];
+  if (name === "adminResolveAccess") return ["lib/app/admin/admin_access_api.dart"];
   return scannedCallers;
 }
 

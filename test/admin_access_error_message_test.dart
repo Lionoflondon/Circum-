@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:circum/app/admin/admin_access_api.dart';
 import 'package:circum/app/admin/admin_access_error_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,5 +40,26 @@ void main() {
 
     expect(message, contains('could not be verified'));
     expect(message, isNot(contains('sensitive diagnostic payload')));
+  });
+
+  test('Cloud Run access statuses retain the same safe UI classes', () {
+    expect(
+      adminAccessErrorMessage(
+        const AdminAccessException('UNAUTHENTICATED', 'private auth detail'),
+      ),
+      contains('session'),
+    );
+    expect(
+      adminAccessErrorMessage(
+        const AdminAccessException('PERMISSION_DENIED', 'private role detail'),
+      ),
+      contains('denied Admin access'),
+    );
+    expect(
+      adminAccessErrorMessage(
+        const AdminAccessException('INTERNAL', 'private database detail'),
+      ),
+      contains('temporarily unavailable'),
+    );
   });
 }
