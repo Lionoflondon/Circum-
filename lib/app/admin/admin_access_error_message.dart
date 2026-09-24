@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'admin_access_api.dart';
+
 String adminAccessErrorMessage(Object error) {
   if (error is FirebaseAuthException) {
     switch (error.code) {
@@ -27,6 +29,23 @@ String adminAccessErrorMessage(Object error) {
       case 'deadline-exceeded':
       case 'resource-exhausted':
       case 'internal':
+        return 'Admin access is temporarily unavailable. Wait a moment and retry.';
+      default:
+        return 'Admin access could not be verified. Refresh the page and retry.';
+    }
+  }
+
+  if (error is AdminAccessException) {
+    switch (error.status) {
+      case 'UNAUTHENTICATED':
+        return 'Your sign-in session expired. Sign in again.';
+      case 'PERMISSION_DENIED':
+        return 'Your account was denied Admin access. Ask an existing Admin to review its access.';
+      case 'FAILED_PRECONDITION':
+        return 'Admin security verification could not be completed. Refresh the page and retry.';
+      case 'UNAVAILABLE':
+      case 'DEADLINE_EXCEEDED':
+      case 'INTERNAL':
         return 'Admin access is temporarily unavailable. Wait a moment and retry.';
       default:
         return 'Admin access could not be verified. Refresh the page and retry.';

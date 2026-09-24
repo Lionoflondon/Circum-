@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 272
 - Gen 1 exports: 270
 - Files importing Firebase Functions v1: 64
-- MIGRATE TO CLOUD RUN: 171
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 56
+- MIGRATE TO CLOUD RUN: 169
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 58
 - REPLACE WITH CLOUD RUN + EVENTARC: 27
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
@@ -29,12 +29,12 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | adminGovernanceAction | server/functions/admin-governance.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-governance.test.js |
 | adminGrantRothToUser | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>lib/app/admin/roth_grant_campaigns.dart<br>server/functions/roth-grant-campaigns.test.js<br>test/admin_operations_test.dart |
 | adminNewsletterDashboard | server/functions/newsletter.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>docs/NEWSLETTER_RELEASE.md<br>lib/app/admin/newsletter_audience.dart<br>server/functions/cloud-run-newsletter.js<br>server/functions/cloud-run-newsletter.test.js<br>server/functions/firestore-newsletter-rules.test.js<br>server/functions/production-functions-inventory.json |
-| adminQueryPage | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-hardening-contract.test.js |
+| adminQueryPage | server/functions/admin-operations-authority.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/admin/admin_phase1_shell.dart |
 | adminReconcileRiderEarnings | server/functions/rider-earnings-summary.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-earnings-summary.test.js |
 | adminRecordAuditEntry | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
 | adminRecordRiderEvent | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>test/admin_operations_test.dart |
 | adminRequestAccountMergeReview | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
-| adminResolveAccess | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
+| adminResolveAccess | server/functions/admin-operations-authority.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/admin/admin_access_api.dart |
 | adminResolveMessageReport | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
 | adminReviewRider | server/functions/admin-rider-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-rider-authority.test.js<br>test/admin_operations_test.dart |
 | adminReviewRiderWithdrawal | server/functions/rider-connect.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/admin/admin_phase1_shell.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/rider-connect.test.js<br>test/admin_operations_test.dart<br>test/admin_rider_payout_live_caller_test.dart |

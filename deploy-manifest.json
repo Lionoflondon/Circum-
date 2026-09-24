@@ -302,11 +302,20 @@
       "products": ["admin", "backend"],
       "files": [
         "deploy-manifest.json",
+        "lib/app/admin/admin_access_api.dart",
         "lib/app/admin/admin_access_error_message.dart",
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/admin-operations-authority-contract.test.js",
         "server/functions/admin-operations-authority.js",
-        "test/admin_access_error_message_test.dart"
+        "server/functions/cloud-run-admin-access.js",
+        "server/functions/cloud-run-admin-access.test.js",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-replacement-registry.test.js",
+        "server/functions/gen1-architecture-registry.js",
+        "server/functions/Dockerfile.admin-access",
+        "server/functions/cloudbuild.admin-access.yaml",
+        "test/admin_access_error_message_test.dart",
+        "test/admin_access_api_test.dart"
       ],
       "reason": "Admin access restoration calls the backend role authority; this explicitly reviewed intersection keeps the client UX and its narrowly scoped callable contract in one protected change."
     },

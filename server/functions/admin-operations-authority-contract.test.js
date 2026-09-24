@@ -12,9 +12,9 @@ test("Admin cannot create canonical deliveries by duplicating live records", () 
 });
 
 test("access resolution reports missing roles without granting access or writing admin records", () => {
-  assert.match(source, /async function resolveActor\(context, \{allowMissingRole = false\} = \{\}\)/);
+  assert.match(source, /async function resolveActor\(context, \{allowMissingRole = false, db = getFirestore\(\)\} = \{\}\)/);
   assert.match(source, /if \(!roles\.size && !allowMissingRole\)/);
-  assert.match(source, /resolveActor\(context, \{allowMissingRole: true\}\)/);
+  assert.match(source, /resolveActor\(context, \{allowMissingRole: true, db\}\)/);
   assert.match(source, /if \(!actor\.roles\.length\) \{\s*return \{roles: \[\], permissions: \[\], accessGranted: false\};/);
   assert.match(source, /if \(!actor\.roles\.length\)[\s\S]*?return \{roles: \[\], permissions: \[\], accessGranted: false\};[\s\S]*?lastLoginAt/);
 });

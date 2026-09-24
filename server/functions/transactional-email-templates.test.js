@@ -67,6 +67,12 @@ test("rendered customer content rejects snake_case and internal labels", () => {
   assert.throws(() => templates.assertCustomerFacingContent({subject: "delivery_in_progress"}), /snake_case|internal_token/);
 });
 
+test("technical URLs and email addresses are explicit forbidden-test exclusions", () => {
+  const copy = templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/private_token"});
+  assert.match(copy.html, /private_token/);
+  assert.doesNotMatch(customerFields(copy), /private_token/);
+});
+
 test("welcome copy explains the account, Starter Roth and next step without raw trigger names", () => {
   const copy = templates.welcome({displayName: "Vaughn Werner", amount: 5});
   assert.equal(copy.subject, "Welcome to CIRCUM — £5 Roth has been added to your wallet");

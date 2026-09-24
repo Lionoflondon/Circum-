@@ -69,11 +69,10 @@ function activeRolesFromRecord(record = {}) {
   return roles.length ? roles : [];
 }
 
-async function resolveActor(context, {allowMissingRole = false} = {}) {
+async function resolveActor(context, {allowMissingRole = false, db = getFirestore()} = {}) {
   if (!context || !context.auth || !context.auth.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
   }
-  const db = getFirestore();
   const uid = context.auth.uid;
   const email = lower(context.auth.token && context.auth.token.email);
   const uidDoc = await db.collection("adminUsers").doc(uid).get();
@@ -97,6 +96,20 @@ async function resolveActor(context, {allowMissingRole = false} = {}) {
     canManageAdmins: hasPermission([...roles], "*"),
     label: email || uid,
   };
+}
+
+async function resolveAdminAccess(data, context, {db = getFirestore()} = {}) {
+  void data;
+  const actor = await resolveActor(context, {allowMissingRole: true, db});
+  if (!actor.roles.length) {
+    return {roles: [], permissions: [], accessGranted: false};
+  }
+  const patch = {lastLoginAt: FieldValue.serverTimestamp()};
+  await Promise.all([
+    db.collection("adminUsers").doc(actor.uid).set(patch, {merge: true}),
+    actor.email ? db.collection("adminUsers").doc(actor.email).set(patch, {merge: true}) : null,
+  ].filter(Boolean));
+  return {roles: actor.roles, permissions: actor.permissions, accessGranted: true};
 }
 
 function requireManageAdmins(actor) {
@@ -543,21 +556,9 @@ function platformOperationPatch(status, actor, reason) {
   };
 }
 
-exports.adminResolveAccess = adminCallable(async (data, context) => {
-  const actor = await resolveActor(context, {allowMissingRole: true});
-  if (!actor.roles.length) {
-    return {roles: [], permissions: [], accessGranted: false};
-  }
-  const db = getFirestore();
-  const patch = {lastLoginAt: FieldValue.serverTimestamp()};
-  await Promise.all([
-    db.collection("adminUsers").doc(actor.uid).set(patch, {merge: true}),
-    actor.email ? db.collection("adminUsers").doc(actor.email).set(patch, {merge: true}) : null,
-  ].filter(Boolean));
-  return {roles: actor.roles, permissions: actor.permissions, accessGranted: true};
-});
+exports.adminResolveAccess = adminCallable(resolveAdminAccess);
 
-exports.adminQueryPage = adminCallable(async (data, context) => {
+async function queryAdminPage(data, context) {
   const actor = await resolveActor(context);
   const collection = clean(data && data.collection);
   const permission = ADMIN_DATASETS[collection];
@@ -581,7 +582,9 @@ exports.adminQueryPage = adminCallable(async (data, context) => {
     total: total.data().count,
     pageSize,
   };
-});
+}
+
+exports.adminQueryPage = adminCallable(queryAdminPage);
 
 exports.adminRecordAuditEntry = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
@@ -1467,4 +1470,4 @@ exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   return {ok: true};
 });
 
-exports._private = {resolveActor, writeAudit};
+exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, writeAudit};
