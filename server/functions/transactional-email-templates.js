@@ -2,7 +2,9 @@
 "use strict";
 
 const APP_URL = "https://circumuk.com";
-const WELCOME_IMAGE_URL = "https://circumuk.com/assets/assets/images/circum-welcome.png";
+const WELCOME_WORDMARK_URL = "https://circumuk.com/assets/assets/images/circum_wordmark.png";
+const TERMS_URL = "https://circumuk.com/terms";
+const PRIVACY_URL = "https://circumuk.com/privacy_policy";
 const SUPPORT_TEXT = "Need help? Reply to this email or contact Circum support from your account.";
 const FORBIDDEN_CUSTOMER_TOKENS = [
   "roth_movement_completed",
@@ -67,25 +69,39 @@ function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, 
   return copy;
 }
 
+function welcomeHtml({displayName = "", amountText, ctaUrl}) {
+  const greeting = safeName(displayName) ? `Hi ${escapeHtml(firstName(displayName))},` : "Hi there,";
+  const safeUrl = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(ctaUrl)) ? text(ctaUrl) : APP_URL;
+  const safeAmount = escapeHtml(amountText || "£5.00");
+  const cta = `<a href="${escapeHtml(safeUrl)}" style="display:inline-block;padding:17px 37px;border-radius:30px;background:#5b43d6;color:#fff;font-size:17px;font-weight:bold;text-decoration:none">See my 5 Roth</a>`;
+  return `<!doctype html><html lang="en"><body style="margin:0;padding:0;background:#edf3ff;color:#182132;font-family:Arial,Helvetica,sans-serif"><span style="display:none;font-size:1px;line-height:1px;color:#f3f6fb;max-height:0;max-width:0;opacity:0;overflow:hidden">Welcome to CIRCUM. Your starter 5 Roth is waiting in the app.</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#edf3ff"><tr><td align="center" style="padding:32px 12px"><table role="presentation" class="shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td align="center" style="padding:44px 48px 18px"><img src="${WELCOME_WORDMARK_URL}" width="186" alt="CIRCUM" style="display:block;width:186px;height:auto;border:0;margin:0 auto"></td></tr><tr><td align="center" style="padding:14px 48px 30px"><h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:43px;line-height:1.14;letter-spacing:-1.2px;color:#111b2d">Welcome to a better<br>way to move things.</h1></td></tr><tr><td style="padding:0 36px 32px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:244px;background:#e0eaff;border-radius:18px;overflow:hidden"><tr><td align="center" valign="middle" style="padding:22px 10px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="85" height="82" align="center" style="width:85px;height:82px;background:#1c2277;border-radius:18px 0 0 18px;color:#fff;font-size:34px">●</td><td width="85" height="82" align="center" style="width:85px;height:82px;background:#23c6c8;color:#fff;font-size:44px">→</td><td width="85" height="82" align="center" style="width:85px;height:82px;background:#6d57ee;color:#fff;font-size:37px">◇</td><td width="85" height="82" align="center" style="width:85px;height:82px;background:#ffb84d;border-radius:0 18px 18px 0;color:#fff;font-size:35px">●</td></tr></table><p style="margin:20px 0 0;color:#172a69;font-family:Georgia,'Times New Roman',serif;font-size:29px;letter-spacing:-.5px">Every delivery starts somewhere.</p></td></tr></table></td></tr><tr><td style="padding:8px 48px 0;font-size:18px;line-height:1.7"><p style="margin:0 0 25px">${greeting}</p><p style="margin:0 0 25px">Your account is ready to use, and there’s a welcome gift waiting for you: <strong style="color:#5b43d6">${safeAmount} Roth to get started.</strong> Explore what CIRCUM can do, then use your Roth toward an eligible service when you’re ready.</p><p style="margin:0 0 13px"><strong>Discover what you can do</strong></p><p style="margin:0 0 16px"><strong style="color:#1673e6">Send:</strong> Arrange a parcel delivery from pickup to drop-off, with options shown before you pay.</p><p style="margin:0 0 16px"><strong style="color:#5848df">Gifts:</strong> Send something thoughtful and add a personal story to the moment.</p><p style="margin:0 0 16px"><strong style="color:#102e7a">Business:</strong> Manage deliveries for your work in one place, with business payment tools when you need them.</p><p style="margin:0 0 16px"><strong style="color:#1752d9">Roth:</strong> CIRCUM’s in-app credits can help pay for eligible services. <strong style="white-space:nowrap">£1 = 1 Roth.</strong> Your welcome ${safeAmount} Roth has been added to your wallet, where you can see your balance.</p><p style="margin:0 0 25px"><strong style="color:#15945d">Health+:</strong> Explore delivery options designed for health-related needs. Any eligibility, availability and price are shown in the app.</p></td></tr><tr><td style="padding:2px 48px 23px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eaf1ff;background-image:linear-gradient(130deg,#eef4ff 0%,#e7edff 40%,#eaf5ff 74%,#f5f3ff 100%);border-radius:24px"><tr><td style="padding:27px 28px;color:#23365e;font-size:18px;line-height:1.55"><span style="color:#4166c9;font-size:13px;font-weight:bold;letter-spacing:1.5px">WELCOME GIFT</span><br><strong style="font-size:27px;color:#2853c7">5 Roth for you</strong><br>That’s <strong>5 Roth</strong> to start with.<br><strong style="display:inline-block;white-space:nowrap;margin:7px 0;color:#2853c7">£1 = 1 Roth</strong><br>Your starter Roth has already been added to your wallet. See your balance in the app.</td></tr></table></td></tr><tr><td style="padding:0 48px;font-size:18px;line-height:1.7"><p style="margin:0 0 13px"><strong>Here’s where to start</strong></p><p style="margin:0 0 25px">Open the app to explore your account. Explore each service at no charge. Your 5 Roth are in your wallet, where you can see your balance. A delivery or optional paid service will show its price before you confirm.</p></td></tr><tr><td align="center" style="padding:5px 48px 31px">${cta}</td></tr><tr><td style="padding:0 48px;font-size:18px;line-height:1.7"><p style="margin:0 0 13px"><strong>A quick word on security</strong></p><p style="margin:0 0 25px">Keep your sign-in details and delivery PINs private. We’ll never ask you to share a password or a one-time sign-in code by email, chat or phone. If anything looks unusual, contact Support.</p><p style="margin:0 0 25px"><strong>Documents</strong><br><a href="${TERMS_URL}" style="color:#1266d4">Terms of Service</a> &nbsp;·&nbsp; <a href="${PRIVACY_URL}" style="color:#1266d4">Privacy Policy</a></p><p style="margin:0 0 31px">Questions? We’re here to help. Here’s to everything you’ll move next.<br><br>Welcome aboard,<br><strong>Team CIRCUM</strong></p></td></tr><tr><td align="center" style="padding:30px 48px 39px;border-top:1px solid #e7edf6;background:#f9fbff;color:#627189;font-size:13px;line-height:1.6"><img src="${WELCOME_WORDMARK_URL}" width="124" alt="CIRCUM" style="display:block;width:124px;height:auto;border:0;margin:0 auto"><br><br>This is a service email about your new CIRCUM account.<br>Need help? Contact Support.</td></tr></table></td></tr></table></body></html>`;
+}
+
 function welcome({displayName = "", amount = 5, ctaUrl = APP_URL} = {}) {
   const name = safeName(displayName);
-  return result({
+  const amountText = money(amount) || "£5.00";
+  const copy = result({
     templateId: "sender-welcome",
-    subject: "Welcome to Circum — £5 Roth has been added to your wallet",
-    preheader: "Your Circum account is ready. Here’s a little something to help you get started.",
-    heading: name ? `Welcome to Circum, ${firstName(name)}` : "Welcome to Circum",
+    subject: `Welcome to CIRCUM — ${Number(amount) === 5 ? "£5" : amountText} Roth has been added to your wallet`,
+    preheader: "Your CIRCUM account is ready. Here’s a little something to help you get started.",
+    heading: "Welcome to a better way to move things.",
     paragraphs: [
-      "Thanks for joining us — your account is ready to use.",
-      `To help you get started, we’ve added ${money(amount) || "£5"} Roth to your wallet. Roth is Circum credit that can be used toward eligible Circum services and deliveries, subject to our current service rules.`,
+      name ? `Hi ${firstName(name)},` : "Hi there,",
+      "Your account is ready to use, and there’s a welcome gift waiting for you.",
+      `To help you get started, we’ve added ${amountText} Roth to your wallet. Roth is CIRCUM credit that can be used toward eligible Circum services and deliveries, subject to our current service rules.`,
       "Whenever you’re ready, you can explore Circum and see what’s available.",
+      "Documents: Terms of Service and Privacy Policy.",
+      "Questions? We’re here to help. Contact Support.",
     ],
-    ctaLabel: "Explore Circum",
+    ctaLabel: "See my 5 Roth",
     ctaUrl,
-    footer: "Warmly,\n\nThe Circum team",
-    imageUrl: WELCOME_IMAGE_URL,
+    footer: "This is a service email about your new CIRCUM account.\n\nThe Circum team",
     senderCategory: "info",
     tags: [{name: "product", value: "account"}, {name: "message", value: "welcome"}],
   });
+  copy.html = welcomeHtml({displayName: name, amountText, ctaUrl});
+  assertCustomerFacingContent(copy);
+  return copy;
 }
 
 function bookingConfirmed({reference = "", ctaUrl = APP_URL} = {}) {
@@ -302,7 +318,7 @@ function giftStory({role, storyUrl} = {}) {
 }
 
 function assertCustomerFacingContent(copy) {
-  const fields = [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer].filter(Boolean).join(" ").toLowerCase();
+  const fields = visibleCustomerText(copy).toLowerCase();
   if (/[a-z][a-z0-9]*_[a-z0-9_]+/.test(fields)) throw new Error("customer_copy_contains_snake_case");
   for (const token of FORBIDDEN_CUSTOMER_TOKENS) {
     if (fields.includes(token)) throw new Error(`customer_copy_contains_internal_token:${token}`);
@@ -310,10 +326,18 @@ function assertCustomerFacingContent(copy) {
   return true;
 }
 
+function visibleCustomerText(copy) {
+  return [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer]
+      .filter(Boolean).join(" ")
+      .replace(/https?:\/\/[^\s"'<>]+/gi, " ")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, " ");
+}
+
 module.exports = {
   APP_URL,
   FORBIDDEN_CUSTOMER_TOKENS,
   assertCustomerFacingContent,
+  visibleCustomerText,
   bookingConfirmed,
   businessInvoicePaid,
   cancellationSettled,

@@ -5,8 +5,7 @@ const assert = require("node:assert/strict");
 const templates = require("./transactional-email-templates");
 
 function customerFields(copy) {
-  return [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer]
-      .filter(Boolean).join(" ");
+  return templates.visibleCustomerText(copy);
 }
 
 test("every transactional template has complete customer-facing structure", () => {
@@ -53,8 +52,8 @@ test("every transactional template has complete customer-facing structure", () =
     assert.ok(copy.html);
     assert.ok(copy.footer);
     assert.match(copy.html, /display:none/);
-    assert.match(copy.html, /<h1>/);
-    assert.match(copy.html, /Reply to this email|contact Circum support|The Circum team/);
+    assert.match(copy.html, /<h1(?:\s|>)/);
+    assert.match(copy.html, /Reply to this email|contact Circum support|The Circum team|Contact Support|Team CIRCUM/);
   }
 });
 
@@ -70,13 +69,15 @@ test("rendered customer content rejects snake_case and internal labels", () => {
 
 test("welcome copy explains the account, Starter Roth and next step without raw trigger names", () => {
   const copy = templates.welcome({displayName: "Vaughn Werner", amount: 5});
-  assert.equal(copy.subject, "Welcome to Circum — £5 Roth has been added to your wallet");
-  assert.match(copy.heading, /Welcome to Circum, Vaughn/);
+  assert.equal(copy.subject, "Welcome to CIRCUM — £5 Roth has been added to your wallet");
+  assert.match(copy.heading, /Welcome to a better way to move things/);
   assert.match(copy.text, /(?:£5\.00 Roth has been added|we’ve added £5\.00 Roth) to your wallet/);
   assert.match(copy.text, /eligible Circum services and deliveries/);
-  assert.match(copy.text, /Explore Circum/);
-  assert.match(copy.text, /The Circum team/);
-  assert.match(copy.html, /circum-welcome\.png/);
-  assert.match(copy.html, /alt="Welcome to Circum"/);
+  assert.match(copy.text, /Documents: Terms of Service and Privacy Policy/);
+  assert.match(copy.html, /circum_wordmark\.png/);
+  assert.match(copy.html, /Every delivery starts somewhere/);
+  assert.match(copy.html, /Terms of Service/);
+  assert.match(copy.html, /Privacy Policy/);
+  assert.doesNotMatch(copy.html, /href="https:\/\/circumuk\.com\/support/);
   assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
 });
