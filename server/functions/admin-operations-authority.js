@@ -69,7 +69,7 @@ function activeRolesFromRecord(record = {}) {
   return roles.length ? roles : [];
 }
 
-async function resolveActor(context) {
+async function resolveActor(context, {allowMissingRole = false} = {}) {
   if (!context || !context.auth || !context.auth.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
   }
@@ -86,7 +86,7 @@ async function resolveActor(context) {
     ...tokenRoles(context.auth.token || {}),
     ...docRecords.flatMap(activeRolesFromRecord),
   ]);
-  if (!roles.size) {
+  if (!roles.size && !allowMissingRole) {
     throw new functions.https.HttpsError("permission-denied", "Administrator access is required.");
   }
   return {
@@ -544,14 +544,17 @@ function platformOperationPatch(status, actor, reason) {
 }
 
 exports.adminResolveAccess = adminCallable(async (data, context) => {
-  const actor = await resolveActor(context);
+  const actor = await resolveActor(context, {allowMissingRole: true});
+  if (!actor.roles.length) {
+    return {roles: [], permissions: [], accessGranted: false};
+  }
   const db = getFirestore();
   const patch = {lastLoginAt: FieldValue.serverTimestamp()};
   await Promise.all([
     db.collection("adminUsers").doc(actor.uid).set(patch, {merge: true}),
     actor.email ? db.collection("adminUsers").doc(actor.email).set(patch, {merge: true}) : null,
   ].filter(Boolean));
-  return {roles: actor.roles, permissions: actor.permissions};
+  return {roles: actor.roles, permissions: actor.permissions, accessGranted: true};
 });
 
 exports.adminQueryPage = adminCallable(async (data, context) => {

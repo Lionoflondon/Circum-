@@ -12,6 +12,7 @@ import 'admin_operations.dart';
 import 'admin_production_payment_api.dart';
 import 'roth_grant_campaigns.dart';
 import 'newsletter_audience.dart';
+import 'admin_access_error_message.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
@@ -86,6 +87,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   String? _message;
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatMessagesSub;
+  Future<void>? _restoreFuture;
+  String? _restoreUid;
+  int _restoreGeneration = 0;
 
   @override
   void initState() {
@@ -110,7 +114,27 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     super.dispose();
   }
 
-  Future<void> _restore(User? user) async {
+  Future<void> _restore(User? user) {
+    final uid = user?.uid;
+    final pending = _restoreFuture;
+    if (pending != null && _restoreUid == uid) return pending;
+
+    final generation = ++_restoreGeneration;
+    _restoreUid = uid;
+    final future = _performRestore(user, generation);
+    _restoreFuture = future;
+    return future.whenComplete(() {
+      if (_restoreGeneration == generation) {
+        _restoreFuture = null;
+        _restoreUid = null;
+      }
+    });
+  }
+
+  Future<void> _performRestore(User? user, int generation) async {
+    bool isCurrent() => mounted && generation == _restoreGeneration;
+
+    if (!isCurrent()) return;
     setState(() {
       _loading = true;
       _message = null;
@@ -127,6 +151,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     try {
       final roles = await _loadRoles(user).timeout(const Duration(seconds: 20));
+      if (!isCurrent()) return;
       setState(() {
         _user = user;
         _email.text = user.email ?? _email.text;
@@ -141,19 +166,21 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         );
       }
     } on TimeoutException {
+      if (!isCurrent()) return;
       setState(
         () => _message =
             'Admin access timed out. Check the connection and retry.',
       );
-    } catch (_) {
-      setState(() => _message = 'Could not load Admin access. Retry.');
+    } catch (error) {
+      if (!isCurrent()) return;
+      setState(() => _message = adminAccessErrorMessage(error));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (isCurrent()) setState(() => _loading = false);
     }
   }
 
   Future<List<String>> _loadRoles(User user) async {
-    final token = await user.getIdTokenResult(true);
+    final token = await user.getIdTokenResult();
     final claims = token.claims ?? const <String, dynamic>{};
     final claimRoles = <String>[
       if (claims['adminRole'] != null) '${claims['adminRole']}',
@@ -163,6 +190,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     ];
     final result = await _functions.httpsCallable('adminResolveAccess').call();
     final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+    if (data['accessGranted'] == false) return const [];
     final serverRoles = ((data['roles'] as List?) ?? const []).map(
       (role) => '$role',
     );
