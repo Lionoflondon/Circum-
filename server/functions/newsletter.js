@@ -221,7 +221,14 @@ async function syncMailchimpAudienceEvent({type, email, eventId, firedAt, eventK
       return {status: "suppressed_local_unsubscribe", suppressed: true};
     }
     const nextRevision = Number(latestRecord && latestRecord.revision || 0) + 1;
-    tx.set(ref, {
+    const alreadyActive = !optedOut && latestRecord && latestRecord.status === "active";
+    const update = alreadyActive ? {
+      mailchimpLastEventAt: incomingEventTime || latestEventTime || null,
+      mailchimpLastEventKey: normalizedEventKey,
+      updatedAt: FieldValue.serverTimestamp(),
+      providerSyncStatus: "pending",
+      providerLastAttemptAt: null,
+    } : {
       email: normalized,
       emailHash: id,
       status,
@@ -245,16 +252,19 @@ async function syncMailchimpAudienceEvent({type, email, eventId, firedAt, eventK
       providerLastAttemptAt: null,
       mailchimpLastEventAt: incomingEventTime || latestEventTime || null,
       mailchimpLastEventKey: normalizedEventKey,
-    }, {merge: true});
-    tx.set(ref.collection("consentEvents").doc(), {
-      type: optedOut ? "unsubscribed" : latestRecord ? "mailchimp_subscribed" : "subscribed",
-      categories: optedOut ? [] : [...DEFAULT_CATEGORIES],
-      source: MAILCHIMP_SOURCE,
-      consentVersion: "mailchimp-audience-consent-v1",
-      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
-      privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+    tx.set(ref, update, {merge: true});
+    if (!alreadyActive) {
+      tx.set(ref.collection("consentEvents").doc(), {
+        type: optedOut ? "unsubscribed" : latestRecord ? "mailchimp_subscribed" : "subscribed",
+        categories: optedOut ? [] : [...DEFAULT_CATEGORIES],
+        source: MAILCHIMP_SOURCE,
+        consentVersion: "mailchimp-audience-consent-v1",
+        privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+        privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     tx.set(eventRef, {
       status: "processing", type, firedAt: firedAt || null, claimedAt: Date.now(),
     }, {merge: true});

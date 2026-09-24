@@ -200,6 +200,24 @@ test("Mailchimp subscription sync never clears an existing Circum unsubscribe", 
   assert.equal(db.records.get(`newsletterSubscribers/${sha256(email)}`).status, "unsubscribed");
 });
 
+test("Mailchimp subscribe preserves an already-active Firebase signup", async () => {
+  const db = new FakeDb();
+  const email = "firebase-signup@example.com";
+  const id = sha256(email);
+  const original = {
+    email, status: "active", revision: 7, categories: ["offers_rewards"], source: "homepage",
+    signupSource: "homepage", consentVersion: "newsletter-consent-v1", consentWording: "By joining, you agree.",
+  };
+  db.records.set(`newsletterSubscribers/${id}`, original);
+  const result = await syncMailchimpAudienceEvent({type: "subscribe", email, eventId: "member-firebase", firedAt: "2026-09-24 10:00:00"}, {db, provider: {upsertAudienceMember: async () => ({status: "synced"})}});
+  assert.equal(result.status, "synced");
+  const updated = db.records.get(`newsletterSubscribers/${id}`);
+  assert.deepEqual(updated.categories, original.categories);
+  assert.equal(updated.source, original.source);
+  assert.equal(updated.consentVersion, original.consentVersion);
+  assert.equal([...db.records.keys()].filter((key) => key.includes("/consentEvents/")).length, 0);
+});
+
 test("Mailchimp subscribe adds without resubscribing and unsubscribe suppresses in Resend", async () => {
   const calls = [];
   const provider = resendNewsletterProvider({apiKey: "test-newsletter-key", fetchImpl: async (url, options) => {
