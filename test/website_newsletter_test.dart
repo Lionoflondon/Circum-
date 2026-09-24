@@ -27,6 +27,21 @@ void main() {
     expect(newsletterSignupEnabled, isFalse);
   });
 
+  test('Mailchimp site tracking is present but consent-gated', () {
+    final shell = File('web/index.html').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    const trackingUrl =
+        'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
+
+    expect(shell, contains('id="mcjs" type="text/plain"'));
+    expect(shell, contains('data-circum-consent="optional-analytics"'));
+    expect(shell, contains(trackingUrl));
+    expect(source, contains('_enableMailchimpSiteTracking()'));
+    expect(source, contains("existing.getAttribute('type') != 'text/plain'"));
+    expect(source, contains(trackingUrl));
+  });
+
   test('preference tokens are removed from visitor and support URL metadata',
       () {
     for (final value in [
