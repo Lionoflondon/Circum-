@@ -299,6 +299,18 @@
       "reason": "Newsletter signup, suppression, audience administration, persistence, and public signup UI form one explicitly reviewed cross-product capability."
     },
     {
+      "products": ["admin", "backend"],
+      "files": [
+        "deploy-manifest.json",
+        "lib/app/admin/admin_access_error_message.dart",
+        "lib/app/admin/admin_phase1_shell.dart",
+        "server/functions/admin-operations-authority-contract.test.js",
+        "server/functions/admin-operations-authority.js",
+        "test/admin_access_error_message_test.dart"
+      ],
+      "reason": "Admin access restoration calls the backend role authority; this explicitly reviewed intersection keeps the client UX and its narrowly scoped callable contract in one protected change."
+    },
+    {
       "products": ["website", "backend"],
       "files": [
         "server/functions/rider-account.test.js",
