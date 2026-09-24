@@ -83,7 +83,6 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 
 The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on the configured secrets. The current production deployment has verified `RESEND_API_KEY`, `GIFTS_EMAIL_FROM`, `BUSINESS_EMAIL_FROM`, `HEALTH_EMAIL_FROM`, and `INFO_EMAIL_FROM` bindings; `NOTIFICATIONS_EMAIL_FROM` remains an optional approved fallback. Secret values are never printed or stored in source.
-
 ## Sender welcome boundary
 
 The Sender-account bootstrap and profile-update entrypoints, together with the pending-wallet repair path, call the authoritative Starter Roth grant first. Only after the grant is marked `granted` does the account path create `sender_welcome_{uid}` in `emailQueue`. The queue identity is create-only and is revalidated against `users/{uid}` plus the exact Starter Roth transaction before Resend. A wallet transaction replay for the Starter Roth grant is explicitly ignored by the generic Roth publisher, so one account cannot receive both a welcome and a generic Roth activity email.
@@ -95,7 +94,6 @@ The exact changed publisher owner is the existing `circum-account-bootstrap` Clo
 ## Corrective welcome send
 
 After protected merge, the new account-bootstrap and transactional-email revisions are fixture-certified, and live queue → claim → Resend persistence is healthy, use the authoritative existing Sender account for the explicitly authorized corrective send. Resolve the account by protected operator procedure, verify `starterRothGrantStatus=granted` and the existing `starterRothTransactionId`, and create only `sender_welcome_{uid}` with the new template. Do not create an account, write a ledger transaction, change balance, or reuse the old Roth activity queue identity. Repeating the operator action must return a create-only duplicate/no-op. Record only privacy-safe queue ID suffix, status, provider acceptance ID if policy permits, and the unchanged Roth transaction/balance evidence.
-
 ## Certification boundary
 
 Fixture certification covers valid, exact duplicate, 20-way duplicate, Eventarc retry, timeout, 429, 5xx, invalid/suppressed recipient, changed source, malformed event, and worker restart. Live certification requires one user-approved controlled recipient and proves queue record → Eventarc → claim → source/recipient validation → Resend acceptance → persisted outcome. No real payment, delivery, Business, Roth, referral, or Rider mutation is permitted for certification.

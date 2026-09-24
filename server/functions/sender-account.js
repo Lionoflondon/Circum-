@@ -54,7 +54,7 @@ function welcomeEmailPending(existing = {}) {
   return cleanText(existing.welcomeEmailStatus, 80).toLowerCase() === "pending";
 }
 
-async function grantAndMarkSenderStarterRoth({uid, email, displayName = "", source}) {
+async function grantAndMarkSenderStarterRoth({uid, email, displayName = "", source, recipientSuppressed = false, suppressionReason = ""}) {
   const grant = await rothLedger.grantSenderWelcomeRoth({uid, email, source});
   const db = getFirestore();
   await db.collection("users").doc(uid).set({
@@ -71,6 +71,8 @@ async function grantAndMarkSenderStarterRoth({uid, email, displayName = "", sour
     displayName,
     starterRothTransactionId: grant.transactionId,
     source,
+    recipientSuppressed,
+    suppressionReason,
   });
   return {...grant, welcome};
 }
@@ -150,6 +152,8 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
       email: context.auth.token && context.auth.token.email,
       displayName: patch.displayName || context.auth.token && context.auth.token.name,
       source: "updateSenderProfile",
+      recipientSuppressed: existingData.transactionalEmailSuppressed === true || existingData.emailSuppressed === true,
+      suppressionReason: existingData.transactionalEmailSuppressed === true || existingData.emailSuppressed === true ? "recipient_suppressed" : "",
     }) :
     null;
   return {
@@ -199,10 +203,11 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
           allowed: true,
           roles: Array.from(roles),
           action: "existing_sender_role_allowed",
-          starterRothEligible: starterRothPending(existing),
+      starterRothEligible: starterRothPending(existing),
           profile: {
             phone: cleanText(existing.phone || existing.phoneNumber, 80),
             displayName: cleanText(existing.displayName || existing.name, 180),
+            recipientSuppressed: existing.transactionalEmailSuppressed === true || existing.emailSuppressed === true,
           },
         };
       }
@@ -239,6 +244,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       profile: {
         phone: cleanText(existing.phone || existing.phoneNumber, 80),
         displayName: cleanText(existing.displayName || existing.name, 180),
+        recipientSuppressed: existing.transactionalEmailSuppressed === true || existing.emailSuppressed === true,
       },
     };
   });
@@ -249,6 +255,8 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       email: context.auth.token && context.auth.token.email,
       displayName: result.profile && result.profile.displayName || context.auth.token && context.auth.token.name,
       source: "ensureSenderAccount",
+      recipientSuppressed: result.profile && result.profile.recipientSuppressed === true,
+      suppressionReason: result.profile && result.profile.recipientSuppressed ? "recipient_suppressed" : "",
     });
     result.starterRothGranted = true;
     result.starterRothAmount = starterRoth.amount;

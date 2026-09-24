@@ -6,7 +6,9 @@ const templates = require("./transactional-email-templates");
 
 function customerFields(copy) {
   return [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer]
-      .filter(Boolean).join(" ");
+      .filter(Boolean).join(" ")
+      .replace(/https?:\/\/[^\s"'<>)]+/gi, "")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "");
 }
 
 test("every transactional template has complete customer-facing structure", () => {
@@ -66,6 +68,12 @@ test("rendered customer content rejects snake_case and internal labels", () => {
   }
   assert.throws(() => templates.assertCustomerFacingContent({subject: "roth_movement_completed"}), /snake_case|internal_token/);
   assert.throws(() => templates.assertCustomerFacingContent({subject: "delivery_in_progress"}), /snake_case|internal_token/);
+});
+
+test("technical URLs and email addresses are explicit forbidden-test exclusions", () => {
+  const copy = templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/private_token"});
+  assert.match(copy.html, /private_token/);
+  assert.doesNotMatch(customerFields(copy), /private_token/);
 });
 
 test("welcome copy explains the account, Starter Roth and next step without raw trigger names", () => {

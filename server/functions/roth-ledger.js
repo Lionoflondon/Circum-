@@ -156,6 +156,8 @@ async function repairPendingSenderWelcomeRoth(context, source) {
     displayName: user.displayName || user.name || user.firstName || context.auth.token.name,
     starterRothTransactionId: grant.transactionId,
     source,
+    recipientSuppressed: user.transactionalEmailSuppressed === true || user.emailSuppressed === true,
+    suppressionReason: user.transactionalEmailSuppressed === true || user.emailSuppressed === true ? "recipient_suppressed" : "",
   });
   return grant;
 }
