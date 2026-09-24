@@ -10,6 +10,11 @@ marketing campaign sending are separate release states.
 
 ## Mailchimp audience synchronization (not yet activated)
 
+The existing Mailchimp-Firebase-Extension remains the Firebase-to-Mailchimp
+contact intake path. Circum does not create a second signup path; the bridge
+below is responsible for signed event handling, suppression precedence, and
+the optional Resend audience mirror.
+
 The dedicated `/integrations/mailchimp/audience` HTTPS route accepts only
 Mailchimp audience `subscribe`, `unsubscribe`, and `cleaned`
 events. It requires Mailchimp's `X-Mailchimp-Signature` HMAC over the raw
@@ -33,6 +38,15 @@ changes; establish a consent-reviewed baseline separately and add stable member
 identity mapping before enabling email-change events. Never paste
 either secret into chat, source, command output, or logs. Do not migrate SMS
 contacts or trigger marketing sends as part of webhook setup.
+
+## Mailchimp connected-site tracking
+
+`web/index.html` contains the account-specific connected-site script as a
+non-executing placeholder so Mailchimp can verify the installed URL. The
+Flutter app replaces that placeholder with an executable script only after the
+visitor accepts CIRCUM's existing optional-analytics choice. Rejecting the
+choice does not load the script. This tracking path is separate from Firebase
+signup intake, audience synchronization, and campaign sending.
 
 ## Approval and activation prerequisites
 
