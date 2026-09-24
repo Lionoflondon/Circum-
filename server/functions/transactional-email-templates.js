@@ -297,7 +297,8 @@ function giftStory({role, storyUrl} = {}) {
 }
 
 function assertCustomerFacingContent(copy) {
-  const fields = [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer].filter(Boolean).join(" ").toLowerCase();
+  const fields = [copy.subject, copy.preheader, copy.heading, copy.text, copy.html, copy.ctaLabel, copy.footer]
+      .filter(Boolean).join(" ").replace(/https?:\/\/[^\s"'<>)]+/gi, "").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "").toLowerCase();
   if (/[a-z][a-z0-9]*_[a-z0-9_]+/.test(fields)) throw new Error("customer_copy_contains_snake_case");
   for (const token of FORBIDDEN_CUSTOMER_TOKENS) {
     if (fields.includes(token)) throw new Error(`customer_copy_contains_internal_token:${token}`);

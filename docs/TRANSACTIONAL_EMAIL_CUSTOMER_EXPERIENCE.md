@@ -8,8 +8,8 @@ All rows below use the centralized `emailQueue` → private Cloud Run consumer �
 
 | Internal event | Business meaning | Subject | Preheader | Heading / body summary | CTA | From family |
 |---|---|---|---|---|---|---|
-| `sender_welcome` | A Sender account was initialized and its one-time £5 Starter Roth grant completed | Welcome to CIRCUM | £5 Roth has been added to help you get started. | Welcomes the Sender, explains the £5 wallet credit and Roth in plain language, and says what happens next | Open CIRCUM | Info |
-| `roth_movement_completed` | An ordinary completed Roth wallet credit, debit, refund, or restoration | Your CIRCUM wallet has been updated | A Roth credit, debit, or refund has been recorded in your wallet | States the actual movement direction and amount and points to the current balance | Open CIRCUM | Info |
+| `sender_welcome_ready` | A Sender account was initialized and its one-time £5 Starter Roth grant completed | Welcome to CIRCUM — your account is ready | £5 Roth has been added to help you get started. | Welcomes the Sender, explains the £5 wallet credit and Roth in plain language, and says what happens next | Explore CIRCUM | Info |
+| `roth_activity_ready` | An ordinary completed Roth wallet credit, debit, refund, or restoration | Your CIRCUM Roth wallet has been updated | A Roth credit, debit, or refund has been recorded in your wallet | States the actual movement direction and amount and points to the current balance | View Roth wallet | Info |
 | `delivery_booking_paid` | A paid ordinary delivery booking was created | Your CIRCUM delivery booking is confirmed | Your paid delivery booking is now in our system. | Confirms the booking and explains that progress updates follow | Open CIRCUM | Info |
 | `delivery_completed` | An ordinary delivery reached its final delivered state and settlement completed | Your CIRCUM delivery has been delivered | Your delivery has reached its destination. | Confirms delivery and points to the details | Open CIRCUM | Info |
 | `delivery_cancellation_settled` | An ordinary delivery cancellation was settled | Your CIRCUM delivery cancellation is confirmed | Your delivery cancellation has been processed. | Confirms processing without inventing a refund or balance change | Open CIRCUM | Info |
@@ -26,13 +26,13 @@ The current source does not publish separate ordinary delivery accepted, in-prog
 
 ## New-Sender welcome exactly once
 
-The completed Starter Roth ledger record is the authoritative welcome source. A record is classified as the Starter grant only from its authoritative source/idempotency metadata. The publisher then creates a sanitized Firestore queue identity equivalent to:
+The authoritative account-bootstrap and pending-wallet-repair paths mark the Starter Roth grant complete before publishing the welcome. The publisher creates a sanitized Firestore queue identity equivalent to:
 
 ```text
-sender_welcome:<uid>/<welcomeGrantId>
+sender_welcome:<uid>
 ```
 
-The queue record is created once. Duplicate account calls, pending-grant repair, Eventarc replay, worker restart, and provider retry all reuse that identity. A Starter grant never enters the generic Roth template. A missing, invalid, or suppressed recipient produces a persisted terminal no-send state; it never calls Resend. Email failure does not roll back account creation or the Roth grant.
+The queue record is create-only. Duplicate account calls, pending-grant repair, Eventarc replay, worker restart, and provider retry all reuse that identity. The Starter Roth ledger replay is ignored by the generic Roth publisher. A missing, invalid, or suppressed recipient produces a persisted terminal no-send state; it never calls Resend. Email failure does not roll back account creation or the Roth grant.
 
 ## Corrective-send boundary
 
