@@ -4,6 +4,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {buildCustodyEvent, buildHealthPlusPlanFields} = require("./health-plus-core");
 const {createEmailQueueRecord} = require("./email-queue");
+const {renderTransactionalEmail} = require("./transactional-email-templates");
 
 const STATUS_EVENTS = {
   scheduled: ["booking_created", "Your Health+ collection has been scheduled.", "scheduled"],
@@ -36,6 +37,7 @@ function pickupLabel(pickup) {
 
 async function queueHealthNotification(db, pickup, type, title, body) {
   const notificationId = `health_${pickup.id}_${type}`;
+  const message = renderTransactionalEmail(`health_plus_${type}`, {});
   const payload = {
     id: notificationId,
     userId: pickup.userId || pickup.senderId || null,
@@ -54,8 +56,13 @@ async function queueHealthNotification(db, pickup, type, title, body) {
     await createEmailQueueRecord(db, notificationId, {
       notificationId,
       to: pickup.email,
-      subject: title,
-      text: body,
+      subject: message.subject || title,
+      preheader: message.preheader,
+      heading: message.heading,
+      text: message.text || body,
+      html: message.html,
+      cta: message.cta,
+      footer: message.footer,
       status: "queued",
       eventType: `health_plus_${type}`,
       source: "health_plus",

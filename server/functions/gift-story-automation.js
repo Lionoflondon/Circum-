@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {createEmailQueueRecord} = require("./email-queue");
+const {renderTransactionalEmail} = require("./transactional-email-templates");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
@@ -435,13 +436,21 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
   // sent/terminal queue item to queued.
   const notificationId = `gift_story_${giftId}_${role}`;
   const secureStoryUrl = storyLink(token);
+  const message = renderTransactionalEmail("gift_story_ready", {
+    recipientRole: role,
+    storyUrl: secureStoryUrl,
+  });
   await createEmailQueueRecord(db, notificationId, {
     notificationId,
     to: email,
-    subject: sender ? "Your Circum Gift Story is ready" : "You have received a Circum Gift Story",
-    body: sender ?
-      `Hello,\n\nYour Circum Gift Story is ready.\n\nWatch your story:\n${secureStoryUrl}\n\nThis secure private link expires according to Gift Story policy.\n\nThoughtful gifting, delivered by Circum.\n\n— Circum` :
-      `Hello,\n\nYour Circum Gift Story is ready.\n\nView your secure story here:\n${secureStoryUrl}\n\nThis private link has been created just for you and expires according to Gift Story policy.\n\n— Circum`,
+    subject: message.subject,
+    preheader: message.preheader,
+    heading: message.heading,
+    body: message.text,
+    text: message.text,
+    html: message.html,
+    cta: message.cta,
+    footer: message.footer,
     type: "gift_story_ready",
     eventType: "gift_story_ready",
     senderCategory: "gifts",

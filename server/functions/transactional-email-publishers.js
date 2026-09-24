@@ -2,6 +2,7 @@
 "use strict";
 
 const {normalizeEmail} = require("./email-queue");
+const {renderTransactionalEmail} = require("./transactional-email-templates");
 
 const CREATED = "google.cloud.firestore.document.v1.created";
 const UPDATED = "google.cloud.firestore.document.v1.updated";
@@ -18,11 +19,14 @@ function asId(path, collection) {
 }
 
 function createOnly(db, id, payload) {
-  if (!id || !payload || !payload.to) return Promise.resolve({status: "skipped", reason: "recipient_missing"});
+  if (!id || !payload) return Promise.resolve({status: "skipped", reason: "recipient_missing"});
+  const recipientValid = Boolean(normalizeEmail(payload.to));
+  const suppressed = payload.persistSuppressed === true && !recipientValid;
   return db.collection("emailQueue").doc(id).create({
     ...payload,
     notificationId: id,
-    status: "queued",
+    status: suppressed ? "suppressed" : "queued",
+    ...(suppressed ? {suppressionReason: payload.suppressionReason || "invalid_recipient"} : {}),
     attempts: 0,
     maxAttempts: 5,
     provider: "resend",
@@ -36,13 +40,19 @@ function createOnly(db, id, payload) {
   });
 }
 
-function record({to, subject, body, eventType, collection, sourceId, required, recipientField, senderCategory = "info", extra = {}}) {
+function record({to, subject, body, eventType, collection, sourceId, required, recipientField, senderCategory = "info", templateContext = {}, extra = {}}) {
   const recipient = normalizeEmail(to);
-  if (!recipient) return null;
+  const rendered = renderTransactionalEmail(eventType, templateContext);
+  if (!recipient && extra.persistSuppressed !== true) return null;
   return {
-    to: recipient,
-    subject,
-    text: body,
+    to: recipient || text(to),
+    subject: rendered.subject || subject,
+    preheader: rendered.preheader,
+    heading: rendered.heading,
+    cta: rendered.cta,
+    footer: rendered.footer,
+    text: rendered.text || body,
+    html: rendered.html,
     eventType,
     sourceCollection: collection,
     sourceDocumentId: sourceId,
@@ -91,7 +101,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       paymentConfirmed(after) && ["requested", "created", "pending"].includes(lower(after.status))) {
     const to = after.senderEmail || after.email;
     const payload = record({to, subject: "Your Circum delivery booking is confirmed",
-      body: `Your paid Circum delivery booking is confirmed. Booking reference: ${deliveryId}. Open Circum to view your delivery.`,
+      body: "Your paid Circum delivery booking is confirmed.",
       eventType: "delivery_booking_paid", collection: "deliveryRequests", sourceId: deliveryId,
       required: "paid", recipientField: after.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(after.senderId)}});
@@ -101,7 +111,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   if (deliveryId && eventType === UPDATED && isOrdinaryDelivery(after) && !finalDelivery(before) && finalDelivery(after)) {
     const to = after.senderEmail || after.email;
     const payload = record({to, subject: "Your Circum delivery is complete",
-      body: `Your Circum delivery has been completed. Booking reference: ${deliveryId}. Open Circum to view the delivery details.`,
+      body: "Your Circum delivery has been completed.",
       eventType: "delivery_completed", collection: "deliveryRequests", sourceId: deliveryId,
       required: lower(after.status || after.deliveryStatus), recipientField: after.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(after.senderId)}});
@@ -117,7 +127,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
     if (lower(delivery.cancellationSettlementStatus) !== "settled") return {status: "skipped", reason: "settlement_not_authoritative"};
     const to = delivery.senderEmail || delivery.email;
     const payload = record({to, subject: "Your Circum delivery cancellation is confirmed",
-      body: `The cancellation for your Circum delivery has been settled. Booking reference: ${settlementId}. Open Circum to view the account details.`,
+      body: "The cancellation for your Circum delivery has been processed.",
       eventType: "delivery_cancellation_settled", collection: "deliveryRequests", sourceId: settlementId,
       required: "settled", recipientField: delivery.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(delivery.senderId)}});
@@ -131,9 +141,10 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
     const to = after.billingEmail;
     const ref = text(after.invoiceNumber || invoiceId);
     const payload = record({to, subject: "Your Circum Business invoice is paid",
-      body: `Payment for Circum Business invoice ${ref} is complete. Sign in to Circum Business to view the invoice.`,
+      body: `Payment for Circum Business invoice ${ref} is complete.`,
       eventType: "business_invoice_paid", collection: "businessInvoices", sourceId: invoiceId,
       required: lower(after.status), recipientField: "billingEmail", senderCategory: "business",
+      templateContext: {reference: ref},
       extra: {businessId: text(after.businessId), invoiceId}});
     if (payload) payload.sourceRequiredFields = {balanceDue: 0};
     return createOnly(db, emailId("business_invoice_paid", invoiceId), payload);
@@ -141,13 +152,30 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
 
   const walletTransactionId = asId(path, "walletTransactions");
   if (walletTransactionId && eventType === CREATED && lower(after.status) === "completed" &&
-      lower(after.walletType || "sender") === "sender" && after.userId && after.userEmail) {
-    const payload = record({to: after.userEmail, subject: "Your Circum Roth activity is complete",
-      body: `A Roth account activity has been completed. Reference: ${walletTransactionId}. Open Circum to review your Roth activity.`,
-      eventType: "roth_movement_completed", collection: "walletTransactions", sourceId: walletTransactionId,
+      lower(after.walletType || "sender") === "sender" && after.userId) {
+    const isStarterWelcome = text(after.metadata && after.metadata.source).toLowerCase() === "sender_welcome_roth" ||
+      text(after.source).toLowerCase() === "sender_welcome_roth" ||
+      text(after.idempotencyKey).toLowerCase().startsWith("sender_welcome_roth:");
+    if (!isStarterWelcome && !after.userEmail) return {status: "skipped", reason: "recipient_missing"};
+    const userSnap = isStarterWelcome ? await db.collection("users").doc(text(after.uid || after.userId)).get() : null;
+    const user = userSnap && userSnap.exists ? userSnap.data() || {} : {};
+    const payload = record({to: after.userEmail, subject: isStarterWelcome ? "Welcome to CIRCUM" : "Your CIRCUM wallet has been updated",
+      body: isStarterWelcome ? "Your CIRCUM account is ready." : "Your Roth wallet activity is complete.",
+      eventType: isStarterWelcome ? "sender_welcome" : "roth_movement_completed", collection: "walletTransactions", sourceId: walletTransactionId,
       required: "completed", recipientField: "userEmail", senderCategory: "info",
-      extra: {recipientId: text(after.uid || after.userId)}});
-    return createOnly(db, emailId("roth_movement_completed", walletTransactionId), payload);
+      templateContext: {
+        displayName: user.displayName || user.firstName || user.name,
+        amount: after.amount,
+        refund: /refund|restor/i.test(`${after.type || ""} ${after.reason || ""} ${after.metadata && after.metadata.source || ""}`),
+      },
+      extra: {
+        recipientId: text(after.uid || after.userId),
+        persistSuppressed: isStarterWelcome,
+        ...(user.transactionalEmailSuppressed || user.emailSuppressed ? {recipientSuppressed: true, suppressionReason: "recipient_suppressed"} : {}),
+      }});
+    return createOnly(db, isStarterWelcome ?
+      emailId("sender_welcome", after.uid || after.userId, walletTransactionId) :
+      emailId("roth_movement_completed", walletTransactionId), payload);
   }
 
   const referralId = asId(path, "referrals");

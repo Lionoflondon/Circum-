@@ -90,6 +90,32 @@ test("completed Roth ledger movement is the sole source of its queue email", asy
   assert.equal(db.read("emailQueue", result.id).sourceCollection, "walletTransactions");
 });
 
+test("completed Starter Roth grant publishes one welcome and never a second generic Roth email", async () => {
+  const db = fakeDb();
+  const input = event("walletTransactions", "sender_welcome_roth_u-1", null, {
+    status: "completed", walletType: "sender", userId: "u-1", uid: "u-1", userEmail: "new@example.test",
+    amount: 5, idempotencyKey: "sender_welcome_roth:u-1", metadata: {source: "sender_welcome_roth"},
+  });
+  const first = await publishFromEvent({db, ...input});
+  assert.equal(first.id, "sender_welcome_u-1_sender_welcome_roth_u-1");
+  assert.equal(db.read("emailQueue", first.id).eventType, "sender_welcome");
+  assert.equal(db.read("emailQueue", "roth_movement_completed_sender_welcome_roth_u-1"), undefined);
+  const replay = await publishFromEvent({db, ...input});
+  assert.deepEqual(replay, {status: "duplicate", id: first.id});
+});
+
+test("Starter Roth welcome with no recipient persists a terminal no-send record", async () => {
+  const db = fakeDb();
+  const input = event("walletTransactions", "sender_welcome_roth_u-2", null, {
+    status: "completed", walletType: "sender", userId: "u-2", uid: "u-2",
+    amount: 5, idempotencyKey: "sender_welcome_roth:u-2", metadata: {source: "sender_welcome_roth"},
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.status, "queued");
+  assert.equal(db.read("emailQueue", "sender_welcome_u-2_sender_welcome_roth_u-2").status, "suppressed");
+  assert.equal(db.read("emailQueue", "sender_welcome_u-2_sender_welcome_roth_u-2").suppressionReason, "invalid_recipient");
+});
+
 test("referral award email waits for final referral and both authoritative ledger entries", async () => {
   const initial = {
     "walletTransactions/referral_reward_user-1_referrer": {status: "completed"},

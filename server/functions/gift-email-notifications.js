@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const {getFirestore} = require("firebase-admin/firestore");
 const {enqueueEmail, emailQueueId, normalizeEmail: normalizeQueueEmail} = require("./email-queue");
+const {renderTransactionalEmail} = require("./transactional-email-templates");
 
 const text = (value) => `${value || ""}`.trim();
 
@@ -23,33 +24,11 @@ function formatDeliveredAt(value) {
   }).format(date);
 }
 
-function escapeHtml(value) {
-  return text(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  }[character]));
-}
-
 function giftDeliveryEmail({giftId, gift = {}}) {
   const recipientName = text(gift.recipientName) || "your recipient";
   const deliveredAt = formatDeliveredAt(deliveredAtValue(gift));
   const reference = text(giftId);
-  const timing = deliveredAt ? ` on ${deliveredAt}` : "";
-  const subject = "Your Circum gift was delivered";
-  const textBody = [
-    "Your Circum gift was delivered.",
-    "",
-    `Your gift to ${recipientName} was marked as delivered${timing}.`,
-    reference ? `Gift reference: ${reference}` : "",
-    "",
-    "This is an essential service email for a gift you sent with Circum.",
-    "Open Circum to view your Gifts history.",
-  ].filter(Boolean).join("\n");
-  const htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17151f;line-height:1.6"><h1>Your Circum gift was delivered</h1><p>Your gift to <strong>${escapeHtml(recipientName)}</strong> was marked as delivered${timing}.</p>${reference ? `<p style="color:#635f70">Gift reference: ${escapeHtml(reference)}</p>` : ""}<p>This is an essential service email for a gift you sent with Circum.</p><p><a href="https://circumuk.com/?app=gifts" style="color:#5b21b6">Open Circum Gifts</a></p></body></html>`;
-  return {subject, text: textBody, html: htmlBody};
+  return renderTransactionalEmail("gift_delivered", {recipientName, deliveredAt, reference});
 }
 
 function emailNotificationId(giftId, eventType) {
