@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/admin/delivery/proof_of_delivery.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -234,9 +235,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   }
 
   Future<void> _loadAdminData() async {
+    if (_loadingData) return;
     setState(() => _loadingData = true);
     try {
-      final repository = AdminRepository(_functions);
+      final repository = AdminRepository();
       final data = await repository.load(
         canManageAdmins: _can(AdminPermission.manageAdmins),
         canViewFinance: _can(AdminPermission.viewFinance),
@@ -254,9 +256,15 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           supportTickets: data.supportTickets,
           healthPlusPayments: data.healthPlusPayments,
         );
-        _message = repository.failures.isEmpty
+        final notices = <String>[
+          if (repository.failures.isNotEmpty)
+            'Data unavailable for ${repository.failures.join(', ')}. These sections have not been counted as empty.',
+          if (repository.denied.isNotEmpty)
+            'Your Admin role cannot view ${repository.denied.join(', ')}.',
+        ];
+        _message = notices.isEmpty
             ? 'Admin data refreshed. Counts show this page; global totals are server-authoritative.'
-            : 'Admin data loaded. Retry unavailable sections: ${repository.failures.join(', ')}.';
+            : notices.join(' ');
       });
     } catch (_) {
       setState(() => _message = 'Could not load Admin data.');
@@ -3731,10 +3739,15 @@ class AdminDataBundle {
 }
 
 class AdminRepository {
-  AdminRepository(this._functions);
-
-  final FirebaseFunctions _functions;
+  static const _maxConcurrentReads = 6;
+  late final Future<String?>? _idToken =
+      FirebaseAuth.instance.currentUser?.getIdToken();
+  late final Future<String?> _appCheckToken =
+      FirebaseAppCheck.instance.getToken();
+  final List<Completer<void>> _readWaiters = [];
+  int _activeReads = 0;
   final List<String> failures = [];
+  final List<String> denied = [];
 
   Future<AdminDataBundle> load({
     required bool canManageAdmins,
@@ -3868,12 +3881,19 @@ class AdminRepository {
   }
 
   Future<List<Map<String, dynamic>>> _page(String collection) async {
+    await _acquireReadSlot();
     try {
-      final result = await _functions
-          .httpsCallable('adminQueryPage')
-          .call({'collection': collection, 'pageSize': 50}).timeout(
-              const Duration(seconds: 20));
-      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final idToken = await _idToken;
+      final appCheckToken = await _appCheckToken;
+      if (idToken == null || idToken.isEmpty || appCheckToken == null || appCheckToken.isEmpty) {
+        throw const AdminAccessException('UNAUTHENTICATED', 'Sign in again and complete Circum security verification.');
+      }
+      final data = await invokeAdminCallable(
+        route: 'adminQueryPage',
+        data: {'collection': collection, 'pageSize': 50},
+        idToken: idToken,
+        appCheckToken: appCheckToken,
+      ).timeout(const Duration(seconds: 20));
       final records = (data['records'] as List? ?? const []);
       return records
           .map(
@@ -3883,8 +3903,12 @@ class AdminRepository {
             },
           )
           .toList(growable: false);
-    } on FirebaseFunctionsException catch (error) {
-      if (error.code != 'permission-denied') failures.add(collection);
+    } on AdminAccessException catch (error) {
+      if (error.status == 'PERMISSION_DENIED') {
+        denied.add(collection);
+      } else {
+        failures.add(collection);
+      }
       return const [];
     } on TimeoutException {
       failures.add(collection);
@@ -3892,6 +3916,26 @@ class AdminRepository {
     } catch (_) {
       failures.add(collection);
       return const [];
+    } finally {
+      _releaseReadSlot();
+    }
+  }
+
+  Future<void> _acquireReadSlot() async {
+    if (_activeReads < _maxConcurrentReads) {
+      _activeReads++;
+      return;
+    }
+    final waiter = Completer<void>();
+    _readWaiters.add(waiter);
+    await waiter.future;
+  }
+
+  void _releaseReadSlot() {
+    if (_readWaiters.isNotEmpty) {
+      _readWaiters.removeAt(0).complete();
+    } else {
+      _activeReads--;
     }
   }
 }
