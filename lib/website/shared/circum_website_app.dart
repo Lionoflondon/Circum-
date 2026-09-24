@@ -82,9 +82,6 @@ enum _WebAppMode {
 }
 
 const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
-const _mailchimpSiteTrackingScriptId = 'mcjs';
-const _mailchimpSiteTrackingScriptUrl =
-    'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -124,10 +121,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _optionalAnalyticsConsent =
           web.window.localStorage.getItem(_analyticsConsentStorageKey) ==
               'accepted';
-      if (_optionalAnalyticsConsent == true) {
-        _enableMailchimpSiteTracking();
-        _logWebsiteVisit();
-      }
+      if (_optionalAnalyticsConsent == true) _logWebsiteVisit();
     }
   }
 
@@ -223,37 +217,6 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       });
     } catch (_) {
       // Visitor analytics must never block the app.
-    }
-  }
-
-  void _enableMailchimpSiteTracking() {
-    if (!kIsWeb || _optionalAnalyticsConsent != true) return;
-
-    final existing = web.document.getElementById(
-      _mailchimpSiteTrackingScriptId,
-    );
-    if (existing != null) {
-      // The HTML shell contains a non-executing placeholder. Replace it only
-      // after consent so the Mailchimp script cannot run prematurely.
-      if (existing.getAttribute('type') != 'text/plain') return;
-      existing.remove();
-    }
-
-    final script = web.HTMLScriptElement()
-      ..id = _mailchimpSiteTrackingScriptId
-      ..async = true
-      ..src = _mailchimpSiteTrackingScriptUrl;
-    script.setAttribute('data-circum-consent', 'optional-analytics');
-    web.document.head!.appendChild(script);
-  }
-
-  void _disableMailchimpSiteTracking() {
-    if (!kIsWeb) return;
-    final script = web.document.getElementById(
-      _mailchimpSiteTrackingScriptId,
-    );
-    if (script != null && script.getAttribute('type') != 'text/plain') {
-      script.remove();
     }
   }
 
@@ -400,12 +363,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       accepted ? 'accepted' : 'rejected',
     );
     setState(() => _optionalAnalyticsConsent = accepted);
-    if (accepted) {
-      _enableMailchimpSiteTracking();
-      _logWebsiteVisit();
-    } else {
-      _disableMailchimpSiteTracking();
-    }
+    if (accepted) _logWebsiteVisit();
   }
 
   void _showConsentPreferences() {

@@ -39,15 +39,6 @@ identity mapping before enabling email-change events. Never paste
 either secret into chat, source, command output, or logs. Do not migrate SMS
 contacts or trigger marketing sends as part of webhook setup.
 
-## Mailchimp connected-site tracking
-
-`web/index.html` contains the account-specific connected-site script as a
-non-executing placeholder so Mailchimp can verify the installed URL. The
-Flutter app replaces that placeholder with an executable script only after the
-visitor accepts CIRCUM's existing optional-analytics choice. Rejecting the
-choice does not load the script. This tracking path is separate from Firebase
-signup intake, audience synchronization, and campaign sending.
-
 ## Approval and activation prerequisites
 
 1. Publish the updated website Privacy Policy naming Resend, Version 2.0,
