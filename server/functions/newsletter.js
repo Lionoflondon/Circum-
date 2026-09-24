@@ -26,6 +26,8 @@ const RATE_WINDOW_MS = 15 * 60 * 1000;
 const RATE_MAX = 5;
 const RESEND_CONTACTS_URL = "https://api.resend.com/contacts";
 const RESEND_TIMEOUT_MS = 15 * 1000;
+const MAILCHIMP_SOURCE = "mailchimp";
+const MAILCHIMP_EVENT_CLAIM_MS = 10 * 60 * 1000;
 
 function clean(value, max = 240) {
   return `${value || ""}`.trim().slice(0, max);
@@ -136,7 +138,12 @@ function resendNewsletterProvider({apiKey = process.env.RESEND_NEWSLETTER_API_KE
   }
 
   return {
-    async upsertAudienceMember({email, status}) {
+    async upsertAudienceMember({email, status, allowResubscribe = false}) {
+      if (status === "active" && !allowResubscribe) {
+        const response = await request("POST", RESEND_CONTACTS_URL, {email});
+        if (response && response.status === 409) return {status: "synced"};
+        return requireSuccess(response);
+      }
       const unsubscribed = status !== "active";
       const contactUrl = `${RESEND_CONTACTS_URL}/${encodeURIComponent(email)}`;
       const body = {email, unsubscribed};
@@ -150,6 +157,173 @@ function resendNewsletterProvider({apiKey = process.env.RESEND_NEWSLETTER_API_KE
       return requireSuccess(update);
     },
   };
+}
+
+function mailchimpEventTime(value) {
+  if (!value || typeof value !== "string") return null;
+  const parsed = Date.parse(value.includes("T") ? value : `${value} UTC`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mailchimpEventKey({type, email, eventId, firedAt, eventKey}) {
+  return eventKey || sha256([type, email, eventId || "", firedAt || ""].join("|"));
+}
+
+async function syncMailchimpAudienceEvent({type, email, eventId, firedAt, eventKey}, {db = getFirestore(), provider = resendNewsletterProvider()} = {}) {
+  const normalized = normalizeEmail(email);
+  const id = sha256(normalized);
+  const ref = db.collection(COLLECTION).doc(id);
+  const normalizedEventKey = mailchimpEventKey({type, email: normalized, eventId, firedAt, eventKey});
+  const eventRef = ref.collection("mailchimpEvents").doc(normalizedEventKey);
+  const incomingEventTime = mailchimpEventTime(firedAt);
+  const current = await ref.get();
+  const record = current.exists ? current.data() : null;
+  const optOutEvents = new Set(["unsubscribe", "cleaned"]);
+  const optInEvents = new Set(["subscribe"]);
+  if (!optOutEvents.has(type) && !optInEvents.has(type)) {
+    throw new Error("unsupported_mailchimp_event");
+  }
+
+  // Consent from Mailchimp can add/update a Circum marketing record. A prior
+  // Circum withdrawal always wins: only a new explicit subscribe event may
+  // restore it, and Resend's own suppression remains independently enforced.
+  const optedOut = optOutEvents.has(type);
+  const status = optedOut ? "unsubscribed" : "active";
+  if (!optedOut && record && record.status === "unsubscribed") {
+    return {status: "suppressed_local_unsubscribe"};
+  }
+
+  const claim = await db.runTransaction(async (tx) => {
+    const latest = await tx.get(ref);
+    const previousEvent = await tx.get(eventRef);
+    const latestRecord = latest.exists ? latest.data() : null;
+    if (previousEvent.exists) {
+      const previous = previousEvent.data();
+      if (["synced", "pending_configuration", "suppressed_local_unsubscribe", "stale_ignored"].includes(previous.status)) {
+        return {status: previous.status, duplicate: true};
+      }
+      const claimedAt = Number(previous.claimedAt || 0);
+      if (previous.status === "processing" && claimedAt && Date.now() - claimedAt < MAILCHIMP_EVENT_CLAIM_MS) {
+        return {status: "retry_required", duplicate: true};
+      }
+    }
+    const latestEventTime = Number(latestRecord && latestRecord.mailchimpLastEventAt || 0) || null;
+    if (incomingEventTime && latestEventTime && incomingEventTime < latestEventTime) {
+      tx.set(eventRef, {
+        status: "stale_ignored", type, firedAt: firedAt || null, claimedAt: Date.now(),
+      }, {merge: true});
+      return {status: "stale_ignored", stale: true};
+    }
+    if (!optedOut && latestRecord && latestRecord.status === "unsubscribed") {
+      tx.set(eventRef, {
+        status: "suppressed_local_unsubscribe", type, firedAt: firedAt || null, claimedAt: Date.now(),
+      }, {merge: true});
+      return {status: "suppressed_local_unsubscribe", suppressed: true};
+    }
+    const nextRevision = Number(latestRecord && latestRecord.revision || 0) + 1;
+    const alreadyActive = !optedOut && latestRecord && latestRecord.status === "active";
+    const update = alreadyActive ? {
+      mailchimpLastEventAt: incomingEventTime || latestEventTime || null,
+      mailchimpLastEventKey: normalizedEventKey,
+      updatedAt: FieldValue.serverTimestamp(),
+      providerSyncStatus: "pending",
+      providerLastAttemptAt: null,
+    } : {
+      email: normalized,
+      emailHash: id,
+      status,
+      revision: nextRevision,
+      categories: optedOut ? [] : [...DEFAULT_CATEGORIES],
+      source: MAILCHIMP_SOURCE,
+      signupSource: record && record.signupSource || MAILCHIMP_SOURCE,
+      lastSignupSource: optedOut ? record && record.lastSignupSource || MAILCHIMP_SOURCE : MAILCHIMP_SOURCE,
+      consentAt: optedOut ? record && record.consentAt || null : FieldValue.serverTimestamp(),
+      consentWording: "Mailchimp audience subscription; audience owner attests that contacts consented to receive CIRCUM marketing emails.",
+      consentVersion: "mailchimp-audience-consent-v1",
+      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
+      verificationState: "not_required",
+      unsubscribeTokenHash: record && record.unsubscribeTokenHash || null,
+      createdAt: latestRecord && latestRecord.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      subscribedAt: optedOut ? record && record.subscribedAt || null : FieldValue.serverTimestamp(),
+      unsubscribedAt: optedOut ? FieldValue.serverTimestamp() : null,
+      providerSyncStatus: "pending",
+      providerLastAttemptAt: null,
+      mailchimpLastEventAt: incomingEventTime || latestEventTime || null,
+      mailchimpLastEventKey: normalizedEventKey,
+    };
+    tx.set(ref, update, {merge: true});
+    if (!alreadyActive) {
+      tx.set(ref.collection("consentEvents").doc(), {
+        type: optedOut ? "unsubscribed" : latestRecord ? "mailchimp_subscribed" : "subscribed",
+        categories: optedOut ? [] : [...DEFAULT_CATEGORIES],
+        source: MAILCHIMP_SOURCE,
+        consentVersion: "mailchimp-audience-consent-v1",
+        privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+        privacyPolicyVersionStatus: PRIVACY_POLICY_VERSION ? "configured" : "approval_required",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    tx.set(eventRef, {
+      status: "processing", type, firedAt: firedAt || null, claimedAt: Date.now(),
+    }, {merge: true});
+    return {status: "processing", revision: nextRevision};
+  });
+
+  if (claim && claim.status !== "processing") return claim;
+
+  const after = await ref.get();
+  const finalRecord = after.exists ? after.data() : null;
+  if (!finalRecord || finalRecord.status !== status || (!optedOut && record && record.status === "unsubscribed")) {
+    return {status: "suppressed_local_unsubscribe"};
+  }
+  let providerStatus = "retry_required";
+  try {
+    const result = await provider.upsertAudienceMember({email: normalized, status, allowResubscribe: false, revision: finalRecord.revision});
+    providerStatus = result && ["synced", "pending_configuration"].includes(result.status) ? result.status : "retry_required";
+  } catch (_) {/* Do not log contact details or provider credentials. */}
+  await db.runTransaction(async (tx) => {
+    const latest = await tx.get(ref);
+    const latestEvent = await tx.get(eventRef);
+    if (!latest.exists || Number(latest.data().revision || 0) !== Number(finalRecord.revision)) {
+      tx.set(eventRef, {status: "superseded", completedAt: FieldValue.serverTimestamp()}, {merge: true});
+      return;
+    }
+    tx.set(ref, {providerSyncStatus: providerStatus, providerLastAttemptAt: FieldValue.serverTimestamp()}, {merge: true});
+    if (latestEvent.exists) tx.set(eventRef, {status: providerStatus, completedAt: FieldValue.serverTimestamp()}, {merge: true});
+  });
+  return {status: providerStatus};
+}
+
+async function reconcileMailchimpAudience({members, db = getFirestore(), provider = resendNewsletterProvider()} = {}) {
+  const counts = {subscribedImported: 0, suppressedUnsubscribed: 0, cleaned: 0, skipped: 0, conflicted: 0, errors: 0};
+  for (const member of members || []) {
+    const status = clean(member && member.status, 32).toLowerCase();
+    const email = member && member.email_address;
+    let type;
+    if (status === "subscribed") type = "subscribe";
+    else if (status === "unsubscribed") type = "unsubscribe";
+    else if (status === "cleaned") type = "cleaned";
+    else {
+      counts.skipped++;
+      continue;
+    }
+    try {
+      const result = await syncMailchimpAudienceEvent({
+        type, email, eventId: member.id, firedAt: member.last_changed || member.timestamp_opt,
+        eventKey: `backfill-${sha256([member.id || "", email || "", status, member.last_changed || ""].join("|"))}`,
+      }, {db, provider});
+      if (result.duplicate) continue;
+      if (result.status === "suppressed_local_unsubscribe") counts.conflicted++;
+      else if (type === "subscribe") counts.subscribedImported++;
+      else if (type === "cleaned") counts.cleaned++;
+      else counts.suppressedUnsubscribed++;
+    } catch (_) {
+      counts.errors++;
+    }
+  }
+  return counts;
 }
 
 function createService({db = getFirestore(), provider = resendNewsletterProvider(), now = () => Date.now(), tokenFactory = randomToken} = {}) {
@@ -435,4 +609,4 @@ exports.adminExportNewsletterSubscribers = adminCallable(async (data, context) =
     nextCursor: snapshot.docs.length > 500 ? docs.at(-1).id : null};
 });
 
-exports._private = {normalizeEmail, sha256, normalizeCategories, createService, limitPublicRequest, resendNewsletterProvider, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};
+exports._private = {normalizeEmail, sha256, normalizeCategories, createService, limitPublicRequest, resendNewsletterProvider, syncMailchimpAudienceEvent, reconcileMailchimpAudience, CATEGORIES, DEFAULT_CATEGORIES, PRIVACY_POLICY_VERSION};

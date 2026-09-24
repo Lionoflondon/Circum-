@@ -8,6 +8,37 @@ hidden until the approved website build is deployed with its explicit enable
 flag. This document is not recipient or campaign-delivery proof. Signup and
 marketing campaign sending are separate release states.
 
+## Mailchimp audience synchronization (not yet activated)
+
+The existing Mailchimp-Firebase-Extension remains the Firebase-to-Mailchimp
+contact intake path. Circum does not create a second signup path; the bridge
+below is responsible for signed event handling, suppression precedence, and
+the optional Resend audience mirror.
+
+The dedicated `/integrations/mailchimp/audience` HTTPS route accepts only
+Mailchimp audience `subscribe`, `unsubscribe`, and `cleaned`
+events. It requires Mailchimp's `X-Mailchimp-Signature` HMAC over the raw
+form-encoded body, enforces a five-minute timestamp window with a constant-time
+comparison, bounds the body, and never logs payload values. Subscribe adds the contact to Resend without clearing any
+existing Resend unsubscribe state; unsubscribe/cleaned applies suppression.
+Existing Circum local unsubscribe state takes precedence. Unknown event types
+are rejected. This path does not send broadcast or transactional email.
+
+Do not create the Mailchimp webhook until this change is merged through
+protected CI, deployed from the exact protected SHA to `circum-newsletter`, and
+the webhook secret is stored directly in Secret Manager and bound to that
+service. Use a random, high-entropy callback key and the Mailchimp signing
+secret if Mailchimp supports signature delivery for this audience webhook;
+otherwise keep the callback key private, and rotate/delete the webhook if its
+URL is exposed. After deployment, configure Mailchimp to POST to
+`https://<verified-circum-newsletter-host>/integrations/mailchimp/audience?key=<random-secret>`
+for subscribe, unsubscribe, and cleaned events only. This initial implementation
+does not backfill the existing Mailchimp audience or process email-address
+changes; establish a consent-reviewed baseline separately and add stable member
+identity mapping before enabling email-change events. Never paste
+either secret into chat, source, command output, or logs. Do not migrate SMS
+contacts or trigger marketing sends as part of webhook setup.
+
 ## Approval and activation prerequisites
 
 1. Publish the updated website Privacy Policy naming Resend, Version 2.0,
