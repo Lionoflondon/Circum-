@@ -105,6 +105,20 @@ test("Mailchimp webhook requires secret and valid content type and passes no con
   }
 });
 
+test("Mailchimp callback verification accepts GET without invoking audience sync", async () => {
+  let dependencyCalls = 0;
+  const server = createServer({dependenciesFactory: () => {
+    dependencyCalls += 1;
+    return {syncMailchimpAudienceEvent: async () => ({status: "accepted"})};
+  }});
+  await listen(server, async (url) => {
+    const response = await fetch(`${url}${MAILCHIMP_WEBHOOK_PATH}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {ok: true, status: "ready"});
+    assert.equal(dependencyCalls, 0);
+  });
+});
+
 test("public routes require valid App Check and preserve caller IP", async () => {
   const {server, calls} = fixture();
   await listen(server, async (url) => {
