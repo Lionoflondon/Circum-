@@ -13,6 +13,7 @@ import 'admin_production_payment_api.dart';
 import 'roth_grant_campaigns.dart';
 import 'newsletter_audience.dart';
 import 'admin_access_error_message.dart';
+import 'admin_access_api.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
@@ -188,8 +189,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       if (claims['roles'] is List)
         ...(claims['roles'] as List<dynamic>).map((role) => '$role'),
     ];
-    final result = await _functions.httpsCallable('adminResolveAccess').call();
-    final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+    final data = await callAdminAccess(auth: _auth);
     if (data['accessGranted'] == false) return const [];
     final serverRoles = ((data['roles'] as List?) ?? const []).map(
       (role) => '$role',
