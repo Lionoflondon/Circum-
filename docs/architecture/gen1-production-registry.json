@@ -677,8 +677,7 @@
       "generation": "Gen 1",
       "productionPurpose": "adminOperationsAuthority.adminQueryPage",
       "callers": [
-        "lib/app/admin/admin_phase1_shell.dart",
-        "server/functions/admin-hardening-contract.test.js"
+        "lib/app/admin/admin_phase1_shell.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -709,8 +708,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-admin-access.js",
+        "cloud-run-admin-access.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
