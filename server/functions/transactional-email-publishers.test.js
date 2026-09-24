@@ -38,6 +38,17 @@ test("paid ordinary booking publishes one deterministic queue item and replay is
   assert.equal(db.read("emailQueue", "delivery_booking_paid_d-1").sourceRequiredStatus, "paid");
 });
 
+test("scheduled ordinary delivery remains in the Info family", async () => {
+  const db = fakeDb();
+  const input = event("deliveryRequests", "scheduled-1", null, {
+    status: "scheduled", paymentStatus: "paid", deliveryDate: "2026-10-01",
+    scheduleType: "scheduled", senderEmail: "sender@example.test",
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "delivery_booking_paid_scheduled-1");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "info");
+});
+
 test("booking publisher excludes Gifts, Health+, and Business delivery source types", async () => {
   for (const overrides of [{sourceModule: "gift"}, {serviceType: "HEALTH_PLUS"}, {businessMode: true}]) {
     const db = fakeDb();

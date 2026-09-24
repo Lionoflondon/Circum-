@@ -96,7 +96,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
 
   const deliveryId = asId(path, "deliveryRequests");
   if (deliveryId && eventType === CREATED && isOrdinaryDelivery(after) &&
-      paymentConfirmed(after) && ["requested", "created", "pending"].includes(lower(after.status))) {
+      paymentConfirmed(after) && ["requested", "created", "pending", "scheduled"].includes(lower(after.status))) {
     const to = after.senderEmail || after.email;
     const payload = record({to, template: templates.bookingConfirmed({reference: deliveryId}),
       eventType: "delivery_booking_paid", collection: "deliveryRequests", sourceId: deliveryId,
