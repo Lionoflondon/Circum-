@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/admin/delivery/proof_of_delivery.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -3869,11 +3870,18 @@ class AdminRepository {
 
   Future<List<Map<String, dynamic>>> _page(String collection) async {
     try {
-      final result = await _functions
-          .httpsCallable('adminQueryPage')
-          .call({'collection': collection, 'pageSize': 50}).timeout(
-              const Duration(seconds: 20));
-      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final user = FirebaseAuth.instance.currentUser;
+      final idToken = await user?.getIdToken();
+      final appCheckToken = await FirebaseAppCheck.instance.getToken();
+      if (idToken == null || idToken.isEmpty || appCheckToken == null || appCheckToken.isEmpty) {
+        throw const AdminAccessException('UNAUTHENTICATED', 'Sign in again and complete Circum security verification.');
+      }
+      final data = await invokeAdminCallable(
+        route: 'adminQueryPage',
+        data: {'collection': collection, 'pageSize': 50},
+        idToken: idToken,
+        appCheckToken: appCheckToken,
+      ).timeout(const Duration(seconds: 20));
       final records = (data['records'] as List? ?? const []);
       return records
           .map(

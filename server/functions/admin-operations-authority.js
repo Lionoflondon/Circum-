@@ -558,7 +558,7 @@ function platformOperationPatch(status, actor, reason) {
 
 exports.adminResolveAccess = adminCallable(resolveAdminAccess);
 
-exports.adminQueryPage = adminCallable(async (data, context) => {
+async function queryAdminPage(data, context) {
   const actor = await resolveActor(context);
   const collection = clean(data && data.collection);
   const permission = ADMIN_DATASETS[collection];
@@ -582,7 +582,9 @@ exports.adminQueryPage = adminCallable(async (data, context) => {
     total: total.data().count,
     pageSize,
   };
-});
+}
+
+exports.adminQueryPage = adminCallable(queryAdminPage);
 
 exports.adminRecordAuditEntry = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
@@ -1468,4 +1470,4 @@ exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   return {ok: true};
 });
 
-exports._private = {resolveActor, resolveAdminAccess, writeAudit};
+exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, writeAudit};

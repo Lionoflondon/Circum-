@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 const adminAccessServiceUrl =
     'https://circum-admin-access-516426305461.us-central1.run.app';
+const _adminCallableRoutes = {'adminResolveAccess', 'adminQueryPage'};
 
 class AdminAccessException implements Exception {
   const AdminAccessException(this.status, this.message);
@@ -47,18 +48,37 @@ Future<Map<String, dynamic>> invokeAdminAccess({
   required String appCheckToken,
   http.Client? client,
 }) async {
+  return invokeAdminCallable(
+    route: 'adminResolveAccess',
+    data: const <String, dynamic>{},
+    idToken: idToken,
+    appCheckToken: appCheckToken,
+    client: client,
+  );
+}
+
+Future<Map<String, dynamic>> invokeAdminCallable({
+  required String route,
+  required Map<String, dynamic> data,
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) async {
+  if (!_adminCallableRoutes.contains(route)) {
+    throw ArgumentError.value(route, 'route', 'Unsupported Admin API route.');
+  }
   final ownsClient = client == null;
   final transport = client ?? http.Client();
   try {
     final response = await transport
         .post(
-          Uri.parse('$adminAccessServiceUrl/adminResolveAccess'),
+          Uri.parse('$adminAccessServiceUrl/$route'),
           headers: {
             'content-type': 'application/json',
             'authorization': 'Bearer $idToken',
             'x-firebase-appcheck': appCheckToken,
           },
-          body: jsonEncode({'data': <String, dynamic>{}}),
+          body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 20));
     final payload = jsonDecode(response.body) as Map<String, dynamic>;

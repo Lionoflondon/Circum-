@@ -27,7 +27,7 @@ function request(base, options = {}) {
   };
   if (options.omitAuth) delete headers.authorization;
   if (options.omitAppCheck) delete headers["x-firebase-appcheck"];
-  return fetch(`${base}/adminResolveAccess`, {
+  return fetch(`${base}${options.path || "/adminResolveAccess"}`, {
     method: "POST",
     headers,
     body: options.body === undefined ? JSON.stringify({data: {}}) : options.body,
@@ -52,7 +52,36 @@ function dependencies(handler, overrides = {}) {
 test("Admin route accepts both direct and callable-compatible paths", () => {
   assert.equal(routeName("/adminResolveAccess"), "adminResolveAccess");
   assert.equal(routeName("/v1/callable/adminResolveAccess"), "adminResolveAccess");
+  assert.equal(routeName("/adminQueryPage"), "adminQueryPage");
+  assert.equal(routeName("/v1/callable/adminQueryPage"), "adminQueryPage");
   assert.equal(routeName("/admin-query-page"), null);
+});
+
+test("Admin query route forwards the authorized request to the server query handler", async () => {
+  const calls = [];
+  await withServer((route) => ({
+    verifyIdToken: async () => ({uid: "admin-uid", super_admin: true}),
+    verifyAppCheck: async () => ({appId: "circum-admin"}),
+    handler: async (data, context) => {
+      calls.push({route, data, uid: context.auth.uid, appId: context.app.appId});
+      return {collection: data.collection, records: [{id: "record-1"}], total: 1};
+    },
+  }), async (base) => {
+    const response = await request(base, {
+      path: "/adminQueryPage",
+      body: JSON.stringify({data: {collection: "users", pageSize: 50}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      result: {collection: "users", records: [{id: "record-1"}], total: 1},
+    });
+  });
+  assert.deepEqual(calls, [{
+    route: "adminQueryPage",
+    data: {collection: "users", pageSize: 50},
+    uid: "admin-uid",
+    appId: "circum-admin",
+  }]);
 });
 
 test("health is lazy, reports Node 22 and source SHA", async () => {

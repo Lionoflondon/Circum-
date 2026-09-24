@@ -8,7 +8,11 @@ const {getAuth} = require("firebase-admin/auth");
 const adminAuthority = require("./admin-operations-authority");
 
 const MAX_BODY_BYTES = 16 * 1024;
-const ROUTE = "adminResolveAccess";
+const ROUTES = Object.freeze({
+  adminResolveAccess: adminAuthority._private.resolveAdminAccess,
+  adminQueryPage: adminAuthority._private.queryAdminPage,
+});
+const ROUTE_NAMES = new Set(Object.keys(ROUTES));
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -39,18 +43,19 @@ function writeJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-function productionDependencies() {
+function productionDependencies(route) {
   if (!getApps().length) initializeApp();
   return {
     verifyIdToken: (token) => getAuth().verifyIdToken(token, true),
     verifyAppCheck: (token) => getAppCheck().verifyToken(token),
-    handler: adminAuthority._private.resolveAdminAccess,
+    handler: ROUTES[route],
   };
 }
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  return /^\/(?:v1\/callable\/)?adminResolveAccess$/.test(pathname) ? ROUTE : null;
+  const match = /^\/(?:v1\/callable\/)?(adminResolveAccess|adminQueryPage)$/.exec(pathname);
+  return match ? match[1] : null;
 }
 
 function errorResponse(error) {
@@ -75,7 +80,7 @@ function errorResponse(error) {
 
 function createServer(options = {}) {
   const dependenciesFactory = options.dependenciesFactory || productionDependencies;
-  let dependencies;
+  const dependencies = new Map();
   return http.createServer((request, response) => {
     if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) {
       return writeJson(response, 200, {
@@ -102,20 +107,22 @@ function createServer(options = {}) {
       try {
         const idToken = bearer(request);
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
-        if (!dependencies) dependencies = dependenciesFactory();
-        const decoded = await dependencies.verifyIdToken(idToken);
+        const route = routeName(request.url);
+        if (!dependencies.has(route)) dependencies.set(route, dependenciesFactory(route));
+        const routeDependencies = dependencies.get(route);
+        const decoded = await routeDependencies.verifyIdToken(idToken);
         const uid = decoded && (decoded.uid || decoded.sub);
         if (!uid) throw callableError("unauthenticated", "Invalid authentication token.");
         const appCheckToken = String(request.headers["x-firebase-appcheck"] || "").trim();
         if (!appCheckToken) throw callableError("failed-precondition", "Circum security verification is required.");
-        const decodedAppCheck = await dependencies.verifyAppCheck(appCheckToken);
+        const decodedAppCheck = await routeDependencies.verifyAppCheck(appCheckToken);
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
             !Object.prototype.hasOwnProperty.call(payload, "data") ||
             !payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
           throw callableError("invalid-argument", "Callable request must contain data.");
         }
-        const result = await dependencies.handler(payload.data, {
+        const result = await routeDependencies.handler(payload.data, {
           auth: {uid, token: decoded},
           app: decodedAppCheck,
           rawRequest: request,
@@ -124,7 +131,7 @@ function createServer(options = {}) {
       } catch (error) {
         const failure = errorResponse(error);
         if (failure.status >= 500) {
-          console.error("admin_access_failed", {route: ROUTE, reason: failure.code});
+          console.error("admin_access_failed", {route: routeName(request.url), reason: failure.code});
         }
         return writeJson(response, failure.status, failure.payload);
       }
@@ -134,4 +141,4 @@ function createServer(options = {}) {
 
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
 
-module.exports = {createServer, errorResponse, productionDependencies, routeName, MAX_BODY_BYTES};
+module.exports = {createServer, errorResponse, productionDependencies, routeName, MAX_BODY_BYTES, ROUTE_NAMES};
