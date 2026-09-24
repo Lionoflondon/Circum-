@@ -18,8 +18,22 @@ gcloud run deploy circum-transactional-email \
   --service-account=circum-transactional-email@circum-2797c.iam.gserviceaccount.com \
   --no-allow-unauthenticated --ingress=internal \
   --port=8080 --concurrency=8 --timeout=60s --max=3 --min=0 \
-  --set-secrets=RESEND_API_KEY=RESEND_API_KEY:latest,GIFTS_EMAIL_FROM=GIFTS_EMAIL_FROM:latest
+  --set-secrets=RESEND_API_KEY=RESEND_API_KEY:latest,GIFTS_EMAIL_FROM=GIFTS_EMAIL_FROM:latest,BUSINESS_EMAIL_FROM=BUSINESS_EMAIL_FROM:latest,HEALTH_EMAIL_FROM=HEALTH_EMAIL_FROM:latest,INFO_EMAIL_FROM=INFO_EMAIL_FROM:latest
 ```
+
+The queue record carries one of four explicit sender categories:
+
+| Category | Owns | Sender rule |
+|---|---|---|
+| Info | Normal and scheduled delivery, general account, security, referral, Roth, Rider, and undefined notifications | `info@circumuk.com` or the approved `notifications@circumuk.com` fallback |
+| Health | Health+ collection, prescription, delivery, reminder, and exception updates | Verified Health+ identity when configured; otherwise Info fallback |
+| Business | Business invoice and account notices | Verified Business identity when configured; otherwise Info fallback |
+| Gifts | Gifts delivery and Gift Story messages only | `Circum Gifts <gifts@circumuk.com>` only |
+
+Gifts publishers may not emit Info, Health, or Business events. Health and
+Business publishers may not use the Gifts identity. A configured identity is
+accepted only from the `circumuk.com` domain, and the consumer rejects
+cross-family overrides.
 
 The queue record carries an explicit sender category. Gifts resolve only to
 the configured/verified `Circum Gifts <gifts@circumuk.com>` identity. Business
@@ -68,7 +82,7 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 
 Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 
-The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on the configured secrets. The current production deployment has `RESEND_API_KEY` and `GIFTS_EMAIL_FROM`; add `BUSINESS_EMAIL_FROM`, `HEALTH_EMAIL_FROM`, `INFO_EMAIL_FROM`, or `NOTIFICATIONS_EMAIL_FROM` only after that identity is verified in Resend. Secret values are never printed or stored in source.
+The trigger service account receives only the Eventarc receiver role and Cloud Run invoker on this service. The runtime service account receives only Firestore access required by the queue/source reads and secret accessor on the configured secrets. The current production deployment has verified `RESEND_API_KEY`, `GIFTS_EMAIL_FROM`, `BUSINESS_EMAIL_FROM`, `HEALTH_EMAIL_FROM`, and `INFO_EMAIL_FROM` bindings; `NOTIFICATIONS_EMAIL_FROM` remains an optional approved fallback. Secret values are never printed or stored in source.
 
 ## Sender welcome boundary
 
