@@ -17,8 +17,8 @@ const RETRY_BACKOFF_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 10
 const EMAIL_API_URL = "https://api.resend.com/emails";
 const DEFAULT_FROM_BY_CATEGORY = Object.freeze({
   gifts: "Circum Gifts <gifts@circumuk.com>",
-  business: "Circum Business <business@circumuk.com>",
-  health: "Circum Health+ <health@circumuk.com>",
+  business: "Circum <info@circumuk.com>",
+  health: "Circum <info@circumuk.com>",
   info: "Circum <info@circumuk.com>",
 });
 const FROM_ENV_BY_CATEGORY = Object.freeze({
@@ -31,19 +31,59 @@ const SENDER_CATEGORIES = new Set(Object.keys(DEFAULT_FROM_BY_CATEGORY));
 
 const text = (value) => `${value || ""}`.trim();
 
+const KNOWN_INFO_EVENT_PREFIXES = [
+  "account", "delivery", "notification", "password", "referral", "rider", "roth", "security",
+];
+
+function inferredSenderCategory(eventType) {
+  const value = text(eventType).toLowerCase();
+  if (value.startsWith("gift")) return "gifts";
+  if (value.startsWith("business")) return "business";
+  if (value.startsWith("health_plus")) return "health";
+  if (KNOWN_INFO_EVENT_PREFIXES.some((prefix) => value.startsWith(prefix))) return "info";
+  return null;
+}
+
 function senderCategoryForRecord(record = {}) {
   const explicit = text(record.senderCategory || record.senderFamily).toLowerCase();
-  if (SENDER_CATEGORIES.has(explicit)) return explicit;
-  const eventType = text(record.eventType || record.type).toLowerCase();
-  if (eventType.startsWith("gift")) return "gifts";
-  if (eventType.startsWith("business")) return "business";
-  if (eventType.startsWith("health_plus")) return "health";
-  return "info";
+  if (explicit && !SENDER_CATEGORIES.has(explicit)) {
+    throw Object.assign(new Error("invalid_sender_category"), {statusCode: 422});
+  }
+  const inferred = inferredSenderCategory(record.eventType || record.type);
+  if (explicit && inferred && explicit !== inferred) {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  return explicit || inferred || "info";
+}
+
+function senderAddress(value) {
+  const match = /<([^>]+)>/.exec(text(value));
+  return (match ? match[1] : text(value)).trim().toLowerCase();
+}
+
+function assertAllowedSenderIdentity(category, from) {
+  const address = senderAddress(from);
+  if (!/@circumuk\.com$/.test(address)) {
+    throw Object.assign(new Error("sender_domain_not_allowed"), {statusCode: 422});
+  }
+  if (category === "gifts" && address !== "gifts@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category !== "gifts" && address === "gifts@circumuk.com") {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
+  if (category === "info" && !["info@circumuk.com", "notifications@circumuk.com"].includes(address)) {
+    throw Object.assign(new Error("info_sender_not_allowed"), {statusCode: 422});
+  }
+  return from;
 }
 
 function fromForRecord(record = {}, env = process.env) {
   const category = senderCategoryForRecord(record);
-  return text(env[FROM_ENV_BY_CATEGORY[category]]) || DEFAULT_FROM_BY_CATEGORY[category];
+  const configured = category === "info" ?
+    text(env[FROM_ENV_BY_CATEGORY[category]] || env.NOTIFICATIONS_EMAIL_FROM) :
+    text(env[FROM_ENV_BY_CATEGORY[category]]);
+  return assertAllowedSenderIdentity(category, configured || DEFAULT_FROM_BY_CATEGORY[category]);
 }
 
 function queueEmailIdFromName(name) {
@@ -197,6 +237,10 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
   if (typeof transport !== "function") {
     throw Object.assign(new Error("email_transport_unavailable"), {retryable: true, statusCode: 503});
   }
+  const resolvedFrom = fromForRecord(record, env);
+  if (text(from) && text(from) !== resolvedFrom) {
+    throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
+  }
   const response = await transport(EMAIL_API_URL, {
     method: "POST",
     headers: {
@@ -205,7 +249,7 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
       "Idempotency-Key": text(record.notificationId),
     },
     body: JSON.stringify({
-      from: text(from) || fromForRecord(record, env),
+      from: resolvedFrom,
       to: [to],
       subject: text(record.subject),
       text: text(record.text || record.body),
