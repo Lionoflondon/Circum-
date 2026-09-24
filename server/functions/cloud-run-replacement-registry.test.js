@@ -36,6 +36,9 @@ test("Admin access caller inventory points at the Cloud Run adapter", () => {
 test("Admin collection read inventory points at the Cloud Run query route", () => {
   const files = ["server/functions/cloud-run-admin-access.js", "server/functions/cloud-run-admin-access.test.js"];
   const source = new Map(files.map((file) => [file, "adminQueryPage"]));
-  assert.deepEqual(findCloudRunReplacements("adminQueryPage", files, source), files.map((file) => path.basename(file)));
+  assert.deepEqual(findCloudRunReplacements("adminQueryPage", files, source), [
+    "cloud-run-admin-access.js",
+    "cloud-run-admin-access.test.js",
+  ]);
   assert.deepEqual(productionCallers("adminQueryPage", ["old-managed-caller.dart"]), ["lib/app/admin/admin_phase1_shell.dart"]);
 });
