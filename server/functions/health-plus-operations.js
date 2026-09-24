@@ -59,6 +59,7 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       status: "queued",
       eventType: `health_plus_${type}`,
       source: "health_plus",
+      senderCategory: "health",
       sourceCollection: "prescriptionPickups",
       sourceDocumentId: pickup.id,
       relatedEntityId: pickup.id,

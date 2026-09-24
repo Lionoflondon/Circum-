@@ -77,6 +77,7 @@ test("business email only publishes on fully-paid transition using billingEmail"
   const result = await publishFromEvent({db, ...input});
   assert.equal(result.id, "business_invoice_paid_i-1");
   assert.equal(db.read("emailQueue", result.id).to, "billing@example.test");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "business");
 });
 
 test("completed Roth ledger movement is the sole source of its queue email", async () => {
@@ -127,4 +128,5 @@ test("Health+ status email is limited to the canonical operational status projec
   const result = await publishFromEvent({db, ...input});
   assert.equal(result.id, "health_pickup-1_delivered");
   assert.equal(db.read("emailQueue", result.id).sourceRequiredStatus, "delivered");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "health");
 });

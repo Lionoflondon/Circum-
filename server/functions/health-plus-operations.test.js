@@ -18,6 +18,7 @@ test("Health+ reminders notify admin one day before actual pickup", () => {
   assert.match(source, /const scheduledAt = asDate\(pickup\.scheduledAt \|\| pickup\.preferredPickupAt \|\| pickup\.scheduledPickupDate\)/);
   assert.match(source, /if \(msUntil <= DAY_MS && msUntil > 23 \* HOUR_MS\)/);
   assert.match(source, /await queueHealthAdminNotification\(db, pickup, "pickup_tomorrow", "Health\+ pickup tomorrow"/);
+  assert.match(source, /senderCategory: "health"/);
   assert.match(source, /notificationId = `health_admin_\$\{pickup\.id\}_\$\{type\}`/);
   assert.match(source, /recipientRole: "admin"/);
   assert.match(source, /destination: \{[\s\S]*?route: "admin_health_plus"[\s\S]*?healthPickupId: pickup\.id/);
