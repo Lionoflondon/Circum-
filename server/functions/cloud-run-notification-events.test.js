@@ -233,6 +233,39 @@ test("accepts an Eventarc Pub/Sub request and forwards decoded delivery fields",
   }
 });
 
+test("Gift completion Eventarc route accepts only the delivery update and preserves both states", async () => {
+  let received;
+  const server = createServer({kind: "gift_delivery_completed", dbFactory: () => ({unused: true}),
+    processOnce: async (input) => {
+      received = input;
+      return {status: "completed"};
+    }});
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const payload = DocumentEventData.encode({
+      value: {name: "projects/circum-2797c/databases/(default)/documents/deliveryRequests/gift-delivery-1",
+        fields: {status: {stringValue: "completed"}, giftRequestId: {stringValue: "gift-1"},
+          serviceType: {stringValue: "gifts"}}},
+      oldValue: {name: "projects/circum-2797c/databases/(default)/documents/deliveryRequests/gift-delivery-1",
+        fields: {status: {stringValue: "in_transit"}, giftRequestId: {stringValue: "gift-1"},
+          serviceType: {stringValue: "gifts"}}},
+    }).finish();
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`, {method: "POST",
+      headers: {"content-type": "application/json", "ce-type": "google.cloud.firestore.document.v1.updated",
+        "ce-id": "gift-event-1"}, body: pubsubPushBody(payload)});
+    assert.equal(response.status, 200);
+    assert.equal(received.kind, "gift_delivery_completed");
+    assert.equal(received.deliveryId, "gift-delivery-1");
+    assert.equal(received.before.status, "in_transit");
+    assert.equal(received.after.status, "completed");
+    assert.equal(received.after.giftRequestId, "gift-1");
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("Gen 1 delivery create path delegates to the Cloud Run durable claim", async () => {
   let received;
   let effects = 0;
