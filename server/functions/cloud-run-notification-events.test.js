@@ -233,6 +233,34 @@ test("accepts an Eventarc Pub/Sub request and forwards decoded delivery fields",
   }
 });
 
+test("rejects malformed Eventarc payloads as client errors", async () => {
+  const server = createServer({
+    kind: "gift_delivery_completed",
+    dbFactory: () => ({unused: true}),
+    processOnce: async () => {
+      throw new Error("malformed payload must not reach the handler");
+    },
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "ce-type": "google.cloud.firestore.document.v1.updated",
+        "ce-id": "malformed-event",
+      },
+      body: "{}",
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {error: "handler_failed"});
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("Gift completion Eventarc route accepts only the delivery update and preserves both states", async () => {
   let received;
   let claims = 0;
