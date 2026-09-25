@@ -3,7 +3,6 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
-const giftStoryAutomation = require("./gift-story-automation");
 const legends = require("./legends");
 const referrals = require("./referrals");
 const platformNotifications = require("./platform-notifications");
@@ -268,18 +267,12 @@ const subscribers = {
       {merge: true},
     );
   },
-  gifts: async (db, event) => {
-    if (!event.giftId) return;
-    await giftStoryAutomation.handleGiftDeliveryCompleted({
-      db,
-      delivery: {
-        giftRequestId: event.giftId,
-        status: "delivered",
-        deliveryId: event.deliveryId,
-      },
-      deliveryId: event.deliveryId,
-    }, {source: "platform_event"});
-  },
+  // Gifts remain owned by the deliveryRequests Firestore completion path.
+  // The platform event bus must not become a second Story consumer.
+  gifts: async () => ({
+    status: "ignored",
+    reason: "platform_event_not_canonical",
+  }),
   healthPlus: async (db, event) => {
     if (!event.healthOrderId) return;
     await db.collection("prescriptionPickups").doc(event.healthOrderId).set(
