@@ -2,12 +2,12 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 272
-- Gen 1 exports: 270
+- Source exports: 273
+- Gen 1 exports: 271
 - Files importing Firebase Functions v1: 64
 - MIGRATE TO CLOUD RUN: 169
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 58
-- REPLACE WITH CLOUD RUN + EVENTARC: 27
+- REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
 - RETIRE — no legitimate production dependency: 3
 
@@ -163,6 +163,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | markSenderLegendCelebrationSeen | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | markStaleRiderPresenceOffline | server/functions/rider-presence.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
 | onChatMessageCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/firestore-chat-notification-rules.test.js<br>server/functions/platform-notifications.test.js |
+| onDeliveryCompletedEvent | server/functions/delivery-completed-event.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/production-functions-inventory.json |
 | onDeliveryCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/production-functions-inventory.json |
 | onDeliveryLiveLocationWrite | server/functions/movement-timeline.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onDeliveryPresenceWrite | server/functions/rider-presence.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/rider-presence-core.test.js |
