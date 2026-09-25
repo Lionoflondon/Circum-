@@ -8,6 +8,7 @@ const {decodeEventData} = require("./rider-policy-firestore-event");
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const CLAIM_LEASE_MS = 5 * 60 * 1000;
+const FIXTURE_EVENT_COLLECTION = "giftStoryRuntimeFixtures";
 const handlers = {
   delivery_created: {
     eventType: "google.cloud.firestore.document.v1.created",
@@ -28,7 +29,7 @@ const handlers = {
       if (!await isGiftStoryOwner(db, "cloud_run")) {
         throw Object.assign(new Error("gift_story_owner_transitioning"), {statusCode: 503});
       }
-      const ref = db.collection("deliveryRequests").doc(deliveryId);
+      const ref = db.collection(eventCollection("gift_delivery_completed")).doc(deliveryId);
       return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run"});
     },
   },
@@ -39,9 +40,18 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function deliveryIdFromName(name) {
+function eventCollection(kind) {
+  if (kind === "gift_delivery_completed" &&
+      process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE === FIXTURE_EVENT_COLLECTION) {
+    return FIXTURE_EVENT_COLLECTION;
+  }
+  return "deliveryRequests";
+}
+
+function deliveryIdFromName(name, collection = "deliveryRequests") {
   const path = String(name || "").split("/documents/")[1] || String(name || "").replace(/^documents\//, "");
-  const match = /^deliveryRequests\/([^/]+)$/.exec(path);
+  const escapedCollection = collection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^${escapedCollection}\\/([^/]+)$`).exec(path);
   return match && match[1];
 }
 
@@ -223,7 +233,7 @@ function createServer(options = {}) {
       if (size > MAX_BODY_BYTES) return json(res, 413, {error: "request_too_large"});
       try {
         const decoded = decodeEventarcPayload(Buffer.concat(chunks));
-        const deliveryId = deliveryIdFromName(decoded.documentName || req.headers["ce-subject"]);
+        const deliveryId = deliveryIdFromName(decoded.documentName || req.headers["ce-subject"], eventCollection(kind));
         if (!deliveryId) return json(res, 400, {error: "invalid_document"});
         if (definition.qualifies && !definition.qualifies(decoded)) return json(res, 200, {ok: true, status: "ignored"});
         if (!db) db = dbFactory();
