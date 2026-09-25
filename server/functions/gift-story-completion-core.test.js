@@ -50,6 +50,22 @@ test("Gift Story ownership defaults to the existing Firestore owner and fails cl
   assert.equal(await getGiftStoryOwner(configured), "none");
 });
 
+test("Gift Story ownership override is bounded to valid preflight states", async () => {
+  const previous = process.env.GIFT_STORY_OWNER_OVERRIDE;
+  try {
+    process.env.GIFT_STORY_OWNER_OVERRIDE = "cloud_run";
+    assert.equal(await getGiftStoryOwner(fakeDb()), "cloud_run");
+    assert.equal(await isGiftStoryOwner(fakeDb(), "cloud_run"), true);
+    process.env.GIFT_STORY_OWNER_OVERRIDE = "none";
+    assert.equal(await getGiftStoryOwner(fakeDb()), "none");
+    process.env.GIFT_STORY_OWNER_OVERRIDE = "invalid";
+    assert.equal(await getGiftStoryOwner(fakeDb()), "firestore");
+  } finally {
+    if (previous === undefined) delete process.env.GIFT_STORY_OWNER_OVERRIDE;
+    else process.env.GIFT_STORY_OWNER_OVERRIDE = previous;
+  }
+});
+
 test("concurrent Gift Story effects execute once and replay returns the recorded result", async () => {
   const db = fakeDb();
   let executions = 0;

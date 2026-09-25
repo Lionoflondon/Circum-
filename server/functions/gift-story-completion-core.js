@@ -18,6 +18,8 @@ function ownershipRef(db) {
 }
 
 async function getGiftStoryOwner(db) {
+  const override = text(process.env.GIFT_STORY_OWNER_OVERRIDE).toLowerCase();
+  if (VALID_OWNERS.has(override)) return override;
   const snapshot = await ownershipRef(db).get();
   if (!snapshot.exists) return DEFAULT_OWNER;
   const owner = text(snapshot.data() && snapshot.data().owner).toLowerCase();
