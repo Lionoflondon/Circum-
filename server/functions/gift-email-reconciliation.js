@@ -111,12 +111,16 @@ if (require.main === module) {
   const giftId = text(process.argv.find((arg) => arg.startsWith("--gift-id="))?.slice(10));
   const repair = process.argv.includes("--repair");
   const replayStuck = process.argv.includes("--replay-stuck");
+  const repairStory = process.argv.includes("--repair-story");
+  const deliveryId = text(process.argv.find((arg) => arg.startsWith("--delivery-id="))?.slice(14));
   const scanPaid = process.argv.includes("--scan-paid");
   const scanDeliveries = process.argv.includes("--scan-deliveries");
   const afterId = text(process.argv.find((arg) => arg.startsWith("--after-id="))?.slice(11));
   const limit = Number(process.argv.find((arg) => arg.startsWith("--limit="))?.slice(8) || 50);
-  if ((scanPaid && scanDeliveries) || ((scanPaid || scanDeliveries) && (repair || replayStuck || giftId))) {
-    process.stderr.write("Bounded scans are read-only and cannot be combined with Gift repair.\n");
+  if ((scanPaid && scanDeliveries) || ((scanPaid || scanDeliveries) && (repair || repairStory || replayStuck || giftId)) ||
+      (repairStory && (repair || replayStuck || !/^[A-Za-z0-9_-]{1,120}$/.test(giftId) ||
+        (deliveryId && !/^[A-Za-z0-9_-]{1,120}$/.test(deliveryId))))) {
+    process.stderr.write("Choose a read-only scan or one exact-Gift repair with valid IDs.\n");
     process.exit(1);
   }
   if (replayStuck && (!repair || !text(process.env.RESEND_API_KEY))) {
@@ -124,7 +128,9 @@ if (require.main === module) {
     process.exit(1);
   }
   initializeApp();
-  const operation = scanPaid || scanDeliveries ? scanGiftRecoveryPage({db: getFirestore(),
+  const operation = repairStory ? require("./gift-story-automation").retryGiftStoryForDelivery(getFirestore(),
+      {giftRequestId: giftId, ...(deliveryId ? {deliveryId} : {})}) :
+    scanPaid || scanDeliveries ? scanGiftRecoveryPage({db: getFirestore(),
     kind: scanPaid ? "paid" : "deliveries", afterId, limit}) :
     reconcileGiftById({db: getFirestore(), giftId, repair, replayStuck});
   operation
