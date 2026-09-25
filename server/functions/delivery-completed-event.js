@@ -278,7 +278,7 @@ const subscribers = {
         deliveryId: event.deliveryId,
       },
       deliveryId: event.deliveryId,
-    });
+    }, {source: "platform_event"});
   },
   healthPlus: async (db, event) => {
     if (!event.healthOrderId) return;

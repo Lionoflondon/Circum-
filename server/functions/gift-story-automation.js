@@ -11,6 +11,10 @@ const communicationEngine = require("./communication-engine");
 const deviceTokenAuthority = require("./device-token-authority");
 const transactionalEmailTemplates = require("./transactional-email-templates");
 const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
+const {
+  isGiftStoryOwner,
+  runGiftStoryEffect,
+} = require("./gift-story-completion-core");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -513,7 +517,8 @@ async function queueRecipientPhoneChannel(db, {giftId, userId = "", phone, url, 
   const notificationId = failedReason ?
     storyNotificationId(giftId, `${normalizedChannel}_fallback`) :
     storyNotificationId(giftId, notificationChannel, retryId);
-  await db.collection(queue).doc(failedReason ? notificationId : `gift_story_${giftId}_recipient${suffix}`).set({
+  const queueRef = db.collection(queue).doc(failedReason ? notificationId : `gift_story_${giftId}_recipient${suffix}`);
+  const queuePayload = {
     to: phone,
     body: giftStoryReadyMessage(url),
     type: "gift_story_ready",
@@ -522,7 +527,16 @@ async function queueRecipientPhoneChannel(db, {giftId, userId = "", phone, url, 
     status: "queued",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  };
+  if (typeof db.runTransaction === "function") {
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(queueRef);
+      const current = existing.exists ? existing.data() || {} : {};
+      if (!existing.exists || !text(current.status)) transaction.set(queueRef, queuePayload, {merge: true});
+    });
+  } else if (!((await queueRef.get()).exists)) {
+    await queueRef.set(queuePayload, {merge: true});
+  }
   await writeStoryNotification(db, {
     notificationId,
     giftStoryId: giftId,
@@ -634,16 +648,29 @@ async function writeStoryNotification(db, data) {
     ...data,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await db.collection("storyNotifications").doc(notification.notificationId).set(notification, {merge: true});
+  const ref = db.collection("storyNotifications").doc(notification.notificationId);
+  if (typeof db.runTransaction === "function") {
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(ref);
+      if (!existing.exists) transaction.set(ref, notification, {merge: true});
+    });
+  } else if (!((await ref.get()).exists)) {
+    await ref.set(notification, {merge: true});
+  }
   return notification.notificationId;
 }
 
-async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false, retryEmails = false} = {}) {
+async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false, retryEmails = false, source = "recovery"} = {}) {
   const giftId = giftSnap.id;
   const giftRef = giftSnap.ref;
   const proposedSenderToken = crypto.randomBytes(32).toString("base64url");
   const proposedRecipientToken = crypto.randomBytes(32).toString("base64url");
-  const {gift, token, recipientToken, expiresAt} = await db.runTransaction(async (transaction) => {
+  const unlockResult = await runGiftStoryEffect(db, {
+    giftId,
+    deliveryId,
+    source,
+    effectId: forceNewToken ? "story_unlock_regenerate" : "story_unlock",
+    execute: async () => db.runTransaction(async (transaction) => {
     const current = await transaction.get(giftRef);
     if (!current.exists) throw new Error("Linked gift request was not found.");
     const gift = current.data() || {};
@@ -728,23 +755,60 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     }
-    return {gift, token, recipientToken, expiresAt};
+      return {gift, token, recipientToken, expiresAt};
+    }),
   });
+  if (unlockResult.status === "busy") throw new Error("gift_story_unlock_busy");
+  let unlockData = unlockResult.result;
+  if (!unlockData) {
+    const current = await giftRef.get();
+    const currentGift = current.data() || {};
+    unlockData = {
+      gift: currentGift,
+      token: text(currentGift.giftStoryAccessToken),
+      recipientToken: text(currentGift.recipientStoryToken),
+      expiresAt: currentGift.giftStoryAccessExpiresAt,
+    };
+  }
+  const {gift, token, recipientToken, expiresAt} = unlockData;
   const senderEmail = normalizeEmail(gift.senderEmail);
   const recipientEmail = normalizeEmail(gift.recipientEmail || gift.recipientContact);
   const recipientPhone = text(gift.recipientPhone || gift.recipientContactPhone || gift.recipientContact);
   const recipientPhoneChannel = chooseRecipientLinkChannel(gift);
   const retryId = retryEmails ? `${Date.now()}` : "";
+  const effectOutputsExist = (collection, id, notificationId = "") => async () => {
+    const output = await db.collection(collection).doc(id).get();
+    if (!output.exists) return false;
+    if (!notificationId) return true;
+    return (await db.collection("storyNotifications").doc(notificationId).get()).exists;
+  };
+  const emailQueueExists = (id, notificationId = "") => effectOutputsExist("emailQueue", id, notificationId);
+  const phone = /^\+?[0-9 ]{8,}$/.test(recipientPhone);
+  const phoneQueue = recipientPhoneChannel === "imessage" ? "imessage" + "Queue" : "whatsapp" + "Queue";
+  const phoneQueueId = `gift_story_${giftId}_recipient${retryId ? `_${retryId}` : ""}`;
+  const phoneNotificationId = storyNotificationId(giftId, `${recipientPhoneChannel}_recipient`, retryId);
+  const senderId = text(gift.senderId || gift.userId);
+  const senderNotificationId = `event_${Buffer.from(`gift_story_ready:${giftId}:${senderId}`).toString("base64url")}`;
   const emailResults = await Promise.allSettled([
-    queueGiftDeliveryEmail({giftId, gift: {...gift, status: "delivered", giftStatus: "delivered",
+    runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: "delivery_email", verify: emailQueueExists(`gift_${giftId}_gift_delivered`), execute: () =>
+      queueGiftDeliveryEmail({giftId, gift: {...gift, status: "delivered", giftStatus: "delivered",
       giftStoryUnlocked: true, giftStoryStatus: "unlocked", giftStoryAccessToken: token}, db}),
-    queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
-    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
-      sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
-    queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),
-    queueSenderStoryAppNotification(db, {giftId, userId: text(gift.senderId || gift.userId), token, retryId}),
+    }),
+    runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `sender_story_email${retryId ? `_retry_${retryId}` : ""}`, verify: emailQueueExists(`gift_story_${giftId}_sender${retryId ? `_${retryId}` : ""}`, storyNotificationId(giftId, "email_sender", retryId)), execute: () =>
+      queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
+    }),
+    runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `recipient_story_email${retryId ? `_retry_${retryId}` : ""}`, verify: emailQueueExists(`gift_story_${giftId}_recipient${retryId ? `_${retryId}` : ""}`, storyNotificationId(giftId, "email_recipient", retryId)), execute: () =>
+      queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
+        sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
+    }),
+    runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `recipient_phone_${recipientPhoneChannel}${retryId ? `_retry_${retryId}` : ""}`, verify: async () => !phone || (await effectOutputsExist(phoneQueue, phoneQueueId, phoneNotificationId))(), execute: () =>
+      queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),
+    }),
+    runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: "sender_app_notification", verify: async () => !senderId || (await effectOutputsExist("notifications", senderNotificationId, storyNotificationId(giftId, "sender_app")))(), execute: () =>
+      queueSenderStoryAppNotification(db, {giftId, userId: text(gift.senderId || gift.userId), token, retryId}),
+    }),
   ]);
-  const failures = emailResults.filter((result) => result.status === "rejected");
+  const failures = emailResults.filter((result) => result.status === "rejected" || result.value && result.value.status === "busy");
   if (failures.length) {
     await giftRef.set({
       giftStoryEmailStatus: "retry_required",
@@ -758,6 +822,32 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   }
+  await runGiftStoryEffect(db, {
+    giftId,
+    deliveryId,
+    source,
+    effectId: "audit_analytics",
+    verify: async () => (await db.collection("giftStoryCompletionAudit").doc(giftId).get()).exists &&
+      (await db.collection("giftStoryAnalytics").doc(giftId).get()).exists,
+    execute: async () => {
+      const audit = {
+        giftId,
+        deliveryId,
+        eventType: "gift_story_unlocked",
+        storyStatus: "unlocked",
+        source,
+        createdAt: FieldValue.serverTimestamp(),
+      };
+      await db.runTransaction(async (transaction) => {
+        transaction.set(db.collection("giftStoryCompletionAudit").doc(giftId), audit, {merge: true});
+        transaction.set(db.collection("giftStoryAnalytics").doc(giftId), {
+          ...audit,
+          metric: "gift_story_unlocked",
+        }, {merge: true});
+      });
+      return {status: "recorded"};
+    },
+  });
   return {giftId, token, recipientToken, expiresAt};
 }
 
@@ -781,16 +871,23 @@ async function markAutomationFailure(db, deliveryId, giftId, error) {
   await batch.commit();
 }
 
-async function handleGiftDeliveryCompleted(change, context) {
+async function handleGiftDeliveryCompleted(change, context, options = {}) {
+  const source = text(options.source || "firestore").toLowerCase();
+  if (source === "platform_event") {
+    return {status: "ignored", reason: "platform_event_not_canonical", source};
+  }
   const before = change.before.data() || {};
   const after = change.after.data() || {};
   if (!isGiftDelivery(after) || isComplete(before.status) || !isComplete(after.status)) return null;
   const db = getFirestore();
+  if (!await isGiftStoryOwner(db, source)) {
+    return {status: "ignored", reason: "gift_story_owner_mismatch", source};
+  }
   let giftSnap = null;
   try {
     giftSnap = await findGift(db, {...after, id: context.params.deliveryId});
     if (!giftSnap) throw new Error("Linked gift request was not found.");
-    await unlockGiftStory(db, giftSnap, context.params.deliveryId);
+    await unlockGiftStory(db, giftSnap, context.params.deliveryId, {source});
     await change.after.ref.set({
       giftStoryAutomationStatus: "ready",
       giftStoryAutomationUpdatedAt: FieldValue.serverTimestamp(),

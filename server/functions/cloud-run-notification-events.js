@@ -25,7 +25,7 @@ const handlers = {
     run: async ({db, deliveryId, before, after}) => {
       const {handleGiftDeliveryCompleted} = require("./gift-story-automation");
       const ref = db.collection("deliveryRequests").doc(deliveryId);
-      return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}});
+      return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run"});
     },
   },
 };
