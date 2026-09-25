@@ -307,6 +307,12 @@ test("invalid and suppressed recipients terminate without provider calls", async
     },
   }), {status: "suppressed", reason: "invalid_recipient"});
   assert.equal(calls, 0);
+  const missingDb = fakeDb({"emailQueue/email-1": record({to: ""})});
+  assert.deepEqual(await processEmailQueueRecord({db: missingDb, emailId: "email-1", eventId: "missing",
+    fetchImpl: async () => {
+      calls += 1;
+    }}), {status: "suppressed", reason: "invalid_recipient"});
+  assert.equal(calls, 0);
   const suppressedDb = fakeDb({"emailQueue/email-1": record({recipientSuppressed: true, suppressionReason: "unsubscribe"})});
   assert.deepEqual(await processEmailQueueRecord({db: suppressedDb, emailId: "email-1", eventId: "suppressed"}), {status: "suppressed", reason: "unsubscribe"});
 });

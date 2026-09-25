@@ -4,9 +4,9 @@ This matrix covers the Gifts payment → final Gift → queue → delivery → S
 
 | Failure point | Expected persisted state | Safe retry / identity | Reconciliation owner | Customer communication | Result |
 |---|---|---|---|---|---|
-| Roth debit before finalization interruption | Debit, Gift paid state, and payment event are one Firestore transaction | Transaction retry; `gift_roth_{giftDraftId}` | Gift finalizer | Confirmation only after paid Gift and completed debit | BLOCKED: atomic source contract checked; emulator failure injection pending |
+| Roth reservation/debit before finalization interruption | Reserved debit persists; no paid Gift or confirmation until the provider succeeds and finalization commits | Reservation retry uses the same provider identity and `gift_roth_{giftDraftId}`; finalization transaction is atomic | Gift finalizer and checkout reservation recovery | No premature confirmation | PASS: emulator lost-response fixture asserts one debit, no Gift/email before finalization, and safe retry |
 | Stripe accepted, client response lost | Provider result recoverable; no new charge | Existing reservation / PaymentIntent identity and webhook replay | Gift payment webhook and client recovery | Stripe receipt for card portion; Circum Gift confirmation only after paid state | PASS: existing source and webhook replay tests; live provider recovery not exercised |
-| Split funding interrupted | No paid Gift or confirmation until card and Roth components finalize | Existing reservation and Roth ledger identity | Gift finalizer / reservation recovery | No premature confirmation | BLOCKED: finalizer source contract checked; compensation fixture pending |
+| Split funding interrupted | No paid Gift or confirmation until card and Roth components finalize | Existing reservation and Roth ledger identity; terminal expiry restores once | Gift finalizer / reservation recovery | No premature confirmation | PASS: emulator lost-response and expiry replay fixtures assert one debit, one restoration, no Gift/email |
 | Paid Gift, publisher fails before queue create | Paid Gift and Roth debit remain intact | Eventarc replay or exact-Gift repair creates `gift_payment_confirmed_{giftId}` once | Gift created Eventarc publisher and targeted operator repair | No false confirmation; delayed confirmation on retry | PASS: create-only and targeted repair fixtures; live event routing pending |
 | Queue create succeeds, publisher loses response | One queue item remains | Create-only deterministic queue ID | Eventarc publisher | One logical email | PASS: replay fixture |
 | Eventarc duplicate, including 20 concurrent attempts | One claimed queue item | Transactional claim and fixed queue ID | Transactional email worker | One logical email | PASS: concurrency fixture |
@@ -18,7 +18,7 @@ This matrix covers the Gifts payment → final Gift → queue → delivery → S
 | Delivery completes before Story unlock | Gift delivery retained; email waits | Existing queue retries until secure Story is ready | Story automation and transactional worker | Delivered email contains Story link only after unlock | PASS: legacy queue and Story-ready fixtures |
 | Duplicate delivery completion | One pair of role-specific Story tokens and three logical emails | Gift transaction read plus create-only queue IDs | Story automation and Gift updated Eventarc publisher | Sender delivery with Story link; Sender and Recipient Story-ready | PASS: concurrent unlock fixture |
 | Story token committed, email queue fails | Unlocked Story and tokens retained; `retry_required` recorded | Same tokens and deterministic queue IDs | Gift updated Eventarc publisher; admin retry | Delayed Story email with original token | PASS: injected queue failure and recovery fixture |
-| Story automation fails before Gift becomes delivered | Delivery record complete; Gift flagged `retry_required` with linked delivery ID | Admin retry verifies completed linked delivery, then unlocks | `retryGiftStoryAutomation` | No false delivery email | BLOCKED: recovery path source checked; admin callable fixture pending |
+| Story automation fails before Gift becomes delivered | Delivery record complete; Gift flagged `retry_required` with linked delivery ID | Admin retry verifies completed linked delivery, then unlocks | `retryGiftStoryAutomation` | No false delivery email | PASS: admin recovery helper fixture rejects incomplete delivery and reuses the original two tokens and three email identities |
 | Wrong Gift/recipient/Story token | No email | Source and role revalidation | Transactional email worker | No cross-customer link | PASS: fixture |
 | Wrong sender family | Queue rejected before provider | Gifts address guard | Transactional email worker | No cross-family send | PASS: fixture |
 | App restart after payment or delivery | Server Gift, ledger, delivery and Story state persist | Existing client recovery and backend reads | Existing Sender app | Restored from backend | BLOCKED: native restart fixture not run in this branch |
@@ -26,11 +26,22 @@ This matrix covers the Gifts payment → final Gift → queue → delivery → S
 ## Release gates still open
 
 - Protected rules/emulator and architecture CI must pass on the PR.
-- `gift-email-reconciliation.js` provides bounded, exact-Gift inspection, create-only repair for missing payment/delivery/Story queue items, and explicit due-queue replay. It requires an operator-supplied Gift ID; automatic discovery of old missed events remains open. The Gift created Eventarc trigger must also be installed and verified.
+- `gift-email-reconciliation.js` provides bounded read-only paid-Gift and completed-delivery discovery pages, exact-Gift inspection, create-only repair for missing payment/delivery/Story queue items, and explicit due-queue replay. Scans are manual, limited to 100 indexed source records per page, and never send or mutate. The Gift-created Eventarc trigger must still be installed and verified.
 - The changed `onGiftDeliveryCompleted` and `retryGiftStoryAutomation` Gen 1 exports need narrow activation proof. A successful source test is not live event ownership.
 - Private runtime health, merged source SHA, intended traffic, event routing, correct Gifts sender identity, and no unexpected 5xx require post-deployment evidence.
 
 Until these gates are closed, the Gifts journey is **not certified for production**.
+
+## Recovery ownership and bounded detection
+
+| Partial state | Detection | Recovery owner | Idempotency ID / safe retry | Terminal state |
+|---|---|---|---|---|
+| Paid Gift; confirmation missing | Read-only `paymentStatus == paid` Gift page (maximum 100, document-ID cursor), then exact Gift, queue and Roth ledger reads | Gift-created Eventarc publisher, then operator exact-Gift repair if event delivery was missed | `gift_payment_confirmed_{giftId}` create-only; no financial write | Sent or explicit terminal no-send |
+| Completed delivery; Story missing | Read-only `status in [completed, complete, delivered]` delivery page (maximum 100, document-ID cursor), then exact linked Gift read; delivery/Gift `retry_required` state | Existing `onGiftDeliveryCompleted` and admin `retryGiftStoryAutomation` | Committed sender/recipient tokens reused; deterministic email IDs | Story unlocked, or admin-visible retry-required |
+| Unlocked Story; notification/email missing | Exact Gift and three deterministic queue IDs | Gift-updated Eventarc publisher, then operator exact-Gift repair | `gift_{giftId}_gift_delivered`, `gift_story_{giftId}_sender`, `gift_story_{giftId}_recipient` create-only | Sent or explicit terminal no-send |
+| Retryable Gift email overdue | Exact deterministic queue IDs and `nextAttemptAt` | Transactional worker; authorized operator exact-Gift replay | Fixed queue ID and Resend idempotency key, same source revalidation | Sent or terminal after bounded attempts |
+
+The scanner reads one bounded, indexed source page per invocation and emits only candidates; it neither schedules itself nor repairs automatically. An operator follows each candidate with the exact-Gift command below. Pagination is explicit through `nextAfterId`, so a page is not falsely described as a whole-database certificate. A read-only paid-Gift page is `node server/functions/gift-email-reconciliation.js --scan-paid --limit=50`; a completed-delivery page is `--scan-deliveries --limit=50`. Pass `--after-id=<nextAfterId>` for the next page. Exact-Gift repair never charges, debits, restores, or regenerates Story tokens.
 
 ## Targeted operator recovery
 

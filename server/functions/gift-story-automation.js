@@ -1260,10 +1260,8 @@ exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context)
   return {downloadUrl, mime: gift.giftStoryVideoMime || "video/webm", expiresAt: expiry};
 });
 
-exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) => {
-  if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+async function retryGiftStoryForDelivery(db, data) {
   const giftId = text(data.giftRequestId);
-  const db = getFirestore();
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift request not found.");
   const gift = giftSnap.data() || {};
@@ -1283,6 +1281,11 @@ exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) 
     retryEmails: true,
   });
   return {ok: true, expiresAt: result.expiresAt.toMillis()};
+}
+
+exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) => {
+  if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+  return retryGiftStoryForDelivery(getFirestore(), data);
 });
 
 exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => {
@@ -1435,6 +1438,7 @@ module.exports.cleanSkin = cleanSkin;
 module.exports.renderGiftStoryHtml = renderGiftStoryHtml;
 module.exports.storyNotificationRecord = storyNotificationRecord;
 module.exports.unlockGiftStory = unlockGiftStory;
+module.exports.retryGiftStoryForDelivery = retryGiftStoryForDelivery;
 module.exports.queueStoryEmail = queueStoryEmail;
 module.exports.chooseRecipientLinkChannel = chooseRecipientLinkChannel;
 module.exports.hasActiveGiftDispute = hasActiveGiftDispute;

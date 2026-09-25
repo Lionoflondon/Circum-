@@ -67,6 +67,53 @@ test("20 concurrent Story unlocks reuse one sender and recipient token and one s
   assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
 });
 
+test("admin recovery requires a completed linked Gift delivery and keeps the original Story tokens", async () => {
+  const values = new Map([
+    ["giftRequests/recovery", {recipientName: "Maya", senderEmail: "sender@example.test",
+      recipientEmail: "recipient@example.test", giftStoryAutomationStatus: "retry_required", deliveryId: "delivery-1"}],
+    ["deliveryRequests/delivery-1", {serviceType: "gifts", status: "in_transit", giftRequestId: "recovery"}],
+  ]);
+  const ref = (path) => ({
+    id: path.split("/").at(-1),
+    path,
+    collection: (name) => ({doc: (id) => ref(`${path}/${name}/${id}`)}),
+    get: async () => ({id: path.split("/").at(-1), exists: values.has(path), ref: ref(path), data: () => values.get(path)}),
+    set: async (value, options = {}) => values.set(path, options.merge ? {...(values.get(path) || {}), ...value} : value),
+    create: async (value) => {
+      if (values.has(path)) throw Object.assign(new Error("Already exists"), {code: 6});
+      values.set(path, value);
+    },
+  });
+  const db = {
+    collection: (name) => ({doc: (id) => ref(`${name}/${id}`)}),
+    runTransaction: async (callback) => {
+      const writes = [];
+      const transaction = {get: (document) => document.get(),
+        set: (document, value, options) => writes.push({document, value, options})};
+      const result = await callback(transaction);
+      for (const {document, value, options} of writes) await document.set(value, options);
+      return result;
+    },
+  };
+  await assert.rejects(story.retryGiftStoryForDelivery(db, {giftRequestId: "recovery"}),
+      /Completed Gift delivery record required/);
+  assert.equal(values.get("giftRequests/recovery").giftStoryAccessToken, undefined);
+  values.set("deliveryRequests/delivery-1", {serviceType: "gifts", status: "completed", giftRequestId: "recovery"});
+  const first = await story.retryGiftStoryForDelivery(db, {giftRequestId: "recovery"});
+  assert.equal(first.ok, true);
+  const senderToken = values.get("giftRequests/recovery").giftStoryAccessToken;
+  const recipientToken = values.get("giftRequests/recovery").recipientStoryToken;
+  assert.ok(senderToken && recipientToken && senderToken !== recipientToken);
+  await story.retryGiftStoryForDelivery(db, {giftRequestId: "recovery"});
+  assert.equal(values.get("giftRequests/recovery").giftStoryAccessToken, senderToken);
+  assert.equal(values.get("giftRequests/recovery").recipientStoryToken, recipientToken);
+  assert.deepEqual([...values.keys()].filter((key) => key.startsWith("emailQueue/")).sort(), [
+    "emailQueue/gift_recovery_gift_delivered",
+    "emailQueue/gift_story_recovery_recipient",
+    "emailQueue/gift_story_recovery_sender",
+  ]);
+});
+
 test("Gift Story automation only targets Gifts deliveries", () => {
   assert.equal(story.isGiftDelivery({serviceType: "GIFTS"}), true);
   assert.equal(story.isGiftDelivery({sourceModule: "gifts"}), true);

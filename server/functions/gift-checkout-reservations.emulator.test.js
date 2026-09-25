@@ -6,6 +6,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const gifts = require("./gifts-payment");
 const reservations = require("./gift-checkout-reservations");
+const {publishFromEvent, CREATED} = require("./transactional-email-publishers");
 let app; let db;
 before(() => {
   assert(process.env.FIRESTORE_EMULATOR_HOST, "Emulator only");
@@ -63,12 +64,18 @@ for (const callers of [2, 10]) {
 test("unknown provider response retries the same identity and cannot release its Roth early", async () => {
   const f = await fixture("timeout", 7); const p = provider({loseResponse: true});
   await assert.rejects(gifts.createGiftPayment(p.stripe).run(f.data, f.context), /Stripe Checkout/);
+  assert.equal((await db.doc("giftRequests/timeout").get()).exists, false);
+  assert.equal((await db.doc("emailQueue/gift_payment_confirmed_timeout").get()).exists, false);
+  assert.equal((await db.doc("walletTransactions/gift_roth_timeout").get()).data().amount, -7);
   await assert.rejects(gifts.cancelGiftPayment(p.stripe).run({giftDraftId: "timeout"}, f.context), /unresolved/);
   await gifts.createGiftPayment(p.stripe).run(f.data, f.context);
   assert.equal(p.objects.size, 1);
+  assert.equal((await db.collection("walletTransactions").where("referenceId", "==", "timeout").get()).size, 1);
   await Promise.all([1, 2].map(() => gifts.cancelGiftPayment(p.stripe).run({giftDraftId: "timeout"}, f.context)));
   assert.equal((await db.doc(`wallets/${f.email}`).get()).data().balance, 7);
   assert.equal((await db.doc("walletTransactions/release_gift_roth_timeout").get()).data().amount, 7);
+  assert.equal((await db.doc("giftRequests/timeout").get()).exists, false);
+  assert.equal((await db.doc("emailQueue/gift_payment_confirmed_timeout").get()).exists, false);
   await assert.rejects(gifts.createGiftPayment(p.stripe).run(f.data, f.context), /ended/);
 });
 test("external-only and Roth-only preserve their original total and finalize once", async () => {
@@ -96,6 +103,10 @@ test("Stripe expiry replay releases only a terminal bound checkout", async () =>
   await gifts.handleGiftCheckoutExpired(p.stripe, session);
   await gifts.handleGiftCheckoutExpired(p.stripe, session);
   assert.equal((await db.doc(`wallets/${f.email}`).get()).data().balance, 7);
+  assert.equal((await db.doc("walletTransactions/gift_roth_expiry").get()).data().amount, -7);
+  assert.equal((await db.doc("walletTransactions/release_gift_roth_expiry").get()).data().amount, 7);
+  assert.equal((await db.doc("giftRequests/expiry").get()).exists, false);
+  assert.equal((await db.doc("emailQueue/gift_payment_confirmed_expiry").get()).exists, false);
   await assert.rejects(gifts.finalizeGiftPaymentFromCheckoutSession({giftDraftId: "expiry", actorUid: "expiry", session: {...session, payment_status: "paid"}}), /ended/);
 });
 test("webhook finalization recovers a provider identity lost before Firestore persistence", async () => {
@@ -104,8 +115,19 @@ test("webhook finalization recovers a provider identity lost before Firestore pe
   const session = [...p.objects.values()][0]; session.status = "complete"; session.payment_status = "paid";
   await gifts.finalizeGiftPaymentFromCheckoutSession({giftDraftId: f.data.giftDraftId, session});
   await gifts.finalizeGiftPaymentFromCheckoutSession({giftDraftId: f.data.giftDraftId, session});
-  assert.equal((await db.doc(`giftRequests/${f.data.giftDraftId}`).get()).data().paymentStatus, "paid");
+  const finalized = (await db.doc(`giftRequests/${f.data.giftDraftId}`).get()).data();
+  assert.equal(finalized.paymentStatus, "paid");
   assert.equal((await db.doc(`wallets/${f.email}`).get()).data().balance, 0);
+  assert.equal(p.objects.size, 1);
+  assert.equal((await db.collection("giftRequests").where("senderId", "==", f.data.giftDraftId).get()).size, 1);
+  assert.equal((await db.collection("walletTransactions").where("referenceId", "==", f.data.giftDraftId).get()).size, 1);
+  const publication = {db, eventType: CREATED, eventId: "webhook-replay", decoded: {
+    documentName: `projects/demo-gift-reservations/databases/(default)/documents/giftRequests/${f.data.giftDraftId}`,
+    before: {}, after: finalized,
+  }};
+  assert.equal((await publishFromEvent(publication)).status, "queued");
+  assert.equal((await publishFromEvent(publication)).status, "duplicate");
+  assert.equal((await db.collection("emailQueue").where("sourceDocumentId", "==", f.data.giftDraftId).get()).size, 1);
 });
 test("untrusted draft protocol cannot bypass legacy provider reconciliation", async () => {
   const f = await fixture("forged-protocol"); const p = provider();

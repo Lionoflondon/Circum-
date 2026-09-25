@@ -3,6 +3,7 @@
 
 const {publishFromEvent, CREATED, UPDATED} = require("./transactional-email-publishers");
 const {processEmailQueueRecord} = require("./cloud-run-transactional-email");
+const {FieldPath} = require("firebase-admin/firestore");
 
 const text = (value) => `${value || ""}`.trim();
 const status = (value) => text(value).toLowerCase();
@@ -60,18 +61,68 @@ async function reconcileGiftById({db, giftId, repair = false, replayStuck = fals
       item.value.status === "failed").length};
 }
 
+async function scanGiftRecoveryPage({db, kind, afterId = "", limit = 50, nowMs = Date.now()}) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Scan limit must be 1–100.");
+  if (afterId && !/^[A-Za-z0-9_-]{1,120}$/.test(afterId)) throw new Error("Invalid scan cursor.");
+  if (kind !== "paid" && kind !== "deliveries") throw new Error("Choose a bounded Gift recovery scan.");
+  const collection = kind === "paid" ? "giftRequests" : "deliveryRequests";
+  const filter = kind === "paid" ? ["paymentStatus", "==", "paid"] :
+    ["status", "in", ["completed", "complete", "delivered"]];
+  let query = db.collection(collection).where(...filter).orderBy(FieldPath.documentId()).limit(limit);
+  if (afterId) query = query.startAfter(afterId);
+  const page = await query.get();
+  const candidates = [];
+  for (const snapshot of page.docs) {
+    if (kind === "paid") {
+      const result = await reconcileGiftById({db, giftId: snapshot.id, nowMs});
+      if (result.missingPayment || result.missingStory || result.completedDeliveryNeedsStory || result.stuckQueueCount) {
+        candidates.push({giftId: snapshot.id, missingPayment: result.missingPayment,
+          missingStory: result.missingStory, completedDeliveryNeedsStory: result.completedDeliveryNeedsStory,
+          stuckQueueCount: result.stuckQueueCount});
+      }
+    } else {
+      const delivery = snapshot.data() || {};
+      const giftId = text(delivery.giftOrderId || delivery.giftRequestId);
+      if (status(delivery.serviceType || delivery.sourceModule) !== "gifts" && !giftId) continue;
+      if (!giftId) {
+        candidates.push({deliveryId: snapshot.id, missingGiftLink: true});
+        continue;
+      }
+      const giftSnap = await db.collection("giftRequests").doc(giftId).get();
+      const gift = giftSnap.exists ? giftSnap.data() || {} : {};
+      if (!giftSnap.exists || gift.giftStoryUnlocked !== true || status(gift.giftStoryStatus) !== "unlocked") {
+        candidates.push({giftId, deliveryId: snapshot.id, completedDeliveryNeedsStory: true,
+          missingGift: !giftSnap.exists});
+      }
+    }
+  }
+  return {kind, examined: page.docs.length, candidates,
+    nextAfterId: page.docs.length === limit ? page.docs.at(-1).id : null};
+}
+
 if (require.main === module) {
   const {initializeApp} = require("firebase-admin/app");
   const {getFirestore} = require("firebase-admin/firestore");
   const giftId = text(process.argv.find((arg) => arg.startsWith("--gift-id="))?.slice(10));
   const repair = process.argv.includes("--repair");
   const replayStuck = process.argv.includes("--replay-stuck");
+  const scanPaid = process.argv.includes("--scan-paid");
+  const scanDeliveries = process.argv.includes("--scan-deliveries");
+  const afterId = text(process.argv.find((arg) => arg.startsWith("--after-id="))?.slice(11));
+  const limit = Number(process.argv.find((arg) => arg.startsWith("--limit="))?.slice(8) || 50);
+  if ((scanPaid && scanDeliveries) || ((scanPaid || scanDeliveries) && (repair || replayStuck || giftId))) {
+    process.stderr.write("Bounded scans are read-only and cannot be combined with Gift repair.\n");
+    process.exit(1);
+  }
   if (replayStuck && (!repair || !text(process.env.RESEND_API_KEY))) {
     process.stderr.write("Stuck email replay requires --repair and a configured email provider.\n");
     process.exit(1);
   }
   initializeApp();
-  reconcileGiftById({db: getFirestore(), giftId, repair, replayStuck})
+  const operation = scanPaid || scanDeliveries ? scanGiftRecoveryPage({db: getFirestore(),
+    kind: scanPaid ? "paid" : "deliveries", afterId, limit}) :
+    reconcileGiftById({db: getFirestore(), giftId, repair, replayStuck});
+  operation
       .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
       .catch((error) => {
         process.stderr.write(`${error.message}\n`);
@@ -79,4 +130,4 @@ if (require.main === module) {
       });
 }
 
-module.exports = {reconcileGiftById};
+module.exports = {reconcileGiftById, scanGiftRecoveryPage};

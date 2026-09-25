@@ -2,12 +2,23 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {reconcileGiftById} = require("./gift-email-reconciliation");
+const {reconcileGiftById, scanGiftRecoveryPage} = require("./gift-email-reconciliation");
 
 function fakeDb(initial = {}) {
   const values = new Map(Object.entries(initial));
+  const queryFor = (name, field, operator, expected, afterId = "", max = 50) => ({
+    orderBy: () => queryFor(name, field, operator, expected, afterId, max),
+    startAfter: (id) => queryFor(name, field, operator, expected, id, max),
+    limit: (count) => queryFor(name, field, operator, expected, afterId, count),
+    get: async () => ({docs: [...values.entries()].filter(([key, value]) => {
+      if (!key.startsWith(`${name}/`) || key.slice(name.length + 1) <= afterId) return false;
+      return operator === "in" ? expected.includes(value[field]) : value[field] === expected;
+    }).sort(([a], [b]) => a.localeCompare(b)).slice(0, max).map(([key, value]) => ({
+      id: key.slice(name.length + 1), data: () => value,
+    }))}),
+  });
   return {
-    collection: (name) => ({doc: (id) => ({
+    collection: (name) => ({where: (field, operator, expected) => queryFor(name, field, operator, expected), doc: (id) => ({
       get: async () => ({exists: values.has(`${name}/${id}`), data: () => values.get(`${name}/${id}`)}),
       create: async (value) => {
         const key = `${name}/${id}`;
@@ -79,4 +90,24 @@ test("targeted recovery replays only due Gift queue IDs when explicitly requeste
     }});
   assert.deepEqual(seen, ["gift_g-4_gift_delivered"]);
   assert.equal(result.replaySent, 1);
+});
+
+test("bounded read-only scans discover missed paid and completed-delivery recovery candidates", async () => {
+  const db = fakeDb({
+    "giftRequests/a": {paymentStatus: "paid", walletContributionGbp: 10, status: "submitted_for_review"},
+    "giftRequests/b": {paymentStatus: "paid", walletContributionGbp: 0, status: "approved"},
+    "deliveryRequests/d": {status: "completed", serviceType: "gifts", giftRequestId: "b"},
+  });
+  const first = await scanGiftRecoveryPage({db, kind: "paid", limit: 1});
+  assert.equal(first.examined, 1);
+  assert.equal(first.nextAfterId, "a");
+  assert.deepEqual(first.candidates.map((item) => item.giftId), ["a"]);
+  const second = await scanGiftRecoveryPage({db, kind: "paid", afterId: first.nextAfterId, limit: 1});
+  assert.equal(second.examined, 1);
+  assert.deepEqual(second.candidates, []);
+  const delivery = await scanGiftRecoveryPage({db, kind: "deliveries", limit: 1});
+  assert.deepEqual(delivery.candidates, [{giftId: "b", deliveryId: "d", completedDeliveryNeedsStory: true,
+    missingGift: false}]);
+  assert.equal(db.count("emailQueue"), 0);
+  await assert.rejects(scanGiftRecoveryPage({db, kind: "paid", limit: 101}), /Scan limit/);
 });
