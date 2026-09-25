@@ -1,0 +1,17 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=Dockerfile.notification-events
+      - --build-arg
+      - CIRCUM_SOURCE_SHA=${_CIRCUM_SOURCE_SHA}
+      - --tag
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _CIRCUM_SOURCE_SHA: unknown
+  _IMAGE: gcr.io/circum-2797c/circum-gift-completed-events:unknown
+options:
+  logging: CLOUD_LOGGING_ONLY

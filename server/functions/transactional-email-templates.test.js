@@ -39,7 +39,9 @@ test("every transactional template has complete customer-facing structure", () =
       reminder_24h: true,
       reminder_2h: true,
     }).map((type) => templates.healthUpdate({type})),
-    templates.giftDelivered({giftId: "gift-1", recipientName: "Alex", deliveredAt: "24 September 2026"}),
+    templates.giftPaymentConfirmed({recipientName: "Alex", rothAmount: 120}),
+    templates.giftPaymentConfirmed({recipientName: "Alex", rothAmount: 25, split: true}),
+    templates.giftDelivered({recipientName: "Alex", storyUrl: "https://circumuk.com/story/senderToken"}),
     templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/token"}),
     templates.giftStory({role: "recipient", storyUrl: "https://circumuk.com/story/token"}),
   ];
@@ -53,7 +55,7 @@ test("every transactional template has complete customer-facing structure", () =
     assert.ok(copy.footer);
     assert.match(copy.html, /display:none/);
     assert.match(copy.html, /<h1(?:\s|>)/);
-    assert.match(copy.html, /Reply to this email|contact Circum support|The Circum team|Contact Support|Team CIRCUM/);
+    assert.match(copy.html, /Reply to this email|contact Circum support|The Circum team|Contact Support|Team CIRCUM|Contact us/);
   }
 });
 
@@ -86,4 +88,37 @@ test("welcome copy explains the account, Starter Roth and next step without raw 
   assert.match(copy.html, /Privacy Policy/);
   assert.doesNotMatch(copy.html, /href="https:\/\/circumuk\.com\/support/);
   assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
+});
+
+test("all Gifts variants retain the approved wordmark, links and clean customer copy", () => {
+  const variants = [
+    templates.giftPaymentConfirmed({recipientName: "Maya", rothAmount: 120}),
+    templates.giftPaymentConfirmed({recipientName: "Maya", rothAmount: 25, split: true}),
+    templates.giftDelivered({recipientName: "Maya", storyUrl: "https://circumuk.com/story/senderToken"}),
+    templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/senderToken"}),
+    templates.giftStory({role: "recipient", storyUrl: "https://circumuk.com/story/recipientToken"}),
+  ];
+  for (const copy of variants) {
+    assert.equal(copy.senderCategory, "gifts");
+    assert.match(copy.html, /circum_wordmark\.png/);
+    assert.match(copy.html, /<a href="https:\/\/circumuk\.com\/privacy_policy"[^>]*>Privacy Policy<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/circumuk\.com\/terms"[^>]*>Terms<\/a>/);
+    assert.match(copy.html, /<a href="mailto:info@circumuk\.com"[^>]*>Contact us<\/a>/);
+    assert.match(copy.html, /https:\/\/apps\.apple\.com\/gb\/app\/circum\/id6463644284/);
+    assert.match(copy.html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.circum\.app/);
+    assert.match(copy.html, /download-on-the-app-store\.svg/);
+    assert.match(copy.html, /en_badge_web_generic\.png/);
+    assert.match(copy.html, /<a href="https:\/\/x\.com\/circumuk"[^>]*>X<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/www\.instagram\.com\/circumuk\/"[^>]*>Instagram<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/www\.tiktok\.com\/@circumuk"[^>]*>TikTok<\/a>/);
+    assert.match(copy.text, /Download Circum on the App Store:/);
+    assert.match(copy.text, /Get Circum on Google Play:/);
+    assert.match(copy.text, /Follow Circum on X: https:\/\/x\.com\/circumuk/);
+    assert.doesNotMatch(customerFields(copy), /giftPaymentDrafts|gift_roth_|submitted_for_review|paymentStatus|gift_story_ready|Firestore|Eventarc|Cloud Run|queue IDs|provider IDs/i);
+    assert.doesNotMatch(customerFields(copy), /[a-z][a-z0-9]*_[a-z0-9_]+/i);
+  }
+  assert.match(variants[0].text, /120 Roth for your Gift to Maya/);
+  assert.match(variants[2].text, /This confirms the gift delivery/);
+  assert.match(variants[2].text, /View the Gift Story: https:\/\/circumuk\.com\/story\/senderToken/);
+  assert.doesNotMatch(variants[4].text, /Roth|£/);
 });

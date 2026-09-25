@@ -28,7 +28,7 @@ The queue record carries one of four explicit sender categories:
 | Info | Normal and scheduled delivery, general account, security, referral, Roth, Rider, and undefined notifications | `info@circumuk.com` or the approved `notifications@circumuk.com` fallback |
 | Health | Health+ collection, prescription, delivery, reminder, and exception updates | Verified Health+ identity when configured; otherwise Info fallback |
 | Business | Business invoice and account notices | Verified Business identity when configured; otherwise Info fallback |
-| Gifts | Gifts delivery and Gift Story messages only | `Circum Gifts <gifts@circumuk.com>` only |
+| Gifts | Roth-funded Gift confirmation, Gift delivery and Gift Story messages | `Circum Gifts <gifts@circumuk.com>` only |
 
 Gifts publishers may not emit Info, Health, or Business events. Health and
 Business publishers may not use the Gifts identity. A configured identity is
@@ -79,6 +79,22 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 | updated | `riderProfiles/{riderId}` | `circum-tx-email-rider-decision-updated-v1` |
 | updated | `prescriptionPickups/{pickupId}` | `circum-tx-email-healthplus-updated-v1` |
 | updated | `giftRequests/{giftId}` | `circum-tx-email-gift-updated-v1` |
+| created | `giftRequests/{giftId}` | `circum-tx-email-gift-created-v1` |
+
+The Gift-created trigger is required for Roth-only and split-funded payment confirmation because finalization creates the paid Gift in one transaction. Install it only after the merged consumer revision is ready:
+
+```text
+gcloud eventarc triggers create circum-tx-email-gift-created-v1 \
+  --project=circum-2797c --location=nam5 \
+  --event-filters=type=google.cloud.firestore.document.v1.created \
+  --event-filters=database='(default)' \
+  --event-filters-path-pattern="document=giftRequests/{giftId}" \
+  --event-data-content-type=application/protobuf \
+  --destination-run-service=circum-transactional-email \
+  --destination-run-region=us-central1 \
+  --destination-run-path=/ \
+  --service-account=circum-tx-email-events@circum-2797c.iam.gserviceaccount.com
+```
 
 Do not deploy the failed Gen 1 email-publisher revisions alongside these source triggers. The existing scheduled reminder job remains unchanged; its reminders retain their existing queue identity.
 

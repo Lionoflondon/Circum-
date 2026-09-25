@@ -10,6 +10,7 @@ const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
 const deviceTokenAuthority = require("./device-token-authority");
 const transactionalEmailTemplates = require("./transactional-email-templates");
+const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -430,7 +431,7 @@ async function findGift(db, delivery) {
 }
 
 async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
-  if (!email || !email.includes("@")) return false;
+  if (!email || !email.includes("@") || !/^[A-Za-z0-9_-]{32,}$/.test(text(token))) return false;
   // One logical story message is created once; publisher replay never resets a
   // sent/terminal queue item to queued.
   const notificationId = `gift_story_${giftId}_${role}`;
@@ -456,6 +457,7 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
     sourceCollection: "giftRequests",
     sourceDocumentId: giftId,
     sourceRequiredStatus: "unlocked",
+    sourceStoryRole: role,
     ...(sourceRecipientField ? {sourceRecipientField} : {}),
     status: "queued",
     maxAttempts: 5,
@@ -638,22 +640,25 @@ async function writeStoryNotification(db, data) {
 
 async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false, retryEmails = false} = {}) {
   const giftId = giftSnap.id;
-  const gift = giftSnap.data() || {};
-  const existingToken = text(gift.giftStoryAccessToken);
-  const token = !forceNewToken && existingToken ? existingToken : crypto.randomBytes(32).toString("base64url");
-  const existingRecipientToken = text(gift.recipientStoryToken);
-  const recipientToken = !forceNewToken && existingRecipientToken ? existingRecipientToken : crypto.randomBytes(32).toString("base64url");
-  const hash = tokenHash(token);
-  const recipientHash = tokenHash(recipientToken);
-  const expiresAt = Timestamp.fromMillis(Date.now() + STORY_RETENTION_HOURS * 60 * 60 * 1000);
-  const tokenRef = db.collection("giftStoryAccessTokens").doc(hash);
-  const recipientTokenRef = db.collection("giftStoryAccessTokens").doc(recipientHash);
   const giftRef = giftSnap.ref;
-  const slides = buildGiftStorySlides(gift);
-  const skin = cleanSkin(gift.giftStorySkin);
-  const senderId = text(gift.senderId || gift.userId || gift.customerId);
-  const senderStoryRef = senderId ? db.collection("users").doc(senderId).collection("giftStories").doc(giftId) : null;
-  await db.runTransaction(async (transaction) => {
+  const proposedSenderToken = crypto.randomBytes(32).toString("base64url");
+  const proposedRecipientToken = crypto.randomBytes(32).toString("base64url");
+  const {gift, token, recipientToken, expiresAt} = await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(giftRef);
+    if (!current.exists) throw new Error("Linked gift request was not found.");
+    const gift = current.data() || {};
+    const token = !forceNewToken && text(gift.giftStoryAccessToken) ? text(gift.giftStoryAccessToken) : proposedSenderToken;
+    const recipientToken = !forceNewToken && text(gift.recipientStoryToken) ? text(gift.recipientStoryToken) : proposedRecipientToken;
+    const hash = tokenHash(token);
+    const recipientHash = tokenHash(recipientToken);
+    const expiresAt = !forceNewToken && gift.giftStoryAccessExpiresAt && text(gift.giftStoryAccessToken) === token ?
+      gift.giftStoryAccessExpiresAt : Timestamp.fromMillis(Date.now() + STORY_RETENTION_HOURS * 60 * 60 * 1000);
+    const tokenRef = db.collection("giftStoryAccessTokens").doc(hash);
+    const recipientTokenRef = db.collection("giftStoryAccessTokens").doc(recipientHash);
+    const slides = buildGiftStorySlides(gift);
+    const skin = cleanSkin(gift.giftStorySkin);
+    const senderId = text(gift.senderId || gift.userId || gift.customerId);
+    const senderStoryRef = senderId ? db.collection("users").doc(senderId).collection("giftStories").doc(giftId) : null;
     transaction.set(tokenRef, {
       giftRequestId: giftId,
       deliveryId,
@@ -703,7 +708,7 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryMusicVideoStatus: gift.giftStoryMusicVideoStatus || "not_requested",
       giftStoryAutomationStatus: "ready",
       giftStoryAutomationError: FieldValue.delete(),
-      giftStoryAvailableAt: FieldValue.serverTimestamp(),
+      giftStoryAvailableAt: gift.giftStoryAvailableAt || FieldValue.serverTimestamp(),
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     if (senderStoryRef) {
@@ -723,6 +728,7 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     }
+    return {gift, token, recipientToken, expiresAt};
   });
   const senderEmail = normalizeEmail(gift.senderEmail);
   const recipientEmail = normalizeEmail(gift.recipientEmail || gift.recipientContact);
@@ -730,6 +736,8 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
   const recipientPhoneChannel = chooseRecipientLinkChannel(gift);
   const retryId = retryEmails ? `${Date.now()}` : "";
   const emailResults = await Promise.allSettled([
+    queueGiftDeliveryEmail({giftId, gift: {...gift, status: "delivered", giftStatus: "delivered",
+      giftStoryUnlocked: true, giftStoryStatus: "unlocked", giftStoryAccessToken: token}, db}),
     queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
     queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
       sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
@@ -764,6 +772,7 @@ async function markAutomationFailure(db, deliveryId, giftId, error) {
   }, {merge: true});
   if (giftId) {
     batch.set(db.collection("giftRequests").doc(giftId), {
+      deliveryId,
       giftStoryAutomationStatus: "retry_required",
       giftStoryAutomationError: message,
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
@@ -1251,18 +1260,32 @@ exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context)
   return {downloadUrl, mime: gift.giftStoryVideoMime || "video/webm", expiresAt: expiry};
 });
 
-exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) => {
-  if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+async function retryGiftStoryForDelivery(db, data) {
   const giftId = text(data.giftRequestId);
-  const giftSnap = await getFirestore().collection("giftRequests").doc(giftId).get();
+  const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift request not found.");
   const gift = giftSnap.data() || {};
-  if (!isComplete(gift.giftStatus || gift.status)) throw new functions.https.HttpsError("failed-precondition", "Gift must be delivered first.");
-  const result = await unlockGiftStory(getFirestore(), giftSnap, text(gift.deliveryId), {
+  const deliveryId = text(gift.deliveryId || data.deliveryId);
+  if (!deliveryId) throw new functions.https.HttpsError("failed-precondition", "Completed Gift delivery record required.");
+  const deliverySnap = await db.collection("deliveryRequests").doc(deliveryId).get();
+  const delivery = deliverySnap.exists ? deliverySnap.data() || {} : {};
+  const linkedGiftId = text(delivery.giftOrderId || delivery.giftRequestId);
+  if (!deliverySnap.exists || !isGiftDelivery(delivery) || !isComplete(delivery.status) ||
+      !(linkedGiftId === giftId || text(gift.deliveryId) === deliveryId) ||
+      (linkedGiftId && linkedGiftId !== giftId) ||
+      (text(gift.deliveryId) && text(gift.deliveryId) !== deliveryId)) {
+    throw new functions.https.HttpsError("failed-precondition", "Completed Gift delivery record required.");
+  }
+  const result = await unlockGiftStory(db, giftSnap, deliveryId, {
     forceNewToken: Boolean(data.regenerateToken),
     retryEmails: true,
   });
   return {ok: true, expiresAt: result.expiresAt.toMillis()};
+}
+
+exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) => {
+  if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+  return retryGiftStoryForDelivery(getFirestore(), data);
 });
 
 exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => {
@@ -1414,6 +1437,9 @@ module.exports.giftStoryVideoPaths = giftStoryVideoPaths;
 module.exports.cleanSkin = cleanSkin;
 module.exports.renderGiftStoryHtml = renderGiftStoryHtml;
 module.exports.storyNotificationRecord = storyNotificationRecord;
+module.exports.unlockGiftStory = unlockGiftStory;
+module.exports.retryGiftStoryForDelivery = retryGiftStoryForDelivery;
+module.exports.queueStoryEmail = queueStoryEmail;
 module.exports.chooseRecipientLinkChannel = chooseRecipientLinkChannel;
 module.exports.hasActiveGiftDispute = hasActiveGiftDispute;
 module.exports.revealPolicyAllowsMutualReveal = revealPolicyAllowsMutualReveal;

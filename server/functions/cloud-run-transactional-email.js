@@ -7,6 +7,7 @@ const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore"
 const {decodeEventarcPayload} = require("./cloud-run-notification-events");
 const {normalizeEmail} = require("./email-queue");
 const emailPublishers = require("./transactional-email-publishers");
+const emailTemplates = require("./transactional-email-templates");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
 const ACCEPTED_EVENT_TYPES = new Set([EVENT_TYPE, emailPublishers.UPDATED]);
@@ -173,19 +174,29 @@ function sourceDescriptor(record = {}) {
 function sourceState(data = {}) {
   return [data.status, data.state, data.deliveryStatus, data.giftStatus, data.lifecycleStatus,
     data.paymentStatus, data.paymentState, data.settlementStatus, data.cancellationSettlementStatus,
-    data.approvalStatus, data.verificationStatus]
+    data.approvalStatus, data.verificationStatus, data.giftStoryStatus, data.storyStatus]
       .map((value) => text(value).toLowerCase())
       .filter(Boolean);
 }
 
 async function revalidateSource(db, record) {
   const eventType = text(record.eventType || record.type).toLowerCase();
+  const legacyGiftDelivery = eventType === "gift_delivered" && !text(record.sourceRecipientField);
   if (eventType === "gift_story_ready" &&
-      (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField))) {
+      (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField) ||
+        !text(record.sourceStoryRole || record.recipientRole))) {
+    return {status: "suppressed", reason: "source_metadata_missing"};
+  }
+  if ((eventType === "gift_delivered" && !text(record.sourceRequiredStatus)) ||
+      (eventType === "gift_payment_confirmed" &&
+        (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField)))) {
     return {status: "suppressed", reason: "source_metadata_missing"};
   }
   const source = sourceDescriptor(record);
-  if (!source) return {status: "valid"};
+  if (!source) {
+    return eventType.startsWith("gift_") ?
+      {status: "suppressed", reason: "source_metadata_missing"} : {status: "valid"};
+  }
   const snapshot = await db.collection(source.collection).doc(source.id).get();
   if (!snapshot.exists) return {status: "suppressed", reason: "source_missing"};
   const required = text(record.sourceRequiredStatus).toLowerCase();
@@ -193,6 +204,41 @@ async function revalidateSource(db, record) {
     return {status: "suppressed", reason: "source_state_changed"};
   }
   const sourceData = snapshot.data() || {};
+  if (eventType === "gift_payment_confirmed") {
+    const roth = Number(record.giftPaymentRothAmount);
+    const card = Number(record.giftPaymentCardAmount);
+    if (source.collection !== "giftRequests" || !text(record.sourceRecipientField) ||
+        text(sourceData.paymentStatus) !== "paid" || !Number.isFinite(roth) || roth <= 0 ||
+        !Number.isFinite(card) || card < 0 || Number(sourceData.walletContributionGbp) !== roth ||
+        Number(sourceData.remainingStripeAmountGbp) !== card ||
+        (card > 0 && !text(sourceData.stripePaymentIntentId || sourceData.stripeCheckoutSessionId))) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+    const ledger = await db.collection("walletTransactions").doc(`gift_roth_${source.id}`).get();
+    if (!ledger.exists || text(ledger.data().status) !== "completed" ||
+        Number(ledger.data().amount) !== -roth || text(ledger.data().referenceId) !== source.id) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
+  if (eventType === "gift_delivered" || eventType === "gift_story_ready") {
+    const role = eventType === "gift_delivered" ? "sender" : text(record.sourceStoryRole || record.recipientRole);
+    const token = role === "recipient" ? text(sourceData.recipientStoryToken) : text(sourceData.giftStoryAccessToken);
+    const expectedUrl = token ? `https://circumuk.com/story/${encodeURIComponent(token)}` : "";
+    if (eventType === "gift_delivered" && text(sourceData.status || sourceData.giftStatus) === "delivered" &&
+        (sourceData.giftStoryUnlocked !== true || text(sourceData.giftStoryStatus) !== "unlocked" || !token)) {
+      return {status: "not_ready", reason: "gift_story_not_ready"};
+    }
+    if (source.collection !== "giftRequests" || !["sender", "recipient"].includes(role) ||
+        text(record.recipientRole) !== role ||
+        !(role === "sender" ? (legacyGiftDelivery || text(record.sourceRecipientField) === "senderEmail") :
+          ["recipientEmail", "recipientContact"].includes(text(record.sourceRecipientField))) ||
+        text(sourceData.status || sourceData.giftStatus) !== "delivered" ||
+        sourceData.giftStoryUnlocked !== true || text(sourceData.giftStoryStatus) !== "unlocked" ||
+        !expectedUrl || (!legacyGiftDelivery && text(record.ctaUrl) !== expectedUrl) ||
+        millis(sourceData.giftStoryAccessExpiresAt) <= Date.now()) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
   for (const [field, expected] of Object.entries(record.sourceRequiredFields || {})) {
     const allowed = Array.isArray(expected) ? expected : [expected];
     const actual = sourceData[field];
@@ -211,7 +257,7 @@ async function revalidateSource(db, record) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }
-  const recipientField = text(record.sourceRecipientField);
+  const recipientField = legacyGiftDelivery ? "senderEmail" : text(record.sourceRecipientField);
   if (recipientField) {
     const authoritativeRecipient = normalizeEmail(sourceData[recipientField]);
     const queuedRecipient = normalizeEmail(record.to || record.recipientEmail);
@@ -246,22 +292,27 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
   if (text(from) && text(from) !== resolvedFrom) {
     throw Object.assign(new Error("sender_family_mismatch"), {statusCode: 422});
   }
-  const response = await transport(EMAIL_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": text(record.notificationId),
-    },
-    body: JSON.stringify({
-      from: resolvedFrom,
-      to: [to],
-      subject: text(record.subject),
-      text: text(record.text || record.body),
-      ...(text(record.html) ? {html: record.html} : {}),
-      tags: Array.isArray(record.providerTags) ? record.providerTags : [],
-    }),
-  });
+  let response;
+  try {
+    response = await transport(EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": text(record.notificationId),
+      },
+      body: JSON.stringify({
+        from: resolvedFrom,
+        to: [to],
+        subject: text(record.subject),
+        text: text(record.text || record.body),
+        ...(text(record.html) ? {html: record.html} : {}),
+        tags: Array.isArray(record.providerTags) ? record.providerTags : [],
+      }),
+    });
+  } catch (_error) {
+    throw Object.assign(new Error("email_transport_failed"), {retryable: true, statusCode: 503});
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(text(payload.message) || `email_provider_http_${response.status}`);
@@ -289,22 +340,27 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     return {status: "suppressed", reason: recipient.reason};
   }
   const source = await revalidateSource(db, record);
+  if (source.status === "not_ready") {
+    await updateQueue(db, emailId, {
+      status: "retryable_failed",
+      failureReason: source.reason,
+      maxAttempts: 20,
+      nextAttemptAt: Timestamp.fromMillis(nowMs + RETRY_BACKOFF_MS[Math.min(Number(claim.attempts || 1) - 1, RETRY_BACKOFF_MS.length - 1)]),
+      leaseOwner: null,
+      leaseExpiresAt: Timestamp.fromMillis(nowMs),
+    });
+    throw Object.assign(new Error("gift_story_not_ready"), {statusCode: 503});
+  }
   if (source.status !== "valid") {
     await updateQueue(db, emailId, {status: "suppressed", failureReason: source.reason, leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
     return {status: "suppressed", reason: source.reason};
   }
+  const effectiveRecord = text(record.eventType || record.type).toLowerCase() === "gift_delivered" ?
+    {...record, ...emailTemplates.giftDelivered({recipientName: source.source.recipientName,
+      storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`})} : record;
+  let providerResult;
   try {
-    const result = await sendResend({record, to: recipient.email, fetchImpl, apiKey, from});
-    await updateQueue(db, emailId, {
-      status: "sent",
-      provider: "resend",
-      providerId: result.providerId || null,
-      sentAt: FieldValue.serverTimestamp(),
-      failureReason: null,
-      leaseOwner: null,
-      leaseExpiresAt: Timestamp.fromMillis(nowMs),
-    });
-    return {status: "sent", providerId: result.providerId || null};
+    providerResult = await sendResend({record: effectiveRecord, to: recipient.email, fetchImpl, apiKey, from});
   } catch (error) {
     const retryable = error && error.retryable;
     const attempt = Number(claim.attempts || 1);
@@ -320,6 +376,20 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     if (retryable && !terminal) throw Object.assign(error, {statusCode: 503});
     return {status: terminal ? "failed" : "retryable_failed", reason: text(error && error.message)};
   }
+  try {
+    await updateQueue(db, emailId, {
+      status: "sent",
+      provider: "resend",
+      providerId: providerResult.providerId || null,
+      sentAt: FieldValue.serverTimestamp(),
+      failureReason: null,
+      leaseOwner: null,
+      leaseExpiresAt: Timestamp.fromMillis(nowMs),
+    });
+  } catch (_error) {
+    throw Object.assign(new Error("email_sent_status_persist_failed"), {statusCode: 503});
+  }
+  return {status: "sent", providerId: providerResult.providerId || null};
 }
 
 function json(res, status, body) {

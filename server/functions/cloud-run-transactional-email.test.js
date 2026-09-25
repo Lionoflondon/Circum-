@@ -57,7 +57,7 @@ function fakeDb(initial = {}) {
 function record(overrides = {}) {
   return {
     notificationId: "email-1",
-    eventType: "gift_delivered",
+    eventType: "delivery_test",
     to: "approved@example.com",
     subject: "Transactional test",
     text: "Test body",
@@ -225,6 +225,56 @@ test("429 is retryable and succeeds on the bounded retry", async () => {
   assert.equal(calls, 1);
 });
 
+test("provider acceptance followed by a lost response retries with the same idempotency key", async () => {
+  const db = fakeDb({"emailQueue/email-1": record()});
+  const accepted = new Map();
+  let requests = 0;
+  const provider = async (_url, options) => {
+    requests += 1;
+    const key = options.headers["Idempotency-Key"];
+    if (!accepted.has(key)) accepted.set(key, "provider-accepted-once");
+    if (requests === 1) throw new TypeError("network response lost");
+    return {ok: true, status: 200, json: async () => ({id: accepted.get(key)})};
+  };
+  await assert.rejects(processEmailQueueRecord({db, emailId: "email-1", eventId: "first", apiKey: "test-key",
+    fetchImpl: provider, nowMs: 1000}), (error) => error.statusCode === 503);
+  assert.equal(db.read("emailQueue", "email-1").status, "retryable_failed");
+  const retryAt = db.read("emailQueue", "email-1").nextAttemptAt.toMillis();
+  const result = await processEmailQueueRecord({db, emailId: "email-1", eventId: "replay", apiKey: "test-key",
+    fetchImpl: provider, nowMs: retryAt + 1});
+  assert.deepEqual(result, {status: "sent", providerId: "provider-accepted-once"});
+  assert.equal(accepted.size, 1);
+  assert.equal(requests, 2);
+});
+
+test("provider acceptance followed by a failed local sent write remains retryable", async () => {
+  const db = fakeDb({"emailQueue/email-1": record()});
+  const originalCollection = db.collection;
+  let failSentWrite = true;
+  db.collection = (name) => ({doc: (id) => {
+    const document = originalCollection(name).doc(id);
+    return {...document, set: async (value, options) => {
+      if (name === "emailQueue" && value.status === "sent" && failSentWrite) {
+        failSentWrite = false;
+        throw new Error("write unavailable");
+      }
+      return document.set(value, options);
+    }};
+  }});
+  const keys = [];
+  const provider = async (_url, options) => {
+    keys.push(options.headers["Idempotency-Key"]);
+    return {ok: true, json: async () => ({id: "same-provider-id"})};
+  };
+  await assert.rejects(processEmailQueueRecord({db, emailId: "email-1", eventId: "first", apiKey: "test-key",
+    fetchImpl: provider, nowMs: 1000}), (error) => error.statusCode === 503);
+  assert.equal(db.read("emailQueue", "email-1").status, "processing");
+  const second = await processEmailQueueRecord({db, emailId: "email-1", eventId: "recovery", apiKey: "test-key",
+    fetchImpl: provider, nowMs: 1000 + 5 * 60 * 1000 + 1});
+  assert.equal(second.status, "sent");
+  assert.deepEqual(keys, ["email-1", "email-1"]);
+});
+
 test("5xx and timeout remain retryable without changing the source record", async () => {
   const db = fakeDb({
     "emailQueue/email-1": record({sourceCollection: "giftRequests", sourceDocumentId: "gift-1", sourceRequiredStatus: "delivered"}),
@@ -256,6 +306,12 @@ test("invalid and suppressed recipients terminate without provider calls", async
       calls += 1;
     },
   }), {status: "suppressed", reason: "invalid_recipient"});
+  assert.equal(calls, 0);
+  const missingDb = fakeDb({"emailQueue/email-1": record({to: ""})});
+  assert.deepEqual(await processEmailQueueRecord({db: missingDb, emailId: "email-1", eventId: "missing",
+    fetchImpl: async () => {
+      calls += 1;
+    }}), {status: "suppressed", reason: "invalid_recipient"});
   assert.equal(calls, 0);
   const suppressedDb = fakeDb({"emailQueue/email-1": record({recipientSuppressed: true, suppressionReason: "unsubscribe"})});
   assert.deepEqual(await processEmailQueueRecord({db: suppressedDb, emailId: "email-1", eventId: "suppressed"}), {status: "suppressed", reason: "unsubscribe"});
@@ -305,6 +361,91 @@ test("legacy Gift Story email without source and recipient revalidation is suppr
     },
   }), {status: "suppressed", reason: "source_metadata_missing"});
   assert.equal(calls, 0);
+});
+
+test("Gift payment confirmation requires paid Gift, matching sender and completed debit", async () => {
+  const queued = record({eventType: "gift_payment_confirmed", to: "sender@example.test",
+    sourceCollection: "giftRequests", sourceDocumentId: "g-1", sourceRequiredStatus: "paid",
+    sourceRecipientField: "senderEmail", giftPaymentRothAmount: 120, giftPaymentCardAmount: 0});
+  const gift = {paymentStatus: "paid", senderEmail: "sender@example.test", walletContributionGbp: 120, remainingStripeAmountGbp: 0};
+  const ledger = {status: "completed", amount: -120, referenceId: "g-1"};
+  const db = fakeDb({"emailQueue/email-1": queued, "giftRequests/g-1": gift,
+    "walletTransactions/gift_roth_g-1": ledger});
+  let sends = 0;
+  assert.equal((await processEmailQueueRecord({db, emailId: "email-1", eventId: "payment", apiKey: "test-key",
+    fetchImpl: async () => {
+sends += 1; return {ok: true, json: async () => ({id: "provider-1"})};
+}})).status, "sent");
+  assert.equal(sends, 1);
+  for (const change of [{gift: {...gift, paymentStatus: "pending"}}, {gift: {...gift, senderEmail: "other@example.test"}},
+    {ledger: {...ledger, status: "pending"}}]) {
+    const fixture = fakeDb({"emailQueue/email-1": queued, "giftRequests/g-1": change.gift || gift,
+      "walletTransactions/gift_roth_g-1": change.ledger || ledger});
+    const result = await processEmailQueueRecord({db: fixture, emailId: "email-1", eventId: "invalid", apiKey: "test-key",
+      fetchImpl: async () => {
+throw new Error("must not send");
+}});
+    assert.equal(result.status, "suppressed");
+  }
+});
+
+test("delivered and Story emails require matching current private token", async () => {
+  const gift = {status: "delivered", giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    giftStoryAccessToken: "senderToken", recipientStoryToken: "recipientToken",
+    giftStoryAccessExpiresAt: {toMillis: () => Date.now() + 60000},
+    senderEmail: "sender@example.test", recipientEmail: "recipient@example.test"};
+  for (const [eventType, role, to, field, token] of [
+    ["gift_delivered", "sender", "sender@example.test", "senderEmail", "senderToken"],
+    ["gift_story_ready", "sender", "sender@example.test", "senderEmail", "senderToken"],
+    ["gift_story_ready", "recipient", "recipient@example.test", "recipientEmail", "recipientToken"],
+  ]) {
+    const queued = record({eventType, to, sourceCollection: "giftRequests", sourceDocumentId: "g-2",
+      sourceRequiredStatus: eventType === "gift_delivered" ? "delivered" : "unlocked",
+      sourceRecipientField: field, sourceStoryRole: role, recipientRole: role,
+      ctaUrl: `https://circumuk.com/story/${token}`});
+    const db = fakeDb({"emailQueue/email-1": queued, "giftRequests/g-2": gift});
+    assert.equal((await processEmailQueueRecord({db, emailId: "email-1", eventId: role, apiKey: "test-key",
+      fetchImpl: async () => ({ok: true, json: async () => ({id: "provider"})})})).status, "sent");
+    const wrong = fakeDb({"emailQueue/email-1": {...queued, ctaUrl: "https://circumuk.com/story/wrong"}, "giftRequests/g-2": gift});
+    assert.equal((await processEmailQueueRecord({db: wrong, emailId: "email-1", eventId: "wrong", apiKey: "test-key",
+      fetchImpl: async () => {
+        throw new Error("must not send");
+      }})).status, "suppressed");
+    const wrongRole = fakeDb({"emailQueue/email-1": {...queued, recipientRole: role === "sender" ? "recipient" : "sender"},
+      "giftRequests/g-2": gift});
+    assert.equal((await processEmailQueueRecord({db: wrongRole, emailId: "email-1", eventId: "wrong-role", apiKey: "test-key",
+      fetchImpl: async () => {
+        throw new Error("must not send");
+      }})).status, "suppressed");
+  }
+});
+
+test("legacy delivered queue item waits for Story and renders the current secure link", async () => {
+  const queued = record({eventType: "gift_delivered", to: "sender@example.test", recipientRole: "sender",
+    sourceCollection: "giftRequests", sourceDocumentId: "g-legacy", sourceRequiredStatus: "delivered",
+    subject: "Old delivery email", text: "Old email without Story", ctaUrl: "https://circumuk.com/?app=gifts"});
+  const gift = {status: "delivered", senderEmail: "sender@example.test", recipientName: "Maya"};
+  const db = fakeDb({"emailQueue/email-1": queued, "giftRequests/g-legacy": gift});
+  await assert.rejects(processEmailQueueRecord({db, emailId: "email-1", eventId: "before-story",
+    apiKey: "test-key", nowMs: 1000, fetchImpl: async () => {
+throw new Error("must not send");
+}}),
+  (error) => error.statusCode === 503);
+  assert.equal(db.read("emailQueue", "email-1").status, "retryable_failed");
+  assert.equal(db.read("emailQueue", "email-1").maxAttempts, 20);
+  const retryAt = db.read("emailQueue", "email-1").nextAttemptAt.toMillis();
+  await db.collection("giftRequests").doc("g-legacy").set({giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    giftStoryAccessToken: "secureToken", giftStoryAccessExpiresAt: {toMillis: () => Date.now() + 60000}}, {merge: true});
+  let sent;
+  const result = await processEmailQueueRecord({db, emailId: "email-1", eventId: "after-story", apiKey: "test-key",
+    nowMs: retryAt + 1, fetchImpl: async (_url, options) => {
+      sent = JSON.parse(options.body);
+      return {ok: true, json: async () => ({id: "provider"})};
+    }});
+  assert.equal(result.status, "sent");
+  assert.equal(sent.subject, "Your CIRCUM Gift has been delivered");
+  assert.match(sent.html, /https:\/\/circumuk\.com\/story\/secureToken/);
+  assert.doesNotMatch(sent.html, /Old email without Story/);
 });
 
 test("recipient is revalidated against the current authoritative source before provider call", async () => {

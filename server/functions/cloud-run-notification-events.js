@@ -18,6 +18,10 @@ const handlers = {
   },
   gift_delivery_completed: {
     eventType: "google.cloud.firestore.document.v1.updated",
+    qualifies: ({before, after}) => {
+      const {isGiftDelivery, isComplete} = require("./gift-story-automation");
+      return isGiftDelivery(after) && !isComplete(before.status) && isComplete(after.status);
+    },
     run: async ({db, deliveryId, before, after}) => {
       const {handleGiftDeliveryCompleted} = require("./gift-story-automation");
       const ref = db.collection("deliveryRequests").doc(deliveryId);
@@ -212,6 +216,7 @@ function createServer(options = {}) {
         const decoded = decodeEventarcPayload(Buffer.concat(chunks));
         const deliveryId = deliveryIdFromName(decoded.documentName || req.headers["ce-subject"]);
         if (!deliveryId) return json(res, 400, {error: "invalid_document"});
+        if (definition.qualifies && !definition.qualifies(decoded)) return json(res, 200, {ok: true, status: "ignored"});
         if (!db) db = dbFactory();
         const result = await once({db, kind, eventId, deliveryId, before: decoded.before, after: decoded.after, run: definition.run});
         return json(res, 200, {ok: true, ...result});

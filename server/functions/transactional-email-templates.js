@@ -6,6 +6,7 @@ const WELCOME_WORDMARK_URL = "https://circumuk.com/assets/assets/images/circum_w
 const TERMS_URL = "https://circumuk.com/terms";
 const PRIVACY_URL = "https://circumuk.com/privacy_policy";
 const SUPPORT_TEXT = "Need help? Reply to this email or contact Circum support from your account.";
+const gifts = require("./gift-email-templates");
 const FORBIDDEN_CUSTOMER_TOKENS = [
   "roth_movement_completed",
   "sender_",
@@ -284,37 +285,22 @@ function healthUpdate({type, ctaUrl = APP_URL} = {}) {
   });
 }
 
-function giftDelivered({giftId = "", recipientName = "", deliveredAt = "", ctaUrl = "https://circumuk.com/?app=gifts"} = {}) {
-  const recipient = safeName(recipientName) || "your recipient";
-  const timing = text(deliveredAt) ? ` on ${text(deliveredAt)}` : "";
-  return result({
-    templateId: "gift-delivered",
-    subject: "Your CIRCUM gift was delivered",
-    preheader: "Your gift has reached its recipient.",
-    heading: "Your CIRCUM gift was delivered",
-    paragraphs: [`Your gift to ${recipient} was marked as delivered${timing}.`, giftId ? `Gift reference: ${safeReference(giftId)}` : "", "This is an essential service message about a gift you sent with Circum."].filter(Boolean),
-    ctaLabel: "Open Circum Gifts",
-    ctaUrl,
-    senderCategory: "gifts",
-    tags: [{name: "product", value: "gifts"}, {name: "message", value: "delivered"}],
-  });
+function giftPaymentConfirmed(options = {}) {
+  const copy = gifts.paymentConfirmed(options);
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
+function giftDelivered(options = {}) {
+  const copy = gifts.delivered(options);
+  assertCustomerFacingContent(copy);
+  return copy;
 }
 
 function giftStory({role, storyUrl} = {}) {
-  const sender = role === "sender";
-  const url = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(storyUrl)) ? text(storyUrl) : "";
-  if (!url) throw new Error("Gift Story link is required.");
-  return result({
-    templateId: sender ? "gift-story-sender" : "gift-story-recipient",
-    subject: sender ? "Your CIRCUM Gift Story is ready" : "You have received a CIRCUM Gift Story",
-    preheader: sender ? "Your private Gift Story is ready to view." : "A private Gift Story has been created for you.",
-    heading: sender ? "Your Gift Story is ready" : "You have received a Gift Story",
-    paragraphs: [sender ? "Your private CIRCUM Gift Story is ready to view." : "Someone has created a private CIRCUM Gift Story for you.", "This secure link is personal to you and expires according to Gift Story policy."],
-    ctaLabel: "View Gift Story",
-    ctaUrl: url,
-    senderCategory: "gifts",
-    tags: [{name: "product", value: "gifts"}, {name: "message", value: "story"}],
-  });
+  const copy = gifts.story({role, storyUrl});
+  assertCustomerFacingContent(copy);
+  return copy;
 }
 
 function assertCustomerFacingContent(copy) {
@@ -343,6 +329,7 @@ module.exports = {
   cancellationSettled,
   deliveryCompleted,
   giftDelivered,
+  giftPaymentConfirmed,
   giftStory,
   healthUpdate,
   referralReward,
