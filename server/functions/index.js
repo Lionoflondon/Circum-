@@ -67,6 +67,7 @@ const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
 const movementTimeline = require("./movement-timeline");
 const giftStoryAutomation = require("./gift-story-automation");
+const deliveryCompletedEvent = require("./delivery-completed-event");
 const riderPresence = require("./rider-presence");
 const addressPlacesCompat = require("./address-places-compat");
 const senderBooking = require("./sender-booking");
@@ -365,6 +366,7 @@ exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
 exports.onDeliveryLiveLocationWrite =
   movementTimeline.onDeliveryLiveLocationWrite;
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
+exports.onDeliveryCompletedEvent = deliveryCompletedEvent.onDeliveryCompletedEvent;
 exports.getSenderGiftStory = giftStoryAutomation.getSenderGiftStory;
 exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
 exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;

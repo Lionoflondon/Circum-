@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 272,
-  "gen1ExportCount": 270,
+  "sourceExportCount": 273,
+  "gen1ExportCount": 271,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -5834,6 +5834,51 @@
         "riders"
       ],
       "externalProviders": [],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "onDeliveryCompletedEvent",
+      "sourceFile": "server/functions/delivery-completed-event.js",
+      "triggerType": "firestore-event",
+      "triggerDefinition": {
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "eventFilters": {
+          "resource": "projects/circum-registry-audit/databases/(default)/documents/platformEvents/{eventId}"
+        },
+        "retry": true
+      },
+      "generation": "Gen 1",
+      "productionPurpose": "deliveryCompletedEvent.onDeliveryCompletedEvent",
+      "callers": [
+        "docs/BACKEND_REMEDIATION_2026-09-21.md",
+        "server/functions/production-functions-inventory.json"
+      ],
+      "criticality": "P0/P1-review-required",
+      "authRequired": false,
+      "appCheckRequired": false,
+      "secrets": [],
+      "firestoreCollections": [
+        "businessOrders",
+        "deliveryActivity",
+        "deliveryAnalytics",
+        "deliveryAuditEvents",
+        "healthPlusNotifications",
+        "irisCompletionRecords",
+        "platformEventSubscribers",
+        "platformEvents",
+        "platformNotifications",
+        "prescriptionPickups",
+        "recipientNotifications",
+        "riderCompletionEvents",
+        "vanguardCompletionEvents"
+      ],
+      "externalProviders": [
+        "Stripe"
+      ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
