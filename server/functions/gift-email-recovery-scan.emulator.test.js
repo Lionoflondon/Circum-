@@ -13,7 +13,7 @@ test("indexed Gift recovery scans page synthetic paid Gifts and completed delive
   try {
     await Promise.all([
       db.doc("giftRequests/paid-a").set({paymentStatus: "paid", walletContributionGbp: 10,
-        status: "approved", deliveryId: "delivery-a"}),
+        senderEmail: "sender@example.test", status: "approved", deliveryId: "delivery-a"}),
       db.doc("giftRequests/pending-b").set({paymentStatus: "pending", walletContributionGbp: 0}),
       db.doc("deliveryRequests/delivery-a").set({status: "completed", serviceType: "gifts",
         giftRequestId: "paid-a"}),

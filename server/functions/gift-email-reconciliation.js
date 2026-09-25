@@ -4,6 +4,7 @@
 const {publishFromEvent, CREATED, UPDATED} = require("./transactional-email-publishers");
 const {processEmailQueueRecord} = require("./cloud-run-transactional-email");
 const {FieldPath} = require("firebase-admin/firestore");
+const {normalizeEmail} = require("./email-queue");
 
 const text = (value) => `${value || ""}`.trim();
 const status = (value) => text(value).toLowerCase();
@@ -15,6 +16,8 @@ async function reconcileGiftById({db, giftId, repair = false, replayStuck = fals
   if (!giftSnap.exists) return {status: "missing"};
   const gift = giftSnap.data() || {};
   const paymentEligible = status(gift.paymentStatus) === "paid" && Number(gift.walletContributionGbp) > 0;
+  const senderAvailable = Boolean(normalizeEmail(gift.senderEmail));
+  const recipientAvailable = Boolean(normalizeEmail(gift.recipientEmail || gift.recipientContact));
   const storyReady = status(gift.status || gift.giftStatus) === "delivered" &&
     gift.giftStoryUnlocked === true && status(gift.giftStoryStatus) === "unlocked";
   const queueIds = [
@@ -24,8 +27,9 @@ async function reconcileGiftById({db, giftId, repair = false, replayStuck = fals
     `gift_story_${giftId}_recipient`,
   ];
   const queueSnapshots = await Promise.all(queueIds.map((id) => db.collection("emailQueue").doc(id).get()));
-  const missingPayment = paymentEligible && !queueSnapshots[0].exists;
-  const missingStory = storyReady && queueSnapshots.slice(1).some((snapshot) => !snapshot.exists);
+  const missingPayment = paymentEligible && senderAvailable && !queueSnapshots[0].exists;
+  const missingStory = storyReady && ((senderAvailable && (!queueSnapshots[1].exists || !queueSnapshots[2].exists)) ||
+    (recipientAvailable && !queueSnapshots[3].exists));
   const stuck = queueIds.filter((_, index) => queueSnapshots[index].exists &&
     status(queueSnapshots[index].data().status) === "retryable_failed" &&
     Number(queueSnapshots[index].data().nextAttemptAt && queueSnapshots[index].data().nextAttemptAt.toMillis()) <= nowMs);
@@ -53,7 +57,8 @@ async function reconcileGiftById({db, giftId, repair = false, replayStuck = fals
   const replayResults = repair && replayStuck ? await Promise.allSettled(stuck.map((id) => processRecord({
     db, emailId: id, eventId: `gift-reconcile-${giftId}-${nowMs}`, nowMs,
   }))) : [];
-  return {status: "inspected", paymentEligible, storyReady, missingPayment, missingStory,
+  return {status: "inspected", paymentEligible, storyReady, recipientUnavailable: !senderAvailable || !recipientAvailable,
+    missingPayment, missingStory,
     completedDeliveryNeedsStory, stuckQueueCount: stuck.length,
     paymentPublication, storyPublication,
     replaySent: replayResults.filter((item) => item.status === "fulfilled" && item.value.status === "sent").length,

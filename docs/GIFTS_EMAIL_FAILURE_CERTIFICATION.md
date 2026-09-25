@@ -42,6 +42,7 @@ Until these gates are closed, the Gifts journey is **not certified for productio
 | Retryable Gift email overdue | Exact deterministic queue IDs and `nextAttemptAt` | Transactional worker; authorized operator exact-Gift replay | Fixed queue ID and Resend idempotency key, same source revalidation | Sent or terminal after bounded attempts |
 
 The scanner reads one bounded, indexed source page per invocation and emits only candidates; it neither schedules itself nor repairs automatically. An operator follows each candidate with the exact-Gift command below. Pagination is explicit through `nextAfterId`, so a page is not falsely described as a whole-database certificate. A read-only paid-Gift page is `node server/functions/gift-email-reconciliation.js --scan-paid --limit=50`; a completed-delivery page is `--scan-deliveries --limit=50`. Pass `--after-id=<nextAfterId>` for the next page. Exact-Gift repair never charges, debits, restores, or regenerates Story tokens.
+Missing or invalid email contacts are reported as unavailable on exact-Gift inspection and are not repeatedly treated as missing queue items; they remain a no-send until an authoritative contact exists.
 
 ## Targeted operator recovery
 

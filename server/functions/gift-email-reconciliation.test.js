@@ -92,9 +92,21 @@ test("targeted recovery replays only due Gift queue IDs when explicitly requeste
   assert.equal(result.replaySent, 1);
 });
 
+test("missing email contacts are terminal no-send, not endlessly missing queue candidates", async () => {
+  const db = fakeDb({"giftRequests/no-contact": {paymentStatus: "paid", walletContributionGbp: 5,
+    status: "delivered", giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    giftStoryAccessToken: "s".repeat(43), recipientStoryToken: "r".repeat(43)}});
+  const result = await reconcileGiftById({db, giftId: "no-contact", repair: true});
+  assert.equal(result.recipientUnavailable, true);
+  assert.equal(result.missingPayment, false);
+  assert.equal(result.missingStory, false);
+  assert.equal(db.count("emailQueue"), 0);
+});
+
 test("bounded read-only scans discover missed paid and completed-delivery recovery candidates", async () => {
   const db = fakeDb({
-    "giftRequests/a": {paymentStatus: "paid", walletContributionGbp: 10, status: "submitted_for_review"},
+    "giftRequests/a": {paymentStatus: "paid", walletContributionGbp: 10, status: "submitted_for_review",
+      senderEmail: "sender@example.test"},
     "giftRequests/b": {paymentStatus: "paid", walletContributionGbp: 0, status: "approved"},
     "deliveryRequests/d": {status: "completed", serviceType: "gifts", giftRequestId: "b"},
   });
