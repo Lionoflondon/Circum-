@@ -99,26 +99,31 @@ function parseJson(buffer) {
 // message.data.  Keep support for direct protobuf events too, so a transport
 // change cannot turn a valid event into an unclaimed 500 response.
 function decodeEventarcPayload(body) {
-  const outer = parseJson(body);
-  if (!outer || !outer.message || typeof outer.message.data !== "string") {
-    return decodeEventData(body);
-  }
-  const messageData = Buffer.from(outer.message.data, "base64");
-  const cloudEvent = parseJson(messageData);
-  if (!cloudEvent) return decodeEventData(messageData);
+  try {
+    const outer = parseJson(body);
+    if (!outer || !outer.message || typeof outer.message.data !== "string") {
+      return decodeEventData(body);
+    }
+    const messageData = Buffer.from(outer.message.data, "base64");
+    const cloudEvent = parseJson(messageData);
+    if (!cloudEvent) return decodeEventData(messageData);
 
-  if (typeof cloudEvent.data_base64 === "string") {
-    return decodeEventData(Buffer.from(cloudEvent.data_base64, "base64"));
+    if (typeof cloudEvent.data_base64 === "string") {
+      return decodeEventData(Buffer.from(cloudEvent.data_base64, "base64"));
+    }
+    if (typeof cloudEvent.data === "string") {
+      const nested = Buffer.from(cloudEvent.data, "base64");
+      return decodeEventData(nested);
+    }
+    if (cloudEvent.data && typeof cloudEvent.data === "object") {
+      return decodeJsonDocumentEvent(cloudEvent.data);
+    }
+    if (cloudEvent.value || cloudEvent.oldValue) return decodeJsonDocumentEvent(cloudEvent);
+    throw Object.assign(new Error("invalid_event_payload"), {statusCode: 400});
+  } catch (error) {
+    if (!error.statusCode) error.statusCode = 400;
+    throw error;
   }
-  if (typeof cloudEvent.data === "string") {
-    const nested = Buffer.from(cloudEvent.data, "base64");
-    return decodeEventData(nested);
-  }
-  if (cloudEvent.data && typeof cloudEvent.data === "object") {
-    return decodeJsonDocumentEvent(cloudEvent.data);
-  }
-  if (cloudEvent.value || cloudEvent.oldValue) return decodeJsonDocumentEvent(cloudEvent);
-  throw Object.assign(new Error("invalid_event_payload"), {statusCode: 400});
 }
 
 async function processOnce({db, kind, eventId, deliveryId, before, after, run}) {
