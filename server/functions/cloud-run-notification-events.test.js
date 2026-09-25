@@ -235,26 +235,39 @@ test("accepts an Eventarc Pub/Sub request and forwards decoded delivery fields",
 
 test("Gift completion Eventarc route accepts only the delivery update and preserves both states", async () => {
   let received;
+  let claims = 0;
   const server = createServer({kind: "gift_delivery_completed", dbFactory: () => ({unused: true}),
     processOnce: async (input) => {
+      claims++;
       received = input;
       return {status: "completed"};
     }});
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   try {
-    const payload = DocumentEventData.encode({
+    const send = async (oldStatus, newStatus, serviceType = "gifts") => {
+      const link = serviceType === "gifts" ? {giftRequestId: {stringValue: "gift-1"}} : {};
+      const payload = DocumentEventData.encode({
       value: {name: "projects/circum-2797c/databases/(default)/documents/deliveryRequests/gift-delivery-1",
-        fields: {status: {stringValue: "completed"}, giftRequestId: {stringValue: "gift-1"},
-          serviceType: {stringValue: "gifts"}}},
+        fields: {status: {stringValue: newStatus}, ...link, serviceType: {stringValue: serviceType}}},
       oldValue: {name: "projects/circum-2797c/databases/(default)/documents/deliveryRequests/gift-delivery-1",
-        fields: {status: {stringValue: "in_transit"}, giftRequestId: {stringValue: "gift-1"},
-          serviceType: {stringValue: "gifts"}}},
-    }).finish();
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/`, {method: "POST",
+        fields: {status: {stringValue: oldStatus}, ...link, serviceType: {stringValue: serviceType}}},
+      }).finish();
+      return fetch(`http://127.0.0.1:${server.address().port}/`, {method: "POST",
       headers: {"content-type": "application/json", "ce-type": "google.cloud.firestore.document.v1.updated",
-        "ce-id": "gift-event-1"}, body: pubsubPushBody(payload)});
+        "ce-id": `gift-event-${oldStatus}-${newStatus}-${serviceType}`}, body: pubsubPushBody(payload)});
+    };
+    const transit = await send("assigned", "in_transit");
+    assert.equal(transit.status, 200);
+    assert.equal((await transit.json()).status, "ignored");
+    assert.equal(claims, 0);
+    const otherService = await send("in_transit", "completed", "standard");
+    assert.equal(otherService.status, 200);
+    assert.equal((await otherService.json()).status, "ignored");
+    assert.equal(claims, 0);
+    const response = await send("in_transit", "completed");
     assert.equal(response.status, 200);
+    assert.equal(claims, 1);
     assert.equal(received.kind, "gift_delivery_completed");
     assert.equal(received.deliveryId, "gift-delivery-1");
     assert.equal(received.before.status, "in_transit");
