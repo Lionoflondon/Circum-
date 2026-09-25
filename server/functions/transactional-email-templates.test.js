@@ -101,9 +101,9 @@ test("all Gifts variants retain the approved wordmark, links and clean customer 
   for (const copy of variants) {
     assert.equal(copy.senderCategory, "gifts");
     assert.match(copy.html, /circum_wordmark\.png/);
-    assert.match(copy.html, /https:\/\/circumuk\.com\/privacy_policy/);
-    assert.match(copy.html, /https:\/\/circumuk\.com\/terms/);
-    assert.match(copy.html, /mailto:info@circumuk\.com/);
+    assert.match(copy.html, /<a href="https:\/\/circumuk\.com\/privacy_policy"[^>]*>Privacy Policy<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/circumuk\.com\/terms"[^>]*>Terms<\/a>/);
+    assert.match(copy.html, /<a href="mailto:info@circumuk\.com"[^>]*>Contact us<\/a>/);
     assert.match(copy.html, /https:\/\/apps\.apple\.com\/gb\/app\/circum\/id6463644284/);
     assert.match(copy.html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.circum\.app/);
     assert.match(copy.html, /download-on-the-app-store\.svg/);
