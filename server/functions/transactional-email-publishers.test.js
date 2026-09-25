@@ -16,6 +16,10 @@ function fakeDb(initial = {}) {
       if (data.has(key)) throw Object.assign(new Error("Already exists"), {code: 6});
       data.set(key, {...value});
     },
+    set: async (value, options = {}) => {
+      const key = `${name}/${id}`;
+      data.set(key, options.merge ? {...(data.get(key) || {}), ...value} : {...value});
+    },
   })});
   return {collection, read: (name, id) => data.get(`${name}/${id}`)};
 }
@@ -152,4 +156,62 @@ test("Health+ status email is limited to the canonical operational status projec
   assert.equal(result.id, "health_pickup-1_delivered");
   assert.equal(db.read("emailQueue", result.id).sourceRequiredStatus, "delivered");
   assert.equal(db.read("emailQueue", result.id).senderCategory, "health");
+});
+
+test("Roth-only Gift confirmation uses the finalized Gift and completed debit once", async () => {
+  const db = fakeDb({"walletTransactions/gift_roth_g-1": {status: "completed", amount: -120, referenceId: "g-1"}});
+  const input = event("giftRequests", "g-1", null, {paymentStatus: "paid", status: "submitted_for_review",
+    senderEmail: "sender@example.test", recipientName: "Maya", walletContributionGbp: 120, remainingStripeAmountGbp: 0});
+  assert.deepEqual(await publishFromEvent({db, ...input}), {status: "queued", id: "gift_payment_confirmed_g-1"});
+  assert.deepEqual(await publishFromEvent({db, ...input}), {status: "duplicate", id: "gift_payment_confirmed_g-1"});
+  const queued = db.read("emailQueue", "gift_payment_confirmed_g-1");
+  assert.equal(queued.senderCategory, "gifts");
+  assert.equal(queued.sourceRecipientField, "senderEmail");
+  assert.match(queued.text, /120 Roth for your Gift to Maya/);
+});
+
+test("split Gift confirmation has no false card amount or duplicate receipt", async () => {
+  const db = fakeDb({"walletTransactions/gift_roth_g-2": {status: "completed", amount: -25, referenceId: "g-2"}});
+  const input = event("giftRequests", "g-2", null, {paymentStatus: "paid", senderEmail: "sender@example.test",
+    recipientName: "Maya", walletContributionGbp: 25, remainingStripeAmountGbp: 75, stripePaymentIntentId: "pi-test"});
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "gift_payment_confirmed_g-2");
+  const queued = db.read("emailQueue", result.id);
+  assert.match(queued.text, /card payment receipt is provided separately/);
+  assert.doesNotMatch(queued.text, /75 Roth|£75/);
+});
+
+test("no Gift confirmation before paid state and completed Roth debit", async () => {
+  const pending = event("giftRequests", "g-3", null, {paymentStatus: "pending", senderEmail: "sender@example.test",
+    walletContributionGbp: 120, remainingStripeAmountGbp: 0});
+  const db = fakeDb();
+  assert.equal((await publishFromEvent({db, ...pending})).status, "ignored");
+  assert.equal((await publishFromEvent({db, ...event("giftRequests", "g-3", null, {...pending.decoded.after, paymentStatus: "paid"})})).reason,
+      "gift_roth_ledger_not_final");
+  assert.equal(db.read("emailQueue", "gift_payment_confirmed_g-3"), undefined);
+});
+
+test("card-only Gift relies on Stripe receipt and does not publish Roth confirmation", async () => {
+  const db = fakeDb();
+  const input = event("giftRequests", "g-4", null, {paymentStatus: "paid", senderEmail: "sender@example.test",
+    walletContributionGbp: 0, remainingStripeAmountGbp: 120});
+  assert.equal((await publishFromEvent({db, ...input})).status, "ignored");
+});
+
+test("Story unlock publishes sender delivery with Story link and both role-specific Story emails", async () => {
+  const db = fakeDb();
+  const senderToken = "s".repeat(43);
+  const recipientToken = "r".repeat(43);
+  const after = {status: "delivered", giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    senderEmail: "sender@example.test", recipientEmail: "recipient@example.test", recipientName: "Maya",
+    giftStoryAccessToken: senderToken, recipientStoryToken: recipientToken};
+  const input = event("giftRequests", "g-5", {status: "approved", giftStoryStatus: "locked"}, after);
+  assert.equal((await publishFromEvent({db, ...input})).status, "published");
+  const delivered = db.read("emailQueue", "gift_g-5_gift_delivered");
+  assert.equal(delivered.to, "sender@example.test");
+  assert.equal(delivered.ctaUrl, `https://circumuk.com/story/${senderToken}`);
+  assert.equal(db.read("emailQueue", "gift_story_g-5_sender").to, "sender@example.test");
+  assert.equal(db.read("emailQueue", "gift_story_g-5_recipient").to, "recipient@example.test");
+  assert.equal(db.read("emailQueue", "gift_g-5_recipient_delivered"), undefined);
+  assert.equal((await publishFromEvent({db, ...input})).status, "published");
 });

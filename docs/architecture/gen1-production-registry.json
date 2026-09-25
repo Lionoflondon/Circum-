@@ -6055,6 +6055,7 @@
       "generation": "Gen 1",
       "productionPurpose": "giftStoryAutomation.onGiftDeliveryCompleted",
       "callers": [
+        "docs/GIFTS_EMAIL_FAILURE_CERTIFICATION.md",
         "scripts/scoped_functions_deploy_list.test.js",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
@@ -8235,6 +8236,7 @@
       "generation": "Gen 1",
       "productionPurpose": "giftStoryAutomation.retryGiftStoryAutomation",
       "callers": [
+        "docs/GIFTS_EMAIL_FAILURE_CERTIFICATION.md",
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
         "test/admin_operations_test.dart"

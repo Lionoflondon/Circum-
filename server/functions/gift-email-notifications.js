@@ -9,24 +9,11 @@ function normalizeEmail(value) {
   return normalizeQueueEmail(value);
 }
 
-function deliveredAtValue(gift = {}) {
-  return gift.deliveredAt || gift.deliveryCompletedAt || gift.updatedAt || null;
-}
-
-function formatDeliveredAt(value) {
-  if (!value) return "";
-  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: "Europe/London",
-  }).format(date);
-}
-
 function giftDeliveryEmail({giftId, gift = {}}) {
-  const deliveredAt = formatDeliveredAt(deliveredAtValue(gift));
-  return templates.giftDelivered({giftId, recipientName: gift.recipientName, deliveredAt});
+  const token = text(gift.giftStoryAccessToken);
+  if (!token || gift.giftStoryUnlocked !== true || text(gift.giftStoryStatus) !== "unlocked") return null;
+  return templates.giftDelivered({recipientName: gift.recipientName,
+    storyUrl: `https://circumuk.com/story/${encodeURIComponent(token)}`});
 }
 
 function emailNotificationId(giftId, eventType) {
@@ -34,19 +21,12 @@ function emailNotificationId(giftId, eventType) {
 }
 
 async function queueGiftDeliveryEmail({giftId, gift = {}, db = getFirestore()}) {
-  let email = normalizeEmail(gift.senderEmail || gift.email);
+  const email = normalizeEmail(gift.senderEmail);
   const senderId = text(gift.senderId || gift.userId);
-  if (!email && senderId) {
-    for (const collection of ["users", "senders"]) {
-      const sender = await db.collection(collection).doc(senderId).get();
-      if (!sender.exists) continue;
-      email = normalizeEmail(sender.data() && sender.data().email);
-      if (email) break;
-    }
-  }
-  if (!email || !giftId) return null;
+  if (!email || !giftId || text(gift.status || gift.giftStatus) !== "delivered") return null;
   const notificationId = emailNotificationId(giftId, "gift_delivered");
   const message = giftDeliveryEmail({giftId, gift});
+  if (!message) return null;
   await enqueueEmail(db, {
     id: notificationId,
     to: email,
@@ -57,12 +37,13 @@ async function queueGiftDeliveryEmail({giftId, gift = {}, db = getFirestore()}) 
     sourceCollection: "giftRequests",
     sourceDocumentId: giftId,
     sourceRequiredStatus: "delivered",
-    ...(normalizeEmail(gift.senderEmail) ? {sourceRecipientField: "senderEmail"} :
-      normalizeEmail(gift.email) ? {sourceRecipientField: "email"} : {}),
     senderCategory: "gifts",
     recipientRole: "sender",
     tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
     extra: {
+      sourceRecipientField: "senderEmail",
+      sourceRequiredFields: {giftStoryStatus: "unlocked", giftStoryUnlocked: true},
+      sourceStoryRole: "sender",
       giftId: text(giftId),
       recipientId: senderId,
       preheader: message.preheader,

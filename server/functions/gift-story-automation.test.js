@@ -7,6 +7,66 @@ const fs = require("node:fs");
 const story = require("./gift-story-automation");
 const source = fs.readFileSync("gift-story-automation.js", "utf8");
 
+test("20 concurrent Story unlocks reuse one sender and recipient token and one set of emails", async () => {
+  const values = new Map([["giftRequests/g-1", {recipientName: "Maya", senderEmail: "sender@example.test",
+    recipientEmail: "recipient@example.test", status: "approved"}]]);
+  let failSenderEmailCreate = false;
+  let transactionQueue = Promise.resolve();
+  const ref = (path) => ({
+    id: path.split("/").at(-1),
+    path,
+    collection: (name) => ({doc: (id) => ref(`${path}/${name}/${id}`)}),
+    get: async () => ({exists: values.has(path), data: () => values.get(path)}),
+    set: async (value, options = {}) => values.set(path, options.merge ? {...(values.get(path) || {}), ...value} : value),
+    create: async (value) => {
+      if (path === "emailQueue/gift_story_g-1_sender" && failSenderEmailCreate) {
+        failSenderEmailCreate = false;
+        throw new Error("queue unavailable");
+      }
+      if (values.has(path)) throw Object.assign(new Error("Already exists"), {code: 6});
+      values.set(path, value);
+    },
+  });
+  const db = {
+    collection: (name) => ({doc: (id) => ref(`${name}/${id}`)}),
+    runTransaction: (callback) => {
+      const run = async () => {
+        const changes = [];
+        const transaction = {
+          get: (document) => document.get(),
+          set: (document, value, options) => changes.push({document, value, options}),
+        };
+        const result = await callback(transaction);
+        for (const {document, value, options} of changes) await document.set(value, options);
+        return result;
+      };
+      const pending = transactionQueue.then(run);
+      transactionQueue = pending.catch(() => {});
+      return pending;
+    },
+  };
+  const giftRef = ref("giftRequests/g-1");
+  const original = await giftRef.get();
+  const snapshot = {id: "g-1", ref: giftRef, data: original.data};
+  const results = await Promise.all(Array.from({length: 20}, () => story.unlockGiftStory(db, snapshot, "d-1")));
+  const first = results[0];
+  assert.ok(results.every((result) => result.token === first.token && result.recipientToken === first.recipientToken));
+  assert.equal(values.get("giftRequests/g-1").giftStoryAccessToken, first.token);
+  assert.equal([...values.keys()].filter((key) => key.startsWith("giftStoryAccessTokens/")).length, 2);
+  assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
+  assert.match(values.get("emailQueue/gift_g-1_gift_delivered").ctaUrl, /\/story\//);
+  values.delete("emailQueue/gift_story_g-1_sender");
+  failSenderEmailCreate = true;
+  const partial = await story.unlockGiftStory(db, snapshot, "d-1");
+  assert.equal(partial.token, first.token);
+  assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "retry_required");
+  assert.equal(values.get("giftRequests/g-1").giftStoryStatus, "unlocked");
+  const recovered = await story.unlockGiftStory(db, snapshot, "d-1");
+  assert.equal(recovered.token, first.token);
+  assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "queued");
+  assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
+});
+
 test("Gift Story automation only targets Gifts deliveries", () => {
   assert.equal(story.isGiftDelivery({serviceType: "GIFTS"}), true);
   assert.equal(story.isGiftDelivery({sourceModule: "gifts"}), true);

@@ -218,11 +218,39 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   }
 
   const giftId = asId(path, "giftRequests");
+  if (giftId && (eventType === CREATED || eventType === UPDATED) &&
+      lower(after.paymentStatus) === "paid" && lower(before.paymentStatus) !== "paid") {
+    const rothAmount = Number(after.walletContributionGbp || 0);
+    const cardAmount = Number(after.remainingStripeAmountGbp || 0);
+    if (rothAmount > 0 && Number.isFinite(rothAmount) && Number.isFinite(cardAmount) && cardAmount >= 0) {
+      const ledger = await db.collection("walletTransactions").doc(`gift_roth_${giftId}`).get();
+      if (!ledger.exists || lower(ledger.data().status) !== "completed" ||
+          Number(ledger.data().amount) !== -rothAmount || text(ledger.data().referenceId) !== giftId) {
+        return {status: "skipped", reason: "gift_roth_ledger_not_final"};
+      }
+      const template = templates.giftPaymentConfirmed({recipientName: after.recipientName, rothAmount, split: cardAmount > 0});
+      const payload = record({to: after.senderEmail, template, eventType: "gift_payment_confirmed", collection: "giftRequests",
+        sourceId: giftId, required: "paid", recipientField: "senderEmail", senderCategory: "gifts",
+        extra: {recipientRole: "sender", giftPaymentRothAmount: rothAmount, giftPaymentCardAmount: cardAmount,
+          sourceRequiredFields: {paymentStatus: "paid", walletContributionGbp: rothAmount, remainingStripeAmountGbp: cardAmount}}});
+      return createOnly(db, emailId("gift_payment_confirmed", giftId), payload);
+    }
+  }
   if (giftId && eventType === UPDATED && lower(after.status || after.giftStatus) === "delivered" &&
-      lower(before.status || before.giftStatus) !== "delivered") {
+      lower(after.giftStoryStatus) === "unlocked" &&
+      (lower(before.status || before.giftStatus) !== "delivered" || lower(before.giftStoryStatus) !== "unlocked")) {
     const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
-    const result = await queueGiftDeliveryEmail({giftId, gift: after, db});
-    return result ? {status: "published", id: result} : {status: "skipped", reason: "gift_recipient_missing"};
+    const {queueStoryEmail} = require("./gift-story-automation");
+    const senderEmail = normalizeEmail(after.senderEmail);
+    const recipientEmail = normalizeEmail(after.recipientEmail || after.recipientContact);
+    const [deliveryId, senderQueued, recipientQueued] = await Promise.all([
+      queueGiftDeliveryEmail({giftId, gift: after, db}),
+      queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token: text(after.giftStoryAccessToken),
+        sourceRecipientField: "senderEmail"}),
+      queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: text(after.recipientStoryToken),
+        sourceRecipientField: normalizeEmail(after.recipientEmail) ? "recipientEmail" : "recipientContact"}),
+    ]);
+    return {status: "published", deliveryId, senderQueued, recipientQueued};
   }
 
   return {status: "ignored", eventId};
