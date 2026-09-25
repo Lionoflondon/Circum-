@@ -24,6 +24,10 @@ const handlers = {
     },
     run: async ({db, deliveryId, before, after}) => {
       const {handleGiftDeliveryCompleted} = require("./gift-story-automation");
+      const {isGiftStoryOwner} = require("./gift-story-completion-core");
+      if (!await isGiftStoryOwner(db, "cloud_run")) {
+        throw Object.assign(new Error("gift_story_owner_transitioning"), {statusCode: 503});
+      }
       const ref = db.collection("deliveryRequests").doc(deliveryId);
       return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run"});
     },

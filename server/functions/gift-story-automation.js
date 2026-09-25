@@ -12,6 +12,7 @@ const deviceTokenAuthority = require("./device-token-authority");
 const transactionalEmailTemplates = require("./transactional-email-templates");
 const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
 const {
+  getGiftStoryOwner,
   isGiftStoryOwner,
   runGiftStoryEffect,
 } = require("./gift-story-completion-core");
@@ -880,8 +881,12 @@ async function handleGiftDeliveryCompleted(change, context, options = {}) {
   const after = change.after.data() || {};
   if (!isGiftDelivery(after) || isComplete(before.status) || !isComplete(after.status)) return null;
   const db = getFirestore();
-  if (!await isGiftStoryOwner(db, source)) {
+  const owner = await getGiftStoryOwner(db);
+  if (owner === "cloud_run" && source === "firestore") {
     return {status: "ignored", reason: "gift_story_owner_mismatch", source};
+  }
+  if (owner !== source) {
+    throw Object.assign(new Error("gift_story_owner_transitioning"), {statusCode: 503});
   }
   let giftSnap = null;
   try {
