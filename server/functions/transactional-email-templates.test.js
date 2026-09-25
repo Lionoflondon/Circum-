@@ -108,8 +108,12 @@ test("all Gifts variants retain the approved wordmark, links and clean customer 
     assert.match(copy.html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.circum\.app/);
     assert.match(copy.html, /download-on-the-app-store\.svg/);
     assert.match(copy.html, /en_badge_web_generic\.png/);
+    assert.match(copy.html, /<a href="https:\/\/x\.com\/circumuk"[^>]*>X<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/www\.instagram\.com\/circumuk\/"[^>]*>Instagram<\/a>/);
+    assert.match(copy.html, /<a href="https:\/\/www\.tiktok\.com\/@circumuk"[^>]*>TikTok<\/a>/);
     assert.match(copy.text, /Download Circum on the App Store:/);
     assert.match(copy.text, /Get Circum on Google Play:/);
+    assert.match(copy.text, /Follow Circum on X: https:\/\/x\.com\/circumuk/);
     assert.doesNotMatch(customerFields(copy), /giftPaymentDrafts|gift_roth_|submitted_for_review|paymentStatus|gift_story_ready|Firestore|Eventarc|Cloud Run|queue IDs|provider IDs/i);
     assert.doesNotMatch(customerFields(copy), /[a-z][a-z0-9]*_[a-z0-9_]+/i);
   }
