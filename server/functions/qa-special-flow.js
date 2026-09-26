@@ -11,14 +11,15 @@ const business = require("./business-payments")._qaHandlers;
 const businessReservations = require("./business-checkout-reservations");
 const movement = require("./movement-ledger");
 const ROOT = "qaSpecialFlowFixtures";
+const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
 const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "paymentArtifactReconciliations", "deliveryRequests"];
 const fail = (message) => {
 throw new functions.https.HttpsError("failed-precondition", message);
 };
 function factory({db, env = process.env, stripe}) {
-  const provider = (fixture) => providerForFixture({stripe, registry: db.collection(ROOT).doc(fixture.id).collection("qaCheckoutProviderObjects"), fixtureId: fixture.id, secret: env.STRIPE_SECRET_KEY});
-  const paidProvider = (fixture, qa) => paymentProviderForFixture({stripe, qa, fixture, secret: env.STRIPE_SECRET_KEY});
-  const lifecycle = qaLifecycle.factory({db, env, providerFactory: (qa, fixture) => paymentProviderForFixture({stripe, qa, fixture, secret: env.STRIPE_SECRET_KEY})});
+  const provider = (fixture) => providerForFixture({stripe, registry: db.collection(ROOT).doc(fixture.id).collection("qaCheckoutProviderObjects"), fixtureId: fixture.id, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
+  const paidProvider = (fixture, qa) => paymentProviderForFixture({stripe, qa, fixture, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
+  const lifecycle = qaLifecycle.factory({db, env, providerFactory: (qa, fixture) => paymentProviderForFixture({stripe, qa, fixture, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY})});
   async function cleanup(fixture) {
     const ref = db.collection(ROOT).doc(fixture.id);
     // Operations may not race cleanup: one lease covers all external effects.
@@ -147,10 +148,10 @@ console.error("QA cleanup remains pending", {fixtureId: doc.id, message: error.m
   return {handle, expire};
 }
 function instance() {
-  const secret = process.env.STRIPE_SECRET_KEY;
+  const secret = process.env.CIRCUM_QA_STRIPE_SECRET_KEY;
   if (!secret || !secret.startsWith("sk_test_")) fail("TEST provider required.");
   return factory({db: getFirestore(), stripe: require("stripe")(secret, {timeout: 20000, maxNetworkRetries: 1})});
 }
-exports.callable = () => functions.runWith({enforceAppCheck: true, timeoutSeconds: 180, secrets: ["STRIPE_SECRET_KEY", "GOOGLE_MAPS_DIRECTIONS_API_KEY"]}).https.onCall((data, context) => instance().handle(data, context));
-exports.scheduled = () => functions.runWith({timeoutSeconds: 180, secrets: ["STRIPE_SECRET_KEY"]}).pubsub.schedule("every 10 minutes").onRun(() => instance().expire());
+exports.callable = () => functions.runWith({enforceAppCheck: true, timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET, "GOOGLE_MAPS_DIRECTIONS_API_KEY"]}).https.onCall((data, context) => instance().handle(data, context));
+exports.scheduled = () => functions.runWith({timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET]}).pubsub.schedule("every 10 minutes").onRun(() => instance().expire());
 exports._test = {factory};
