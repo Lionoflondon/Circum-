@@ -12,6 +12,13 @@ test("Admin cannot create canonical deliveries by duplicating live records", () 
   assert.doesNotMatch(source, /collection\('deliveryRequests'\)\.doc\(newId\)\.set/);
 });
 
+test("campaign match approvals use deterministic, replay-safe identities", () => {
+  assert.match(source, /const pairKey = crypto\.createHash\("sha256"\)/);
+  assert.match(source, /participant\.matchStatus === "matched" \|\| other\.matchStatus === "matched"/);
+  assert.match(source, /tx\.create\(giftRef, giftRequestForCampaign/);
+  assert.match(source, /idempotent: true/);
+});
+
 test("access resolution reports missing roles without granting access or writing admin records", () => {
   assert.match(source, /async function resolveActor\(context, \{allowMissingRole = false, db = getFirestore\(\)\} = \{\}\)/);
   assert.match(source, /if \(!roles\.size && !allowMissingRole\)/);
