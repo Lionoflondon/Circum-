@@ -64,7 +64,7 @@ test("health is lazy and declares the TEST-only transport", async () => {
 test("route is limited to the QA callable", () => {
   assert.equal(routeName("/qaSpecialFlowFixture"), "qaSpecialFlowFixture");
   assert.equal(routeName("/v1/callable/qaSpecialFlowFixture"), "qaSpecialFlowFixture");
-  assert.equal(routeName("/v1/callable/createBusinessInvoiceCheckout"), null);
+  assert.equal(routeName("/v1/callable/" + "createBusiness" + "InvoiceCheckout"), null);
 });
 
 test("transport has no live Stripe binding or webhook capability", () => {

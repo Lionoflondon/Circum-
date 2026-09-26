@@ -6714,7 +6714,9 @@
       "generation": "Gen 1",
       "productionPurpose": "qaSpecialFlow.callable()",
       "callers": [
-        "docs/qa/private-special-flow-fixture.md"
+        "docs/qa/private-special-flow-fixture.md",
+        "server/functions/cloud-run-qa-special-flow.js",
+        "server/functions/cloud-run-qa-special-flow.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -6735,8 +6737,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-qa-special-flow.js",
+        "cloud-run-qa-special-flow.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
