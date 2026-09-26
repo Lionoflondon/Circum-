@@ -575,6 +575,7 @@ async function queueSenderStoryAppNotification(db, {giftId, userId, token, retry
     body: "Your Circum Gift Story is ready.",
     data: {category: "gifts", giftId, secureStoryUrl: url, route: "gift"},
     dedupeKey: `gift_story_ready:${giftId}:${uid}`,
+    ...(db.fixtureMode ? {db, suppressPush: true} : {}),
   });
   return true;
 }
@@ -880,7 +881,7 @@ async function handleGiftDeliveryCompleted(change, context, options = {}) {
   const before = change.before.data() || {};
   const after = change.after.data() || {};
   if (!isGiftDelivery(after) || isComplete(before.status) || !isComplete(after.status)) return null;
-  const db = getFirestore();
+  const db = options.db || getFirestore();
   const owner = await getGiftStoryOwner(db);
   if (owner === "cloud_run" && source === "firestore") {
     return {status: "ignored", reason: "gift_story_owner_mismatch", source};
@@ -899,6 +900,7 @@ async function handleGiftDeliveryCompleted(change, context, options = {}) {
     }, {merge: true});
   } catch (error) {
     await markAutomationFailure(db, context.params.deliveryId, giftSnap && giftSnap.id, error);
+    if (source === "cloud_run") throw error;
   }
   return null;
 }
