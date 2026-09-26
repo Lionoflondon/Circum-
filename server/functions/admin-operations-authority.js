@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+const crypto = require("node:crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, FieldPath, Timestamp} = require("firebase-admin/firestore");
 const {
@@ -1083,7 +1084,8 @@ exports.adminApproveGiftCampaignMatch = adminCallable(async (data, context) => {
   }
   const db = getFirestore();
   const participantRef = db.collection("giftCampaignParticipants").doc(participantId);
-  const matchRef = db.collection("giftCampaignMatches").doc();
+  let matchRef;
+  let replay = false;
   let otherId = "";
   let score = 0;
   let reason = "";
@@ -1103,6 +1105,27 @@ exports.adminApproveGiftCampaignMatch = adminCallable(async (data, context) => {
       throw new functions.https.HttpsError("not-found", "Suggested participant was not found.");
     }
     const other = otherSnap.data() || {};
+    if (participantId === otherId) {
+      throw new functions.https.HttpsError("failed-precondition", "A campaign participant cannot match with themselves.");
+    }
+    const pair = [participantId, otherId].sort();
+    const pairKey = crypto.createHash("sha256").update(JSON.stringify([participant.campaignId || null, pair])).digest("hex");
+    matchRef = db.collection("giftCampaignMatches").doc(`campaign_${pairKey}`);
+    const existingMatch = await tx.get(matchRef);
+    if (existingMatch.exists) {
+      const existing = existingMatch.data() || {};
+      if (existing.status !== "approved" || JSON.stringify([...(existing.participantIds || [])].sort()) !== JSON.stringify(pair)) {
+        throw new functions.https.HttpsError("failed-precondition", "This campaign pair already has a conflicting match record.");
+      }
+      replay = true;
+      return;
+    }
+    if (participant.matchStatus === "matched" || other.matchStatus === "matched") {
+      throw new functions.https.HttpsError("failed-precondition", "One of these participants is already matched.");
+    }
+    if (participant.campaignId && other.campaignId && participant.campaignId !== other.campaignId) {
+      throw new functions.https.HttpsError("failed-precondition", "Campaign participants must belong to the same campaign.");
+    }
     reason = clean(participant.suggestedMatchReason);
     score = Number(participant.suggestedMatchScore || 0);
     for (const [currentRef, current, partner] of [
@@ -1120,8 +1143,8 @@ exports.adminApproveGiftCampaignMatch = adminCallable(async (data, context) => {
         matchApprovedBy: actor.uid,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
-      const giftRef = db.collection("giftRequests").doc();
-      tx.set(giftRef, giftRequestForCampaign(current, partner, participant, matchRef.id));
+      const giftRef = db.collection("giftRequests").doc(`campaign_${pairKey}_${currentRef.id}`);
+      tx.create(giftRef, giftRequestForCampaign(current, partner, participant, matchRef.id));
     }
     tx.set(matchRef, {
       campaignId: participant.campaignId || null,
@@ -1136,6 +1159,7 @@ exports.adminApproveGiftCampaignMatch = adminCallable(async (data, context) => {
       updatedAt: FieldValue.serverTimestamp(),
     });
   });
+  if (replay) return {ok: true, matchId: matchRef.id, idempotent: true};
   await writeAudit(db, actor, {
     actionType: "gift_campaign_match_approved",
     recordType: "giftCampaignMatches",
