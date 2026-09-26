@@ -1010,7 +1010,10 @@ void main() {
       expect(source, contains('contentStatus'));
       expect(source, contains('captionDraft'));
       expect(source, contains('postedTikTokUrl'));
-      expect(source, contains("httpsCallable('adminSaveGiftRequestEditor')"));
+      expect(source, contains("route: 'adminSaveGiftRequestEditor'"));
+      expect(source, contains("invokeAdminCallable("));
+      expect(source,
+          isNot(contains("httpsCallable('adminSaveGiftRequestEditor')")));
       expect(backend, contains('gift_request_editor_saved'));
     });
 

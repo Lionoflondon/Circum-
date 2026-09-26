@@ -1888,16 +1888,29 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     if (confirmed != true) return;
     try {
-      await _functions.httpsCallable('adminSaveGiftRequestEditor').call({
-        'giftId': id,
-        'collection': collection,
-        'patch': patch,
-        'reason': 'Historical Gift Request editor workflow restored',
-      });
+      final idToken = await _auth.currentUser?.getIdToken();
+      final appCheckToken = await FirebaseAppCheck.instance.getToken();
+      if (idToken == null || idToken.isEmpty || appCheckToken == null || appCheckToken.isEmpty) {
+        throw const AdminAccessException(
+          'FAILED_PRECONDITION',
+          'Circum security verification is required.',
+        );
+      }
+      await invokeAdminCallable(
+        route: 'adminSaveGiftRequestEditor',
+        data: {
+          'giftId': id,
+          'collection': collection,
+          'patch': patch,
+          'reason': 'Historical Gift Request editor workflow restored',
+        },
+        idToken: idToken,
+        appCheckToken: appCheckToken,
+      );
       setState(() => _message = 'Gift Request $id saved.');
       await _loadAdminData();
-    } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Gift Request save failed.');
+    } on AdminAccessException catch (error) {
+      setState(() => _message = error.message);
     }
   }
 
