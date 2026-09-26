@@ -850,9 +850,8 @@ class _BusinessViewState extends State<BusinessView>
                         '${requests.where((item) => item.status.contains('approval')).length}'),
                 _MiniStat(label: 'Completed Gifts', value: '$completed'),
                 _MiniStat(
-                    label: 'Recipient Status',
-                    value:
-                        '${requests.where((item) => item.status.contains('recipient')).length}'),
+                    label: 'Recipient privacy',
+                    value: 'Protected'),
               ],
       ),
       const SizedBox(height: 14),
