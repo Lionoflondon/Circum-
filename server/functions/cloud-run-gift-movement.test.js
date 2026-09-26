@@ -4,12 +4,24 @@
 const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
-const {createServer, giftIdFromName} = require("./cloud-run-gift-movement");
+const {createServer, giftIdFromName, eventTarget} = require("./cloud-run-gift-movement");
 
 test("gift movement route accepts only matching Firestore paths", () => {
   assert.equal(giftIdFromName("projects/p/databases/(default)/documents/giftRequests/g1"), "g1");
   assert.equal(giftIdFromName("documents/deliveryRequests/g1"), null);
   assert.equal(giftIdFromName("documents/giftRequests/g1/nested"), null);
+});
+
+test("fixture event path requires the exact enabled fixture and remains nested", () => {
+  const root = {collection: (name) => ({doc: (id) => ({collection: (child) => ({path: `${name}/${id}/${child}`})})}),
+    runTransaction: async () => {}};
+  const fixtureName = "documents/giftMovementRuntimeFixtures/__codex_gift_movement_canary/giftRequests/__codex_gift_1";
+  const target = eventTarget(fixtureName, root, "__codex_gift_movement_canary");
+  assert.equal(target.giftId, "__codex_gift_1");
+  assert.equal(target.eventDb.collection("deliveryRequests").path,
+      "giftMovementRuntimeFixtures/__codex_gift_movement_canary/deliveryRequests");
+  assert.equal(eventTarget(fixtureName, root, "__codex_gift_movement_other"), null);
+  assert.equal(eventTarget(fixtureName, root, ""), null);
 });
 
 test("health route works without invoking projection", async () => {

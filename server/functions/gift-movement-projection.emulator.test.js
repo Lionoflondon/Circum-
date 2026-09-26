@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {projectLatestGiftMovement} = require("./gift-movement-projection-core");
+const {fixtureDb} = require("./gift-movement-fixture-db");
 
 async function withDb(name, run) {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, "Firestore emulator required");
@@ -57,4 +58,14 @@ test("completed claim with missing target is surfaced for review", async () => w
   await db.doc("deliveryRequests/gift_g3").delete();
   assert.equal((await projectLatestGiftMovement(db, "g3")).status, "manual_review_claim_target_mismatch");
   assert.equal((await db.doc("deliveryRequests/gift_g3").get()).exists, false);
+}));
+
+test("fixture projection cannot write top-level customer collections", async () => withDb("fixture", async (db) => {
+  const isolated = fixtureDb(db, "__codex_gift_movement_emulator");
+  await isolated.collection("giftRequests").doc("__codex_gift_1").set({status: "packed"});
+  assert.equal((await projectLatestGiftMovement(isolated, "__codex_gift_1")).status, "projected");
+  assert.equal((await isolated.collection("deliveryRequests").doc("gift___codex_gift_1").get()).exists, true);
+  assert.equal((await db.doc("deliveryRequests/gift___codex_gift_1").get()).exists, false);
+  assert.equal((await db.doc("giftRequests/__codex_gift_1").get()).exists, false);
+  assert.equal((await isolated.collection("giftMovementProjectionClaims").get()).size, 1);
 }));

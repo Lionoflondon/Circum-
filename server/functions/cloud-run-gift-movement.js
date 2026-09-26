@@ -6,6 +6,7 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {decodeEventarcPayload} = require("./cloud-run-notification-events");
 const {projectLatestGiftMovement} = require("./gift-movement-projection-core");
+const {FIXTURE_COLLECTION, validFixtureId, fixtureDb} = require("./gift-movement-fixture-db");
 
 const EVENT_TYPES = new Set([
   "google.cloud.firestore.document.v1.created",
@@ -26,7 +27,20 @@ function giftIdFromName(name) {
   return match && match[1];
 }
 
-function createServer({db = configuredDb(), project = projectLatestGiftMovement} = {}) {
+function eventTarget(name, db, enabledFixtureId) {
+  const path = String(name || "").split("/documents/")[1] || String(name || "").replace(/^documents\//, "");
+  const giftId = giftIdFromName(path);
+  if (giftId) return {giftId, eventDb: db};
+  if (!validFixtureId(enabledFixtureId)) return null;
+  const expectedPrefix = `${FIXTURE_COLLECTION}/${enabledFixtureId}/giftRequests/`;
+  if (!path.startsWith(expectedPrefix)) return null;
+  const fixtureGiftId = path.slice(expectedPrefix.length);
+  if (!/^__codex_[A-Za-z0-9_-]{1,100}$/.test(fixtureGiftId)) return null;
+  return {giftId: fixtureGiftId, eventDb: fixtureDb(db, enabledFixtureId)};
+}
+
+function createServer({db = configuredDb(), project = projectLatestGiftMovement,
+  fixtureId = process.env.GIFT_MOVEMENT_FIXTURE_ID} = {}) {
   return http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/healthz") {
       res.writeHead(200, {"content-type": "application/json"});
@@ -47,9 +61,9 @@ function createServer({db = configuredDb(), project = projectLatestGiftMovement}
       if (size > MAX_BODY_BYTES) return res.writeHead(413).end();
       try {
         const decoded = decodeEventarcPayload(Buffer.concat(chunks));
-        const giftId = giftIdFromName(decoded.documentName || req.headers["ce-subject"]);
-        if (!giftId) return res.writeHead(400).end();
-        const result = await project(db, giftId);
+        const target = eventTarget(decoded.documentName || req.headers["ce-subject"], db, fixtureId);
+        if (!target) return res.writeHead(400).end();
+        const result = await project(target.eventDb, target.giftId);
         console.log("gift_movement_projection", {status: result.status});
         res.writeHead(200, {"content-type": "application/json"});
         res.end(JSON.stringify({ok: true, status: result.status}));
@@ -63,4 +77,4 @@ function createServer({db = configuredDb(), project = projectLatestGiftMovement}
 }
 
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
-module.exports = {createServer, giftIdFromName};
+module.exports = {createServer, giftIdFromName, eventTarget};
