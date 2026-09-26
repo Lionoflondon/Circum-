@@ -1890,7 +1890,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     try {
       final idToken = await _auth.currentUser?.getIdToken();
       final appCheckToken = await FirebaseAppCheck.instance.getToken();
-      if (idToken == null || idToken.isEmpty || appCheckToken == null || appCheckToken.isEmpty) {
+      if (idToken == null ||
+          idToken.isEmpty ||
+          appCheckToken == null ||
+          appCheckToken.isEmpty) {
         throw const AdminAccessException(
           'FAILED_PRECONDITION',
           'Circum security verification is required.',
@@ -1951,6 +1954,86 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Gift Story action failed.');
+    }
+  }
+
+  Future<void> _requestGiftRecurringRecovery(
+    Map<String, dynamic> series,
+    String operation,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage recurring Gifts.');
+      return;
+    }
+    final seriesId = '${series['seriesId'] ?? _idFor(series)}'.trim();
+    if (seriesId.isEmpty) return;
+    final reasonController = TextEditingController(
+      text: operation == 'cancel_at_period_end'
+          ? 'Cancellation requested from Admin after series review.'
+          : 'Recurring Gift recovery requested from Admin after series review.',
+    );
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          operation == 'cancel_at_period_end'
+              ? 'Schedule cancellation'
+              : 'Request recurring recovery',
+        ),
+        content: TextField(
+          controller: reasonController,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Reason'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              reasonController.text.trim(),
+            ),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || reason.trim().isEmpty || !mounted) return;
+    try {
+      final user = _auth.currentUser;
+      final idToken = await user?.getIdToken();
+      final appCheckToken = await FirebaseAppCheck.instance.getToken();
+      if (idToken == null ||
+          idToken.isEmpty ||
+          appCheckToken == null ||
+          appCheckToken.isEmpty) {
+        throw const AdminAccessException(
+          'UNAUTHENTICATED',
+          'Sign in again and complete Circum security verification.',
+        );
+      }
+      await invokeAdminCallable(
+        route: 'adminRequestGiftRecurringRecovery',
+        data: {
+          'seriesId': seriesId,
+          'operation': operation,
+          'reason': reason.trim(),
+        },
+        idToken: idToken,
+        appCheckToken: appCheckToken,
+      ).timeout(const Duration(seconds: 20));
+      setState(() => _message = 'Recurring Gift $operation request queued.');
+      await _loadAdminData();
+    } on AdminAccessException catch (error) {
+      setState(() => _message = error.message);
+    } on TimeoutException {
+      setState(() => _message = 'Recurring Gift request timed out.');
+    } catch (_) {
+      setState(() => _message = 'Recurring Gift request could not be queued.');
     }
   }
 
@@ -3461,6 +3544,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateGiftStoryAccess: _updateGiftStoryAccess,
                       onUpdateGiftStoryMedia: _updateGiftStoryMedia,
                       onUpdateGiftWorkspace: _updateGiftWorkspace,
+                      onRequestGiftRecurringRecovery:
+                          _requestGiftRecurringRecovery,
                       onUpdateIrisRepositoryRecord: _updateIrisRepositoryRecord,
                       onUpdateIrisCandidateWorkflow:
                           _updateIrisCandidateWorkflow,
@@ -3791,7 +3876,12 @@ class AdminRepository {
       _page('recurringPickupSchedules'),
       _page('healthPlusCustodyArchive'),
       _page('businessAccounts'),
-      _page('giftOrders'),
+      Future.wait([
+        _page('giftOrders'),
+        _page('businessGiftOrders'),
+        _page('giftRecurringSeries'),
+      ]).then(
+          (groups) => groups.expand((group) => group).toList(growable: false)),
       _page('giftRequests'),
       _page('giftBrands'),
       _page('giftCampaignParticipants'),
@@ -3898,8 +3988,12 @@ class AdminRepository {
     try {
       final idToken = await _idToken;
       final appCheckToken = await _appCheckToken;
-      if (idToken == null || idToken.isEmpty || appCheckToken == null || appCheckToken.isEmpty) {
-        throw const AdminAccessException('UNAUTHENTICATED', 'Sign in again and complete Circum security verification.');
+      if (idToken == null ||
+          idToken.isEmpty ||
+          appCheckToken == null ||
+          appCheckToken.isEmpty) {
+        throw const AdminAccessException('UNAUTHENTICATED',
+            'Sign in again and complete Circum security verification.');
       }
       final data = await invokeAdminCallable(
         route: 'adminQueryPage',
@@ -4298,6 +4392,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateGiftStoryAccess,
     required this.onUpdateGiftStoryMedia,
     required this.onUpdateGiftWorkspace,
+    required this.onRequestGiftRecurringRecovery,
     required this.onUpdateIrisRepositoryRecord,
     required this.onUpdateIrisCandidateWorkflow,
     required this.onSetBusinessOperationStatus,
@@ -4417,6 +4512,8 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateGiftStoryMedia;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftWorkspace;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onRequestGiftRecurringRecovery;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateIrisRepositoryRecord;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -4763,6 +4860,7 @@ class _AdminModuleBody extends StatelessWidget {
               onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
               onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
               onUpdateGiftWorkspace: onUpdateGiftWorkspace,
+              onRequestGiftRecurringRecovery: onRequestGiftRecurringRecovery,
             ),
           AdminModule.troubleshooting => _TroubleshootingModule(
               deliveries: data.deliveries,
@@ -11390,7 +11488,8 @@ class _EmptyState extends StatelessWidget {
 enum _GiftsWorkspaceTab {
   workflow('Gifts Workflow', Icons.inventory_2_rounded),
   campaigns('Campaigns', Icons.campaign_rounded),
-  brandPartners('Brand Partners', Icons.storefront_rounded);
+  brandPartners('Brand Partners', Icons.storefront_rounded),
+  recurring('Recurring Self Gifts', Icons.autorenew_rounded);
 
   const _GiftsWorkspaceTab(this.label, this.icon);
 
@@ -11421,6 +11520,7 @@ class _GiftsOperationsModule extends StatefulWidget {
     required this.onUpdateGiftStoryAccess,
     required this.onUpdateGiftStoryMedia,
     required this.onUpdateGiftWorkspace,
+    required this.onRequestGiftRecurringRecovery,
   });
 
   final List<Map<String, dynamic>> gifts;
@@ -11453,6 +11553,8 @@ class _GiftsOperationsModule extends StatefulWidget {
       onUpdateGiftStoryMedia;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftWorkspace;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onRequestGiftRecurringRecovery;
 
   @override
   State<_GiftsOperationsModule> createState() => _GiftsOperationsModuleState();
@@ -11557,10 +11659,13 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
       match: _matchFilter,
     );
     final workflowGifts = filtered
-        .where((gift) => !_isCampaignGiftRecord(gift))
+        .where((gift) =>
+            !_isCampaignGiftRecord(gift) && !_isRecurringSeriesRecord(gift))
         .toList(growable: false);
     final campaignGifts =
         filtered.where(_isCampaignGiftRecord).toList(growable: false);
+    final recurringSeries =
+        filtered.where(_isRecurringSeriesRecord).toList(growable: false);
     final filteredParticipants = _applyGiftOperationalFilters(
       searchedParticipants,
       campaign: _campaignFilter,
@@ -11645,6 +11750,9 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
                 ),
               _GiftsWorkspaceTab.brandPartners => _giftBrandPartnerWorkspace(
                   filteredBrands,
+                ),
+              _GiftsWorkspaceTab.recurring => _giftRecurringWorkspace(
+                  recurringSeries,
                 ),
             },
           ),
@@ -11813,6 +11921,70 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
         const SizedBox(height: 18),
         _giftBrandPartners(brands),
       ],
+    );
+  }
+
+  Widget _giftRecurringWorkspace(List<Map<String, dynamic>> records) {
+    return _RecordModule(
+      title: 'Recurring Self Gifts',
+      subtitle:
+          'Read-only series observability. Recovery and cancellation remain backend-authoritative.',
+      records: records,
+      query: widget.query,
+      fields: const [
+        'id',
+        'seriesId',
+        'senderId',
+        'status',
+        'frequency',
+        'budgetGbp',
+        'nextExpectedRenewalAt',
+        'cancelAtPeriodEnd',
+        'lastFulfilledInvoiceId',
+        'lastFulfilledRenewalId',
+        'lastActionRequiredRenewalId',
+      ],
+      columns: const [
+        'Series',
+        'Status',
+        'Budget / Frequency',
+        'Next charge',
+        'Latest renewal',
+        'Action required'
+      ],
+      row: (record) => [
+        '${record['seriesId'] ?? _recordId(record)}\n${record['senderId'] ?? ''}',
+        '${record['status'] ?? 'unknown'}${record['cancelAtPeriodEnd'] == true ? ' · cancel scheduled' : ''}',
+        '£${record['budgetGbp'] ?? '—'} · ${record['frequency'] ?? '—'}',
+        '${record['nextExpectedRenewalAt'] ?? '—'}',
+        '${record['lastFulfilledRenewalId'] ?? record['lastFulfilledInvoiceId'] ?? 'None'}',
+        '${record['lastActionRequiredRenewalId'] ?? 'None'}',
+      ],
+      actions: widget.canManageIssues
+          ? (record) => [
+                _MiniAction(
+                  label: 'Reconcile',
+                  onPressed: () => unawaited(
+                    widget.onRequestGiftRecurringRecovery(record, 'reconcile'),
+                  ),
+                ),
+                _MiniAction(
+                  label: 'Review',
+                  onPressed: () => unawaited(
+                    widget.onRequestGiftRecurringRecovery(record, 'review'),
+                  ),
+                ),
+                _MiniAction(
+                  label: 'Cancel at period end',
+                  onPressed: () => unawaited(
+                    widget.onRequestGiftRecurringRecovery(
+                      record,
+                      'cancel_at_period_end',
+                    ),
+                  ),
+                ),
+              ]
+          : null,
     );
   }
 
@@ -14840,6 +15012,12 @@ bool _isCampaignGiftRecord(Map<String, dynamic> record) {
   return '${record['campaignId'] ?? record['campaignName'] ?? record['campaign'] ?? ''}'
       .trim()
       .isNotEmpty;
+}
+
+bool _isRecurringSeriesRecord(Map<String, dynamic> record) {
+  return record['_collection'] == 'giftRecurringSeries' ||
+      ('${record['seriesId'] ?? ''}'.trim().isNotEmpty &&
+          '${record['stripeSubscriptionId'] ?? ''}'.trim().isNotEmpty);
 }
 
 Set<String> _campaignNames(

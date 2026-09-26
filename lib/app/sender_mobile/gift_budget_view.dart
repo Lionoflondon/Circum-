@@ -19,6 +19,10 @@ class GiftBudgetView extends StatefulWidget {
 class _GiftBudgetViewState extends State<GiftBudgetView> {
   late double _budget;
 
+  bool get _isBusinessGift =>
+      widget.draft.businessContext['businessMode'] == true &&
+      '${widget.draft.businessContext['businessId'] ?? ''}'.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -63,18 +67,21 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Slider(
-                value: _budget,
-                min: 50,
-                max: 1500,
-                divisions: 145,
-                activeColor: const Color(0xFFC9B8FF),
-                inactiveColor: Colors.white.withValues(alpha: .12),
-                onChanged: (value) => setState(() => _budget = value),
-              ),
+              if (!_isBusinessGift)
+                Slider(
+                  value: _budget,
+                  min: 50,
+                  max: 1500,
+                  divisions: 145,
+                  activeColor: const Color(0xFFC9B8FF),
+                  inactiveColor: Colors.white.withValues(alpha: .12),
+                  onChanged: (value) => setState(() => _budget = value),
+                ),
               const SizedBox(height: 8),
               Text(
-                'IRIS will curate the best possible experience within your chosen budget.',
+                _isBusinessGift
+                    ? 'Business Gift budgets use approved amounts set by CIRCUM.'
+                    : 'IRIS will curate the best possible experience within your chosen budget.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: const Color(0xFFE4DCF5),

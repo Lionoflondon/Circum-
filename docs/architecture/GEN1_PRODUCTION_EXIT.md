@@ -2,11 +2,11 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 277
-- Gen 1 exports: 275
-- Files importing Firebase Functions v1: 65
+- Source exports: 278
+- Gen 1 exports: 276
+- Files importing Firebase Functions v1: 66
 - MIGRATE TO CLOUD RUN: 166
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 67
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 68
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -88,6 +88,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | completeSenderWalletOnboarding | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_wallet.dart<br>server/functions/sender-payment-app-check.test.js |
 | confirmRiderIrisAssessment | server/functions/rider-iris-acknowledgement.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-app-check-http.test.js<br>server/functions/rider-cancellation.emulator.test.js |
 | createBusinessAccount | server/functions/business-access.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/business/business_access_view.dart<br>lib/app/business/business_repository.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/business-centre-contract.test.js |
+| createBusinessGiftOrder | server/functions/business-gifts.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/gift_payment_view.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/payment-runtime-bindings.test.js |
 | createBusinessInvoiceCheckout | server/functions/business-payments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/business/business_repository.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/business-centre-contract.test.js<br>server/functions/business-checkout-reservations.emulator.test.js<br>server/functions/cloud-run-payment-family.js<br>server/functions/cloud-run-payment-schedulers.test.js<br>server/functions/delivery-lifecycle.emulator.test.js<br>server/functions/payment-runtime-bindings.test.js |
 | createBusinessRothCheckout | server/functions/business-payments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/business-centre-contract.test.js<br>server/functions/cloud-run-business-roth.js<br>server/functions/payment-runtime-bindings.test.js<br>test/sender_mobile/sender_final_p1_hardening_test.dart<br>test/website_business_roth_checkout_contract_test.dart |
 | createDeliveryAdjustmentPayment | server/functions/delivery-adjustments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js |
