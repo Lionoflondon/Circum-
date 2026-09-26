@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../env/env.dart';
+import '../business/business_journey_context.dart';
 import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 import 'native_payment_identity.dart';
 import 'sender_accessibility.dart';
@@ -41,6 +42,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   bool _applyRoth = false;
   bool _recurringConsentAccepted = false;
   bool _platformPaySupported = false;
+  String _businessPaymentRail = 'card';
   List<SenderPaymentMethod> _savedMethods = const [];
   String? _selectedPaymentMethodId;
 
@@ -62,8 +64,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           widget.draft.selfGiftFrequency == 'quarterly');
   String get _recurringFrequencyLabel =>
       widget.draft.selfGiftFrequency == 'quarterly'
-      ? 'Every 4 months'
-      : 'Monthly';
+          ? 'Every 4 months'
+          : 'Monthly';
   DateTime _nextRecurringChargeDate() {
     final now = DateTime.now();
     final months = widget.draft.selfGiftFrequency == 'quarterly' ? 4 : 1;
@@ -73,6 +75,10 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     final lastDay = DateTime(year, month + 1, 0).day;
     return DateTime(year, month, now.day.clamp(1, lastDay));
   }
+
+  bool get _isBusinessGift =>
+      widget.draft.businessContext['businessMode'] == true &&
+      '${widget.draft.businessContext['businessId'] ?? ''}'.isNotEmpty;
 
   String get _verifiedPaymentMethod {
     if (_rothApplied >= widget.draft.budget && widget.draft.budget > 0) {
@@ -89,6 +95,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   }
 
   List<String> get _availablePaymentMethods {
+    if (_isBusinessGift) return const [];
     final methods = <String>[];
     if (_platformPaySupported &&
         !kIsWeb &&
@@ -111,8 +118,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         .doc()
         .id;
     final uri = Uri.base;
-    final cancelled =
-        uri.queryParameters['payment'] == 'cancelled' ||
+    final cancelled = uri.queryParameters['payment'] == 'cancelled' ||
         uri.fragment.contains('payment=cancelled');
     if (cancelled) {
       _message =
@@ -130,8 +136,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       final platformPay = kIsWeb
           ? false
           : await Stripe.instance.isPlatformPaySupported().timeout(
-              const Duration(seconds: 4),
-            );
+                const Duration(seconds: 4),
+              );
       if (!mounted) return;
       setState(() {
         _savedMethods = profile.methods;
@@ -143,6 +149,10 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   }
 
   Future<void> _loadRothBalance() async {
+    if (_isBusinessGift) {
+      if (mounted) setState(() => _rothLoading = false);
+      return;
+    }
     try {
       final result = await FirebaseFunctions.instance
           .httpsCallable(senderGiftRothBalanceCallableName)
@@ -180,6 +190,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
 
   @override
   Widget build(BuildContext context) {
+    final paymentBlocked = _paymentComplete || _paymentMethod == null;
     return GiftJourneyWidgets.scaffold(
       activeStep: 12,
       eyebrow: 'STEP 12 — PAYMENT',
@@ -226,14 +237,15 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           ),
         ],
         const SizedBox(height: 10),
-        _RothBalanceSummary(
-          loading: _rothLoading,
-          loadFailed: _rothLoadFailed,
-          balance: _rothBalance,
-          applied: _rothApplied,
-          remaining: _remainingCardAmount,
-          onRetry: _loadRothBalance,
-        ),
+        if (!_isBusinessGift)
+          _RothBalanceSummary(
+            loading: _rothLoading,
+            loadFailed: _rothLoadFailed,
+            balance: _rothBalance,
+            applied: _rothApplied,
+            remaining: _remainingCardAmount,
+            onRetry: _loadRothBalance,
+          ),
         const SizedBox(height: 22),
         Text(
           'Choose payment method',
@@ -270,28 +282,35 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
             const SizedBox(height: 10),
           ],
         ),
-        ..._savedMethods.expand(
-          (method) => [
-            _PaymentMethodTile(
-              label: method.isDefault
-                  ? '${method.title} · Default'
-                  : method.title,
-              selected: _selectedPaymentMethodId == method.id,
-              onTap: () => setState(() {
-                _paymentMethod = 'Saved card';
-                _selectedPaymentMethodId = method.id;
-              }),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-        if (_rothCanFullyCover) ...[
-          const SizedBox(height: 10),
-          _PaymentMethodTile(
-            label: 'Roth',
-            selected: _paymentMethod == 'Roth',
-            onTap: () => _selectPaymentMethod('Roth'),
+        if (_isBusinessGift)
+          _BusinessGiftRailPicker(
+            selected: _businessPaymentRail,
+            onChanged: (value) => setState(() => _businessPaymentRail = value),
           ),
+        if (!_isBusinessGift) ...[
+          ..._savedMethods.expand(
+            (method) => [
+              _PaymentMethodTile(
+                label: method.isDefault
+                    ? '${method.title} · Default'
+                    : method.title,
+                selected: _selectedPaymentMethodId == method.id,
+                onTap: () => setState(() {
+                  _paymentMethod = 'Saved card';
+                  _selectedPaymentMethodId = method.id;
+                }),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+          if (_rothCanFullyCover) ...[
+            const SizedBox(height: 10),
+            _PaymentMethodTile(
+              label: 'Roth',
+              selected: _paymentMethod == 'Roth',
+              onTap: () => _selectPaymentMethod('Roth'),
+            ),
+          ],
         ],
         if (_showRothToggle) ...[
           const SizedBox(height: 16),
@@ -341,14 +360,16 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           ),
           const SizedBox(height: 12),
           GiftJourneyWidgets.primaryButton(
-            enabled:
-                !_submitting &&
-                _paymentMethod != null &&
+            enabled: !_submitting &&
+                (_isBusinessGift || _paymentMethod != null) &&
                 (!_isRecurringSelfGift || _recurringConsentAccepted),
             label: _submitting
                 ? 'Preparing checkout...'
-                : 'Continue to Secure Payment',
-            onTap: _submitting || _paymentComplete || _paymentMethod == null
+                : _isBusinessGift
+                    ? 'Continue with Business Gift'
+                    : 'Continue to Secure Payment',
+            onTap: _submitting ||
+                    (_isBusinessGift ? _paymentComplete : paymentBlocked)
                 ? null
                 : _submitForAdminReview,
           ),
@@ -366,13 +387,17 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       return;
     }
     if (_submitting || _paymentComplete) return;
+    if (_isBusinessGift) {
+      await _submitBusinessGift(user);
+      return;
+    }
     final confirmed = await confirmSenderPaymentIfRequired(
       context,
       paymentMethod: _verifiedPaymentMethod == 'roth'
           ? 'Roth'
           : _verifiedPaymentMethod == 'roth_card'
-          ? 'Roth and card'
-          : (_paymentMethod ?? 'card'),
+              ? 'Roth and card'
+              : (_paymentMethod ?? 'card'),
       amount: '£${widget.draft.budget.toStringAsFixed(2)}',
     );
     if (!confirmed || !mounted || _submitting) return;
@@ -468,9 +493,9 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
         final finalData =
             await ProductionPaymentApi.call('gifts', 'finalizeGiftPayment', {
-              'giftDraftId': _giftDraftId,
-              'paymentIntentId': paymentData['paymentIntentId'],
-            }).timeout(_backendTimeout);
+          'giftDraftId': _giftDraftId,
+          'paymentIntentId': paymentData['paymentIntentId'],
+        }).timeout(_backendTimeout);
         if (finalData['paymentStatus'] != 'paid') {
           throw StateError('Gift payment is still being verified.');
         }
@@ -520,6 +545,64 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     }
   }
 
+  Future<void> _submitBusinessGift(User user) async {
+    final confirmed = await confirmSenderPaymentIfRequired(
+      context,
+      paymentMethod: 'Business $_businessPaymentRail',
+      amount: '£${widget.draft.budget.toStringAsFixed(2)}',
+    );
+    if (!confirmed || !mounted || _submitting) return;
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      final journey = BusinessJourneyScope.maybeOf(context);
+      final businessId =
+          '${journey?.businessId ?? widget.draft.businessContext['businessId'] ?? ''}';
+      final result = await ProductionPaymentApi.call(
+        'business_invoices',
+        'createBusinessGiftOrder',
+        {
+          'businessId': businessId,
+          'idempotencyKey': 'business_gift_${user.uid}_$_giftDraftId',
+          'budgetGbp': widget.draft.budget,
+          'paymentRail': _businessPaymentRail,
+          'recipientName': widget.draft.recipientName,
+          'recipientPhone': widget.draft.recipientPhone,
+          'recipientEmail': widget.draft.recipientEmail,
+          'deliveryAddress': widget.draft.deliveryAddress,
+          'deliveryDate': widget.draft.deliveryDate,
+          'deliveryTimeWindow': widget.draft.deliveryTimeWindow,
+          'returnUrl': Uri.base.toString(),
+        },
+      ).timeout(_backendTimeout);
+      if (!mounted) return;
+      final checkoutUrl = Uri.tryParse('${result['checkoutUrl'] ?? ''}');
+      if (_businessPaymentRail == 'card' &&
+          checkoutUrl != null &&
+          checkoutUrl.host.isNotEmpty) {
+        await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+        return;
+      }
+      setState(() {
+        _paymentComplete = _businessPaymentRail == 'roth';
+        _message = _businessPaymentRail == 'invoice'
+            ? 'Business invoice created. Complete it from Business Invoices; the Gift will be created after verified payment.'
+            : 'Business Gift payment confirmed. The Gift is now with the Gifts Team.';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Business Gift payment could not be started. No duplicate order was created.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   Future<bool> _recoverExistingNativeGift(User user) async {
     final db = FirebaseFirestore.instance;
     Future<QuerySnapshot<Map<String, dynamic>>> owned(String collection) => db
@@ -531,8 +614,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         .timeout(_backendTimeout);
     final completed = await owned('giftRequests');
     if (FirebaseAuth.instance.currentUser?.uid != user.uid) return true;
-    var paid =
-        completed.docs.isNotEmpty &&
+    var paid = completed.docs.isNotEmpty &&
         completed.docs.single.data()['paymentStatus'] == 'paid';
     if (!paid) {
       final drafts = await owned(senderGiftPaymentDraftCollectionName);
@@ -628,8 +710,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         )
         .timeout(_paymentSheetInitTimeout);
     await Stripe.instance.presentPaymentSheet().timeout(
-      _paymentSheetPresentTimeout,
-    );
+          _paymentSheetPresentTimeout,
+        );
   }
 }
 
@@ -679,9 +761,8 @@ class _PaymentMethodTile extends StatelessWidget {
               selected
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_off_rounded,
-              color: selected
-                  ? const Color(0xFFC9B8FF)
-                  : const Color(0xFFB8AAB8),
+              color:
+                  selected ? const Color(0xFFC9B8FF) : const Color(0xFFB8AAB8),
               size: 18,
             ),
           ],
@@ -826,6 +907,66 @@ class _RecurringConsentCard extends StatelessWidget {
   }
 }
 
+class _BusinessGiftRailPicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _BusinessGiftRailPicker({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF9BBEFF).withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF9BBEFF).withValues(alpha: .28),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'BUSINESS PAYMENT RAIL',
+            style: GoogleFonts.jetBrainsMono(
+              color: const Color(0xFFBFD4FF),
+              fontSize: 10,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'The Business account determines the final order and payment record. Recipient value remains private.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in const [
+                ('card', 'Business card'),
+                ('invoice', 'Business invoice'),
+                ('roth', 'Business Roth'),
+              ])
+                ChoiceChip(
+                  label: Text(option.$2),
+                  selected: selected == option.$1,
+                  onSelected: (_) => onChanged(option.$1),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RothBalanceSummary extends StatelessWidget {
   final bool loading;
   final bool loadFailed;
@@ -848,8 +989,8 @@ class _RothBalanceSummary extends StatelessWidget {
     final balanceText = loading
         ? 'Loading...'
         : loadFailed
-        ? 'Refresh required'
-        : '£${balance.toStringAsFixed(0)}';
+            ? 'Refresh required'
+            : '£${balance.toStringAsFixed(0)}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
