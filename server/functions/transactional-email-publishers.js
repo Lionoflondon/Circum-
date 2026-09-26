@@ -91,6 +91,12 @@ function paymentConfirmed(data = {}) {
       .includes(lower(data.paymentStatus || data.paymentState));
 }
 
+function businessAccountActivated(data = {}) {
+  const statuses = [data.status, data.approvalStatus, data.businessStatus, data.verificationStatus]
+      .map(lower);
+  return statuses.some((value) => ["approved", "active"].includes(value));
+}
+
 function finalDelivery(data = {}) {
   return ["delivered", "completed"].includes(lower(data.status || data.deliveryStatus)) &&
     lower(data.settlementStatus) === "completed";
@@ -200,6 +206,24 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       };
     }
     return createOnly(db, emailId("business_invoice_payment_problem", invoiceId, after.paymentCommunicationKey), payload);
+  }
+
+  const businessId = asId(path, "businessAccounts");
+  if (businessId && eventType === UPDATED && businessAccountActivated(after) &&
+      !businessAccountActivated(before)) {
+    const recipientField = normalizeEmail(after.contactEmail) ? "contactEmail" : "billingEmail";
+    const to = after[recipientField];
+    const payload = record({to, template: templates.businessAccountActivated({
+      companyName: after.businessName || after.companyName,
+      ctaUrl: "https://circumuk.com/?app=business",
+    }), eventType: "business_account_activated", collection: "businessAccounts", sourceId: businessId,
+    required: lower(after.status || after.approvalStatus || after.businessStatus), recipientField, senderCategory: "business",
+    extra: {
+      businessId,
+      sourceActivationStatus: lower(after.status || after.approvalStatus || after.businessStatus),
+    }});
+    if (payload) payload.sourceRequiredFields = {status: ["approved", "active"]};
+    return createOnly(db, emailId("business_account_activated", businessId), payload);
   }
 
   const walletTransactionId = asId(path, "walletTransactions");

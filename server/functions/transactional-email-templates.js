@@ -223,6 +223,25 @@ function businessPaymentProblem({state = "unconfirmed", reference = "", ctaUrl =
   });
 }
 
+function businessAccountActivated({companyName = "", ctaUrl = `${APP_URL}/?app=business`} = {}) {
+  const name = safeName(companyName);
+  return result({
+    templateId: "business-account-activated",
+    subject: "Your CIRCUM Business account is ready",
+    preheader: "Your company can now use CIRCUM Business.",
+    heading: "Welcome to CIRCUM Business",
+    paragraphs: [
+      name ? `${name} is now active on CIRCUM Business.` : "Your company is now active on CIRCUM Business.",
+      "You can now manage your company deliveries, team access and Business payment tools in one place.",
+      "Sign in to review your workspace and get started.",
+    ],
+    ctaLabel: "Open Business",
+    ctaUrl,
+    senderCategory: "business",
+    tags: [{name: "product", value: "business"}, {name: "message", value: "account-activated"}],
+  });
+}
+
 function rothActivity({displayName = "", movement = "updated", amount = null, reference = "", ctaUrl = APP_URL} = {}) {
   const amountText = money(amount);
   const descriptions = {
@@ -393,6 +412,7 @@ module.exports = {
   visibleCustomerText,
   bookingConfirmed,
   businessInvoicePaid,
+  businessAccountActivated,
   businessPaymentProblem,
   cancellationSettled,
   deliveryCompleted,

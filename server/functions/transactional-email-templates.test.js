@@ -15,6 +15,7 @@ test("every transactional template has complete customer-facing structure", () =
     templates.deliveryCompleted({reference: "booking-1"}),
     templates.cancellationSettled({reference: "booking-1"}),
     templates.businessInvoicePaid({reference: "invoice-1"}),
+    templates.businessAccountActivated({companyName: "Acme Logistics"}),
     templates.businessPaymentProblem({reference: "invoice-1", state: "failed"}),
     templates.businessPaymentProblem({reference: "invoice-1", state: "unconfirmed"}),
     templates.rothActivity({movement: "credited", amount: 5, reference: "wallet-1"}),
@@ -123,6 +124,18 @@ test("Business payment-problem copy distinguishes failure from an unconfirmed pa
   assert.doesNotMatch(unconfirmed.text, /you were not charged|refund|Stripe|Firestore|payment_failed|business_invoice_/i);
   assert.match(failed.html, /circum_wordmark\.png/);
   assert.match(unconfirmed.html, /download-on-the-app-store\.svg/);
+});
+
+test("Business activation copy uses the approved branded layout and live routes", () => {
+  const copy = templates.businessAccountActivated({companyName: "Acme Logistics"});
+  assert.equal(copy.templateId, "business-account-activated");
+  assert.equal(copy.senderCategory, "business");
+  assert.match(copy.text, /Acme Logistics is now active on CIRCUM Business/);
+  assert.match(copy.html, /circum_wordmark\.png/);
+  assert.match(copy.html, /download-on-the-app-store\.svg/);
+  assert.match(copy.html, /en_badge_web_generic\.png/);
+  assert.match(copy.html, /https:\/\/circumuk\.com\/\?app=business/);
+  assert.doesNotMatch(customerFields(copy), /business_account_activated|Firestore|Eventarc|status code/i);
 });
 
 test("all Gifts variants retain the approved wordmark, links and clean customer copy", () => {

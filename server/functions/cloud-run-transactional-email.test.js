@@ -28,6 +28,11 @@ test("approved Business and Health+ design refreshes only matching validated que
   {status: "valid", source: {status: "rescheduled"}});
   assert.match(health.html, /rescheduled/);
   assert.match(health.html, /en_badge_web_generic\.png/);
+  const activation = currentServiceDesign({eventType: "business_account_activated", templateId: "business-account-activated",
+    sourceCollection: "businessAccounts", sourceDocumentId: "business-1", ctaUrl: "https://circumuk.com/?app=business"},
+  {status: "valid", source: {status: "approved", businessName: "Acme Logistics"}});
+  assert.match(activation.html, /Acme Logistics/);
+  assert.match(activation.html, /circum_wordmark\.png/);
   const unrelated = {eventType: "gift_delivered", templateId: "gift-delivered", html: "unchanged"};
   assert.equal(currentServiceDesign(unrelated, {status: "valid", source: {}}), unrelated);
 });

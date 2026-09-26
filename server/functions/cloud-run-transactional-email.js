@@ -253,6 +253,14 @@ async function revalidateSource(db, record) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }
+  if (eventType === "business_account_activated") {
+    const statuses = [sourceData.status, sourceData.approvalStatus, sourceData.businessStatus, sourceData.verificationStatus]
+        .map((value) => text(value).toLowerCase());
+    if (source.collection !== "businessAccounts" ||
+        !statuses.some((value) => ["approved", "active"].includes(value))) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
   if (eventType === giftPolicy.EVENT.PAYMENT_PROBLEM) {
     const sourceStateValue = text(sourceData.paymentStatus || sourceData.paymentState || sourceData.status).toLowerCase();
     if (!source.collection.match(/^gift(PaymentDrafts|Requests)$/) || !giftPolicy.isPaymentProblemState(sourceData) ||
@@ -363,6 +371,13 @@ function currentServiceDesign(record, source) {
     return {...record, ...emailTemplates.businessPaymentProblem({
       state: record.sourcePaymentProblemState,
       reference: source.source.invoiceNumber || record.sourceDocumentId,
+      ctaUrl: record.ctaUrl,
+    })};
+  }
+  if (record.eventType === "business_account_activated" && record.templateId === "business-account-activated" &&
+      record.sourceCollection === "businessAccounts") {
+    return {...record, ...emailTemplates.businessAccountActivated({
+      companyName: source.source.businessName || source.source.companyName,
       ctaUrl: record.ctaUrl,
     })};
   }
