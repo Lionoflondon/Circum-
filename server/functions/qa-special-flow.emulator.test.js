@@ -47,12 +47,13 @@ const row = {id: `re_test_${refunds.length + 1}`, livemode: false, status: "succ
 return {data: refunds.filter((r) => r.payment_intent === id)};
 },
   }};
-  const env = {GCLOUD_PROJECT: "circum-2797c", STRIPE_MODE: "TEST", STRIPE_SECRET_KEY: "sk_test_fixture", QA_LIFECYCLE_ENABLED: "true", QA_LIFECYCLE_ALLOWLIST: JSON.stringify({operators: ["qa_sender"], senders: ["qa_sender"], riders: ["qa_rider"]})};
+  const env = {GCLOUD_PROJECT: "circum-2797c", STRIPE_MODE: "TEST", STRIPE_SECRET_KEY: "sk_test_fixture", QA_LIFECYCLE_ENABLED: "true", QA_LIFECYCLE_ALLOWLIST: JSON.stringify({operators: ["qa_operator"], senders: ["qa_sender"], riders: ["qa_rider"]})};
   const f = require("./qa-special-flow")._test.factory({db, env, stripe});
   const ctx = {auth: {uid: "qa_sender", token: {email: "qa@example.invalid"}}, app: {appId: "emulator"}, rawRequest: {headers: {authorization: "Bearer test"}}};
   await assert.rejects(f.handle({action: "prepare"}, {...ctx, app: undefined}), /attestation/);
   await assert.rejects(f.handle({action: "prepare"}, {...ctx, auth: {uid: "outsider"}}), /not permitted/);
-  const {fixtureId} = await f.handle({action: "prepare"}, ctx);
+  const operator = {...ctx, auth: {uid: "qa_operator", token: {email: "operator@example.invalid"}}};
+  const {fixtureId} = await f.handle({action: "prepare"}, operator);
   const h = await f.handle({action: "health"}, ctx); const h2 = await f.handle({action: "health"}, ctx);
   assert.equal(h.bookingId, h2.bookingId); assert.equal(h.sessionId, h2.sessionId); assert.equal(h.routeAuthority, 2); assert(h.amountPence > 0);
   const hp = await f.handle({action: "health_finalize"}, ctx); const hp2 = await f.handle({action: "health_finalize"}, ctx);
