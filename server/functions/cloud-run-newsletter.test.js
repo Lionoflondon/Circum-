@@ -14,14 +14,14 @@ async function listen(server, run) {
   }
 }
 
-function fixture() {
+function fixture({rawAppCheckFailure = false} = {}) {
   const calls = [];
   const handlers = Object.fromEntries([...PUBLIC, ...ADMIN].map((name) => [name, {run: async (data, context) => {
     calls.push({name, data, context});
     return {ok: true, name};
   }}]));
   const server = createServer({dependenciesFactory: () => ({
-    verifyAppCheck: async (token) => token === "valid-app" ? {appId: "web-app"} : Promise.reject(Object.assign(new Error("bad app"), {code: "failed-precondition"})),
+    verifyAppCheck: async (token) => token === "valid-app" ? {appId: "web-app"} : Promise.reject(rawAppCheckFailure ? new Error("app-check-token-is-invalid") : Object.assign(new Error("bad app"), {code: "failed-precondition"})),
     verifyIdToken: async (token) => token === "valid-user" ? {uid: "admin-1", email: "admin@example.invalid"} : Promise.reject(Object.assign(new Error("bad auth"), {code: "unauthenticated"})),
     handlers,
   })});
@@ -128,6 +128,15 @@ test("public routes require valid App Check and preserve caller IP", async () =>
     assert.equal(response.status, 200);
     assert.equal(calls[0].context.app.appId, "web-app");
     assert.equal(calls[0].context.rawRequest.ip, "203.0.113.7");
+  });
+});
+
+test("normalizes provider-specific App Check failures to failed-precondition", async () => {
+  const {server} = fixture({rawAppCheckFailure: true});
+  await listen(server, async (url) => {
+    const response = await request(url, "submitNewsletterSignup", {appCheck: "bad"});
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.status, "FAILED_PRECONDITION");
   });
 });
 
