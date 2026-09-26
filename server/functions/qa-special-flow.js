@@ -47,10 +47,10 @@ function factory({db, env = process.env, stripe}) {
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
     if (["health", "health_finalize", "business", "business_finalize"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
-    const id = createHash("sha256").update(`special-v3:${lists.operators[0]}`).digest("hex");
+    const id = createHash("sha256").update(`special-v4:${lists.operators[0]}`).digest("hex");
     const ref = db.collection(ROOT).doc(id);
     if (data.action === "prepare") {
-      const created = await lifecycle.handle({action: "create", requestId: `special_v3_${lists.operators[0]}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
+      const created = await lifecycle.handle({action: "create", requestId: `special_v4_${lists.operators[0]}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
       await db.runTransaction(async (tx) => {
         const current = await tx.get(ref); if (current.exists) return;
         const now = Timestamp.now();
