@@ -817,6 +817,9 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryEmailError: failures.map((result) => `${result.reason}`).join(" | ").slice(0, 1000),
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    if (source === "cloud_run" || source === "reconciliation") {
+      throw new Error("gift_story_downstream_retry_required");
+    }
   } else {
     await giftRef.set({
       giftStoryEmailStatus: "queued",
