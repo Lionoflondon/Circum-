@@ -6,7 +6,11 @@ import 'package:http/http.dart' as http;
 
 const adminAccessServiceUrl =
     'https://circum-admin-access-516426305461.us-central1.run.app';
-const _adminCallableRoutes = {'adminResolveAccess', 'adminQueryPage'};
+const _adminCallableRoutes = {
+  'adminResolveAccess',
+  'adminQueryPage',
+  'adminSaveGiftRequestEditor',
+};
 
 class AdminAccessException implements Exception {
   const AdminAccessException(this.status, this.message);
