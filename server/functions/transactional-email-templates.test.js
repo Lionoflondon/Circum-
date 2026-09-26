@@ -95,6 +95,22 @@ test("welcome copy explains the account, Starter Roth and next step without raw 
   assert.doesNotMatch(customerFields(copy), /roth_movement_completed|sender_|starterRothGrantStatus|Firestore/i);
 });
 
+test("Business and Health+ emails use the approved branded layout and store links", () => {
+  for (const copy of [templates.businessInvoicePaid({reference: "INV-2048"}),
+    templates.healthUpdate({type: "scheduled"}), templates.healthUpdate({type: "rescheduled"})]) {
+    assert.match(copy.html, /circum_wordmark\.png/);
+    assert.match(copy.html, /download-on-the-app-store\.svg/);
+    assert.match(copy.html, /en_badge_web_generic\.png/);
+    assert.match(copy.html, /https:\/\/apps\.apple\.com\/gb\/app\/circum\/id6463644284/);
+    assert.match(copy.html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.circum\.app/);
+    assert.match(copy.text, /Download Circum on the App Store:/);
+    assert.match(copy.text, /Get Circum on Google Play:/);
+    assert.match(copy.html, /background:#(?:f0f5ff|edf8f3)/);
+  }
+  assert.match(templates.businessInvoicePaid({reference: "INV-2048"}).html, /INV-2048/);
+  assert.match(templates.healthUpdate({type: "rescheduled"}).html, /rescheduled/);
+});
+
 test("all Gifts variants retain the approved wordmark, links and clean customer copy", () => {
   const variants = [
     templates.giftPaymentConfirmed({recipientName: "Maya", rothAmount: 120}),

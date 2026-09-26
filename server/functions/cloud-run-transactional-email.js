@@ -330,6 +330,25 @@ function retryableProviderStatus(status) {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
+function currentServiceDesign(record, source) {
+  if (!source || !source.source) return record;
+  if (record.eventType === "business_invoice_paid" && record.templateId === "business-invoice-paid" &&
+      record.sourceCollection === "businessInvoices" &&
+      ["paid", "paid_manually"].includes(text(source.source.status).toLowerCase()) &&
+      Number(source.source.balanceDue || 0) <= 0) {
+    return {...record, ...emailTemplates.businessInvoicePaid({
+      reference: source.source.invoiceNumber || record.sourceDocumentId,
+      ctaUrl: record.ctaUrl,
+    })};
+  }
+  const healthType = /^health-update-([a-z0-9_]+)$/.exec(text(record.templateId));
+  if (healthType && text(record.eventType).startsWith("health_plus_") &&
+      record.sourceCollection === "prescriptionPickups") {
+    return {...record, ...emailTemplates.healthUpdate({type: healthType[1], ctaUrl: record.ctaUrl})};
+  }
+  return record;
+}
+
 async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RESEND_API_KEY, from = null, env = process.env}) {
   if (!text(apiKey)) {
     throw Object.assign(new Error("email_provider_not_configured"), {retryable: true, statusCode: 503});
@@ -411,7 +430,8 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
       Boolean(source.source.giftStoryAccessToken));
   const effectiveRecord = text(record.eventType || record.type).toLowerCase() === "gift_delivered" ?
     {...record, ...emailTemplates.giftDelivered({recipientName: source.source.recipientName,
-      ...(deliveryUsesStory ? {storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`} : {})})} : record;
+      ...(deliveryUsesStory ? {storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`} : {})})} :
+    currentServiceDesign(record, source);
   let providerResult;
   try {
     providerResult = await sendResend({record: effectiveRecord, to: recipient.email, fetchImpl, apiKey, from});
@@ -516,6 +536,7 @@ module.exports = {
   recipientFor,
   claimEmail,
   revalidateSource,
+  currentServiceDesign,
   sendResend,
   senderCategoryForRecord,
   fromForRecord,

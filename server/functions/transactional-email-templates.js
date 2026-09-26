@@ -3,6 +3,10 @@
 
 const APP_URL = "https://circumuk.com";
 const WELCOME_WORDMARK_URL = "https://circumuk.com/assets/assets/images/circum_wordmark.png";
+const APP_STORE_URL = "https://apps.apple.com/gb/app/circum/id6463644284";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.circum.app";
+const APP_STORE_BADGE_URL = "https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg";
+const PLAY_STORE_BADGE_URL = "https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png";
 const TERMS_URL = "https://circumuk.com/terms";
 const PRIVACY_URL = "https://circumuk.com/privacy_policy";
 const SUPPORT_TEXT = "Need help? Reply to this email or contact Circum support from your account.";
@@ -63,8 +67,27 @@ function layout({preheader, heading, paragraphs, ctaLabel = "", ctaUrl = "", foo
   return {preheader, heading, text: textBody, html, footer, ctaLabel: safeUrl ? ctaLabel || "Open Circum" : "", ctaUrl: safeUrl};
 }
 
+function serviceLayout({family, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer}) {
+  const business = family === "business";
+  const accent = business ? "#2559c7" : "#168267";
+  const ink = business ? "#102653" : "#124b43";
+  const tint = business ? "#f0f5ff" : "#edf8f3";
+  const border = business ? "#dbe6fb" : "#d6eee3";
+  const label = business ? "BUSINESS" : "HEALTH+";
+  const safeUrl = /^https:\/\/circumuk\.com(?:[/?#].*)?$/.test(text(ctaUrl)) ? text(ctaUrl) : "";
+  const body = paragraphs.filter(Boolean).map((paragraph) => `<p style="margin:0 0 16px">${escapeHtml(paragraph)}</p>`).join("");
+  const cta = safeUrl ? `<tr><td align="center" style="padding:8px 42px 36px"><a href="${escapeHtml(safeUrl)}" style="display:inline-block;padding:15px 24px;border-radius:999px;background:${accent};color:#fff;text-decoration:none;font-size:15px;font-weight:700">${escapeHtml(ctaLabel || "Open Circum")}</a></td></tr>` : "";
+  const html = `<!doctype html><html lang="en"><body style="margin:0;background:${business ? "#eaf0f8" : "#eaf4f1"};color:${ink};font-family:Arial,Helvetica,sans-serif"><span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:32px 12px"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#fff;border-radius:20px;overflow:hidden"><tr><td style="height:6px;background:${accent};font-size:0;line-height:0">&nbsp;</td></tr><tr><td style="padding:30px 42px 25px;border-bottom:1px solid #e8edf5"><img src="${WELCOME_WORDMARK_URL}" width="180" alt="CIRCUM" style="display:block;width:180px;height:auto;border:0"><div style="margin-top:13px;font-size:11px;letter-spacing:2px;font-weight:700;color:${accent}">${label}</div></td></tr><tr><td style="padding:38px 42px 20px"><div style="font-size:12px;letter-spacing:1px;font-weight:700;color:${accent}">${business ? "ACCOUNT UPDATE" : "SERVICE UPDATE"}</div><h1 style="margin:18px 0 12px;font-family:Georgia,'Times New Roman',serif;font-size:40px;line-height:1.1;font-weight:400;color:${ink}">${escapeHtml(heading)}</h1></td></tr><tr><td style="padding:0 42px 22px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${tint};border:1px solid ${border};border-radius:16px"><tr><td style="padding:24px;color:${ink};font-size:16px;line-height:1.6">${body}</td></tr></table></td></tr>${cta}<tr><td align="center" style="padding:22px 12px 8px;border-top:1px solid #e8edf5;background:#fafcff"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding:4px 6px"><a href="${APP_STORE_URL}"><img src="${APP_STORE_BADGE_URL}" width="124" alt="Download Circum on the App Store" style="display:block;width:124px;height:auto;border:0"></a></td><td style="padding:4px 6px"><a href="${PLAY_STORE_URL}"><img src="${PLAY_STORE_BADGE_URL}" width="151" alt="Get Circum on Google Play" style="display:block;width:151px;height:auto;border:0"></a></td></tr></table></td></tr><tr><td align="center" style="padding:12px 42px 30px;background:#fafcff;color:#71809a;font-size:12px;line-height:1.6">${escapeHtml(footer)}</td></tr></table></td></tr></table></body></html>`;
+  return {html, textLinks: `Download Circum on the App Store: ${APP_STORE_URL}\nGet Circum on Google Play: ${PLAY_STORE_URL}`};
+}
+
 function result({templateId, subject, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, imageUrl, senderCategory, tags = []}) {
   const rendered = layout({preheader, heading, paragraphs, ctaLabel, ctaUrl, footer, imageUrl});
+  if (senderCategory === "business" || senderCategory === "health") {
+    const styled = serviceLayout({family: senderCategory, preheader, heading, paragraphs, ctaLabel, ctaUrl, footer: footer || SUPPORT_TEXT});
+    rendered.html = styled.html;
+    rendered.text += `\n\n${styled.textLinks}`;
+  }
   const copy = {templateId, subject, senderCategory, providerTags: tags, ...rendered};
   assertCustomerFacingContent(copy);
   return copy;
