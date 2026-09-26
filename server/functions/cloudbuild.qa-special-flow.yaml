@@ -1,0 +1,18 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - Dockerfile.qa-special-flow
+      - --build-arg
+      - CIRCUM_SOURCE_SHA=${_CIRCUM_SOURCE_SHA}
+      - --tag
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _CIRCUM_SOURCE_SHA: unknown
+  _IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-qa-special-flow:unknown
+options:
+  logging: CLOUD_LOGGING_ONLY
