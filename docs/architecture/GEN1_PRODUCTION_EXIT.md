@@ -2,11 +2,11 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 273
-- Gen 1 exports: 271
-- Files importing Firebase Functions v1: 64
+- Source exports: 277
+- Gen 1 exports: 275
+- Files importing Firebase Functions v1: 65
 - MIGRATE TO CLOUD RUN: 166
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 63
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 67
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -76,6 +76,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | cancelBusinessInvoiceCheckout | server/functions/business-payments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart<br>server/functions/business-centre-contract.test.js<br>server/functions/cloud-run-payment-family.js<br>server/functions/payment-runtime-bindings.test.js |
 | cancelDelivery | server/functions/delivery-policy.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/payments-cancellation-contract.test.js |
 | cancelGiftPayment | server/functions/gifts-payment.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js<br>server/functions/gift-checkout-reservations.emulator.test.js |
+| cancelGiftRecurring | server/functions/index.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js |
 | cancelRiderWithdrawal | server/functions/rider-connect.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js<br>server/functions/rider-withdrawal-cancel.test.js |
 | cancelRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
 | cleanupExpiredGiftStories | server/functions/gift-story-automation.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
@@ -91,6 +92,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | createBusinessRothCheckout | server/functions/business-payments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/business-centre-contract.test.js<br>server/functions/cloud-run-business-roth.js<br>server/functions/payment-runtime-bindings.test.js<br>test/sender_mobile/sender_final_p1_hardening_test.dart<br>test/website_business_roth_checkout_contract_test.dart |
 | createDeliveryAdjustmentPayment | server/functions/delivery-adjustments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js |
 | createGiftPayment | server/functions/gifts-payment.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/gift_journey_draft.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-newsletter.test.js<br>server/functions/cloud-run-payment-family.js<br>server/functions/cloud-run-payment-family.test.js<br>server/functions/gift-checkout-reservations.emulator.test.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js |
+| createGiftRecurringBillingPortalSession | server/functions/index.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js |
 | createGiftStoryVideoUpload | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart |
 | createGooglePlayReviewFixture | server/functions/founder-review-fixture.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/founder-review-fixture.test.js |
 | createHealthPlusBillingPortalSession | server/functions/health-plus.js | Gen 1 | http | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/production-functions-inventory.json |
@@ -132,6 +134,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | generateHealthPlusRecurringBookings | server/functions/health-plus-operations.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
 | getAvailableRequests | server/functions/get-avaliable-requests.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>lib/website/shared/circum_website_app.dart<br>lib/website/shared/rider_delivery_authority_api.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>test/website_rider_delivery_authority_api_test.dart |
 | getAvaliableRequests | server/functions/get-avaliable-requests.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js |
+| getGiftRecurringStatus | server/functions/index.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js |
 | getGiftStoryActionState | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/gift_story_view.dart<br>test/sender_mobile/gift_voice_media_contract_test.dart |
 | getGiftStoryVideoDownload | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart |
 | getGooglePlayReviewFixture | server/functions/founder-review-fixture.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/founder-review-fixture.test.js |
@@ -188,6 +191,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | qaLifecycleFixture | server/functions/qa-lifecycle.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/QA-LIFECYCLE.md |
 | qaSpecialFlowFixture | server/functions/qa-special-flow.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/qa/private-special-flow-fixture.md<br>server/functions/cloud-run-qa-special-flow.js<br>server/functions/cloud-run-qa-special-flow.test.js |
 | reconcileBusinessInvoiceCheckouts | server/functions/business-payments.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/payment-runtime-bindings.test.js |
+| reconcileGiftRecurringRenewals | server/functions/gift-recurring.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/GIFTS_PLATFORM_CURRENT_MATRIX.md<br>server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js |
 | reconcilePendingDeliverySettlements | server/functions/delivery-tracking.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js<br>server/functions/dispatch-completion-spine.test.js |
 | reconcilePendingSenderCancellations | server/functions/delivery-policy.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/cloud-run-sender-cancellation-reconciler.js<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/production-functions-inventory.json |
 | reconcileRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |

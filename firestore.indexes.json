@@ -1,6 +1,16 @@
 {
   "indexes": [
     {
+      "collectionGroup": "giftRecurringSeries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "nextExpectedRenewalAt", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "giftRequests",
       "queryScope": "COLLECTION",
       "fields": [{"fieldPath": "paidAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
