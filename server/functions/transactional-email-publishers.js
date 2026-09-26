@@ -3,6 +3,7 @@
 
 const {normalizeEmail} = require("./email-queue");
 const templates = require("./transactional-email-templates");
+const giftPolicy = require("./gift-communications-policy");
 
 const CREATED = "google.cloud.firestore.document.v1.created";
 const UPDATED = "google.cloud.firestore.document.v1.updated";
@@ -87,6 +88,29 @@ function paymentConfirmed(data = {}) {
 function finalDelivery(data = {}) {
   return ["delivered", "completed"].includes(lower(data.status || data.deliveryStatus)) &&
     lower(data.settlementStatus) === "completed";
+}
+
+function giftStatus(data = {}) {
+  return lower(data.status || data.giftStatus || data.flowStatus);
+}
+
+function giftStatusEmail(data = {}) {
+  const status = giftStatus(data);
+  const definitions = {
+    approved: {eventType: giftPolicy.EVENT.APPROVED, template: templates.giftApproved},
+    rejected: {eventType: giftPolicy.EVENT.REJECTED, template: templates.giftRejected},
+    ready_for_gift_delivery: {eventType: giftPolicy.EVENT.READY, template: templates.giftReadyForDelivery},
+  };
+  const definition = definitions[status];
+  return definition ? {...definition, requiredStatus: status} : null;
+}
+
+function giftCommunicationExtra({eventType, data, classification = "sender_email", eventAt = null} = {}) {
+  return {
+    policyVersion: giftPolicy.POLICY_VERSION,
+    communicationClassification: classification,
+    authoritativeEventAt: eventAt || giftPolicy.authoritativeEventAt(data, eventType).millis || null,
+  };
 }
 
 async function publishFromEvent({db, eventType, eventId, decoded}) {
@@ -218,6 +242,20 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   }
 
   const giftId = asId(path, "giftRequests");
+  const giftPaymentDraftId = asId(path, "giftPaymentDrafts");
+  if (giftPaymentDraftId && (eventType === CREATED || eventType === UPDATED) &&
+      giftPolicy.isPaymentProblemState(after) && !giftPolicy.isPaymentProblemState(before)) {
+    const state = lower(after.paymentStatus || after.paymentState || after.status);
+    const attemptKey = text(after.stripePaymentIntentId || after.stripeCheckoutSessionId) ||
+      timestampKey(after.paymentProblemAt);
+    const template = templates.giftPaymentProblem({recipientName: after.recipientName, state: giftPolicy.paymentProblemKind(after)});
+    const payload = record({to: after.senderEmail, template, eventType: giftPolicy.EVENT.PAYMENT_PROBLEM,
+      collection: "giftPaymentDrafts", sourceId: giftPaymentDraftId, required: state, recipientField: "senderEmail",
+      senderCategory: "gifts", extra: {...giftCommunicationExtra({eventType: giftPolicy.EVENT.PAYMENT_PROBLEM,
+        data: after, eventAt: after.paymentProblemAt}), sourcePaymentProblemState: state, giftId: giftPaymentDraftId,
+      sourceRequiredFields: {paymentStatus: state}}});
+    return createOnly(db, emailId(giftPolicy.EVENT.PAYMENT_PROBLEM, giftPaymentDraftId, attemptKey), payload);
+  }
   if (giftId && (eventType === CREATED || eventType === UPDATED) &&
       lower(after.paymentStatus) === "paid" && lower(before.paymentStatus) !== "paid") {
     const rothAmount = Number(after.walletContributionGbp || 0);
@@ -231,24 +269,38 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       const template = templates.giftPaymentConfirmed({recipientName: after.recipientName, rothAmount, split: cardAmount > 0});
       const payload = record({to: after.senderEmail, template, eventType: "gift_payment_confirmed", collection: "giftRequests",
         sourceId: giftId, required: "paid", recipientField: "senderEmail", senderCategory: "gifts",
-        extra: {recipientRole: "sender", giftPaymentRothAmount: rothAmount, giftPaymentCardAmount: cardAmount,
+        extra: {...giftCommunicationExtra({eventType: giftPolicy.EVENT.PAYMENT_CONFIRMED, data: after, eventAt: after.paidAt}),
+          recipientRole: "sender", giftPaymentRothAmount: rothAmount, giftPaymentCardAmount: cardAmount,
           sourceRequiredFields: {paymentStatus: "paid", walletContributionGbp: rothAmount, remainingStripeAmountGbp: cardAmount}}});
       return createOnly(db, emailId("gift_payment_confirmed", giftId), payload);
     }
   }
-  if (giftId && eventType === UPDATED && lower(after.status || after.giftStatus) === "delivered" &&
-      lower(after.giftStoryStatus) === "unlocked" &&
-      (lower(before.status || before.giftStatus) !== "delivered" || lower(before.giftStoryStatus) !== "unlocked")) {
+  const statusEmail = giftStatusEmail(after);
+  if (giftId && eventType === UPDATED && statusEmail &&
+      giftStatus(before) !== giftStatus(after)) {
+    const template = statusEmail.template({recipientName: after.recipientName});
+    const payload = record({to: after.senderEmail, template, eventType: statusEmail.eventType, collection: "giftRequests",
+      sourceId: giftId, required: statusEmail.requiredStatus, recipientField: "senderEmail", senderCategory: "gifts",
+      extra: {...giftCommunicationExtra({eventType: statusEmail.eventType, data: after}), recipientRole: "sender",
+        giftId, sourceRequiredFields: {status: statusEmail.requiredStatus}}});
+    return createOnly(db, emailId(statusEmail.eventType, giftId), payload);
+  }
+  const delivered = giftStatus(after) === "delivered";
+  const storyReady = delivered && after.giftStoryUnlocked === true && lower(after.giftStoryStatus) === "unlocked";
+  const deliveredTransition = giftStatus(before) !== "delivered" && delivered;
+  const storyTransition = lower(before.giftStoryStatus) !== "unlocked" && storyReady;
+  if (giftId && eventType === UPDATED && (deliveredTransition || storyTransition)) {
     const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
     const {queueStoryEmail} = require("./gift-story-automation");
     const senderEmail = normalizeEmail(after.senderEmail);
     const recipientEmail = normalizeEmail(after.recipientEmail || after.recipientContact);
     const [deliveryId, senderQueued, recipientQueued] = await Promise.all([
-      queueGiftDeliveryEmail({giftId, gift: after, db}),
-      queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token: text(after.giftStoryAccessToken),
-        sourceRecipientField: "senderEmail"}),
-      queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: text(after.recipientStoryToken),
-        sourceRecipientField: normalizeEmail(after.recipientEmail) ? "recipientEmail" : "recipientContact"}),
+      delivered ? queueGiftDeliveryEmail({giftId, gift: after, db}) : null,
+      storyReady ? queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token: text(after.giftStoryAccessToken),
+        sourceRecipientField: "senderEmail", eventAt: giftPolicy.authoritativeEventAt(after, giftPolicy.EVENT.STORY_READY).millis}) : null,
+      storyReady ? queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: text(after.recipientStoryToken),
+        sourceRecipientField: normalizeEmail(after.recipientEmail) ? "recipientEmail" : "recipientContact",
+        eventAt: giftPolicy.authoritativeEventAt(after, giftPolicy.EVENT.STORY_READY).millis}) : null,
     ]);
     return {status: "published", deliveryId, senderQueued, recipientQueued};
   }
@@ -256,4 +308,5 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   return {status: "ignored", eventId};
 }
 
-module.exports = {CREATED, UPDATED, documentPath, publishFromEvent, paymentConfirmed, finalDelivery, isOrdinaryDelivery};
+module.exports = {CREATED, UPDATED, documentPath, publishFromEvent, paymentConfirmed, finalDelivery, isOrdinaryDelivery,
+  giftStatus, giftStatusEmail};

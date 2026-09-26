@@ -1307,6 +1307,14 @@ exports.adminSaveGiftRequestEditor = adminCallable(async (data, context) => {
   const snap = await ref.get();
   const before = snap.exists ? snap.data() : {};
   const patch = giftRequestEditorPatch(data.patch || {}, actor);
+  const beforeStatus = lower(before.status || before.giftStatus);
+  const nextStatus = lower(patch.status || patch.giftStatus);
+  if (nextStatus && nextStatus !== beforeStatus) {
+    const timestamp = FieldValue.serverTimestamp();
+    if (nextStatus === "approved") patch.approvedAt = timestamp;
+    if (nextStatus === "rejected") patch.rejectedAt = timestamp;
+    if (["ready_for_gift_delivery", "ready_for_delivery"].includes(nextStatus)) patch.readyForDeliveryAt = timestamp;
+  }
   await ref.set(patch, {merge: true});
   await writeAudit(db, actor, {
     actionType: "gift_request_editor_saved",

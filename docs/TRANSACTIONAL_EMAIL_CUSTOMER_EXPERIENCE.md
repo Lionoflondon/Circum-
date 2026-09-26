@@ -17,12 +17,17 @@ All rows below use the centralized `emailQueue` â†’ private Cloud Run consumer â
 | `referral_award_finalized` | Both referral reward ledger entries completed | Your CIRCUM referral reward is ready | Your referral reward has been added to Roth. | Explains that the reward is available in Roth | Open CIRCUM | Info |
 | `rider_application_decision` | A Rider application was approved, rejected, or needs more information | Decision-specific Rider subject | Decision-specific next-step preview | Privacy-safe status and next step; no internal notes or documents | Open the Rider app | Info |
 | `health_plus_*` | A Health+ pickup entered an implemented operational status | Status-specific Health+ subject | Status-specific progress preview | Human descriptions for scheduled, assigned, collection travel, collected, delivery travel, delivered, rescheduled, escalated, prescription not ready, customer unavailable, and reviewed completion | Open CIRCUM | Health+ |
+| `gift_payment_confirmed` | A Roth-only or split-funded Gift reached authoritative paid state | Your CIRCUM Gift is confirmed | Your Gift is moving to the next stage. | Confirms the Gift; split copy identifies the card receipt as Stripe-owned and does not misstate amounts | Open CIRCUM Gifts | Gifts |
+| `gift_payment_problem` | A Gift payment failed or could not be confirmed | State-safe payment subject | Review your Gift in CIRCUM. | Explains the payment issue without promising a charge outcome, refund, or other unproven financial result | Review my Gift | Gifts |
+| `gift_approved` | The Gift was approved | Your CIRCUM Gift has been approved | Your Gift can move to the next stage. | Confirms approval and points to the Gift | Open my Gift | Gifts |
+| `gift_rejected` | The Gift needs attention after review | Your CIRCUM Gift needs your attention | Your Gift needs attention before it can move forward. | Explains the review outcome and directs the Sender to the canonical Gift view | Review my Gift | Gifts |
+| `gift_ready_for_delivery` | The Gift is ready to enter delivery | Your CIRCUM Gift is ready for delivery | Your Gift is ready to move into delivery. | Explains the milestone and points to the latest details | Open my Gift | Gifts |
 | `gift_delivered` | A Gifts delivery reached delivered status | Your Circum gift was delivered | Your gift has reached its recipient. | Confirms the gift recipient and optional customer-facing gift reference | Open CIRCUM Gifts | Gifts |
 | `gift_story_ready` | A private Gift Story link was created for a sender or recipient | Your CIRCUM Gift Story is ready / You have received a CIRCUM Gift Story | Your private Gift Story is ready to view. | Explains the private link, its expiry policy, and how to view it | View your Gift Story | Gifts |
 
 ## Explicitly not implemented as email surfaces
 
-The current source does not publish separate ordinary delivery accepted, in-progress, refund, or adjustment emails; it also does not publish separate tip or receipt emails. They remain out of the matrix rather than receiving invented templates. Stripe-managed Gifts receipts and Firebase Auth-managed account emails remain outside this transactional queue.
+The current source does not publish separate submitted-for-review, curation-started, ordinary delivery progress, Rider progress, routine status, or Gift refund emails. They remain in-app/push only or not applicable under policy. Stripe-managed card receipts and Firebase Auth-managed account emails remain outside this transactional queue.
 
 ## New-Sender welcome exactly once
 

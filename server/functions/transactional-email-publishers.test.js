@@ -198,7 +198,52 @@ test("card-only Gift relies on Stripe receipt and does not publish Roth confirma
   assert.equal((await publishFromEvent({db, ...input})).status, "ignored");
 });
 
-test("Story unlock publishes sender delivery with Story link and both role-specific Story emails", async () => {
+test("all policy-required Gift status milestones publish deterministic Sender emails", async () => {
+  for (const [status, eventType, templateId] of [
+    ["approved", "gift_approved", "gift-approved"],
+    ["rejected", "gift_rejected", "gift-rejected"],
+    ["ready_for_gift_delivery", "gift_ready_for_delivery", "gift-ready-for-delivery"],
+  ]) {
+    const db = fakeDb();
+    const input = event("giftRequests", `g-${status}`, {status: "submitted_for_review"}, {
+      status, senderEmail: "sender@example.test", recipientName: "Maya",
+    });
+    const result = await publishFromEvent({db, ...input});
+    assert.equal(result.id, `${eventType}_g-${status}`);
+    const queued = db.read("emailQueue", result.id);
+    assert.equal(queued.templateId, templateId);
+    assert.equal(queued.senderCategory, "gifts");
+    assert.equal(queued.recipientRole, "sender");
+  }
+});
+
+test("Gift payment problem uses state-safe copy and never creates a refund email", async () => {
+  for (const [paymentStatus, expectedTemplate] of [["failed", "gift-payment-problem-failed"], ["requires_action", "gift-payment-problem-unconfirmed"]]) {
+    const db = fakeDb();
+    const input = event("giftPaymentDrafts", `draft-${paymentStatus}`, {paymentStatus: "payment_pending"}, {
+      paymentStatus, paymentProblemAt: "2026-09-26T13:00:00.000Z", senderEmail: "sender@example.test", recipientName: "Maya",
+    });
+    const result = await publishFromEvent({db, ...input});
+    assert.equal(result.status, "queued");
+    const queued = db.read("emailQueue", result.id);
+    assert.equal(queued.templateId, expectedTemplate);
+    assert.equal(queued.sourceCollection, "giftPaymentDrafts");
+    assert.doesNotMatch(queued.text, /refund|refunded|weren't charged|not charged/i);
+  }
+});
+
+test("routine Gift progression remains push-only and never publishes an email", async () => {
+  for (const status of ["submitted_for_review", "curation_started", "in_delivery", "rider_assigned"]) {
+    const db = fakeDb();
+    const input = event("giftRequests", `push-${status}`, {status: "submitted_for_review"}, {
+      status, senderEmail: "sender@example.test", recipientName: "Maya",
+    });
+    assert.equal((await publishFromEvent({db, ...input})).status, "ignored");
+    assert.equal(db.read("emailQueue", `gift_${status}_push-${status}`), undefined);
+  }
+});
+
+test("Story unlock publishes sender delivery plus both role-specific Story emails", async () => {
   const db = fakeDb();
   const senderToken = "s".repeat(43);
   const recipientToken = "r".repeat(43);
@@ -209,7 +254,7 @@ test("Story unlock publishes sender delivery with Story link and both role-speci
   assert.equal((await publishFromEvent({db, ...input})).status, "published");
   const delivered = db.read("emailQueue", "gift_g-5_gift_delivered");
   assert.equal(delivered.to, "sender@example.test");
-  assert.equal(delivered.ctaUrl, `https://circumuk.com/story/${senderToken}`);
+  assert.equal(delivered.ctaUrl, "https://circumuk.com/?app=gifts");
   assert.equal(db.read("emailQueue", "gift_story_g-5_sender").to, "sender@example.test");
   assert.equal(db.read("emailQueue", "gift_story_g-5_recipient").to, "recipient@example.test");
   assert.equal(db.read("emailQueue", "gift_g-5_recipient_delivered"), undefined);

@@ -701,6 +701,8 @@ exports.handleGiftPaymentIntent = async (stripe, intent, eventId = "") => {
       if (draft.data().senderId !== text(metadata.senderId) || draft.data().stripePaymentIntentId !== intent.id) return;
       transaction.update(draftRef, {
         paymentStatus: text(intent.status) || "payment_pending",
+        paymentProblemAt: FieldValue.serverTimestamp(),
+        paymentProblemState: text(intent.status) || "payment_pending",
         updatedAt: FieldValue.serverTimestamp(),
       });
     });

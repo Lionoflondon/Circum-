@@ -13,12 +13,15 @@ const X_URL = "https://x.com/circumuk";
 const INSTAGRAM_URL = "https://www.instagram.com/circumuk/";
 const TIKTOK_URL = "https://www.tiktok.com/@circumuk";
 const STORY_URL = /^https:\/\/circumuk\.com\/story\/[A-Za-z0-9_-]+$/;
+const GIFTS_APP_URL = "https://circumuk.com/?app=gifts";
 const text = (value) => `${value || ""}`.trim();
 const escapeHtml = (value) => text(value).replace(/[&<>"']/g, (character) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"}[character]));
 const safeName = (value) => text(value).replace(/[<>_]/g, " ").replace(/\s+/g, " ").slice(0, 80) || "your recipient";
 
 function build({templateId, subject, preheader, heading, paragraphs, label, value, ctaLabel = "", ctaUrl = "", message}) {
-  if (ctaLabel && !STORY_URL.test(text(ctaUrl))) throw new Error("A secure Gift Story link is required.");
+  if (ctaLabel && !STORY_URL.test(text(ctaUrl)) && text(ctaUrl) !== GIFTS_APP_URL) {
+    throw new Error("A canonical CIRCUM Gifts link is required.");
+  }
   const url = ctaLabel ? text(ctaUrl) : "";
   const footer = "Need help with the delivery record? Contact us at info@circumuk.com.";
   const body = [heading, ...paragraphs, `${label}: ${value}`, url ? `${ctaLabel}: ${url}` : "", footer,
@@ -48,12 +51,66 @@ function paymentConfirmed({recipientName = "", rothAmount = 0, split = false} = 
     label: split ? "Gift status" : "Payment received", value: split ? "Confirmed" : roth, message: "payment-confirmed"});
 }
 
+function paymentProblem({recipientName = "", state = "unconfirmed"} = {}) {
+  const recipient = safeName(recipientName);
+  const failed = text(state).toLowerCase() === "failed";
+  return build({
+    templateId: failed ? "gift-payment-problem-failed" : "gift-payment-problem-unconfirmed",
+    subject: failed ? "We couldn't complete your CIRCUM Gift payment" : "We couldn't confirm your CIRCUM Gift payment",
+    preheader: failed ? "We couldn't complete the payment for your Gift. Review your Gift in CIRCUM." :
+      "We couldn't confirm the payment for your Gift. Review your Gift in CIRCUM.",
+    heading: failed ? "Your Gift payment needs attention" : "We couldn't confirm your Gift payment",
+    paragraphs: failed ? [
+      `We couldn't complete the payment for your Gift to ${recipient}.`,
+      "Open CIRCUM to review your Gift and complete the next step.",
+    ] : [
+      `We couldn't confirm the payment for your Gift to ${recipient}.`,
+      "Open CIRCUM to review your Gift and see the next step.",
+    ],
+    label: "Gift payment",
+    value: "Needs attention",
+    ctaLabel: "Review my Gift",
+    ctaUrl: GIFTS_APP_URL,
+    message: "payment-problem",
+  });
+}
+
+function approved({recipientName = ""} = {}) {
+  const recipient = safeName(recipientName);
+  return build({templateId: "gift-approved", subject: "Your CIRCUM Gift has been approved",
+    preheader: "Your Gift has been approved and can move to the next stage.", heading: "Your Gift is approved",
+    paragraphs: [`The CIRCUM Gifts team has approved your Gift to ${recipient}.`,
+      "Open CIRCUM to review the latest details as your Gift moves to the next stage."],
+    label: "Gift status", value: "Approved", ctaLabel: "Open my Gift", ctaUrl: GIFTS_APP_URL, message: "approved"});
+}
+
+function rejected({recipientName = ""} = {}) {
+  const recipient = safeName(recipientName);
+  return build({templateId: "gift-rejected", subject: "Your CIRCUM Gift needs your attention",
+    preheader: "Your Gift needs attention before it can move forward.", heading: "Your Gift needs attention",
+    paragraphs: [`The CIRCUM Gifts team couldn't approve your Gift to ${recipient} at this stage.`,
+      "Open CIRCUM to review the Gift and any next step shown there."],
+    label: "Gift status", value: "Needs attention", ctaLabel: "Review my Gift", ctaUrl: GIFTS_APP_URL, message: "rejected"});
+}
+
+function readyForDelivery({recipientName = ""} = {}) {
+  const recipient = safeName(recipientName);
+  return build({templateId: "gift-ready-for-delivery", subject: "Your CIRCUM Gift is ready for delivery",
+    preheader: "Your Gift is ready to move into delivery.", heading: "Your Gift is ready for delivery",
+    paragraphs: [`Your Gift to ${recipient} is ready to move into delivery.`,
+      "Open CIRCUM to review the latest details."],
+    label: "Gift status", value: "Ready for delivery", ctaLabel: "Open my Gift", ctaUrl: GIFTS_APP_URL, message: "ready-for-delivery"});
+}
+
 function delivered({recipientName = "", storyUrl = ""} = {}) {
   const recipient = safeName(recipientName);
+  const hasStory = STORY_URL.test(text(storyUrl));
   return build({templateId: "gift-delivered", subject: "Your CIRCUM Gift has been delivered",
-    preheader: "Your Gift Story is ready to view.", heading: "Your Gift has been delivered",
-    paragraphs: [`Your Gift to ${recipient} has been delivered. This confirms the gift delivery.`, "Your Gift Story is ready to view."],
-    label: "Delivery", value: `Delivered to ${recipient}`, ctaLabel: "View the Gift Story", ctaUrl: storyUrl, message: "delivered"});
+    preheader: hasStory ? "Your Gift Story is ready to view." : "Your Gift has been delivered.", heading: "Your Gift has been delivered",
+    paragraphs: hasStory ? [`Your Gift to ${recipient} has been delivered. This confirms the gift delivery.`, "Your Gift Story is ready to view."] :
+      [`Your Gift to ${recipient} has been delivered. This confirms the gift delivery.`, "Open CIRCUM to review the latest details."],
+    label: "Delivery", value: `Delivered to ${recipient}`, ctaLabel: hasStory ? "View the Gift Story" : "Open CIRCUM",
+    ctaUrl: hasStory ? storyUrl : GIFTS_APP_URL, message: "delivered"});
 }
 
 function story({role, storyUrl} = {}) {
@@ -69,4 +126,4 @@ function story({role, storyUrl} = {}) {
     ctaLabel: "View your Gift Story", ctaUrl: storyUrl, message: "story"});
 }
 
-module.exports = {paymentConfirmed, delivered, story};
+module.exports = {GIFTS_APP_URL, approved, delivered, paymentConfirmed, paymentProblem, readyForDelivery, rejected, story};
