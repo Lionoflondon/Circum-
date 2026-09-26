@@ -907,7 +907,7 @@ async function recordBusinessPaymentOutcome({db, reservationId, intent, eventId,
       throw new Error("Business payment provider metadata does not match its persisted checkout.");
     }
     const providerIntentId = text(intent && intent.id, 160) || text(payment.providerPaymentIntentId, 160);
-    const key = `${reservationId}:${providerIntentId || text(intent && intent.id, 160) || eventType}`;
+    const key = `${reservationId}:${providerIntentId || eventType}:${state}`;
     const balanceDue = invoiceBalanceDue(invoice);
     const paidInvoice = ["paid", "paid_manually"].includes(text(invoice.status).toLowerCase()) || Number.isFinite(balanceDue) && balanceDue <= 0;
     const priorIntentStatus = text(payment.paymentIntentStatus, 80).toLowerCase();

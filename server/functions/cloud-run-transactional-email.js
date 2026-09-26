@@ -254,10 +254,9 @@ async function revalidateSource(db, record) {
     }
   }
   if (eventType === "business_account_activated") {
-    const statuses = [sourceData.status, sourceData.approvalStatus, sourceData.businessStatus, sourceData.verificationStatus]
-        .map((value) => text(value).toLowerCase());
     if (source.collection !== "businessAccounts" ||
-        !statuses.some((value) => ["approved", "active"].includes(value))) {
+        sourceData.isApproved !== true ||
+        !["approved", "active"].includes(text(sourceData.approvalStatus).toLowerCase())) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }

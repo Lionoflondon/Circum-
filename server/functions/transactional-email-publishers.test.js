@@ -148,6 +148,11 @@ test("Business activation does not publish for an initial registration or non-ap
     status: "approved", approvalStatus: "approved", contactEmail: "owner@example.test",
   });
   assert.equal((await publishFromEvent({db, ...unrelated})).status, "ignored");
+  const verifiedOnly = event("businessAccounts", "business-3", {status: "pending", approvalStatus: "pending", isApproved: false}, {
+    status: "approved", approvalStatus: "pending", verificationStatus: "approved", isApproved: false,
+    contactEmail: "owner@example.test",
+  });
+  assert.equal((await publishFromEvent({db, ...verifiedOnly})).status, "ignored");
 });
 
 test("completed Roth ledger movement is the sole source of its queue email", async () => {

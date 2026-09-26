@@ -3,6 +3,18 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {handleBusinessPaymentIntent} = require("./business-payments");
+const {providerParams} = require("./business-checkout-reservations");
+
+test("Checkout propagates the authoritative reservation identity to PaymentIntent webhooks", () => {
+  const params = providerParams({
+    returnUrl: "https://circumuk.com/?app=business",
+    businessId: "business-1", invoiceId: "invoice-1", checkoutReservationId: "reservation-1",
+    invoiceNumber: "QA-1", currency: "gbp", externalAmount: 2000, rothReserved: 0,
+    amount: 20, createdByUserId: "owner-1", expiresAt: Date.now() + 3600000,
+  });
+  assert.deepEqual(params.payment_intent_data.metadata, params.metadata);
+  assert.equal(params.payment_intent_data.metadata.checkoutReservationId, "reservation-1");
+});
 
 function fakeDb(initial = {}) {
   const data = new Map(Object.entries(initial));
@@ -74,6 +86,14 @@ test("processing remains neutral and success supersedes a queued failure", async
   const lateFailure = await handleBusinessPaymentIntent({db, intent: intent(), eventId: "evt-late-failure", eventType: "payment_intent.payment_failed"});
   assert.equal(lateFailure.skipped, true);
   assert.equal(lateFailure.reason, "authoritative_success_supersedes_failure");
+});
+
+test("processing then definitive failure on the same intent has a new logical email identity", async () => {
+  const db = fixture();
+  const processing = await handleBusinessPaymentIntent({db, intent: intent("processing"), eventId: "evt-processing", eventType: "payment_intent.processing"});
+  const failed = await handleBusinessPaymentIntent({db, intent: intent(), eventId: "evt-failed", eventType: "payment_intent.payment_failed"});
+  assert.notEqual(processing.communicationKey, failed.communicationKey);
+  assert.match(failed.communicationKey, /:failed$/);
 });
 
 test("unbound client-shaped metadata cannot create a Business payment outcome", async () => {

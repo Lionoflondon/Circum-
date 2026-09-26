@@ -247,6 +247,18 @@ async function reserve({
 }
 function providerParams(r) {
   const sep = r.returnUrl.includes("?") ? "&" : "?";
+  const metadata = {
+    type: "business_invoice_payment",
+    businessId: r.businessId,
+    invoiceId: r.invoiceId,
+    paymentId: r.checkoutReservationId,
+    checkoutReservationId: r.checkoutReservationId,
+    reservationVersion: "1",
+    cardAmountGbp: `${pounds(r.externalAmount)}`,
+    rothAmountGbp: `${pounds(r.rothReserved)}`,
+    paymentAmountGbp: `${pounds(r.amount)}`,
+    createdByUserId: r.createdByUserId,
+  };
   return {
     mode: "payment",
     payment_method_types: ["card"],
@@ -267,18 +279,8 @@ function providerParams(r) {
     ],
     success_url: `${r.returnUrl}${sep}paymentStatus=payment-success&invoiceId=${r.invoiceId}&businessId=${r.businessId}&paymentId=${r.checkoutReservationId}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
     cancel_url: `${r.returnUrl}${sep}paymentStatus=payment-cancelled&invoiceId=${r.invoiceId}&businessId=${r.businessId}&paymentId=${r.checkoutReservationId}`,
-    metadata: {
-      type: "business_invoice_payment",
-      businessId: r.businessId,
-      invoiceId: r.invoiceId,
-      paymentId: r.checkoutReservationId,
-      checkoutReservationId: r.checkoutReservationId,
-      reservationVersion: "1",
-      cardAmountGbp: `${pounds(r.externalAmount)}`,
-      rothAmountGbp: `${pounds(r.rothReserved)}`,
-      paymentAmountGbp: `${pounds(r.amount)}`,
-      createdByUserId: r.createdByUserId,
-    },
+    metadata,
+    payment_intent_data: {metadata},
   };
 }
 async function provider({db, stripe, reservation}) {

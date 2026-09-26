@@ -92,9 +92,7 @@ function paymentConfirmed(data = {}) {
 }
 
 function businessAccountActivated(data = {}) {
-  const statuses = [data.status, data.approvalStatus, data.businessStatus, data.verificationStatus]
-      .map(lower);
-  return statuses.some((value) => ["approved", "active"].includes(value));
+  return data.isApproved === true && ["approved", "active"].includes(lower(data.approvalStatus));
 }
 
 function finalDelivery(data = {}) {
@@ -217,12 +215,12 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       companyName: after.businessName || after.companyName,
       ctaUrl: "https://circumuk.com/?app=business",
     }), eventType: "business_account_activated", collection: "businessAccounts", sourceId: businessId,
-    required: lower(after.status || after.approvalStatus || after.businessStatus), recipientField, senderCategory: "business",
+    required: lower(after.approvalStatus), recipientField, senderCategory: "business",
     extra: {
       businessId,
-      sourceActivationStatus: lower(after.status || after.approvalStatus || after.businessStatus),
+      sourceActivationStatus: lower(after.approvalStatus),
     }});
-    if (payload) payload.sourceRequiredFields = {status: ["approved", "active"]};
+    if (payload) payload.sourceRequiredFields = {approvalStatus: ["approved", "active"], isApproved: true};
     return createOnly(db, emailId("business_account_activated", businessId), payload);
   }
 
