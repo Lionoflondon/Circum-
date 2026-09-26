@@ -50,7 +50,9 @@ function eventHandlerName(body, requestUrl = "") {
   if (!encoded) return topicHandlerName(requestUrl);
   try {
     const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
-    return typeof decoded.handler === "string" ? decoded.handler : topicHandlerName(requestUrl);
+    const explicitHandler = decoded && decoded.handler;
+    return (explicitHandler === "health" || handlers[explicitHandler]) ?
+      explicitHandler : topicHandlerName(requestUrl);
   } catch (_) {
     return topicHandlerName(requestUrl);
   }
