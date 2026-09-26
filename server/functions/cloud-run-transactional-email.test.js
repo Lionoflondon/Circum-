@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
+const {createEmailQueueRecord} = require("./email-queue");
 const {
   EVENT_TYPE,
   claimEmail,
@@ -67,6 +68,58 @@ function record(overrides = {}) {
     ...overrides,
   };
 }
+
+test("legacy queued-over-sent records cannot acquire a send lease or lose terminal fields", async () => {
+  const sentAt = new Date("2026-09-25T09:30:00Z");
+  const db = fakeDb({"emailQueue/email-1": record({
+    status: "queued",
+    sentAt,
+    providerId: "resend-original",
+    attempts: 2,
+  })});
+  let providerCalls = 0;
+  const publishReplay = () => createEmailQueueRecord(db, "email-1", record());
+  const replays = await Promise.all(Array.from({length: 20}, publishReplay));
+  assert.equal(replays.filter((result) => result.status === "duplicate").length, 20);
+  const results = await Promise.all(Array.from({length: 20}, (_, index) => processEmailQueueRecord({
+    db,
+    emailId: "email-1",
+    eventId: `replay-${index}`,
+    fetchImpl: async () => {
+      providerCalls++;
+      return {ok: true, status: 200, json: async () => ({id: "unexpected"})};
+    },
+    apiKey: "test-key",
+  })));
+  assert.equal(results.filter((result) => result.status === "duplicate").length, 20);
+  assert.equal(providerCalls, 0);
+  const final = db.read("emailQueue", "email-1");
+  assert.equal(final.status, "sent");
+  assert.equal(final.sentAt, sentAt);
+  assert.equal(final.providerId, "resend-original");
+  assert.equal(final.attempts, 2);
+});
+
+test("suppressed, failed, and skipped queue records remain terminal on replay", async () => {
+  for (const status of ["suppressed", "failed", "skipped"]) {
+    const db = fakeDb({"emailQueue/email-1": record({status, attempts: 3})});
+    let providerCalls = 0;
+    const result = await processEmailQueueRecord({
+      db,
+      emailId: "email-1",
+      eventId: `replay-${status}`,
+      fetchImpl: async () => {
+        providerCalls++;
+        return {ok: true, status: 200, json: async () => ({id: "unexpected"})};
+      },
+      apiKey: "test-key",
+    });
+    assert.equal(result.status, "duplicate");
+    assert.equal(providerCalls, 0);
+    assert.equal(db.read("emailQueue", "email-1").status, status);
+    assert.equal(db.read("emailQueue", "email-1").attempts, 3);
+  }
+});
 
 test("transactional sender identity follows the activity family", async () => {
   assert.equal(senderCategoryForRecord({eventType: "gift_delivered"}), "gifts");

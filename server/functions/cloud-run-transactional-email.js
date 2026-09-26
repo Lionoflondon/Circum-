@@ -110,7 +110,7 @@ function millis(value) {
 }
 
 function terminalStatus(status) {
-  return new Set(["sent", "suppressed", "failed"]).has(text(status).toLowerCase());
+  return new Set(["sent", "suppressed", "failed", "skipped"]).has(text(status).toLowerCase());
 }
 
 async function claimEmail({db, emailId, eventId, nowMs = Date.now()}) {
@@ -119,6 +119,20 @@ async function claimEmail({db, emailId, eventId, nowMs = Date.now()}) {
     const snap = await tx.get(ref);
     if (!snap.exists) return {status: "missing"};
     const current = snap.data() || {};
+    // A legacy publisher can merge `status: queued` onto a sent record without
+    // removing sentAt. Treat the provider receipt as terminal before any lease
+    // or attempt can be acquired, and repair the visible queue state.
+    if (current.sentAt) {
+      if (text(current.status).toLowerCase() !== "sent") {
+        tx.set(ref, {
+          status: "sent",
+          leaseOwner: null,
+          leaseExpiresAt: Timestamp.fromMillis(nowMs),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return {status: "duplicate", current: {...current, status: "sent"}};
+    }
     if (terminalStatus(current.status)) return {status: "duplicate", current};
     const leaseUntil = millis(current.leaseExpiresAt);
     if (current.status === "processing" && leaseUntil > nowMs) {
