@@ -2,7 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
 const core = require("./ratings-tipping-core");
 const tipRefunds = require("./tip-refunds");
 const rothLedger = require("./roth-ledger");
@@ -512,6 +512,128 @@ async function processStripeTipIntent(stripe, intent) {
   return {handled: true, status: intent.status};
 }
 
+async function reconcileDeliveryTipsCore(stripe, {db = getFirestore(), now = Date.now(), limit = 100, dryRun = false} = {}) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Tip reconciliation page limit must be 1-100");
+  const cursorRef = db.collection("operationsState").doc("tip_reconciliation_cursor_v2");
+  const cursorSnapshot = await cursorRef.get();
+  const cursor = text((cursorSnapshot.data() || {}).lastTipId);
+  const firstPage = () => db.collection("deliveryTips").orderBy(FieldPath.documentId()).limit(limit).get();
+  let query = db.collection("deliveryTips").orderBy(FieldPath.documentId()).limit(limit);
+  if (cursor) query = query.startAfter(cursor);
+  let page = await query.get();
+  if (page.empty && cursor) page = await firstPage();
+  const result = {scanned: page.size, repaired: 0, wouldRepair: 0, reviewRequired: 0, pending: 0, unchanged: 0};
+  const review = async (doc, tip, reason, error = null) => {
+    result.reviewRequired++;
+    if (dryRun) return;
+    await db.collection("tipReconciliations").doc(`tip_${doc.id}`).set({
+      tipId: doc.id, deliveryId: text(tip.deliveryId), riderId: text(tip.riderId),
+      status: "review_required", reason,
+      errorCode: error ? text(error.code || "reconciliation_error").slice(0, 120) : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  };
+  for (const doc of page.docs) {
+    const tip = doc.data() || {};
+    const status = text(tip.status).toLowerCase();
+    if (!tip.deliveryId || doc.id !== tip.deliveryId || !Number.isSafeInteger(tip.amountPence) ||
+        tip.amountPence < 100 || tip.amountPence > 10000 || tip.currency !== "GBP" ||
+        !["roth", "saved_card", "card", "apple_pay", "google_pay"].includes(tip.paymentMethod)) {
+      await review(doc, tip, "invalid_tip_authority");
+      continue;
+    }
+    const ledger = await db.collection("walletTransactions").doc(`delivery_tip_${tip.deliveryId}`).get();
+    if (ledger.exists) {
+      const row = ledger.data() || {};
+      if (row.tipId !== doc.id || row.deliveryId !== tip.deliveryId || row.riderId !== tip.riderId ||
+          row.amountPence !== tip.amountPence || row.type !== "tip" || row.currency !== "GBP") {
+        await review(doc, tip, "ledger_identity_mismatch");
+      } else if (tip.credited !== true && !["refund_pending", "refunded", "partially_refunded", "reversed"].includes(status)) {
+        await review(doc, tip, "ledger_tip_state_mismatch");
+      } else {
+        result.unchanged++;
+      }
+      continue;
+    }
+    if (tip.credited === true) {
+      await review(doc, tip, "credited_without_ledger");
+      continue;
+    }
+    if (["refund_pending", "refunded", "partially_refunded", "reversed"].includes(status)) {
+      result.unchanged++;
+      continue;
+    }
+    if (!["processing", "succeeded"].includes(status)) {
+      result.unchanged++;
+      continue;
+    }
+    const updatedMillis = tip.updatedAt && typeof tip.updatedAt.toMillis === "function" ? tip.updatedAt.toMillis() : 0;
+    const stale = status === "succeeded" || !updatedMillis || now - updatedMillis > 30 * 60 * 1000;
+    if (tip.paymentMethod !== "roth" && !tip.stripePaymentIntentId) {
+      if (stale) await review(doc, tip, "payment_intent_missing");
+      else result.pending++;
+      continue;
+    }
+    try {
+      const delivery = await db.collection("deliveryRequests").doc(tip.deliveryId).get();
+      if (!delivery.exists) throw new Error("tip_delivery_missing");
+      const deliveryData = delivery.data() || {};
+      assertTipParties(tip, deliveryData);
+      if ((!deliveryData.completedAt && !deliveryData.deliveredAt &&
+          !core.COMPLETED_STATUSES.has(text(deliveryData.deliveryState || deliveryData.status).toLowerCase())) ||
+          deliveryData.isTest === true || deliveryData.testData === true ||
+          text(deliveryData.environment).toLowerCase() === "test" ||
+          !["paid", "succeeded", "success"].includes(text(deliveryData.paymentStatus).toLowerCase()) ||
+          deliveryData.refunded === true || text(deliveryData.refundStatus).toLowerCase() === "refunded") {
+        throw new Error("tip_delivery_not_eligible");
+      }
+      let intentId = null;
+      if (tip.paymentMethod === "roth") {
+        const debit = await db.collection("walletTransactions").doc(`wallet_tip_${tip.deliveryId}`).get();
+        const row = debit.data() || {};
+        if (!debit.exists || row.uid !== tip.senderId || row.type !== "delivery_tip" ||
+            row.referenceId !== tip.deliveryId || Math.abs(Number(row.amount)) !== tip.amountPence / 100) {
+          throw new Error("tip_roth_debit_missing_or_mismatched");
+        }
+      } else {
+        const intent = await stripe.paymentIntents.retrieve(tip.stripePaymentIntentId);
+        assertTipIntent(tip, intent, stripe._circumStripeMode);
+        if (intent.status !== "succeeded") {
+          if (stale) await review(doc, tip, `provider_${text(intent.status).slice(0, 60)}`);
+          else result.pending++;
+          continue;
+        }
+        const latestCharge = intent.latest_charge;
+        if (!latestCharge) throw new Error("tip_charge_missing");
+        const charge = typeof latestCharge === "string" ?
+          await stripe.charges.retrieve(latestCharge) : latestCharge;
+        if (!charge || charge.payment_intent !== intent.id || charge.amount !== tip.amountPence ||
+            text(charge.currency).toUpperCase() !== "GBP" || charge.paid !== true ||
+            charge.refunded === true || charge.disputed === true || Number(charge.amount_refunded || 0) !== 0) {
+          throw new Error("tip_charge_not_eligible");
+        }
+        const refunds = await stripe.refunds.list({payment_intent: intent.id, limit: 1});
+        if (!refunds || !Array.isArray(refunds.data) || refunds.data.length > 0) {
+          throw new Error("tip_refund_requires_review");
+        }
+        intentId = intent.id;
+      }
+      if (dryRun) result.wouldRepair++;
+      else {
+        const outcome = await finalizeTip(db, doc.ref, tip, intentId);
+        if (outcome.credited) result.repaired++;
+        else result.unchanged++;
+      }
+    } catch (error) {
+      await review(doc, tip, "reconciliation_failed", error);
+    }
+  }
+  if (!dryRun && !page.empty) {
+    await cursorRef.set({lastTipId: page.docs[page.docs.length - 1].id, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  }
+  return result;
+}
+
 async function tipReversalTarget(db, tipId, tipAmountPence, refundedPence) {
   if (!Number.isSafeInteger(refundedPence) || refundedPence < 0 || refundedPence > tipAmountPence) throw new Error("Invalid provider refund amount");
   const disputes = await db.collection("tipDisputes").where("tipId", "==", tipId).get();
@@ -661,4 +783,5 @@ exports.submitDeliveryRating = functions.https.onCall(submitRating);
 exports.submitDeliveryTip = submitTip;
 exports.reportRating = functions.https.onCall(reportRating);
 exports.processStripeTipIntent = processStripeTipIntent;
+exports.reconcileDeliveryTipsCore = reconcileDeliveryTipsCore;
 exports._test = {repairRiderRatingFeedback, submitRating, reportRating, finalizeTip, resolveDelivery, assertTipIntent, assertTipParties};

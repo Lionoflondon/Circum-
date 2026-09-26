@@ -7,6 +7,7 @@ const businessPayments = require("./business-payments");
 const riderConnect = require("./rider-connect");
 const deliveryTracking = require("./delivery-tracking");
 const healthPlusOperations = require("./health-plus-operations");
+const ratingsTipping = require("./ratings-tipping");
 
 if (!getApps().length) initializeApp();
 
@@ -31,11 +32,16 @@ const handlers = Object.freeze({
     deliveryTracking._private.reconcilePendingDeliverySettlementsCore(),
   processHealthPlusReminders: () =>
     healthPlusOperations._private.processHealthPlusRemindersCore(),
+  reconcileDeliveryTips: () =>
+    ratingsTipping.reconcileDeliveryTipsCore(stripeClient()),
+  reconcileDeliveryTipsDryRun: () =>
+    ratingsTipping.reconcileDeliveryTipsCore(stripeClient(), {dryRun: true}),
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
   "firebase-schedule-reconcilePendingDeliverySettlements-us-central1": "reconcilePendingDeliverySettlements",
   "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
+  "firebase-schedule-reconcileDeliveryTips-us-central1": "reconcileDeliveryTips",
 });
 
 function topicHandlerName(requestUrl = "", headers = {}) {
