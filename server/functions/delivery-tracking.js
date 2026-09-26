@@ -876,20 +876,21 @@ async function reconcileSettlementPendingDelivery(db, deliveryId) {
   });
 }
 
+async function reconcilePendingDeliverySettlementsCore(db = getFirestore()) {
+  const snapshot = await db.collection("deliveryRequests")
+      .where("settlementStatus", "==", "pending_authority")
+      .limit(100)
+      .get();
+  const results = [];
+  for (const document of snapshot.docs) {
+    results.push(await reconcileSettlementPendingDelivery(db, document.id));
+  }
+  return {scanned: snapshot.size, results};
+}
+
 exports.reconcilePendingDeliverySettlements = functions.pubsub
     .schedule("every 5 minutes")
-    .onRun(async () => {
-      const db = getFirestore();
-      const snapshot = await db.collection("deliveryRequests")
-          .where("settlementStatus", "==", "pending_authority")
-          .limit(100)
-          .get();
-      const results = [];
-      for (const document of snapshot.docs) {
-        results.push(await reconcileSettlementPendingDelivery(db, document.id));
-      }
-      return {scanned: snapshot.size, results};
-    });
+    .onRun(() => reconcilePendingDeliverySettlementsCore());
 
 exports._private = {
   liveLocationPatch,
@@ -909,6 +910,7 @@ exports._private = {
   hasManualRankOverride,
   riderTrustRankPatch,
   reconcileSettlementPendingDelivery,
+  reconcilePendingDeliverySettlementsCore,
   scheduledPickupMillis,
   scheduledOperationalTransitionAllowed,
 };

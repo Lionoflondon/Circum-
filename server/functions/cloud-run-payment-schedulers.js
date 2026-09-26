@@ -5,6 +5,8 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const businessPayments = require("./business-payments");
 const riderConnect = require("./rider-connect");
+const deliveryTracking = require("./delivery-tracking");
+const healthPlusOperations = require("./health-plus-operations");
 
 if (!getApps().length) initializeApp();
 
@@ -25,6 +27,10 @@ const handlers = Object.freeze({
     riderConnect.scheduledRiderStripeStatusSyncCore(stripeClient()),
   scheduledRiderPayoutRecovery: () =>
     riderConnect.recoverRiderPayoutsCore(stripeClient()),
+  reconcilePendingDeliverySettlements: () =>
+    deliveryTracking._private.reconcilePendingDeliverySettlementsCore(),
+  processHealthPlusReminders: () =>
+    healthPlusOperations._private.processHealthPlusRemindersCore(),
 });
 
 function eventHandlerName(body) {
