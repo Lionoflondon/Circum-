@@ -113,6 +113,7 @@ async function reconcileGiftStoryWindow({db, start, end, pageSize = 25, maxRecor
           counts.candidates++;
           if (apply) {
             try {
+              if (await ownerReader(db) !== "cloud_run") throw new Error("reconciliation_owner_changed");
               const result = await runCompletion(db, gift, snapshot.id, {source: "reconciliation"});
               if (result.effectiveEffects > 0) counts.processed++;
               else counts.alreadyClaimed++;

@@ -169,3 +169,22 @@ test("concurrent reconciliation invocations reuse effective Story claims", async
   assert.equal(results.reduce((sum, result) => sum + result.processed, 0), 1);
   assert.equal(results.reduce((sum, result) => sum + result.alreadyClaimed, 0), 1);
 });
+
+test("reconciliation stops before the next Gift if ownership changes mid-window", async () => {
+  const at = Date.parse("2026-09-26T10:03:00Z");
+  const rows = [delivery("a", at), delivery("b", at + 1)];
+  const gifts = {gift_a: {}, gift_b: {}};
+  let reads = 0;
+  let completions = 0;
+  const result = await reconcileGiftStoryWindow(options(fakeDb(rows, gifts), {
+    ownerReader: async () => ++reads < 3 ? "cloud_run" : "none",
+    runCompletion: async () => {
+      completions++;
+      return {effectiveEffects: 1};
+    },
+  }));
+  assert.equal(result.processed, 1);
+  assert.equal(result.errors, 1);
+  assert.equal(completions, 1);
+  assert.ok(result.nextCursor);
+});
