@@ -806,6 +806,7 @@ async function markConversationRead(data, context) {
 }
 
 exports.emitNotification = emitNotification;
+exports.pushMessageFor = pushMessageFor;
 exports.destinationFor = destinationFor;
 exports.pushMessageFor = pushMessageFor;
 exports._sendCircumMessageHandler = sendMessage;
