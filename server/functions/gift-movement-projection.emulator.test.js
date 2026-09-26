@@ -29,6 +29,7 @@ test("projects current gift once and preserves Rider voice redaction", async () 
   assert.equal(delivery.voiceNoteUrl, undefined);
   assert.equal((await projectLatestGiftMovement(db, "g1")).status, "projected");
   assert.equal((await projectLatestGiftMovement(db, "g1")).status, "already_projected");
+  assert.equal((await db.collection("giftMovementProjectionClaims").get()).size, 2);
 }));
 
 test("delayed duplicate handlers project latest source instead of stale event status", async () => withDb("latest", async (db) => {
@@ -40,9 +41,20 @@ test("delayed duplicate handlers project latest source instead of stale event st
   const delivery = (await db.doc("deliveryRequests/gift_g2").get()).data();
   assert.equal(delivery.status, "completed");
   assert.equal((await projectLatestGiftMovement(db, "g2")).status, "already_projected");
+  assert.equal((await db.collection("giftMovementProjectionClaims").get()).size, 2);
 }));
 
 test("deleted source cannot recreate a delivery", async () => withDb("deleted", async (db) => {
   assert.equal((await projectLatestGiftMovement(db, "missing")).status, "source_deleted");
   assert.equal((await db.doc("deliveryRequests/gift_missing").get()).exists, false);
+}));
+
+test("completed claim with missing target is surfaced for review", async () => withDb("target-missing", async (db) => {
+  await db.doc("giftRequests/g3").set({status: "packed"});
+  await projectLatestGiftMovement(db, "g3");
+  await db.doc("deliveryRequests/gift_g3").delete();
+  assert.equal((await projectLatestGiftMovement(db, "g3")).status, "projected");
+  await db.doc("deliveryRequests/gift_g3").delete();
+  assert.equal((await projectLatestGiftMovement(db, "g3")).status, "manual_review_claim_target_mismatch");
+  assert.equal((await db.doc("deliveryRequests/gift_g3").get()).exists, false);
 }));
