@@ -45,7 +45,8 @@ function factory({db, env = process.env, stripe}) {
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "capture_tip", "send_message", "cancel"]);
     if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
-    if (["prepare", "health", "health_finalize", "business", "business_finalize", "cleanup"].includes(data.action) && (!lists.operators.includes(uid) || !lists.senders.includes(uid))) fail("QA Sender operator required.");
+    if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = createHash("sha256").update(`special-v2:${lists.operators[0]}`).digest("hex");
     const ref = db.collection(ROOT).doc(id);
     if (data.action === "prepare") {
