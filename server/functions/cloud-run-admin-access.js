@@ -11,6 +11,7 @@ const MAX_BODY_BYTES = 16 * 1024;
 const ROUTES = Object.freeze({
   adminResolveAccess: adminAuthority._private.resolveAdminAccess,
   adminQueryPage: adminAuthority._private.queryAdminPage,
+  adminSaveGiftRequestEditor: adminAuthority._private.saveGiftRequestEditor,
 });
 const ROUTE_NAMES = new Set(Object.keys(ROUTES));
 const STATUS = {
@@ -54,7 +55,7 @@ function productionDependencies(route) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^\/(?:v1\/callable\/)?(adminResolveAccess|adminQueryPage)$/.exec(pathname);
+  const match = /^\/(?:v1\/callable\/)?(adminResolveAccess|adminQueryPage|adminSaveGiftRequestEditor)$/.exec(pathname);
   return match ? match[1] : null;
 }
 

@@ -73,7 +73,7 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
     callers: productionCallers(name, scannedCallers),
     criticality: /ensure|auth|account|delivery|payment|stripe|dispatch|tracking|complete|settle|notification|message|online|offline/i.test(name) ? "P0/P1-review-required" : "review-required",
     authRequired: /context\.auth|verifyIdToken|require[A-Z]/.test(source),
-    appCheckRequired: name === "adminResolveAccess" || /app.?check|enforceAppCheck/i.test(source),
+    appCheckRequired: ["adminResolveAccess", "adminSaveGiftRequestEditor"].includes(name) || /app.?check|enforceAppCheck/i.test(source),
     secrets,
     firestoreCollections: collections,
     externalProviders: /stripe/i.test(source) ? ["Stripe"] : [],

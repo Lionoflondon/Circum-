@@ -54,7 +54,34 @@ test("Admin route accepts both direct and callable-compatible paths", () => {
   assert.equal(routeName("/v1/callable/adminResolveAccess"), "adminResolveAccess");
   assert.equal(routeName("/adminQueryPage"), "adminQueryPage");
   assert.equal(routeName("/v1/callable/adminQueryPage"), "adminQueryPage");
+  assert.equal(routeName("/adminSaveGiftRequestEditor"), "adminSaveGiftRequestEditor");
+  assert.equal(routeName("/v1/callable/adminSaveGiftRequestEditor"), "adminSaveGiftRequestEditor");
   assert.equal(routeName("/admin-query-page"), null);
+});
+
+test("Gift editor route forwards only the authenticated callable payload", async () => {
+  const calls = [];
+  await withServer((route) => ({
+    verifyIdToken: async () => ({uid: "admin-uid", role: "support"}),
+    verifyAppCheck: async () => ({appId: "circum-admin"}),
+    handler: async (data, context) => {
+      calls.push({route, data, uid: context.auth.uid, appId: context.app.appId});
+      return {ok: true};
+    },
+  }), async (base) => {
+    const response = await request(base, {
+      path: "/adminSaveGiftRequestEditor",
+      body: JSON.stringify({data: {giftId: "gift-1", collection: "giftRequests", patch: {status: "approved"}, reason: "fixture"}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true}});
+  });
+  assert.deepEqual(calls, [{
+    route: "adminSaveGiftRequestEditor",
+    data: {giftId: "gift-1", collection: "giftRequests", patch: {status: "approved"}, reason: "fixture"},
+    uid: "admin-uid",
+    appId: "circum-admin",
+  }]);
 });
 
 test("Admin query route forwards the authorized request to the server query handler", async () => {

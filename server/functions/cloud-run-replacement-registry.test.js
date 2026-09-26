@@ -42,3 +42,23 @@ test("Admin collection read inventory points at the Cloud Run query route", () =
   ]);
   assert.deepEqual(productionCallers("adminQueryPage", ["old-managed-caller.dart"]), ["lib/app/admin/admin_phase1_shell.dart"]);
 });
+
+test("Gift editor inventory points at the authenticated Cloud Run mutation route", () => {
+  const files = ["server/functions/cloud-run-admin-access.js", "server/functions/cloud-run-admin-access.test.js"];
+  const source = new Map(files.map((file) => [file, "adminSaveGiftRequestEditor"]));
+  assert.deepEqual(findCloudRunReplacements("adminSaveGiftRequestEditor", files, source), [
+    "cloud-run-admin-access.js",
+    "cloud-run-admin-access.test.js",
+  ]);
+  assert.deepEqual(productionCallers("adminSaveGiftRequestEditor", ["old-managed-caller.dart"]), ["lib/app/admin/admin_phase1_shell.dart"]);
+});
+
+test("Normal Stripe webhook inventory points at the single shared Cloud Run processor", () => {
+  const files = ["server/functions/cloud-run-stripe-server.js", "server/functions/cloud-run-stripe-server.test.js"];
+  const source = new Map(files.map((file) => [file, "POST /stripe/webhook"]));
+  assert.deepEqual(findCloudRunReplacements("StripeWebhook", files, source), [
+    "cloud-run-stripe-server.js",
+    "cloud-run-stripe-server.test.js",
+  ]);
+  assert.deepEqual(productionCallers("StripeWebhook", ["legacy-doc.md"]), ["server/functions/cloud-run-stripe-server.js"]);
+});
