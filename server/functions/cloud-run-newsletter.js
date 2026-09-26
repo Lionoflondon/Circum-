@@ -143,7 +143,15 @@ function createServer(options = {}) {
         if (!dependencies) dependencies = dependenciesFactory();
         const appCheckToken = String(request.headers["x-firebase-appcheck"] || "");
         if (!appCheckToken) throw Object.assign(new Error("Circum security verification is required."), {code: "failed-precondition"});
-        const app = await dependencies.verifyAppCheck(appCheckToken);
+        let app;
+        try {
+          app = await dependencies.verifyAppCheck(appCheckToken);
+        } catch (_) {
+          // The Firebase App Check verifier uses provider-specific error codes
+          // that are not callable error codes. Normalize every verification
+          // failure to the same fail-closed client response.
+          throw Object.assign(new Error("Circum security verification is required."), {code: "failed-precondition"});
+        }
         const context = {app: {appId: app.appId || app.sub}, rawRequest: {ip: requestIp(request)}};
         if (ADMIN.has(name)) {
           const idToken = bearer(request);
