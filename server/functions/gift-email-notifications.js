@@ -10,10 +10,8 @@ function normalizeEmail(value) {
 }
 
 function giftDeliveryEmail({giftId, gift = {}}) {
-  const token = text(gift.giftStoryAccessToken);
-  if (!token || gift.giftStoryUnlocked !== true || text(gift.giftStoryStatus) !== "unlocked") return null;
-  return templates.giftDelivered({recipientName: gift.recipientName,
-    storyUrl: `https://circumuk.com/story/${encodeURIComponent(token)}`});
+  if (text(gift.status || gift.giftStatus) !== "delivered") return null;
+  return templates.giftDelivered({recipientName: gift.recipientName});
 }
 
 function emailNotificationId(giftId, eventType) {
@@ -36,15 +34,15 @@ async function queueGiftDeliveryEmail({giftId, gift = {}, db = getFirestore()}) 
     eventType: "gift_delivered",
     sourceCollection: "giftRequests",
     sourceDocumentId: giftId,
-    sourceRequiredStatus: "delivered",
-    senderCategory: "gifts",
-    recipientRole: "sender",
-    tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
-    extra: {
-      sourceRecipientField: "senderEmail",
-      sourceRequiredFields: {giftStoryStatus: "unlocked", giftStoryUnlocked: true},
-      sourceStoryRole: "sender",
-      giftId: text(giftId),
+      sourceRequiredStatus: "delivered",
+      senderCategory: "gifts",
+      recipientRole: "sender",
+      tags: [{name: "product", value: "gifts"}, {name: "event", value: "gift_delivered"}],
+      extra: {
+        sourceRecipientField: "senderEmail",
+        policyVersion: "gifts-communications-v1",
+        communicationClassification: "sender_email",
+        giftId: text(giftId),
       recipientId: senderId,
       preheader: message.preheader,
       heading: message.heading,

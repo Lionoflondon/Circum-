@@ -4,7 +4,7 @@ Gifts sends these essential service emails:
 
 - Stripe sends the payment receipt to the authenticated Sender email address for every card payment, including Checkout and native PaymentIntent flows. For split payments, Stripe's receipt covers the Stripe-funded remainder; Roth-only Gifts do not create a Stripe payment or receipt.
 - Circum sends one Gift confirmation to the Sender for a finalized Roth-only or split-funded payment. It waits for the paid Gift record and completed Roth debit. It does not duplicate the Stripe card receipt.
-- Circum sends one delivery confirmation to the Sender after delivery and Story unlock. That email includes the Sender's secure Story link.
+- Circum sends one delivery confirmation to the Sender after authoritative Gift delivery. It uses the canonical Gifts route; the separate Story-ready messages carry the secure Sender and Recipient Story links after Story unlock.
 - Circum sends separate Story-ready messages with role-specific secure links to the Sender and Recipient after Story unlock. There is no separate Recipient delivery email.
 
 Each Circum email is created in the canonical Firestore `emailQueue` with a deterministic Gift/event identity. The queue is private, prevents duplicate logical emails, and retries transient provider failures. The consumer rechecks the source Gift, recipient and Story token before send. It never includes a delivery address, Gift value in Recipient mail, or raw private Story content.

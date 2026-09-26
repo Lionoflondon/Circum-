@@ -80,6 +80,7 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 | updated | `prescriptionPickups/{pickupId}` | `circum-tx-email-healthplus-updated-v1` |
 | updated | `giftRequests/{giftId}` | `circum-tx-email-gift-updated-v1` |
 | created | `giftRequests/{giftId}` | `circum-tx-email-gift-created-v1` |
+| updated | `giftPaymentDrafts/{giftDraftId}` | `circum-tx-email-gift-payment-problem-updated-v1` |
 
 The Gift-created trigger is required for Roth-only and split-funded payment confirmation because finalization creates the paid Gift in one transaction. Install it only after the merged consumer revision is ready:
 

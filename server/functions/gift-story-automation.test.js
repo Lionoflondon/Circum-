@@ -54,7 +54,7 @@ test("20 concurrent Story unlocks reuse one sender and recipient token and one s
   assert.equal(values.get("giftRequests/g-1").giftStoryAccessToken, first.token);
   assert.equal([...values.keys()].filter((key) => key.startsWith("giftStoryAccessTokens/")).length, 2);
   assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
-  assert.match(values.get("emailQueue/gift_g-1_gift_delivered").ctaUrl, /\/story\//);
+  assert.equal(values.get("emailQueue/gift_g-1_gift_delivered").ctaUrl, "https://circumuk.com/?app=gifts");
   values.delete("emailQueue/gift_story_g-1_sender");
   failSenderEmailCreate = true;
   const partial = await story.unlockGiftStory(db, snapshot, "d-1");

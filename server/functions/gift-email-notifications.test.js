@@ -11,14 +11,14 @@ test("delivery email is clear and excludes private delivery details", () => {
       senderEmail: "sender@example.com",
       deliveryAddress: "1 Private Street, London",
       deliveredAt: "2026-09-22T13:00:00.000Z",
-      giftStoryUnlocked: true,
-      giftStoryStatus: "unlocked",
-      giftStoryAccessToken: "privateSenderToken",
+      status: "delivered",
+      giftStoryUnlocked: false,
+      giftStoryStatus: "locked",
     },
   });
   assert.equal(message.subject, "Your CIRCUM Gift has been delivered");
   assert.match(message.text, /Alex & Sam/);
-  assert.match(message.text, /View the Gift Story: https:\/\/circumuk\.com\/story\/privateSenderToken/);
+  assert.match(message.text, /Open CIRCUM: https:\/\/circumuk\.com\/\?app=gifts/);
   assert.doesNotMatch(message.text, /Private Street/);
   assert.match(message.html, /Alex &amp; Sam/);
   assert.doesNotMatch(message.html, /Private Street/);
@@ -53,15 +53,15 @@ test("gift delivery publisher uses the canonical emailQueue identity", async () 
   assert.equal(writes[0].value.sourceCollection, "giftRequests");
   assert.equal(writes[0].value.sourceRequiredStatus, "delivered");
   assert.equal(writes[0].value.sourceRecipientField, "senderEmail");
-  assert.equal(writes[0].value.sourceStoryRole, "sender");
-  assert.equal(writes[0].value.ctaUrl, "https://circumuk.com/story/privateSenderToken");
+  assert.equal(writes[0].value.sourceStoryRole, undefined);
+  assert.equal(writes[0].value.ctaUrl, "https://circumuk.com/?app=gifts");
   assert.equal(writes[0].value.senderCategory, "gifts");
   assert.equal(writes[0].value.to, "sender@example.com");
 });
 
-test("delivered email waits for Story unlock", async () => {
-  const db = {collection: () => {
-throw new Error("email must not queue");
-}};
-  assert.equal(await emails.queueGiftDeliveryEmail({db, giftId: "gift-1", gift: {status: "delivered", senderEmail: "sender@example.test"}}), null);
+test("delivered email does not wait for Story unlock", async () => {
+  const writes = [];
+  const db = {collection: (name) => ({doc: (id) => ({create: async (value) => writes.push({name, id, value})})})};
+  assert.equal(await emails.queueGiftDeliveryEmail({db, giftId: "gift-1", gift: {status: "delivered", senderEmail: "sender@example.test"}}), "gift_gift-1_gift_delivered");
+  assert.equal(writes.length, 1);
 });

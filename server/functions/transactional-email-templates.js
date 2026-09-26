@@ -291,6 +291,30 @@ function giftPaymentConfirmed(options = {}) {
   return copy;
 }
 
+function giftPaymentProblem(options = {}) {
+  const copy = gifts.paymentProblem(options);
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
+function giftApproved(options = {}) {
+  const copy = gifts.approved(options);
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
+function giftRejected(options = {}) {
+  const copy = gifts.rejected(options);
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
+function giftReadyForDelivery(options = {}) {
+  const copy = gifts.readyForDelivery(options);
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
 function giftDelivered(options = {}) {
   const copy = gifts.delivered(options);
   assertCustomerFacingContent(copy);
@@ -328,8 +352,12 @@ module.exports = {
   businessInvoicePaid,
   cancellationSettled,
   deliveryCompleted,
+  giftApproved,
   giftDelivered,
   giftPaymentConfirmed,
+  giftPaymentProblem,
+  giftReadyForDelivery,
+  giftRejected,
   giftStory,
   healthUpdate,
   referralReward,

@@ -8,6 +8,7 @@ const {decodeEventarcPayload} = require("./cloud-run-notification-events");
 const {normalizeEmail} = require("./email-queue");
 const emailPublishers = require("./transactional-email-publishers");
 const emailTemplates = require("./transactional-email-templates");
+const giftPolicy = require("./gift-communications-policy");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
 const ACCEPTED_EVENT_TYPES = new Set([EVENT_TYPE, emailPublishers.UPDATED]);
@@ -195,13 +196,14 @@ function sourceState(data = {}) {
 
 async function revalidateSource(db, record) {
   const eventType = text(record.eventType || record.type).toLowerCase();
-  const legacyGiftDelivery = eventType === "gift_delivered" && !text(record.sourceRecipientField);
+  const legacyGiftDelivery = eventType === "gift_delivered" &&
+    (text(record.sourceStoryRole) || /\/story\//.test(text(record.ctaUrl)) || !text(record.communicationClassification));
   if (eventType === "gift_story_ready" &&
       (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField) ||
         !text(record.sourceStoryRole || record.recipientRole))) {
     return {status: "suppressed", reason: "source_metadata_missing"};
   }
-  if ((eventType === "gift_delivered" && !text(record.sourceRequiredStatus)) ||
+  if ((eventType.startsWith("gift_") && eventType !== "gift_story_ready" && !text(record.sourceRequiredStatus)) ||
       (eventType === "gift_payment_confirmed" &&
         (!text(record.sourceRequiredStatus) || !text(record.sourceRecipientField)))) {
     return {status: "suppressed", reason: "source_metadata_missing"};
@@ -234,22 +236,56 @@ async function revalidateSource(db, record) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }
+  if (eventType === giftPolicy.EVENT.PAYMENT_PROBLEM) {
+    const sourceStateValue = text(sourceData.paymentStatus || sourceData.paymentState || sourceData.status).toLowerCase();
+    if (!source.collection.match(/^gift(PaymentDrafts|Requests)$/) || !giftPolicy.isPaymentProblemState(sourceData) ||
+        giftPolicy.PAYMENT_PROBLEM_STATES.has(sourceStateValue) === false ||
+        text(record.sourcePaymentProblemState).toLowerCase() !== sourceStateValue ||
+        sourceData.chargeSucceeded === true || sourceData.paymentSucceeded === true ||
+        Number(sourceData.amountReceivedPence ?? sourceData.amount_received ?? sourceData.amountReceived ?? 0) > 0) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
+  if ([giftPolicy.EVENT.APPROVED, giftPolicy.EVENT.REJECTED, giftPolicy.EVENT.READY].includes(eventType)) {
+    const expected = {
+      [giftPolicy.EVENT.APPROVED]: "approved",
+      [giftPolicy.EVENT.REJECTED]: "rejected",
+      [giftPolicy.EVENT.READY]: "ready_for_gift_delivery",
+    }[eventType];
+    if (source.collection !== "giftRequests" || text(sourceData.status || sourceData.giftStatus).toLowerCase() !== expected) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
   if (eventType === "gift_delivered" || eventType === "gift_story_ready") {
     const role = eventType === "gift_delivered" ? "sender" : text(record.sourceStoryRole || record.recipientRole);
     const token = role === "recipient" ? text(sourceData.recipientStoryToken) : text(sourceData.giftStoryAccessToken);
     const expectedUrl = token ? `https://circumuk.com/story/${encodeURIComponent(token)}` : "";
-    if (eventType === "gift_delivered" && text(sourceData.status || sourceData.giftStatus) === "delivered" &&
+    const newDeliveryEmail = eventType === "gift_delivered" && !legacyGiftDelivery;
+    const validStoryEmail = eventType === "gift_story_ready" && source.collection === "giftRequests" &&
+      ["sender", "recipient"].includes(role) && text(record.recipientRole) === role &&
+      (role === "sender" ? text(record.sourceRecipientField) === "senderEmail" :
+        ["recipientEmail", "recipientContact"].includes(text(record.sourceRecipientField))) &&
+      text(sourceData.status || sourceData.giftStatus) === "delivered" &&
+      sourceData.giftStoryUnlocked === true && text(sourceData.giftStoryStatus) === "unlocked" &&
+      Boolean(expectedUrl) && text(record.ctaUrl) === expectedUrl && millis(sourceData.giftStoryAccessExpiresAt) > Date.now();
+    const validLegacyDelivery = eventType === "gift_delivered" && legacyGiftDelivery && source.collection === "giftRequests" &&
+      role === "sender" && text(record.recipientRole) === "sender" && (!text(record.sourceRecipientField) || text(record.sourceRecipientField) === "senderEmail") &&
+      text(sourceData.status || sourceData.giftStatus) === "delivered" && sourceData.giftStoryUnlocked === true &&
+      text(sourceData.giftStoryStatus) === "unlocked" && Boolean(expectedUrl) && text(record.ctaUrl) === expectedUrl &&
+      millis(sourceData.giftStoryAccessExpiresAt) > Date.now();
+    const unmarkedLegacyDelivery = eventType === "gift_delivered" && legacyGiftDelivery && source.collection === "giftRequests" &&
+      !text(record.sourceRecipientField) && text(record.recipientRole) === "sender" &&
+      text(sourceData.status || sourceData.giftStatus) === "delivered" && sourceData.giftStoryUnlocked === true &&
+      text(sourceData.giftStoryStatus) === "unlocked" && Boolean(expectedUrl) && millis(sourceData.giftStoryAccessExpiresAt) > Date.now();
+    if (eventType === "gift_delivered" && legacyGiftDelivery && !text(record.sourceRecipientField) &&
+        text(sourceData.status || sourceData.giftStatus) === "delivered" &&
         (sourceData.giftStoryUnlocked !== true || text(sourceData.giftStoryStatus) !== "unlocked" || !token)) {
       return {status: "not_ready", reason: "gift_story_not_ready"};
     }
-    if (source.collection !== "giftRequests" || !["sender", "recipient"].includes(role) ||
-        text(record.recipientRole) !== role ||
-        !(role === "sender" ? (legacyGiftDelivery || text(record.sourceRecipientField) === "senderEmail") :
-          ["recipientEmail", "recipientContact"].includes(text(record.sourceRecipientField))) ||
-        text(sourceData.status || sourceData.giftStatus) !== "delivered" ||
-        sourceData.giftStoryUnlocked !== true || text(sourceData.giftStoryStatus) !== "unlocked" ||
-        !expectedUrl || (!legacyGiftDelivery && text(record.ctaUrl) !== expectedUrl) ||
-        millis(sourceData.giftStoryAccessExpiresAt) <= Date.now()) {
+    const validNewDelivery = newDeliveryEmail && source.collection === "giftRequests" && role === "sender" &&
+      text(record.recipientRole) === "sender" && text(record.sourceRecipientField) === "senderEmail" &&
+      text(sourceData.status || sourceData.giftStatus) === "delivered";
+    if (!validStoryEmail && !validNewDelivery && !validLegacyDelivery && !unmarkedLegacyDelivery) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }
@@ -369,9 +405,13 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     await updateQueue(db, emailId, {status: "suppressed", failureReason: source.reason, leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
     return {status: "suppressed", reason: source.reason};
   }
+  const deliveryUsesStory = text(record.sourceStoryRole) || /\/story\//.test(text(record.ctaUrl)) ||
+    (text(record.eventType || record.type).toLowerCase() === "gift_delivered" && source.source &&
+      source.source.giftStoryUnlocked === true && text(source.source.giftStoryStatus) === "unlocked" &&
+      Boolean(source.source.giftStoryAccessToken));
   const effectiveRecord = text(record.eventType || record.type).toLowerCase() === "gift_delivered" ?
     {...record, ...emailTemplates.giftDelivered({recipientName: source.source.recipientName,
-      storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`})} : record;
+      ...(deliveryUsesStory ? {storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`} : {})})} : record;
   let providerResult;
   try {
     providerResult = await sendResend({record: effectiveRecord, to: recipient.email, fetchImpl, apiKey, from});

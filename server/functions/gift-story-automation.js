@@ -10,6 +10,7 @@ const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
 const deviceTokenAuthority = require("./device-token-authority");
 const transactionalEmailTemplates = require("./transactional-email-templates");
+const giftCommunicationsPolicy = require("./gift-communications-policy");
 const {queueGiftDeliveryEmail} = require("./gift-email-notifications");
 const {
   getGiftStoryOwner,
@@ -435,7 +436,7 @@ async function findGift(db, delivery) {
   return query.empty ? null : query.docs[0];
 }
 
-async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = ""}) {
+async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = "", sourceRecipientField = "", eventAt = 0}) {
   if (!email || !email.includes("@") || !/^[A-Za-z0-9_-]{32,}$/.test(text(token))) return false;
   // One logical story message is created once; publisher replay never resets a
   // sent/terminal queue item to queued.
@@ -463,6 +464,9 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
     sourceDocumentId: giftId,
     sourceRequiredStatus: "unlocked",
     sourceStoryRole: role,
+    policyVersion: giftCommunicationsPolicy.POLICY_VERSION,
+    communicationClassification: "sender_and_recipient_email",
+    authoritativeEventAt: eventAt || null,
     ...(sourceRecipientField ? {sourceRecipientField} : {}),
     status: "queued",
     maxAttempts: 5,
@@ -720,6 +724,7 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       status: "delivered",
       giftStatus: "delivered",
       deliveryId,
+      deliveredAt: gift.deliveredAt || FieldValue.serverTimestamp(),
       giftStoryEnabled: true,
       giftStoryUnlocked: true,
       giftStoryStatus: "unlocked",
@@ -797,11 +802,11 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryUnlocked: true, giftStoryStatus: "unlocked", giftStoryAccessToken: token}, db}),
     }),
     runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `sender_story_email${retryId ? `_retry_${retryId}` : ""}`, verify: emailQueueExists(`gift_story_${giftId}_sender${retryId ? `_${retryId}` : ""}`, storyNotificationId(giftId, "email_sender", retryId)), execute: () =>
-      queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail"}),
+      queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId), sourceRecipientField: "senderEmail", eventAt: giftCommunicationsPolicy.authoritativeEventAt(gift, giftCommunicationsPolicy.EVENT.STORY_READY).millis}),
     }),
     runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `recipient_story_email${retryId ? `_retry_${retryId}` : ""}`, verify: emailQueueExists(`gift_story_${giftId}_recipient${retryId ? `_${retryId}` : ""}`, storyNotificationId(giftId, "email_recipient", retryId)), execute: () =>
       queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel,
-        sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact"}),
+        sourceRecipientField: normalizeEmail(gift.recipientEmail) ? "recipientEmail" : "recipientContact", eventAt: giftCommunicationsPolicy.authoritativeEventAt(gift, giftCommunicationsPolicy.EVENT.STORY_READY).millis}),
     }),
     runGiftStoryEffect(db, {giftId, deliveryId, source, effectId: `recipient_phone_${recipientPhoneChannel}${retryId ? `_retry_${retryId}` : ""}`, verify: async () => !phone || (await effectOutputsExist(phoneQueue, phoneQueueId, phoneNotificationId))(), execute: () =>
       queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),

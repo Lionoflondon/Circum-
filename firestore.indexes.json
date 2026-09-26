@@ -1,6 +1,48 @@
 {
   "indexes": [
     {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "paidAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "approvedAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "rejectedAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "readyForDeliveryAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "deliveredAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "giftStoryAvailableAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftPaymentDrafts",
+      "queryScope": "COLLECTION",
+      "fields": [{"fieldPath": "paymentProblemAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "deliveryRequests",
       "queryScope": "COLLECTION",
       "fields": [
