@@ -67,14 +67,14 @@ async function linkedGift(db, deliveryId, delivery) {
   let snapshot;
   if (directId) {
     snapshot = await db.collection("giftRequests").doc(directId).get();
-  } else {
+  }
+  if (!snapshot || !snapshot.exists) {
     const matches = await db.collection("giftRequests").where("deliveryId", "==", deliveryId).limit(1).get();
     snapshot = matches.docs[0];
   }
   if (!snapshot || !snapshot.exists) return null;
   const gift = snapshot.data() || {};
   if (text(gift.deliveryId) && text(gift.deliveryId) !== deliveryId) return null;
-  if (directId && snapshot.id !== directId) return null;
   return snapshot;
 }
 

@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {Timestamp} = require("firebase-admin/firestore");
-const {windowBounds, reconcileGiftStoryWindow} = require("./gift-story-gap-reconciliation");
+const {windowBounds, linkedGift, reconcileGiftStoryWindow} = require("./gift-story-gap-reconciliation");
 
 const START = "2026-09-26T10:00:00Z";
 const END = "2026-09-26T10:10:00Z";
@@ -47,6 +47,9 @@ function fakeDb(rows = [], gifts = {}) {
   };
   return {queries, collection: (name) => name === "deliveryRequests" ? deliveryCollection : {
     doc: (id) => ({get: async () => ({id, exists: Boolean(gifts[id]), data: () => gifts[id]})}),
+    where: (_field, _op, deliveryId) => ({limit: () => ({get: async () => ({docs: Object.entries(gifts)
+        .filter(([, gift]) => gift.deliveryId === deliveryId)
+        .map(([id, gift]) => ({id, exists: true, data: () => gift}))})})}),
   }};
 }
 
@@ -152,6 +155,15 @@ test("non-Gift and non-final records are ignored while malformed Gift links fail
   assert.equal(result.ignored, 2);
   assert.equal(result.errors, 1);
   assert.equal(result.processed, 0);
+});
+
+test("a stale direct Gift ID falls back to the canonical delivery-link lookup", async () => {
+  const fallback = {id: "actual_gift", exists: true, data: () => ({deliveryId: "d1"})};
+  const db = {collection: () => ({
+    doc: () => ({get: async () => ({exists: false})}),
+    where: () => ({limit: () => ({get: async () => ({docs: [fallback]})})}),
+  })};
+  assert.equal((await linkedGift(db, "d1", {giftOrderId: "stale_id"})).id, "actual_gift");
 });
 
 test("concurrent reconciliation invocations reuse effective Story claims", async () => {
