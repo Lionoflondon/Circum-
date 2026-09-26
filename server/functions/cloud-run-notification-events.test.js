@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
+const {fixtureDb, isFixtureDeliveryId} = require("./gift-story-fixture-db");
 const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce} = require("./cloud-run-notification-events");
 const {processDeliveryCreatedOnce} = require("./platform-notifications");
 
@@ -42,10 +43,27 @@ test("business claim is stable per handler and delivery", () => {
   assert.notEqual(claimId("delivery_created", "d1"), claimId("gift_delivery_completed", "d1"));
 });
 
+test("fixture persistence maps every downstream collection below the isolated event document", () => {
+  const ref = (path) => ({path, collection: (name) => collection(`${path}/${name}`)});
+  const collection = (path) => ({path, doc: (id) => ref(`${path}/${id}`)});
+  const rawDb = {collection, runTransaction: async () => {}, batch: () => ({})};
+  assert.equal(isFixtureDeliveryId("__codex_delivery_1"), true);
+  assert.equal(isFixtureDeliveryId("customer-delivery-1"), false);
+  assert.throws(() => fixtureDb(rawDb, "customer-delivery-1"), /invalid_fixture_delivery_id/);
+  const db = fixtureDb(rawDb, "__codex_delivery_1");
+  for (const name of ["giftRequests", "giftStoryAccessTokens", "giftStoryCompletionEffects", "eventHandlerClaims",
+    "emailQueue", "notifications", "storyNotifications", "whatsappQueue", "imessageQueue", "giftStoryAnalytics",
+    "giftStoryCompletionAudit", "users", "chats", "dispatchInspections", "deliveryRequests"]) {
+    assert.equal(db.collection(name).path, `giftStoryRuntimeFixtures/__codex_delivery_1/state/${name}/records`);
+  }
+  assert.equal(db.collection("giftStoryRuntimeFixtures").path, "giftStoryRuntimeFixtures");
+});
+
 function claimDb(initial = {}) {
   let data = {...initial};
   let transactionQueue = Promise.resolve();
   const ref = {
+    get: async () => ({exists: Object.keys(data).length > 0, data: () => data}),
     set: async (value) => {
       data = {...data, ...value};
     },
@@ -99,7 +117,7 @@ test("expired processing claim can be reclaimed by a retry with a new event id",
 test("active processing claim rejects a competing event id", async () => {
   const db = claimDb({status: "processing", eventId: "active-event", leaseExpiresAt: {toMillis: () => Date.now() + 60000}});
   await assert.rejects(
-      processOnce({db, kind: "delivery_created", eventId: "other-event", deliveryId: "d1", run: async () => {}}),
+      processOnce({db, kind: "delivery_created", eventId: "other-event", deliveryId: "d1", run: async () => {}, waitForBusyMs: 0}),
       (error) => error.statusCode === 503,
   );
 });
@@ -133,7 +151,7 @@ test("retry after the first durable effect skips it and finishes only missing ef
   assert.equal(second, 1);
 });
 
-test("20 concurrent copies produce one logical effect", async () => {
+test("20 concurrent copies produce one logical effect without amplifying retries", async () => {
   const db = claimDb();
   let effects = 0;
   const results = await Promise.allSettled(Array.from({length: 20}, (_, index) => processOnce({
@@ -146,7 +164,8 @@ test("20 concurrent copies produce one logical effect", async () => {
   })));
   assert.equal(effects, 1);
   assert.equal(results.filter((result) => result.status === "fulfilled" && result.value.status === "completed").length, 1);
-  assert.equal(results.filter((result) => result.status === "rejected" && result.reason.statusCode === 503).length, 19);
+  assert.equal(results.filter((result) => result.status === "fulfilled" && result.value.status === "duplicate").length, 19);
+  assert.equal(results.filter((result) => result.status === "rejected").length, 0);
 });
 
 test("a stale worker cannot complete after another worker reclaims the lease", async () => {
@@ -311,7 +330,8 @@ test("Gift completion fixture collection is bounded and does not change producti
   const previous = process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE;
   process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE = "giftStoryRuntimeFixtures";
   let received;
-  const server = createServer({kind: "gift_delivery_completed", dbFactory: () => ({unused: true}),
+  const fixtureRawDb = {collection: () => ({doc: () => ({})}), runTransaction: async () => {}, batch: () => ({})};
+  const server = createServer({kind: "gift_delivery_completed", dbFactory: () => fixtureRawDb,
     processOnce: async (input) => {
       received = input;
       return {status: "completed"};
@@ -319,7 +339,7 @@ test("Gift completion fixture collection is bounded and does not change producti
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   try {
-    const name = "projects/circum-2797c/databases/(default)/documents/giftStoryRuntimeFixtures/fixture-1";
+    const name = "projects/circum-2797c/databases/(default)/documents/giftStoryRuntimeFixtures/__codex_fixture_1";
     const payload = DocumentEventData.encode({
       value: {name, fields: {status: {stringValue: "completed"}, serviceType: {stringValue: "GIFTS"}}},
       oldValue: {name, fields: {status: {stringValue: "in_transit"}, serviceType: {stringValue: "GIFTS"}}},
@@ -330,7 +350,8 @@ test("Gift completion fixture collection is bounded and does not change producti
       body: pubsubPushBody(payload),
     });
     assert.equal(response.status, 200);
-    assert.equal(received.deliveryId, "fixture-1");
+    assert.equal(received.deliveryId, "__codex_fixture_1");
+    assert.equal(received.db.fixtureMode, true);
     assert.equal(received.after.status, "completed");
   } finally {
     server.close();

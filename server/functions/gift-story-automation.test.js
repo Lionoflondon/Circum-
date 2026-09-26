@@ -65,6 +65,14 @@ test("20 concurrent Story unlocks reuse one sender and recipient token and one s
   assert.equal(recovered.token, first.token);
   assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "queued");
   assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
+  values.delete("emailQueue/gift_story_g-1_sender");
+  failSenderEmailCreate = true;
+  await assert.rejects(story.unlockGiftStory(db, snapshot, "d-1", {source: "cloud_run"}),
+      /gift_story_downstream_retry_required/);
+  assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "retry_required");
+  await story.unlockGiftStory(db, snapshot, "d-1", {source: "cloud_run"});
+  assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "queued");
+  assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
 });
 
 test("admin recovery requires a completed linked Gift delivery and keeps the original Story tokens", async () => {

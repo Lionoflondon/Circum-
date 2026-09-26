@@ -143,8 +143,8 @@ async function participantDisplayName(uid, role, context) {
   return role === "rider" ? "Rider" : "Sender";
 }
 
-async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = "", retryExisting = false}) {
-  const db = getFirestore();
+async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = "", retryExisting = false,
+  db = getFirestore(), suppressPush = false}) {
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
   const normalizedDedupeKey = clean(dedupeKey);
@@ -193,6 +193,10 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     }
   } else {
     await ref.set(payload);
+  }
+  if (suppressPush) {
+    await ref.set({pushDeliveryStatus: "skipped", failureReason: "fixture_only", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    return ref.id;
   }
   const token = await deviceTokenAuthority.ownedProfileToken(recipientId, recipientRole);
   if (!token) {

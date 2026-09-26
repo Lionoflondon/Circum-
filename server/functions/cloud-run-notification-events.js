@@ -5,10 +5,10 @@ const http = require("node:http");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {decodeEventData} = require("./rider-policy-firestore-event");
+const {FIXTURE_COLLECTION, fixtureDb} = require("./gift-story-fixture-db");
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const CLAIM_LEASE_MS = 5 * 60 * 1000;
-const FIXTURE_EVENT_COLLECTION = "giftStoryRuntimeFixtures";
 const handlers = {
   delivery_created: {
     eventType: "google.cloud.firestore.document.v1.created",
@@ -30,7 +30,7 @@ const handlers = {
         throw Object.assign(new Error("gift_story_owner_transitioning"), {statusCode: 503});
       }
       const ref = db.collection(eventCollection("gift_delivery_completed")).doc(deliveryId);
-      return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run"});
+      return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run", db});
     },
   },
 };
@@ -42,8 +42,8 @@ function json(res, status, body) {
 
 function eventCollection(kind) {
   if (kind === "gift_delivery_completed" &&
-      process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE === FIXTURE_EVENT_COLLECTION) {
-    return FIXTURE_EVENT_COLLECTION;
+      process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE === FIXTURE_COLLECTION) {
+    return FIXTURE_COLLECTION;
   }
   return "deliveryRequests";
 }
@@ -57,6 +57,18 @@ function deliveryIdFromName(name, collection = "deliveryRequests") {
 
 function claimId(kind, deliveryId) {
   return Buffer.from(`${kind}:${deliveryId}`).toString("base64url");
+}
+
+async function waitForCompletedClaim(ref, maxWaitMs = 30000) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const snapshot = await ref.get();
+    const current = snapshot.exists ? snapshot.data() || {} : {};
+    if (current.status === "completed") return {status: "duplicate"};
+    if (current.status !== "processing") break;
+  }
+  throw Object.assign(new Error("event_already_processing"), {statusCode: 503});
 }
 
 function jsonValueToJs(value) {
@@ -136,14 +148,14 @@ function decodeEventarcPayload(body) {
   }
 }
 
-async function processOnce({db, kind, eventId, deliveryId, before, after, run}) {
+async function processOnce({db, kind, eventId, deliveryId, before, after, run, waitForBusyMs = 30000}) {
   const ref = db.collection("eventHandlerClaims").doc(claimId(kind, deliveryId));
   const lease = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const current = snap.exists ? snap.data() || {} : {};
     if (current.status === "completed") return "duplicate";
     const leaseUntil = current.leaseExpiresAt && typeof current.leaseExpiresAt.toMillis === "function" ? current.leaseExpiresAt.toMillis() : 0;
-    if (current.status === "processing" && current.eventId !== eventId && leaseUntil > Date.now()) return "busy";
+    if (current.status === "processing" && leaseUntil > Date.now()) return "busy";
     const now = Date.now();
     const leaseOwner = `${eventId}:${now}`;
     tx.set(ref, {
@@ -164,7 +176,7 @@ async function processOnce({db, kind, eventId, deliveryId, before, after, run}) 
     return {leaseOwner};
   });
   if (lease === "duplicate") return {status: "duplicate"};
-  if (lease === "busy") throw Object.assign(new Error("event_already_processing"), {statusCode: 503});
+  if (lease === "busy") return waitForCompletedClaim(ref, waitForBusyMs);
   const effects = {
     run: async (effectId, execute) => {
       const mayRun = await db.runTransaction(async (tx) => {
@@ -237,7 +249,9 @@ function createServer(options = {}) {
         if (!deliveryId) return json(res, 400, {error: "invalid_document"});
         if (definition.qualifies && !definition.qualifies(decoded)) return json(res, 200, {ok: true, status: "ignored"});
         if (!db) db = dbFactory();
-        const result = await once({db, kind, eventId, deliveryId, before: decoded.before, after: decoded.after, run: definition.run});
+        const eventDb = kind === "gift_delivery_completed" && eventCollection(kind) === FIXTURE_COLLECTION ?
+          fixtureDb(db, deliveryId) : db;
+        const result = await once({db: eventDb, kind, eventId, deliveryId, before: decoded.before, after: decoded.after, run: definition.run});
         return json(res, 200, {ok: true, ...result});
       } catch (error) {
         console.error("notification_event_failed", {handler: kind, eventId, reason: error && error.message || "unknown"});
