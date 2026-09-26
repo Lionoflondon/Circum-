@@ -137,7 +137,10 @@ function createServer(options = {}) {
         const result = await dependencies.handler(payload.data, {
           auth: {uid, token: decoded},
           app: {appId: app.appId || app.sub},
-          rawRequest: request,
+          // Canonical onRequest handlers read Firebase Auth from Authorization;
+          // the Cloud Run edge keeps IAM auth separate and verifies Firebase
+          // Auth from X-Firebase-Auth above.
+          rawRequest: {headers: {...request.headers, authorization: `Bearer ${firebaseIdToken}`}},
         });
         console.info(JSON.stringify({event: "qa_special_flow_completed", action, outcome: "success"}));
         return writeJson(response, 200, {result});

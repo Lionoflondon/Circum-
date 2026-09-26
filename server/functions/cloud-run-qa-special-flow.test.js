@@ -107,6 +107,7 @@ test("valid QA attestation preserves callable envelope and context", async () =>
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context.auth.uid, "qa-sender");
   assert.equal(calls[0].context.app.appId, "qa-web");
+  assert.equal(calls[0].context.rawRequest.headers.authorization, "Bearer firebase-auth-token");
 });
 
 test("ordinary identity is denied by the canonical QA handler", async () => {
