@@ -41,6 +41,11 @@ test("every transactional template has complete customer-facing structure", () =
     }).map((type) => templates.healthUpdate({type})),
     templates.giftPaymentConfirmed({recipientName: "Alex", rothAmount: 120}),
     templates.giftPaymentConfirmed({recipientName: "Alex", rothAmount: 25, split: true}),
+    templates.giftPaymentProblem({recipientName: "Alex", state: "failed"}),
+    templates.giftPaymentProblem({recipientName: "Alex", state: "unconfirmed"}),
+    templates.giftApproved({recipientName: "Alex"}),
+    templates.giftRejected({recipientName: "Alex"}),
+    templates.giftReadyForDelivery({recipientName: "Alex"}),
     templates.giftDelivered({recipientName: "Alex", storyUrl: "https://circumuk.com/story/senderToken"}),
     templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/token"}),
     templates.giftStory({role: "recipient", storyUrl: "https://circumuk.com/story/token"}),
@@ -94,6 +99,12 @@ test("all Gifts variants retain the approved wordmark, links and clean customer 
   const variants = [
     templates.giftPaymentConfirmed({recipientName: "Maya", rothAmount: 120}),
     templates.giftPaymentConfirmed({recipientName: "Maya", rothAmount: 25, split: true}),
+    templates.giftPaymentProblem({recipientName: "Maya", state: "failed"}),
+    templates.giftPaymentProblem({recipientName: "Maya", state: "unconfirmed"}),
+    templates.giftApproved({recipientName: "Maya"}),
+    templates.giftRejected({recipientName: "Maya"}),
+    templates.giftReadyForDelivery({recipientName: "Maya"}),
+    templates.giftDelivered({recipientName: "Maya"}),
     templates.giftDelivered({recipientName: "Maya", storyUrl: "https://circumuk.com/story/senderToken"}),
     templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/senderToken"}),
     templates.giftStory({role: "recipient", storyUrl: "https://circumuk.com/story/recipientToken"}),
@@ -114,11 +125,22 @@ test("all Gifts variants retain the approved wordmark, links and clean customer 
     assert.match(copy.text, /Download Circum on the App Store:/);
     assert.match(copy.text, /Get Circum on Google Play:/);
     assert.match(copy.text, /Follow Circum on X: https:\/\/x\.com\/circumuk/);
-    assert.doesNotMatch(customerFields(copy), /giftPaymentDrafts|gift_roth_|submitted_for_review|paymentStatus|gift_story_ready|Firestore|Eventarc|Cloud Run|queue IDs|provider IDs/i);
+    assert.doesNotMatch(customerFields(copy), /giftPaymentDrafts|gift_roth_|submitted_for_review|paymentStatus|gift_story_ready|payment-problem|Firestore|Eventarc|Cloud Run|queue IDs|provider IDs|refund/i);
     assert.doesNotMatch(customerFields(copy), /[a-z][a-z0-9]*_[a-z0-9_]+/i);
   }
   assert.match(variants[0].text, /120 Roth for your Gift to Maya/);
-  assert.match(variants[2].text, /This confirms the gift delivery/);
-  assert.match(variants[2].text, /View the Gift Story: https:\/\/circumuk\.com\/story\/senderToken/);
-  assert.doesNotMatch(variants[4].text, /Roth|£/);
+  const deliveredWithStory = variants.find((copy) => copy.templateId === "gift-delivered" && copy.ctaLabel === "View the Gift Story");
+  const recipientStory = variants.find((copy) => copy.templateId === "gift-story-recipient");
+  assert.match(deliveredWithStory.text, /This confirms the gift delivery/);
+  assert.match(deliveredWithStory.text, /View the Gift Story: https:\/\/circumuk\.com\/story\/senderToken/);
+  assert.doesNotMatch(recipientStory.text, /Roth|£/);
+});
+
+test("Gift payment-problem variants never make an unproven financial statement", () => {
+  for (const state of ["failed", "unconfirmed"]) {
+    const copy = templates.giftPaymentProblem({recipientName: "Maya", state});
+    assert.match(copy.text, /review your Gift|see the next step/i);
+    assert.doesNotMatch(copy.text, /weren't charged|not charged|refund|refunded|refund issued|charged again/i);
+    assert.equal(copy.ctaUrl, "https://circumuk.com/?app=gifts");
+  }
 });

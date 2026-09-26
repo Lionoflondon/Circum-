@@ -2,124 +2,136 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {reconcileGiftById, scanGiftRecoveryPage} = require("./gift-email-reconciliation");
+const {runForwardReconciliation, communicationId} = require("./gift-email-reconciliation");
+const policy = require("./gift-communications-policy");
+
+function millis(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  return new Date(value).getTime();
+}
 
 function fakeDb(initial = {}) {
   const values = new Map(Object.entries(initial));
-  const queryFor = (name, field, operator, expected, afterId = "", max = 50) => ({
-    orderBy: () => queryFor(name, field, operator, expected, afterId, max),
-    startAfter: (id) => queryFor(name, field, operator, expected, id, max),
-    limit: (count) => queryFor(name, field, operator, expected, afterId, count),
-    get: async () => ({docs: [...values.entries()].filter(([key, value]) => {
-      if (!key.startsWith(`${name}/`) || key.slice(name.length + 1) <= afterId) return false;
-      return operator === "in" ? expected.includes(value[field]) : value[field] === expected;
-    }).sort(([a], [b]) => a.localeCompare(b)).slice(0, max).map(([key, value]) => ({
-      id: key.slice(name.length + 1), data: () => value,
-    }))}),
-  });
-  return {
-    collection: (name) => ({where: (field, operator, expected) => queryFor(name, field, operator, expected), doc: (id) => ({
-      get: async () => ({exists: values.has(`${name}/${id}`), data: () => values.get(`${name}/${id}`)}),
+  function ref(collection, id) {
+    const key = `${collection}/${id}`;
+    return {
+      id,
+      get: async () => ({exists: values.has(key), data: () => values.get(key)}),
       create: async (value) => {
-        const key = `${name}/${id}`;
         if (values.has(key)) throw Object.assign(new Error("Already exists"), {code: 6});
-        values.set(key, value);
+        values.set(key, {...value});
       },
-      set: async (value, options = {}) => {
-        const key = `${name}/${id}`;
-        values.set(key, options.merge ? {...(values.get(key) || {}), ...value} : value);
+      set: async (value, options = {}) => values.set(key, options.merge ? {...(values.get(key) || {}), ...value} : {...value}),
+    };
+  }
+  function query(collection, clauses = [], orders = [], cursor = null, limit = 50) {
+    const api = {
+      where: (field, operator, value) => query(collection, [...clauses, {field: String(field), operator, value}], orders, cursor, limit),
+      orderBy: (field) => query(collection, clauses, [...orders, typeof field === "string" ? field : "__name__"], cursor, limit),
+      startAfter: (...valuesAfter) => query(collection, clauses, orders, valuesAfter, limit),
+      limit: (count) => query(collection, clauses, orders, cursor, count),
+      get: async () => {
+        let docs = [...values.entries()]
+            .filter(([key]) => key.startsWith(`${collection}/`))
+            .map(([key, value]) => ({id: key.slice(collection.length + 1), data: () => value}));
+        docs = docs.filter((doc) => clauses.every(({field, operator, value}) => {
+          const actual = millis(doc.data()[field]);
+          const expected = millis(value);
+          return operator === ">=" ? actual >= expected : operator === "<=" ? actual <= expected : actual === expected;
+        }));
+        docs.sort((a, b) => {
+          for (const field of orders) {
+            const left = field === "__name__" ? a.id : millis(a.data()[field]);
+            const right = field === "__name__" ? b.id : millis(b.data()[field]);
+            if (left < right) return -1;
+            if (left > right) return 1;
+          }
+          return a.id.localeCompare(b.id);
+        });
+        if (cursor && cursor.length) {
+          docs = docs.filter((doc) => {
+            const lastValue = millis(cursor[0]);
+            const docValue = millis(doc.data()[orders[0]]);
+            return docValue > lastValue || docValue === lastValue && doc.id > cursor[1];
+          });
+        }
+        return {docs: docs.slice(0, limit)};
       },
-    })}),
-    read: (name, id) => values.get(`${name}/${id}`),
-    count: (name) => [...values.keys()].filter((key) => key.startsWith(`${name}/`)).length,
+    };
+    return api;
+  }
+  return {
+    collection: (name) => ({doc: (id) => ref(name, id), where: (field, operator, value) => query(name, [{field: String(field), operator, value}])}),
+    read: (collection, id) => values.get(`${collection}/${id}`),
+    count: (collection) => [...values.keys()].filter((key) => key.startsWith(`${collection}/`)).length,
   };
 }
 
-test("targeted reconciliation detects and repairs missing payment communication without financial writes", async () => {
-  const db = fakeDb({
-    "giftRequests/g-1": {status: "submitted_for_review", paymentStatus: "paid", senderEmail: "sender@example.test",
-      recipientName: "Maya", walletContributionGbp: 120, remainingStripeAmountGbp: 0},
-    "walletTransactions/gift_roth_g-1": {status: "completed", amount: -120, referenceId: "g-1"},
-  });
-  const inspection = await reconcileGiftById({db, giftId: "g-1"});
-  assert.equal(inspection.missingPayment, true);
-  assert.equal(db.count("emailQueue"), 0);
-  const first = await reconcileGiftById({db, giftId: "g-1", repair: true});
-  assert.equal(first.paymentPublication, "queued");
-  const second = await reconcileGiftById({db, giftId: "g-1", repair: true});
-  assert.equal(second.missingPayment, false);
-  assert.equal(db.count("emailQueue"), 1);
-  assert.equal(db.read("walletTransactions", "gift_roth_g-1").amount, -120);
-});
+const EFFECTIVE = "2026-09-26T12:00:00.000Z";
+const END = "2026-09-27T00:00:00.000Z";
+const post = "2026-09-26T13:00:00.000Z";
 
-test("targeted reconciliation repairs missing Story messages with the original tokens", async () => {
+function gift(status, eventField, extra = {}) {
+  return {status, senderEmail: "sender@example.test", recipientEmail: "recipient@example.test", recipientName: "Maya",
+    [eventField]: post, ...extra};
+}
+
+test("forward reconciliation covers all seven required email milestones through the canonical publisher", async () => {
   const senderToken = "s".repeat(43);
   const recipientToken = "r".repeat(43);
-  const db = fakeDb({"giftRequests/g-2": {status: "delivered", giftStoryUnlocked: true,
-    giftStoryStatus: "unlocked", senderEmail: "sender@example.test", recipientEmail: "recipient@example.test",
-    giftStoryAccessToken: senderToken, recipientStoryToken: recipientToken, recipientName: "Maya"}});
-  const result = await reconcileGiftById({db, giftId: "g-2", repair: true});
-  assert.equal(result.storyPublication, "published");
+  const db = fakeDb({
+    "giftRequests/payment": gift("submitted_for_review", "paidAt", {paymentStatus: "paid", walletContributionGbp: 25, remainingStripeAmountGbp: 0}),
+    "walletTransactions/gift_roth_payment": {status: "completed", amount: -25, referenceId: "payment"},
+    "giftPaymentDrafts/problem": {paymentStatus: "failed", paymentProblemAt: post, senderEmail: "sender@example.test", recipientName: "Maya"},
+    "giftRequests/approved": gift("approved", "approvedAt"),
+    "giftRequests/rejected": gift("rejected", "rejectedAt"),
+    "giftRequests/ready": gift("ready_for_gift_delivery", "readyForDeliveryAt"),
+    "giftRequests/delivered": gift("delivered", "deliveredAt"),
+    "giftRequests/story": gift("delivered", "giftStoryAvailableAt", {giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+      giftStoryAccessToken: senderToken, recipientStoryToken: recipientToken}),
+  });
+  const result = await runForwardReconciliation({db, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(result.published, 7);
+  assert.equal(result.suppressed, 0);
+  assert.equal(result.errors, 0);
+  assert.equal(db.count("emailQueue"), 9);
+  assert.equal(db.read("emailQueue", "gift_approved_approved").recipientRole, "sender");
+});
+
+test("second reconciliation run is a zero-new-communication no-op and preserves deterministic IDs", async () => {
+  const giftData = gift("delivered", "giftStoryAvailableAt", {giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    giftStoryAccessToken: "s".repeat(43), recipientStoryToken: "r".repeat(43)});
+  const db = fakeDb({"giftRequests/g-1": giftData});
+  const first = await runForwardReconciliation({db, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  const second = await runForwardReconciliation({db, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(first.published, 1);
+  assert.equal(second.published, 0);
+  assert.equal(second.existing, 2);
   assert.equal(db.count("emailQueue"), 3);
-  assert.equal(db.read("emailQueue", "gift_g-2_gift_delivered").ctaUrl, `https://circumuk.com/story/${senderToken}`);
-  assert.equal(db.read("emailQueue", "gift_story_g-2_recipient").ctaUrl, `https://circumuk.com/story/${recipientToken}`);
-  assert.equal((await reconcileGiftById({db, giftId: "g-2"})).missingStory, false);
 });
 
-test("targeted reconciliation identifies a completed delivery needing Story recovery", async () => {
-  const db = fakeDb({
-    "giftRequests/g-3": {status: "approved", deliveryId: "d-3"},
-    "deliveryRequests/d-3": {status: "completed", sourceModule: "gifts", giftRequestId: "g-3"},
-  });
-  const result = await reconcileGiftById({db, giftId: "g-3"});
-  assert.equal(result.completedDeliveryNeedsStory, true);
+test("partial Story pair repairs only the missing role and invalid recipients become terminal suppression outcomes", async () => {
+  const base = gift("delivered", "giftStoryAvailableAt", {giftStoryUnlocked: true, giftStoryStatus: "unlocked",
+    giftStoryAccessToken: "s".repeat(43), recipientStoryToken: "r".repeat(43)});
+  const partial = fakeDb({"giftRequests/partial": base, ["emailQueue/" + communicationId(policy.EVENT.STORY_READY, "partial", "sender")]: {status: "queued"}});
+  const repaired = await runForwardReconciliation({db: partial, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(repaired.published, 1);
+  assert.equal(repaired.existing, 1);
+
+  const noRecipient = fakeDb({"giftRequests/no-recipient": {...base, recipientEmail: "not-an-email", recipientStoryToken: "r".repeat(43)}});
+  const suppressed = await runForwardReconciliation({db: noRecipient, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(suppressed.suppressed, 1);
+  assert.equal(noRecipient.count("giftCommunicationOutcomes"), 1);
+  const replay = await runForwardReconciliation({db: noRecipient, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(replay.published, 0);
+});
+
+test("pre-policy events remain ignored even when updated later", async () => {
+  const db = fakeDb({"giftRequests/old": {status: "approved", senderEmail: "sender@example.test",
+    approvedAt: "2026-09-25T10:00:00.000Z", updatedAt: "2026-09-26T23:00:00.000Z"}});
+  const result = await runForwardReconciliation({db, startAt: EFFECTIVE, endAt: END, policyEffectiveAt: EFFECTIVE, pageSize: 20, maxWork: 100});
+  assert.equal(result.published, 0);
+  assert.equal(result.candidates, 0);
   assert.equal(db.count("emailQueue"), 0);
-});
-
-test("targeted recovery replays only due Gift queue IDs when explicitly requested", async () => {
-  const db = fakeDb({
-    "giftRequests/g-4": {status: "delivered", giftStoryStatus: "unlocked", giftStoryUnlocked: true},
-    "emailQueue/gift_g-4_gift_delivered": {status: "retryable_failed", nextAttemptAt: {toMillis: () => 100}},
-    "emailQueue/gift_story_g-4_sender": {status: "retryable_failed", nextAttemptAt: {toMillis: () => 5000}},
-  });
-  const seen = [];
-  const result = await reconcileGiftById({db, giftId: "g-4", repair: true, replayStuck: true, nowMs: 1000,
-    processRecord: async ({emailId}) => {
-      seen.push(emailId);
-      return {status: "sent"};
-    }});
-  assert.deepEqual(seen, ["gift_g-4_gift_delivered"]);
-  assert.equal(result.replaySent, 1);
-});
-
-test("missing email contacts are terminal no-send, not endlessly missing queue candidates", async () => {
-  const db = fakeDb({"giftRequests/no-contact": {paymentStatus: "paid", walletContributionGbp: 5,
-    status: "delivered", giftStoryUnlocked: true, giftStoryStatus: "unlocked",
-    giftStoryAccessToken: "s".repeat(43), recipientStoryToken: "r".repeat(43)}});
-  const result = await reconcileGiftById({db, giftId: "no-contact", repair: true});
-  assert.equal(result.recipientUnavailable, true);
-  assert.equal(result.missingPayment, false);
-  assert.equal(result.missingStory, false);
-  assert.equal(db.count("emailQueue"), 0);
-});
-
-test("bounded read-only scans discover missed paid and completed-delivery recovery candidates", async () => {
-  const db = fakeDb({
-    "giftRequests/a": {paymentStatus: "paid", walletContributionGbp: 10, status: "submitted_for_review",
-      senderEmail: "sender@example.test"},
-    "giftRequests/b": {paymentStatus: "paid", walletContributionGbp: 0, status: "approved"},
-    "deliveryRequests/d": {status: "completed", serviceType: "gifts", giftRequestId: "b"},
-  });
-  const first = await scanGiftRecoveryPage({db, kind: "paid", limit: 1});
-  assert.equal(first.examined, 1);
-  assert.equal(first.nextAfterId, "a");
-  assert.deepEqual(first.candidates.map((item) => item.giftId), ["a"]);
-  const second = await scanGiftRecoveryPage({db, kind: "paid", afterId: first.nextAfterId, limit: 1});
-  assert.equal(second.examined, 1);
-  assert.deepEqual(second.candidates, []);
-  const delivery = await scanGiftRecoveryPage({db, kind: "deliveries", limit: 1});
-  assert.deepEqual(delivery.candidates, [{giftId: "b", deliveryId: "d", completedDeliveryNeedsStory: true,
-    missingGift: false}]);
-  assert.equal(db.count("emailQueue"), 0);
-  await assert.rejects(scanGiftRecoveryPage({db, kind: "paid", limit: 101}), /Scan limit/);
+  assert.equal(db.count("giftCommunicationOutcomes"), 0);
 });

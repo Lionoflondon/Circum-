@@ -17,7 +17,7 @@ This audit is derived from canonical `b4c5978` and the customer-copy release bra
 
 | Surface | Authoritative event/source | Recipient | Current transport/publisher | Queue event and identity | Decision |
 |---|---|---|---|---|---|
-| Gifts delivery | `giftRequests` reaches delivered state | Gift sender email | `platform-notifications.js` → `gift-email-notifications.js` → `emailQueue` | `gift_delivered`, `gift_{giftId}_gift_delivered` | Cloud Run transactional email |
+| Gifts delivery | `giftRequests` reaches authoritative delivered state | Gift Sender email | `transactional-email-publishers.js` / `gift-email-notifications.js` → `emailQueue` | `gift_delivered`, `gift_{giftId}_gift_delivered` | Cloud Run transactional email |
 | Gift Story | Gift Story finalization in `gift-story-automation.js` | Sender and recipient story contacts | `queueStoryEmail` → `emailQueue`; app/link notification remains separate | `gift_story_ready`, `gift_story_{giftId}_{role}` | Cloud Run transactional email |
 | Health+ | `prescriptionPickups` operational status projection | Pickup email | `queueHealthNotification` → `emailQueue` | `health_{pickupId}_{type}` | Cloud Run transactional email |
 | Paid booking / Gifts payment receipt | Ordinary `deliveryRequests` record created only after payment confirmation; Gifts payment receipt remains owned by Stripe | Auth-derived `senderEmail` on the canonical delivery | Cloud Run/Eventarc publisher on `deliveryRequests` create | `delivery_booking_paid`, `delivery_booking_paid_{deliveryId}` | Circum booking confirmation; never duplicates Stripe's Gifts receipt |
@@ -46,12 +46,12 @@ Every existing `emailQueue` publisher uses `transactional-email-templates.js`. E
 | Referral reward with both role ledgers final | Referral reward is available in Roth | “Your CIRCUM referral reward is ready” | `info@circumuk.com` |
 | Rider authority decision | Approval, application update, or request for more information without admin/document detail | Decision-specific plain-English subject | `info@circumuk.com` |
 | Health+ operational status or reminder | Collection, rider, prescription, delivery, exception, reschedule, or reminder update | Status-specific Health+ subject | `health@circumuk.com` when verified, otherwise `info@circumuk.com` |
-| Gift delivered | Gift reached the recipient; no address is exposed | “Your CIRCUM gift was delivered” | `gifts@circumuk.com` |
+| Gift delivered | Gift reached the recipient; no address is exposed | “Your CIRCUM Gift has been delivered” | `gifts@circumuk.com` |
 | Gift Story ready | Private story is available through a secure link; normal priority | “Your CIRCUM Gift Story is ready” or recipient equivalent | `gifts@circumuk.com` |
 
 Rendered customer-facing fields are rejected by automated tests if they contain snake_case, known raw event names, Firestore/Eventarc terms, source field names, or internal notification identifiers. Queue metadata may retain internal event identity for routing and audit; it is never copied into customer-facing fields.
 
-The following delivery lifecycle messages remain push/in-app only under current product policy: rider acceptance, rider en route to pickup, arrival at pickup, pickup confirmation, delivery in progress, approaching drop-off, rider-side cancellation, and payment-failure notices. Their existing customer strings are already plain English. No new email is introduced for those states by this release.
+The following lifecycle messages remain push/in-app only under current product policy: Gift submitted-for-review, Gift curation started, ordinary Rider acceptance/progress, arrival at pickup, pickup confirmation, delivery in progress, approaching drop-off, rider-side cancellation, and routine status progression. Gift payment problems are a separate consequential Gifts event with a state-safe Sender email; no Gift refund email exists in this policy.
 
 ## One-owner rule
 
