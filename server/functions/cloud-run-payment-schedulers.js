@@ -39,22 +39,29 @@ const TOPIC_HANDLER_BY_NAME = Object.freeze({
 });
 
 function topicHandlerName(requestUrl = "") {
-  const mode = new URL(requestUrl || "/", "http://localhost").searchParams.get("__GCP_CloudEventsMode") || "";
+  const rawUrl = String(requestUrl || "");
+  const mode = new URL(rawUrl || "/", "http://localhost").searchParams.get("__GCP_CloudEventsMode") || "";
   const match = /^CUSTOM_PUBSUB_projects\/[^/]+\/topics\/([^/?]+)$/.exec(mode);
-  return match ? TOPIC_HANDLER_BY_NAME[match[1]] || "" : "";
+  if (match && TOPIC_HANDLER_BY_NAME[match[1]]) return TOPIC_HANDLER_BY_NAME[match[1]];
+  for (const [topic, handler] of Object.entries(TOPIC_HANDLER_BY_NAME)) {
+    if (rawUrl.includes(topic) || rawUrl.includes(encodeURIComponent(topic))) return handler;
+  }
+  return "";
 }
 
 function eventHandlerName(body, requestUrl = "") {
+  const topicHandler = topicHandlerName(requestUrl);
+  if (topicHandler) return topicHandler;
   const envelope = body && body.message ? body : body && body.data && body.data.message ? body.data : null;
   const encoded = envelope && envelope.message && envelope.message.data;
-  if (!encoded) return topicHandlerName(requestUrl);
+  if (!encoded) return "";
   try {
     const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
     const explicitHandler = decoded && decoded.handler;
     return (explicitHandler === "health" || handlers[explicitHandler]) ?
-      explicitHandler : topicHandlerName(requestUrl);
+      explicitHandler : "";
   } catch (_) {
-    return topicHandlerName(requestUrl);
+    return "";
   }
 }
 

@@ -32,6 +32,7 @@ test("Pub/Sub Eventarc envelopes select only an explicit scheduler handler", () 
   assert.equal(eventHandlerName(wrap({handler: 42})), "");
   assert.equal(eventHandlerName({message: {data: "%%%"}}), "");
   assert.equal(eventHandlerName(wrap({handler: "unknown"}), "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-reconcilePendingDeliverySettlements-us-central1"), "reconcilePendingDeliverySettlements");
+  assert.equal(eventHandlerName(wrap({handler: "unknown"}), "https://service.example/?topic=firebase-schedule-processHealthPlusReminders-us-central1"), "processHealthPlusReminders");
 });
 
 test("Firebase Scheduler Eventarc metadata selects only the exact migrated topics", () => {
