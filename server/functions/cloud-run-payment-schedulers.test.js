@@ -10,6 +10,8 @@ test("payment scheduler service exposes only bounded maintenance routes", () => 
   assert.match(source, /reconcileBusinessInvoiceCheckoutsCore/);
   assert.match(source, /scheduledRiderStripeStatusSyncCore/);
   assert.match(source, /recoverRiderPayoutsCore/);
+  assert.match(source, /reconcilePendingDeliverySettlementsCore/);
+  assert.match(source, /processHealthPlusRemindersCore/);
   assert.match(payoutSource, /FieldPath\.documentId\(\)/);
   assert.doesNotMatch(source, /createRiderTransferOrPayout\(stripeClient/);
   assert.doesNotMatch(source, /createBusinessInvoiceCheckout/);
