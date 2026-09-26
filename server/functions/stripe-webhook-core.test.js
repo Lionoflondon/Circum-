@@ -91,6 +91,27 @@ test("Gen 1 and Cloud Run processors share route idempotency for 100 replay deli
   assert.equal(effects, 1);
 });
 
+test("the canonical Cloud Run processor routes Gift payment events through the existing Gift authority", async () => {
+  const calls = [];
+  const processor = createStripeWebhookProcessor(dependencies({
+    giftsPayment: {
+      handleGiftCheckoutExpired: async () => ({handled: false}),
+      handleGiftPaymentIntent: async (_stripe, intent, eventId) => {
+        calls.push({intentId: intent.id, eventId});
+        return {handled: true, communicationPublication: "downstream_eventarc"};
+      },
+    },
+  }));
+  const request = signed({
+    id: "evt_gift_payment", type: "payment_intent.succeeded", livemode: false,
+    data: {object: {id: "pi_gift_1", metadata: {giftDraftId: "gift-1"}}},
+  });
+  const result = await processor(request);
+  assert.equal(result.status, 200);
+  assert.deepEqual(calls, [{intentId: "pi_gift_1", eventId: "evt_gift_payment"}]);
+  assert.equal(result.body.gift.communicationPublication, "downstream_eventarc");
+});
+
 test("temporary failure returns to the caller and retry can complete without duplicate effect", async () => {
   let attempts = 0;
   let effects = 0;

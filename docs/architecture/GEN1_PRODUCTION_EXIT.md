@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 273
 - Gen 1 exports: 271
 - Files importing Firebase Functions v1: 64
-- MIGRATE TO CLOUD RUN: 169
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 60
+- MIGRATE TO CLOUD RUN: 167
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 62
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -40,7 +40,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | adminReviewRiderWithdrawal | server/functions/rider-connect.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/admin/admin_phase1_shell.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/rider-connect.test.js<br>test/admin_operations_test.dart<br>test/admin_rider_payout_live_caller_test.dart |
 | adminSaveAdminUser | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
 | adminSaveGiftBrandPartner | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
-| adminSaveGiftRequestEditor | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>test/admin_operations_test.dart |
+| adminSaveGiftRequestEditor | server/functions/admin-operations-authority.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/admin/admin_phase1_shell.dart |
 | adminSearchNewsletterSubscribers | server/functions/newsletter.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>docs/NEWSLETTER_RELEASE.md<br>lib/app/admin/newsletter_audience.dart<br>server/functions/cloud-run-newsletter.js<br>server/functions/firestore-newsletter-rules.test.js<br>server/functions/production-functions-inventory.json |
 | adminSuggestGiftCampaignMatch | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>test/admin_operations_test.dart |
 | adminUpdateBusinessAccountStatus | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
@@ -253,7 +253,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | setGooglePlayReviewPresence | server/functions/founder-review-fixture.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/founder-review-fixture.test.js |
 | setWalletFrozen | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart<br>test/admin_operations_test.dart |
 | startAdminConversation | server/functions/communication-engine.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-hardening-contract.test.js<br>test/admin_operations_test.dart |
-| StripeWebhook | server/functions/index.js | Gen 1 | http | MIGRATE TO CLOUD RUN | docs/project_memory.md<br>server/functions/CLOUD_RUN_STRIPE_WEBHOOK.md<br>server/functions/payment-runtime-bindings.test.js |
+| StripeWebhook | server/functions/index.js | Gen 1 | http | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-stripe-server.js |
 | submitDeliveryEvidence | server/functions/delivery-evidence.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/delivery-evidence-reconciled.emulator.test.js |
 | submitDeliveryRating | server/functions/ratings-tipping.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/send_package/view/ratings.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/QA-LIFECYCLE.md<br>test/sender_mobile/ratings_tipping_v2_test.dart |
 | submitDeliveryTip | server/functions/ratings-tipping.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/view/ratings.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/QA-LIFECYCLE.md<br>server/functions/cloud-run-payment-family.js<br>server/functions/cloud-run-payment-family.test.js<br>server/functions/tips-authority.emulator.test.js<br>test/sender_mobile/ratings_tipping_v2_test.dart |

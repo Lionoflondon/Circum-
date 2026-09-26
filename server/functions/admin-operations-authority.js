@@ -1294,15 +1294,14 @@ exports.adminUpdateIrisCandidateWorkflow = adminCallable(async (data, context) =
   return {ok: true};
 });
 
-exports.adminSaveGiftRequestEditor = adminCallable(async (data, context) => {
-  const actor = await resolveActor(context);
+async function saveGiftRequestEditor(data, context, {db = getFirestore()} = {}) {
+  const actor = await resolveActor(context, {db});
   requireSupport(actor, "Gift Operations Admin access is required.");
   const id = clean(data.giftId);
   const collection = clean(data.collection || "giftRequests");
   if (!id || !GIFT_EDITOR_COLLECTIONS.has(collection)) {
     throw new functions.https.HttpsError("invalid-argument", "Gift request record is required.");
   }
-  const db = getFirestore();
   const ref = db.collection(collection).doc(id);
   const snap = await ref.get();
   const before = snap.exists ? snap.data() : {};
@@ -1323,7 +1322,9 @@ exports.adminSaveGiftRequestEditor = adminCallable(async (data, context) => {
     reason: requireReason(data),
   }, before, patch);
   return {ok: true};
-});
+}
+
+exports.adminSaveGiftRequestEditor = adminCallable(saveGiftRequestEditor);
 
 exports.adminUpdateGiftWorkspace = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
@@ -1478,4 +1479,4 @@ exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   return {ok: true};
 });
 
-exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, writeAudit};
+exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, saveGiftRequestEditor, writeAudit};
