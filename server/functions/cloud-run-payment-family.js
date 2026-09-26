@@ -11,6 +11,7 @@ const FAMILY_ROUTES = Object.freeze({
   business_invoices: [
     "createBusinessInvoiceCheckout",
     "cancelBusinessInvoiceCheckout",
+    "createBusinessGiftOrder",
   ],
   gifts: [
     "createGiftPayment",

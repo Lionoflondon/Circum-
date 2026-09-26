@@ -712,7 +712,17 @@ exports.cancelBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: 
 exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
   const metadata = sessionData.metadata || {};
   if (metadata.type === "business_invoice_payment" && metadata.checkoutReservationId) {
-    return checkoutReservations.settle({db: getFirestore(), session: sessionData, id: metadata.checkoutReservationId});
+    const settled = await checkoutReservations.settle({db: getFirestore(), session: sessionData, id: metadata.checkoutReservationId});
+    if (metadata.businessGiftOrderId) {
+      const businessGifts = require("./business-gifts");
+      const gift = await businessGifts.finalizePaidBusinessGiftOrder({
+        db: getFirestore(),
+        orderId: metadata.businessGiftOrderId,
+        payment: settled,
+      });
+      return {...settled, businessGift: gift};
+    }
+    return settled;
   }
   if (metadata.type === "business_roth_purchase") {
     const businessId = metadata.businessId;
@@ -866,6 +876,14 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
         stripePaymentIntentId: sessionData.payment_intent || null,
       },
     });
+    if (metadata.businessGiftOrderId) {
+      const businessGifts = require("./business-gifts");
+      return businessGifts.finalizePaidBusinessGiftOrder({
+        db: getFirestore(),
+        orderId: metadata.businessGiftOrderId,
+        payment: {paymentId, paymentMethod: rothAmount > 0 ? "roth" : requestedMethod},
+      });
+    }
   }
 };
 
