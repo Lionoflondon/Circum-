@@ -38,7 +38,7 @@ const TOPIC_HANDLER_BY_NAME = Object.freeze({
   "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
 });
 
-function topicHandlerName(requestUrl = "") {
+function topicHandlerName(requestUrl = "", headers = {}) {
   const rawUrl = String(requestUrl || "");
   const mode = new URL(rawUrl || "/", "http://localhost").searchParams.get("__GCP_CloudEventsMode") || "";
   const match = /^CUSTOM_PUBSUB_projects\/[^/]+\/topics\/([^/?]+)$/.exec(mode);
@@ -46,11 +46,13 @@ function topicHandlerName(requestUrl = "") {
   for (const [topic, handler] of Object.entries(TOPIC_HANDLER_BY_NAME)) {
     if (rawUrl.includes(topic) || rawUrl.includes(encodeURIComponent(topic))) return handler;
   }
-  return "";
+  const source = String(headers["ce-source"] || headers["x-goog-cloud-event-source"] || "");
+  const sourceMatch = /\/topics\/([^/?]+)$/.exec(source);
+  return sourceMatch ? TOPIC_HANDLER_BY_NAME[sourceMatch[1]] || "" : "";
 }
 
-function eventHandlerName(body, requestUrl = "") {
-  const topicHandler = topicHandlerName(requestUrl);
+function eventHandlerName(body, requestUrl = "", headers = {}) {
+  const topicHandler = topicHandlerName(requestUrl, headers);
   if (topicHandler) return topicHandler;
   const envelope = body && body.message ? body : body && body.data && body.data.message ? body.data : null;
   const encoded = envelope && envelope.message && envelope.message.data;
@@ -80,7 +82,7 @@ const server = http.createServer(async (req, res) => {
   }
   let name = path.slice(1);
   if (req.method === "POST" && (path === "/" || path === "/events")) {
-    name = eventHandlerName(await readJson(req), req.url);
+    name = eventHandlerName(await readJson(req), req.url, req.headers);
     if (name === "health") {
       console.log("payment_scheduler_health_event");
       res.writeHead(204).end();
