@@ -9,12 +9,28 @@ const {
   EVENT_TYPE,
   claimEmail,
   createServer,
+  currentServiceDesign,
   fromForRecord,
   processEmailQueueRecord,
   queueEmailIdFromName,
   senderCategoryForRecord,
   sendResend,
 } = require("./cloud-run-transactional-email");
+
+test("approved Business and Health+ design refreshes only matching validated queue records", () => {
+  const invoice = currentServiceDesign({eventType: "business_invoice_paid", templateId: "business-invoice-paid",
+    sourceCollection: "businessInvoices", sourceDocumentId: "invoice-1", ctaUrl: "https://circumuk.com/?app=business"},
+  {status: "valid", source: {status: "paid", balanceDue: 0, invoiceNumber: "INV-2048"}});
+  assert.match(invoice.html, /INV-2048/);
+  assert.match(invoice.html, /download-on-the-app-store\.svg/);
+  const health = currentServiceDesign({eventType: "health_plus_rescheduled", templateId: "health-update-rescheduled",
+    sourceCollection: "prescriptionPickups", ctaUrl: "https://circumuk.com/?app=health-plus"},
+  {status: "valid", source: {status: "rescheduled"}});
+  assert.match(health.html, /rescheduled/);
+  assert.match(health.html, /en_badge_web_generic\.png/);
+  const unrelated = {eventType: "gift_delivered", templateId: "gift-delivered", html: "unchanged"};
+  assert.equal(currentServiceDesign(unrelated, {status: "valid", source: {}}), unrelated);
+});
 
 function fakeDb(initial = {}) {
   const data = new Map(Object.entries(initial));
