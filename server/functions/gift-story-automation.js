@@ -827,7 +827,7 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   }
-  await runGiftStoryEffect(db, {
+  const auditResult = await runGiftStoryEffect(db, {
     giftId,
     deliveryId,
     source,
@@ -853,7 +853,9 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       return {status: "recorded"};
     },
   });
-  return {giftId, token, recipientToken, expiresAt};
+  const effectiveEffects = [unlockResult, auditResult, ...emailResults.filter((result) => result.status === "fulfilled").map((result) => result.value)]
+      .filter((result) => result && result.status === "completed").length;
+  return {giftId, token, recipientToken, expiresAt, effectiveEffects};
 }
 
 async function markAutomationFailure(db, deliveryId, giftId, error) {
