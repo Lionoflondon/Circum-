@@ -74,6 +74,7 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 | updated | `deliveryRequests/{deliveryId}` | `circum-tx-email-delivery-updated-v1` |
 | updated | `deliveryCancellationSettlements/{deliveryId}` | `circum-tx-email-cancellation-updated-v1` |
 | updated | `businessInvoices/{invoiceId}` | `circum-tx-email-business-invoice-updated-v1` |
+| updated | `businessAccounts/{businessId}` | `circum-tx-email-business-account-updated-v1` |
 | created | `walletTransactions/{transactionId}` | `circum-tx-email-wallet-created-v1` |
 | updated | `referrals/{referralId}` | `circum-tx-email-referral-updated-v1` |
 | updated | `riderProfiles/{riderId}` | `circum-tx-email-rider-decision-updated-v1` |
@@ -90,6 +91,21 @@ gcloud eventarc triggers create circum-tx-email-gift-created-v1 \
   --event-filters=type=google.cloud.firestore.document.v1.created \
   --event-filters=database='(default)' \
   --event-filters-path-pattern="document=giftRequests/{giftId}" \
+  --event-data-content-type=application/protobuf \
+  --destination-run-service=circum-transactional-email \
+  --destination-run-region=us-central1 \
+  --destination-run-path=/ \
+  --service-account=circum-tx-email-events@circum-2797c.iam.gserviceaccount.com
+```
+
+The Business activation source uses the same consumer and sender family:
+
+```text
+gcloud eventarc triggers create circum-tx-email-business-account-updated-v1 \
+  --project=circum-2797c --location=nam5 \
+  --event-filters=type=google.cloud.firestore.document.v1.updated \
+  --event-filters=database='(default)' \
+  --event-filters-path-pattern="document=businessAccounts/{businessId}" \
   --event-data-content-type=application/protobuf \
   --destination-run-service=circum-transactional-email \
   --destination-run-region=us-central1 \

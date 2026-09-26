@@ -95,6 +95,61 @@ test("business email only publishes on fully-paid transition using billingEmail"
   assert.equal(db.read("emailQueue", result.id).senderCategory, "business");
 });
 
+test("Business payment failure publishes one Business action-required queue item", async () => {
+  const db = fakeDb();
+  const input = event("businessInvoices", "i-failed", {status: "open", balanceDue: 20}, {
+    status: "open", balanceDue: 20, invoiceNumber: "INV-FAILED", businessId: "b-1", billingEmail: "billing@example.test",
+    paymentCommunicationState: "failed", paymentCommunicationKey: "reservation-1:pi_failed",
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "business_invoice_payment_problem_i-failed_reservation-1_pi_failed");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "business");
+  assert.equal(db.read("emailQueue", result.id).sourcePaymentProblemState, "failed");
+  assert.deepEqual(await publishFromEvent({db, ...input}), {status: "duplicate", id: result.id});
+});
+
+test("Business success and unchanged failure markers do not publish a failed email", async () => {
+  const db = fakeDb();
+  const unchanged = event("businessInvoices", "i-success", {status: "open", balanceDue: 20, paymentCommunicationKey: "same"}, {
+    status: "open", balanceDue: 20, paymentCommunicationState: "failed", paymentCommunicationKey: "same",
+    billingEmail: "billing@example.test",
+  });
+  assert.equal((await publishFromEvent({db, ...unchanged})).status, "ignored");
+  const success = event("businessInvoices", "i-success", {status: "open", balanceDue: 20}, {
+    status: "paid", balanceDue: 0, paymentCommunicationState: "succeeded", paymentCommunicationKey: "reservation-1:pi_success",
+    billingEmail: "billing@example.test",
+  });
+  assert.equal((await publishFromEvent({db, ...success})).id, "business_invoice_paid_i-success");
+  assert.equal(db.read("emailQueue", "business_invoice_payment_problem_i-success_reservation-1_pi_success"), undefined);
+});
+
+test("Business activation publishes once on the authoritative approval transition", async () => {
+  const db = fakeDb();
+  const input = event("businessAccounts", "business-1", {
+    status: "pending", approvalStatus: "pending", contactEmail: "owner@example.test",
+  }, {
+    status: "approved", approvalStatus: "approved", isApproved: true,
+    businessName: "Acme Logistics", contactEmail: "owner@example.test",
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "business_account_activated_business-1");
+  assert.equal(db.read("emailQueue", result.id).to, "owner@example.test");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "business");
+  assert.deepEqual(await publishFromEvent({db, ...input}), {status: "duplicate", id: result.id});
+});
+
+test("Business activation does not publish for an initial registration or non-approval update", async () => {
+  const db = fakeDb();
+  const initial = event("businessAccounts", "business-2", null, {
+    status: "pending", approvalStatus: "pending", contactEmail: "owner@example.test",
+  });
+  assert.equal((await publishFromEvent({db, ...initial})).status, "ignored");
+  const unrelated = event("businessAccounts", "business-2", {status: "approved", approvalStatus: "approved"}, {
+    status: "approved", approvalStatus: "approved", contactEmail: "owner@example.test",
+  });
+  assert.equal((await publishFromEvent({db, ...unrelated})).status, "ignored");
+});
+
 test("completed Roth ledger movement is the sole source of its queue email", async () => {
   const db = fakeDb();
   const input = event("walletTransactions", "w-1", null, {

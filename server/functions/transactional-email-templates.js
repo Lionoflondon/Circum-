@@ -203,6 +203,45 @@ function businessInvoicePaid({reference = "", ctaUrl = APP_URL} = {}) {
   });
 }
 
+function businessPaymentProblem({state = "unconfirmed", reference = "", ctaUrl = `${APP_URL}/?app=business&section=invoicing`} = {}) {
+  const definitive = text(state).toLowerCase() === "failed";
+  const ref = safeReference(reference);
+  return result({
+    templateId: `business-payment-problem-${definitive ? "failed" : "unconfirmed"}`,
+    subject: definitive ? "Action needed for your CIRCUM Business invoice" : "We could not confirm your CIRCUM Business payment",
+    preheader: definitive ? "Your Business payment needs attention before the invoice can be settled." : "We could not confirm your Business payment yet. Review the invoice before trying again.",
+    heading: "Your Business payment needs attention",
+    paragraphs: [
+      definitive ? "We could not complete the payment for your CIRCUM Business invoice." : "We could not confirm the payment for your CIRCUM Business invoice yet.",
+      "Please review the invoice in CIRCUM and follow the next step shown there. Your invoice and payment record remain available in your Business account.",
+      ref ? `Invoice reference: ${ref}` : "",
+    ].filter(Boolean),
+    ctaLabel: "Review invoice",
+    ctaUrl,
+    senderCategory: "business",
+    tags: [{name: "product", value: "business"}, {name: "message", value: "payment-action-required"}],
+  });
+}
+
+function businessAccountActivated({companyName = "", ctaUrl = `${APP_URL}/?app=business`} = {}) {
+  const name = safeName(companyName);
+  return result({
+    templateId: "business-account-activated",
+    subject: "Your CIRCUM Business account is ready",
+    preheader: "Your company can now use CIRCUM Business.",
+    heading: "Welcome to CIRCUM Business",
+    paragraphs: [
+      name ? `${name} is now active on CIRCUM Business.` : "Your company is now active on CIRCUM Business.",
+      "You can now manage your company deliveries, team access and Business payment tools in one place.",
+      "Sign in to review your workspace and get started.",
+    ],
+    ctaLabel: "Open Business",
+    ctaUrl,
+    senderCategory: "business",
+    tags: [{name: "product", value: "business"}, {name: "message", value: "account-activated"}],
+  });
+}
+
 function rothActivity({displayName = "", movement = "updated", amount = null, reference = "", ctaUrl = APP_URL} = {}) {
   const amountText = money(amount);
   const descriptions = {
@@ -373,6 +412,8 @@ module.exports = {
   visibleCustomerText,
   bookingConfirmed,
   businessInvoicePaid,
+  businessAccountActivated,
+  businessPaymentProblem,
   cancellationSettled,
   deliveryCompleted,
   giftApproved,

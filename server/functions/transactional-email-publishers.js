@@ -10,6 +10,12 @@ const UPDATED = "google.cloud.firestore.document.v1.updated";
 const text = (value) => `${value || ""}`.trim();
 const lower = (value) => text(value).toLowerCase();
 
+function balanceDue(data = {}) {
+  if (data.balanceDue != null) return Number(data.balanceDue);
+  if (data.total != null || data.amountPaid != null) return Math.max(0, Number(data.total || 0) - Number(data.amountPaid || 0));
+  return null;
+}
+
 function documentPath(name = "") {
   return String(name).split("/documents/")[1] || String(name).replace(/^documents\//, "");
 }
@@ -85,6 +91,12 @@ function paymentConfirmed(data = {}) {
       .includes(lower(data.paymentStatus || data.paymentState));
 }
 
+function businessAccountActivated(data = {}) {
+  const statuses = [data.status, data.approvalStatus, data.businessStatus, data.verificationStatus]
+      .map(lower);
+  return statuses.some((value) => ["approved", "active"].includes(value));
+}
+
 function finalDelivery(data = {}) {
   return ["delivered", "completed"].includes(lower(data.status || data.deliveryStatus)) &&
     lower(data.settlementStatus) === "completed";
@@ -156,7 +168,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
 
   const invoiceId = asId(path, "businessInvoices");
   if (invoiceId && eventType === UPDATED && !["paid", "paid_manually"].includes(lower(before.status)) &&
-      ["paid", "paid_manually"].includes(lower(after.status)) && Number(after.balanceDue || 0) <= 0) {
+      ["paid", "paid_manually"].includes(lower(after.status)) && Number.isFinite(balanceDue(after)) && balanceDue(after) <= 0) {
     const to = after.billingEmail;
     const ref = text(after.invoiceNumber || invoiceId);
     const payload = record({to, template: templates.businessInvoicePaid({reference: ref}),
@@ -165,6 +177,53 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       extra: {businessId: text(after.businessId), invoiceId}});
     if (payload) payload.sourceRequiredFields = {balanceDue: 0};
     return createOnly(db, emailId("business_invoice_paid", invoiceId), payload);
+  }
+
+  const paymentProblemState = lower(after.paymentCommunicationState);
+  if (invoiceId && eventType === UPDATED &&
+      ["failed", "unconfirmed"].includes(paymentProblemState) &&
+      text(after.paymentCommunicationKey) &&
+      text(after.paymentCommunicationKey) !== text(before.paymentCommunicationKey) &&
+      !["paid", "paid_manually"].includes(lower(after.status)) && Number.isFinite(balanceDue(after)) && balanceDue(after) > 0) {
+    const to = after.billingEmail;
+    const ref = text(after.invoiceNumber || invoiceId);
+    const payload = record({to, template: templates.businessPaymentProblem({
+      state: paymentProblemState,
+      reference: ref,
+      ctaUrl: "https://circumuk.com/?app=business&section=invoicing",
+    }), eventType: "business_invoice_payment_problem", collection: "businessInvoices", sourceId: invoiceId,
+    required: "", recipientField: "billingEmail", senderCategory: "business",
+    extra: {
+      businessId: text(after.businessId),
+      invoiceId,
+      sourcePaymentProblemState: paymentProblemState,
+      sourcePaymentProblemKey: text(after.paymentCommunicationKey),
+    }});
+    if (payload) {
+      payload.sourceRequiredFields = {
+        paymentCommunicationKey: text(after.paymentCommunicationKey),
+        paymentCommunicationState: paymentProblemState,
+      };
+    }
+    return createOnly(db, emailId("business_invoice_payment_problem", invoiceId, after.paymentCommunicationKey), payload);
+  }
+
+  const businessId = asId(path, "businessAccounts");
+  if (businessId && eventType === UPDATED && businessAccountActivated(after) &&
+      !businessAccountActivated(before)) {
+    const recipientField = normalizeEmail(after.contactEmail) ? "contactEmail" : "billingEmail";
+    const to = after[recipientField];
+    const payload = record({to, template: templates.businessAccountActivated({
+      companyName: after.businessName || after.companyName,
+      ctaUrl: "https://circumuk.com/?app=business",
+    }), eventType: "business_account_activated", collection: "businessAccounts", sourceId: businessId,
+    required: lower(after.status || after.approvalStatus || after.businessStatus), recipientField, senderCategory: "business",
+    extra: {
+      businessId,
+      sourceActivationStatus: lower(after.status || after.approvalStatus || after.businessStatus),
+    }});
+    if (payload) payload.sourceRequiredFields = {status: ["approved", "active"]};
+    return createOnly(db, emailId("business_account_activated", businessId), payload);
   }
 
   const walletTransactionId = asId(path, "walletTransactions");

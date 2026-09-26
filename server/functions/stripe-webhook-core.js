@@ -63,6 +63,15 @@ function createStripeWebhookProcessor(deps) {
     if (event.type === "checkout.session.expired") {
       const giftExpiry = await giftsPayment.handleGiftCheckoutExpired(stripe, event.data.object);
       if (giftExpiry.handled) return finish({success: true, gift: giftExpiry}, "gift_checkout_expired");
+      if (businessPayments && typeof businessPayments.handleBusinessCheckoutExpired === "function") {
+        const businessExpiry = await businessPayments.handleBusinessCheckoutExpired({
+          db,
+          stripe,
+          session: event.data.object,
+          eventId: event.id,
+        });
+        if (businessExpiry.handled) return finish({success: true, business: businessExpiry}, "business_checkout_expired");
+      }
     }
     if (event.type.startsWith("charge.dispute.")) {
       const tipDispute = await ratingsTipping.processStripeTipDispute(stripe, event);
@@ -75,6 +84,15 @@ function createStripeWebhookProcessor(deps) {
       return finish({success: true, refund: refundResult}, "payment_refund");
     }
     if (["payment_intent.succeeded", "payment_intent.processing", "payment_intent.payment_failed", "payment_intent.canceled"].includes(event.type)) {
+      if (businessPayments && typeof businessPayments.handleBusinessPaymentIntent === "function") {
+        const businessIntent = await businessPayments.handleBusinessPaymentIntent({
+          db,
+          intent: event.data.object,
+          eventId: event.id,
+          eventType: event.type,
+        });
+        if (businessIntent.handled) return finish({success: true, business: businessIntent}, "business_payment_intent");
+      }
       let giftIntentResult;
       try {
         giftIntentResult = await giftsPayment.handleGiftPaymentIntent(stripe, event.data.object, event.id);
