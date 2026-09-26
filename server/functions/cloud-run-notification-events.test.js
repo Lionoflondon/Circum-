@@ -307,6 +307,39 @@ test("Gift completion Eventarc route accepts only the delivery update and preser
   }
 });
 
+test("Gift completion fixture collection is bounded and does not change production routing", async () => {
+  const previous = process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE;
+  process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE = "giftStoryRuntimeFixtures";
+  let received;
+  const server = createServer({kind: "gift_delivery_completed", dbFactory: () => ({unused: true}),
+    processOnce: async (input) => {
+      received = input;
+      return {status: "completed"};
+    }});
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const name = "projects/circum-2797c/databases/(default)/documents/giftStoryRuntimeFixtures/fixture-1";
+    const payload = DocumentEventData.encode({
+      value: {name, fields: {status: {stringValue: "completed"}, serviceType: {stringValue: "GIFTS"}}},
+      oldValue: {name, fields: {status: {stringValue: "in_transit"}, serviceType: {stringValue: "GIFTS"}}},
+    }).finish();
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`, {
+      method: "POST",
+      headers: {"content-type": "application/json", "ce-type": "google.cloud.firestore.document.v1.updated", "ce-id": "fixture-collection-event"},
+      body: pubsubPushBody(payload),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(received.deliveryId, "fixture-1");
+    assert.equal(received.after.status, "completed");
+  } finally {
+    server.close();
+    await once(server, "close");
+    if (previous === undefined) delete process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE;
+    else process.env.GIFT_STORY_EVENT_COLLECTION_OVERRIDE = previous;
+  }
+});
+
 test("Gen 1 delivery create path delegates to the Cloud Run durable claim", async () => {
   let received;
   let effects = 0;
