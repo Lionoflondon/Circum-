@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 277,
-  "gen1ExportCount": 275,
+  "sourceExportCount": 278,
+  "gen1ExportCount": 276,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -15,6 +15,7 @@
     "server/functions/admin-rider-authority.js",
     "server/functions/business-access.js",
     "server/functions/business-checkout-reservations.js",
+    "server/functions/business-gifts.js",
     "server/functions/business-payments.js",
     "server/functions/communication-engine.js",
     "server/functions/delivery-adjustments.js",
@@ -2983,6 +2984,40 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
       "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "createBusinessGiftOrder",
+      "sourceFile": "server/functions/business-gifts.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "businessGifts.createBusinessGiftOrder(stripe)",
+      "callers": [
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/payment-runtime-bindings.test.js"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": true,
+      "secrets": [
+        "STRIPE_SECRET_KEY"
+      ],
+      "firestoreCollections": [
+        "adminAuditLogs",
+        "businessAccounts",
+        "businessInvoices",
+        "giftRequests"
+      ],
+      "externalProviders": [
+        "Stripe"
+      ],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

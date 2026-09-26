@@ -62,6 +62,7 @@ const healthPlusOperations = require("./health-plus-operations");
 const rothLedger = require("./roth-ledger");
 const rothGrantCampaigns = require("./roth-grant-campaigns");
 const businessPayments = require("./business-payments");
+const businessGifts = require("./business-gifts");
 const riderConnect = require("./rider-connect");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
@@ -252,6 +253,7 @@ exports.adminCreateBusinessInvoice =
   businessPayments.adminCreateBusinessInvoice;
 exports.createBusinessInvoiceCheckout =
   businessPayments.createBusinessInvoiceCheckout(stripe);
+exports.createBusinessGiftOrder = businessGifts.createBusinessGiftOrder(stripe);
 exports.cancelBusinessInvoiceCheckout = businessPayments.cancelBusinessInvoiceCheckout(stripe);
 exports.createBusinessAccount = businessAccess.createBusinessAccount;
 exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;

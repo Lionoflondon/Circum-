@@ -12,12 +12,14 @@ const modules = {
   "sender-finance": require("./sender-finance"),
   "sender-booking": require("./sender-booking"),
   "gifts-payment": require("./gifts-payment"),
+  "business-gifts": require("./business-gifts"),
 };
 const injected = {
   "business-payments": ["createBusinessRothCheckout", "createBusinessInvoiceCheckout", "cancelBusinessInvoiceCheckout", "reconcileBusinessInvoiceCheckouts"],
   "sender-finance": ["listSenderPaymentMethods", "createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod"],
   "sender-booking": ["createSenderPaymentSession", "createSenderPaidDelivery", "finalizeSenderWebCheckout"],
   "gifts-payment": ["createGiftPayment", "finalizeGiftPayment"],
+  "business-gifts": ["createBusinessGiftOrder"],
 };
 function secretKeys(fn) {
   return (fn.__endpoint.secretEnvironmentVariables || []).map((item) => item.key);

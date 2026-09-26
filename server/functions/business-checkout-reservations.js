@@ -207,9 +207,10 @@ async function reserve({
       status: "creating",
       createdAt: now,
       expiresAt: now + 31 * 60 * 1000,
-      createdByUserId: uid,
-      invoiceNumber: invoice.invoiceNumber || "Circum Business invoice",
-      returnUrl: `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`,
+    createdByUserId: uid,
+    invoiceNumber: invoice.invoiceNumber || "Circum Business invoice",
+    businessGiftOrderId: invoice.businessGiftOrderId || null,
+    returnUrl: `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`,
     };
     tx.create(reservationRef(db, id), r);
     tx.create(paymentRef(db, id), {
@@ -253,6 +254,7 @@ function providerParams(r) {
     invoiceId: r.invoiceId,
     paymentId: r.checkoutReservationId,
     checkoutReservationId: r.checkoutReservationId,
+    businessGiftOrderId: r.businessGiftOrderId || null,
     reservationVersion: "1",
     cardAmountGbp: `${pounds(r.externalAmount)}`,
     rothAmountGbp: `${pounds(r.rothReserved)}`,
