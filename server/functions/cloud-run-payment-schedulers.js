@@ -33,15 +33,26 @@ const handlers = Object.freeze({
     healthPlusOperations._private.processHealthPlusRemindersCore(),
 });
 
-function eventHandlerName(body) {
+const TOPIC_HANDLER_BY_NAME = Object.freeze({
+  "firebase-schedule-reconcilePendingDeliverySettlements-us-central1": "reconcilePendingDeliverySettlements",
+  "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
+});
+
+function topicHandlerName(requestUrl = "") {
+  const mode = new URL(requestUrl || "/", "http://localhost").searchParams.get("__GCP_CloudEventsMode") || "";
+  const match = /^CUSTOM_PUBSUB_projects\/[^/]+\/topics\/([^/?]+)$/.exec(mode);
+  return match ? TOPIC_HANDLER_BY_NAME[match[1]] || "" : "";
+}
+
+function eventHandlerName(body, requestUrl = "") {
   const envelope = body && body.message ? body : body && body.data && body.data.message ? body.data : null;
   const encoded = envelope && envelope.message && envelope.message.data;
-  if (!encoded) return "";
+  if (!encoded) return topicHandlerName(requestUrl);
   try {
     const decoded = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
-    return typeof decoded.handler === "string" ? decoded.handler : "";
+    return typeof decoded.handler === "string" ? decoded.handler : topicHandlerName(requestUrl);
   } catch (_) {
-    return "";
+    return topicHandlerName(requestUrl);
   }
 }
 
@@ -60,7 +71,7 @@ const server = http.createServer(async (req, res) => {
   }
   let name = path.slice(1);
   if (req.method === "POST" && (path === "/" || path === "/events")) {
-    name = eventHandlerName(await readJson(req));
+    name = eventHandlerName(await readJson(req), req.url);
     if (name === "health") {
       console.log("payment_scheduler_health_event");
       res.writeHead(204).end();
@@ -86,4 +97,4 @@ if (require.main === module) {
   server.listen(Number(process.env.PORT || 8080), "0.0.0.0");
 }
 
-module.exports = {eventHandlerName, handlers, server};
+module.exports = {eventHandlerName, topicHandlerName, handlers, server};
