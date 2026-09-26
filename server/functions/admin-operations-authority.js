@@ -21,7 +21,8 @@ const ADMIN_DATASETS = Object.freeze({
   supportTickets: "support.read", healthPlusPayments: "finance.read",
   prescriptionPickups: "health.read", healthPlusProfiles: "health.read",
   recurringPickupSchedules: "health.read", healthPlusCustodyArchive: "health.read",
-  businessAccounts: "business.read", giftOrders: "gift.read",
+  businessAccounts: "business.read", businessGiftOrders: "business.read", giftOrders: "gift.read",
+  giftRecurringSeries: "gift.read",
   giftRequests: "gift.read", giftBrands: "gift.read",
   giftCampaignParticipants: "gift.read", giftCampaignMatches: "gift.read",
   adminAuditLogs: "audit.read", chats: "support.read",
@@ -586,6 +587,56 @@ async function queryAdminPage(data, context) {
 }
 
 exports.adminQueryPage = adminCallable(queryAdminPage);
+
+async function requestGiftRecurringRecovery(data, context) {
+  const actor = await resolveActor(context);
+  if (!hasPermission(actor.roles, "gift.manage")) {
+    throw new functions.https.HttpsError("permission-denied", "Gift management access is required.");
+  }
+  const seriesId = clean(data && data.seriesId);
+  const operation = lower(data && data.operation);
+  const reason = requireReason(data, "Recurring Gift recovery");
+  if (!seriesId || !["reconcile", "review", "cancel_at_period_end"].includes(operation)) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a recurring Gift series and supported recovery operation.");
+  }
+  const db = getFirestore();
+  const seriesRef = db.collection("giftRecurringSeries").doc(seriesId);
+  const seriesSnap = await seriesRef.get();
+  if (!seriesSnap.exists) throw new functions.https.HttpsError("not-found", "Recurring Gift series not found.");
+  const requestId = crypto.createHash("sha256")
+      .update(`${seriesId}:${operation}:${actor.uid}:${reason}`)
+      .digest("hex");
+  const requestRef = db.collection("giftRecurringRecoveryRequests").doc(requestId);
+  const request = {
+    requestId,
+    seriesId,
+    operation,
+    status: "queued",
+    reason,
+    requestedBy: actor.uid,
+    requestedByLabel: actor.label,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(requestRef);
+    if (!existing.exists) {
+      transaction.create(requestRef, request);
+      transaction.create(db.collection("adminAuditLogs").doc(), {
+        action: "gift_recurring_recovery_requested",
+        actionType: `gift_recurring_${operation}_requested`,
+        recordType: "giftRecurringSeries",
+        recordId: seriesId,
+        requestId,
+        reason,
+        adminUserId: actor.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
+  return {requestId, seriesId, operation, status: "queued", idempotent: true};
+}
+
+exports.adminRequestGiftRecurringRecovery = adminCallable(requestGiftRecurringRecovery);
 
 exports.adminRecordAuditEntry = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
@@ -1503,4 +1554,4 @@ exports.adminResolveMessageReport = adminCallable(async (data, context) => {
   return {ok: true};
 });
 
-exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, saveGiftRequestEditor, writeAudit};
+exports._private = {resolveActor, resolveAdminAccess, queryAdminPage, saveGiftRequestEditor, requestGiftRecurringRecovery, writeAudit};

@@ -12,6 +12,7 @@ const ROUTES = Object.freeze({
   adminResolveAccess: adminAuthority._private.resolveAdminAccess,
   adminQueryPage: adminAuthority._private.queryAdminPage,
   adminSaveGiftRequestEditor: adminAuthority._private.saveGiftRequestEditor,
+  adminRequestGiftRecurringRecovery: adminAuthority._private.requestGiftRecurringRecovery,
 });
 const ROUTE_NAMES = new Set(Object.keys(ROUTES));
 const STATUS = {
@@ -55,7 +56,7 @@ function productionDependencies(route) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^\/(?:v1\/callable\/)?(adminResolveAccess|adminQueryPage|adminSaveGiftRequestEditor)$/.exec(pathname);
+  const match = /^\/(?:v1\/callable\/)?(adminResolveAccess|adminQueryPage|adminSaveGiftRequestEditor|adminRequestGiftRecurringRecovery)$/.exec(pathname);
   return match ? match[1] : null;
 }
 
