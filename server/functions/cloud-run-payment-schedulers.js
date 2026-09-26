@@ -34,6 +34,8 @@ const handlers = Object.freeze({
     healthPlusOperations._private.processHealthPlusRemindersCore(),
   reconcileDeliveryTips: () =>
     ratingsTipping.reconcileDeliveryTipsCore(stripeClient()),
+  reconcileDeliveryTipsDryRun: () =>
+    ratingsTipping.reconcileDeliveryTipsCore(stripeClient(), {dryRun: true}),
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
