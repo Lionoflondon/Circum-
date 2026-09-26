@@ -112,6 +112,26 @@ test("the canonical Cloud Run processor routes Gift payment events through the e
   assert.equal(result.body.gift.communicationPublication, "downstream_eventarc");
 });
 
+test("the single Stripe webhook owner routes Business payment outcomes to the Business authority", async () => {
+  const calls = [];
+  const processor = createStripeWebhookProcessor(dependencies({
+    businessPayments: {
+      handleBusinessPaymentIntent: async (input) => {
+        calls.push({eventId: input.eventId, eventType: input.eventType, intentId: input.intent.id});
+        return {handled: true, state: "failed", communicationPublication: "downstream_eventarc"};
+      },
+    },
+  }));
+  const request = signed({
+    id: "evt_business_failure", type: "payment_intent.payment_failed", livemode: false,
+    data: {object: {id: "pi_business_1", metadata: {type: "business_invoice_payment", checkoutReservationId: "reservation-1"}}},
+  });
+  const result = await processor(request);
+  assert.equal(result.status, 200);
+  assert.deepEqual(calls, [{eventId: "evt_business_failure", eventType: "payment_intent.payment_failed", intentId: "pi_business_1"}]);
+  assert.equal(result.body.business.communicationPublication, "downstream_eventarc");
+});
+
 test("temporary failure returns to the caller and retry can complete without duplicate effect", async () => {
   let attempts = 0;
   let effects = 0;

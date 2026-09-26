@@ -533,6 +533,39 @@ test("recipient is revalidated against the current authoritative source before p
   assert.equal(calls, 0);
 });
 
+test("queued Business failure is suppressed when authoritative success supersedes it", async () => {
+  const db = fakeDb({
+    "emailQueue/business_invoice_payment_problem_invoice-1_reservation-1_pi-1": record({
+      notificationId: "business_invoice_payment_problem_invoice-1_reservation-1_pi-1",
+      eventType: "business_invoice_payment_problem",
+      templateId: "business-payment-problem-failed",
+      sourceCollection: "businessInvoices",
+      sourceDocumentId: "invoice-1",
+      sourceRecipientField: "billingEmail",
+      sourcePaymentProblemState: "failed",
+      sourcePaymentProblemKey: "reservation-1:pi-1",
+      to: "billing@example.test",
+    }),
+    "businessInvoices/invoice-1": {
+      status: "paid", balanceDue: 0, billingEmail: "billing@example.test",
+      paymentCommunicationState: "succeeded", paymentCommunicationKey: "reservation-1:pi-1",
+    },
+  });
+  let providerCalls = 0;
+  const result = await processEmailQueueRecord({
+    db,
+    emailId: "business_invoice_payment_problem_invoice-1_reservation-1_pi-1",
+    eventId: "stale-failure",
+    apiKey: "test-key",
+    fetchImpl: async () => {
+      providerCalls += 1;
+      return {ok: true, status: 200, json: async () => ({id: "unexpected"})};
+    },
+  });
+  assert.deepEqual(result, {status: "suppressed", reason: "source_state_changed"});
+  assert.equal(providerCalls, 0);
+});
+
 test("Rider decision uses approvalStatus as an authoritative source state", async () => {
   const db = fakeDb({
     "emailQueue/rider-decision": record({sourceCollection: "riderProfiles", sourceDocumentId: "rider-1", sourceRequiredStatus: "approved", sourceRecipientField: "email", to: "rider@example.test"}),

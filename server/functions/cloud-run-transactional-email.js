@@ -194,6 +194,12 @@ function sourceState(data = {}) {
       .filter(Boolean);
 }
 
+function balanceDue(data = {}) {
+  if (data.balanceDue != null) return Number(data.balanceDue);
+  if (data.total != null || data.amountPaid != null) return Math.max(0, Number(data.total || 0) - Number(data.amountPaid || 0));
+  return null;
+}
+
 async function revalidateSource(db, record) {
   const eventType = text(record.eventType || record.type).toLowerCase();
   const legacyGiftDelivery = eventType === "gift_delivered" &&
@@ -233,6 +239,17 @@ async function revalidateSource(db, record) {
     const ledger = await db.collection("walletTransactions").doc(`gift_roth_${source.id}`).get();
     if (!ledger.exists || text(ledger.data().status) !== "completed" ||
         Number(ledger.data().amount) !== -roth || text(ledger.data().referenceId) !== source.id) {
+      return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
+  if (eventType === "business_invoice_payment_problem") {
+    const currentState = text(sourceData.paymentCommunicationState).toLowerCase();
+    if (source.collection !== "businessInvoices" ||
+        !["failed", "unconfirmed"].includes(currentState) ||
+        currentState !== text(record.sourcePaymentProblemState).toLowerCase() ||
+        text(sourceData.paymentCommunicationKey) !== text(record.sourcePaymentProblemKey) ||
+        ["paid", "paid_manually"].includes(text(sourceData.status).toLowerCase()) ||
+        !Number.isFinite(balanceDue(sourceData)) || balanceDue(sourceData) <= 0) {
       return {status: "suppressed", reason: "source_state_changed"};
     }
   }
@@ -337,6 +354,14 @@ function currentServiceDesign(record, source) {
       ["paid", "paid_manually"].includes(text(source.source.status).toLowerCase()) &&
       Number(source.source.balanceDue || 0) <= 0) {
     return {...record, ...emailTemplates.businessInvoicePaid({
+      reference: source.source.invoiceNumber || record.sourceDocumentId,
+      ctaUrl: record.ctaUrl,
+    })};
+  }
+  if (record.eventType === "business_invoice_payment_problem" && record.templateId &&
+      record.sourceCollection === "businessInvoices") {
+    return {...record, ...emailTemplates.businessPaymentProblem({
+      state: record.sourcePaymentProblemState,
       reference: source.source.invoiceNumber || record.sourceDocumentId,
       ctaUrl: record.ctaUrl,
     })};

@@ -95,6 +95,12 @@ function text(value, max = 500) {
   return `${value || ""}`.trim().slice(0, max);
 }
 
+function invoiceBalanceDue(invoice = {}) {
+  if (invoice.balanceDue != null) return Number(invoice.balanceDue);
+  if (invoice.total != null || invoice.amountPaid != null) return Math.max(0, Number(invoice.total || 0) - Number(invoice.amountPaid || 0));
+  return null;
+}
+
 function invoiceNumberFor(ref) {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   return `CIR-BIZ-${today}-${ref.id.slice(0, 6).toUpperCase()}`;
@@ -863,6 +869,119 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
   }
 };
 
+const BUSINESS_PAYMENT_INTENT_EVENTS = new Set([
+  "payment_intent.succeeded",
+  "payment_intent.processing",
+  "payment_intent.payment_failed",
+  "payment_intent.canceled",
+]);
+
+function businessPaymentCommunicationState(eventType) {
+  if (eventType === "payment_intent.payment_failed" || eventType === "payment_intent.canceled") return "failed";
+  if (eventType === "payment_intent.processing") return "unconfirmed";
+  if (eventType === "payment_intent.succeeded") return "succeeded";
+  return null;
+}
+
+async function recordBusinessPaymentOutcome({db, reservationId, intent, eventId, eventType, state}) {
+  const reservationRef = db.collection("businessCheckoutReservations").doc(reservationId);
+  const paymentRef = db.collection("businessInvoicePayments").doc(reservationId);
+  return db.runTransaction(async (transaction) => {
+    const [reservationSnap, paymentSnap] = await Promise.all([
+      transaction.get(reservationRef),
+      transaction.get(paymentRef),
+    ]);
+    if (!reservationSnap.exists || !paymentSnap.exists) return {handled: true, skipped: true, reason: "payment_record_missing"};
+    const reservation = reservationSnap.data() || {};
+    const payment = paymentSnap.data() || {};
+    const invoiceRef = db.collection("businessInvoices").doc(reservation.invoiceId);
+    const invoiceSnap = await transaction.get(invoiceRef);
+    if (!invoiceSnap.exists) return {handled: true, skipped: true, reason: "invoice_missing"};
+    const invoice = invoiceSnap.data() || {};
+    const metadata = intent && intent.metadata || {};
+    if (metadata.checkoutReservationId !== reservationId ||
+        metadata.businessId !== reservation.businessId ||
+        metadata.invoiceId !== reservation.invoiceId ||
+        payment.businessId !== reservation.businessId ||
+        payment.invoiceId !== reservation.invoiceId) {
+      throw new Error("Business payment provider metadata does not match its persisted checkout.");
+    }
+    const providerIntentId = text(intent && intent.id, 160) || text(payment.providerPaymentIntentId, 160);
+    const key = `${reservationId}:${providerIntentId || text(intent && intent.id, 160) || eventType}`;
+    const balanceDue = invoiceBalanceDue(invoice);
+    const paidInvoice = ["paid", "paid_manually"].includes(text(invoice.status).toLowerCase()) || Number.isFinite(balanceDue) && balanceDue <= 0;
+    const priorIntentStatus = text(payment.paymentIntentStatus, 80).toLowerCase();
+    if (paidInvoice || (priorIntentStatus === "succeeded" && state !== "succeeded")) {
+      transaction.set(paymentRef, {
+        paymentIntentStatus: state === "succeeded" ? "succeeded" : priorIntentStatus || "superseded",
+        paymentOutcome: "superseded_success",
+        paymentOutcomeEventId: eventId || null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {handled: true, skipped: true, reason: "authoritative_success_supersedes_failure"};
+    }
+    const providerStatus = text(intent && intent.status, 80).toLowerCase() || eventType.replace(/^payment_intent\./, "");
+    transaction.set(paymentRef, {
+      paymentIntentStatus: providerStatus,
+      paymentOutcome: state,
+      paymentOutcomeEventId: eventId || null,
+      paymentCommunicationState: state,
+      paymentCommunicationKey: key,
+      paymentCommunicationEventId: eventId || null,
+      providerPaymentIntentId: providerIntentId || null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(invoiceRef, {
+      paymentCommunicationState: state,
+      paymentCommunicationKey: key,
+      paymentCommunicationPaymentId: reservationId,
+      paymentCommunicationProviderIntentId: providerIntentId || null,
+      paymentCommunicationEventId: eventId || null,
+      paymentCommunicationUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {
+      handled: true,
+      state,
+      paymentId: reservationId,
+      communicationKey: key,
+      communicationPublication: state === "succeeded" ? "none" : "downstream_eventarc",
+    };
+  });
+}
+
+async function handleBusinessPaymentIntent({db = getFirestore(), intent, eventId, eventType}) {
+  if (!BUSINESS_PAYMENT_INTENT_EVENTS.has(eventType)) return {handled: false};
+  const metadata = intent && intent.metadata || {};
+  if (metadata.type !== "business_invoice_payment" || !metadata.checkoutReservationId) return {handled: false};
+  const state = businessPaymentCommunicationState(eventType);
+  if (!state) return {handled: false};
+  return recordBusinessPaymentOutcome({db, reservationId: text(metadata.checkoutReservationId, 160), intent, eventId, eventType, state});
+}
+
+async function handleBusinessCheckoutExpired({db = getFirestore(), stripe, session, eventId}) {
+  const metadata = session && session.metadata || {};
+  if (metadata.type !== "business_invoice_payment" || !metadata.checkoutReservationId) return {handled: false};
+  const id = text(metadata.checkoutReservationId, 160);
+  const reservationSnap = await db.collection("businessCheckoutReservations").doc(id).get();
+  if (!reservationSnap.exists) return {handled: true, skipped: true, reason: "checkout_record_missing"};
+  if (session.payment_status === "paid") return {handled: true, ...(await checkoutReservations.settle({db, session, id}))};
+  if (session.status !== "expired") return {handled: true, skipped: true, reason: "provider_state_not_final"};
+  const released = await checkoutReservations.release({db, id, status: "expired", providerSession: session});
+  const outcome = await recordBusinessPaymentOutcome({
+    db,
+    reservationId: id,
+    intent: {
+      id: session.payment_intent || session.id,
+      status: "expired",
+      metadata,
+    },
+    eventId,
+    eventType: "checkout.session.expired",
+    state: "unconfirmed",
+  });
+  return {handled: true, released: released.status, ...outcome};
+}
+
 exports._private = {
   BUSINESS_ROTH_SELF_SERVE_CAP_GBP,
   businessRothAmountDecision,
@@ -872,7 +991,13 @@ exports._private = {
   debitBusinessRoth,
   markInvoicePaid,
   payBusinessInvoiceAtomically,
+  businessPaymentCommunicationState,
+  invoiceBalanceDue,
+  recordBusinessPaymentOutcome,
 };
+
+exports.handleBusinessPaymentIntent = handleBusinessPaymentIntent;
+exports.handleBusinessCheckoutExpired = handleBusinessCheckoutExpired;
 
 async function reconcileBusinessInvoiceCheckoutsCore(stripe) {
   return checkoutReservations.reconcileExpired({db: getFirestore(), stripe});

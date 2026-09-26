@@ -15,6 +15,8 @@ test("every transactional template has complete customer-facing structure", () =
     templates.deliveryCompleted({reference: "booking-1"}),
     templates.cancellationSettled({reference: "booking-1"}),
     templates.businessInvoicePaid({reference: "invoice-1"}),
+    templates.businessPaymentProblem({reference: "invoice-1", state: "failed"}),
+    templates.businessPaymentProblem({reference: "invoice-1", state: "unconfirmed"}),
     templates.rothActivity({movement: "credited", amount: 5, reference: "wallet-1"}),
     templates.rothActivity({movement: "debited", amount: 2.5, reference: "wallet-2"}),
     templates.rothActivity({movement: "refunded", amount: 1, reference: "wallet-3"}),
@@ -109,6 +111,18 @@ test("Business and Health+ emails use the approved branded layout and store link
   }
   assert.match(templates.businessInvoicePaid({reference: "INV-2048"}).html, /INV-2048/);
   assert.match(templates.healthUpdate({type: "rescheduled"}).html, /rescheduled/);
+});
+
+test("Business payment-problem copy distinguishes failure from an unconfirmed payment", () => {
+  const failed = templates.businessPaymentProblem({reference: "INV-2048", state: "failed"});
+  const unconfirmed = templates.businessPaymentProblem({reference: "INV-2048", state: "unconfirmed"});
+  assert.equal(failed.templateId, "business-payment-problem-failed");
+  assert.equal(unconfirmed.templateId, "business-payment-problem-unconfirmed");
+  assert.match(failed.text, /could not complete the payment/i);
+  assert.match(unconfirmed.text, /could not confirm the payment/i);
+  assert.doesNotMatch(unconfirmed.text, /you were not charged|refund|Stripe|Firestore|payment_failed|business_invoice_/i);
+  assert.match(failed.html, /circum_wordmark\.png/);
+  assert.match(unconfirmed.html, /download-on-the-app-store\.svg/);
 });
 
 test("all Gifts variants retain the approved wordmark, links and clean customer copy", () => {
