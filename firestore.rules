@@ -766,6 +766,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /businessGiftOrders/{orderId} {
+      allow read: if (isFinanceAdmin()) || canReadBusinessId(resource.data.businessId);
+      allow write: if false;
+    }
+
+    match /businessGiftOrderEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /giftRecurringRecoveryRequests/{requestId} {
+      allow read, write: if false;
+    }
+
     match /businessAuditLogs/{logId} {
       allow read: if (isFinanceAdmin()) || canReadBusinessId(resource.data.businessId);
       allow write: if false;
