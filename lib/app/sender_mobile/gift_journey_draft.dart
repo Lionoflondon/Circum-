@@ -21,8 +21,6 @@ const senderGiftPaymentDraftCollectionName = 'giftPaymentDrafts';
 const senderGiftAdminReviewCollectionName = 'giftRequests';
 const senderGiftPaymentCallableName = 'createGiftPayment';
 const senderGiftRothBalanceCallableName = 'getSenderRothBalance';
-const senderGiftRecurringConsentCopy =
-    'Make this Gift recurring. By continuing, you agree that CIRCUM will automatically charge your saved payment card for the same Gift budget on each selected renewal date until you cancel. Each successful renewal creates a new Gift using your original delivery-date pattern. Roth applies only to your first payment and is not used for future renewals. You can cancel future renewals before the next billing date. Cancellation takes effect at the end of the current billing period.';
 const senderGiftIrisUnsupportedCopy =
     'IRIS’s real catalog only tags gift signals for Beauty/Fashion. None of your selected themes fall in that range, so there’s nothing to suggest yet.';
 const senderGiftIrisPartialUnsupportedCopy =

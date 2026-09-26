@@ -39,7 +39,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   String? _message;
   String? _paymentMethod;
   bool _applyRoth = false;
-  bool _recurringConsentAccepted = false;
   bool _platformPaySupported = false;
   List<SenderPaymentMethod> _savedMethods = const [];
   String? _selectedPaymentMethodId;
@@ -56,24 +55,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   double get _rothApplied =>
       _applyRoth ? _rothBalance.clamp(0, widget.draft.budget).toDouble() : 0;
   double get _remainingCardAmount => widget.draft.budget - _rothApplied;
-  bool get _isRecurringSelfGift =>
-      widget.draft.mode == SenderGiftMode.myself &&
-      (widget.draft.selfGiftFrequency == 'monthly' ||
-          widget.draft.selfGiftFrequency == 'quarterly');
-  String get _recurringFrequencyLabel =>
-      widget.draft.selfGiftFrequency == 'quarterly'
-      ? 'Every 4 months'
-      : 'Monthly';
-  DateTime _nextRecurringChargeDate() {
-    final now = DateTime.now();
-    final months = widget.draft.selfGiftFrequency == 'quarterly' ? 4 : 1;
-    final targetMonth = now.month - 1 + months;
-    final year = now.year + targetMonth ~/ 12;
-    final month = targetMonth % 12 + 1;
-    final lastDay = DateTime(year, month + 1, 0).day;
-    return DateTime(year, month, now.day.clamp(1, lastDay));
-  }
-
   String get _verifiedPaymentMethod {
     if (_rothApplied >= widget.draft.budget && widget.draft.budget > 0) {
       return 'roth';
@@ -214,17 +195,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           label: 'Total',
           value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
-        if (_isRecurringSelfGift) ...[
-          const SizedBox(height: 16),
-          _RecurringConsentCard(
-            frequency: _recurringFrequencyLabel,
-            budget: widget.draft.budget,
-            nextChargeDate: _nextRecurringChargeDate(),
-            accepted: _recurringConsentAccepted,
-            onChanged: (value) =>
-                setState(() => _recurringConsentAccepted = value),
-          ),
-        ],
         const SizedBox(height: 10),
         _RothBalanceSummary(
           loading: _rothLoading,
@@ -341,10 +311,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           ),
           const SizedBox(height: 12),
           GiftJourneyWidgets.primaryButton(
-            enabled:
-                !_submitting &&
-                _paymentMethod != null &&
-                (!_isRecurringSelfGift || _recurringConsentAccepted),
+            enabled: !_submitting && _paymentMethod != null,
             label: _submitting
                 ? 'Preparing checkout...'
                 : 'Continue to Secure Payment',
@@ -411,9 +378,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         'paymentMethod': _verifiedPaymentMethod,
         'grossGiftBudget': widget.draft.budget,
         'paymentStatus': 'payment_pending',
-        'recurringConsentAccepted':
-            _isRecurringSelfGift && _recurringConsentAccepted,
-        'recurringConsentCopy': senderGiftRecurringConsentCopy,
       });
       final parsedDeliveryDate = DateTime.tryParse(
         widget.draft.deliveryDate ?? '',
@@ -430,9 +394,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           'source': 'sender_mobile',
           'applyRoth': _applyRoth && _rothBalance > 0,
           'paymentMethod': _verifiedPaymentMethod,
-          'recurringConsentAccepted':
-              _isRecurringSelfGift && _recurringConsentAccepted,
-          'recurringConsentCopy': senderGiftRecurringConsentCopy,
           if (_selectedPaymentMethodId != null)
             'paymentMethodId': _selectedPaymentMethodId,
           'checkoutMode': kIsWeb ? 'web_checkout' : 'payment_intent',
@@ -748,78 +709,6 @@ class _RothToggleCard extends StatelessWidget {
               value: '£${remaining.toStringAsFixed(0)}',
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RecurringConsentCard extends StatelessWidget {
-  final String frequency;
-  final double budget;
-  final DateTime nextChargeDate;
-  final bool accepted;
-  final ValueChanged<bool> onChanged;
-
-  const _RecurringConsentCard({
-    required this.frequency,
-    required this.budget,
-    required this.nextChargeDate,
-    required this.accepted,
-    required this.onChanged,
-  });
-
-  String get _dateLabel =>
-      '${nextChargeDate.day}/${nextChargeDate.month}/${nextChargeDate.year}';
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFC9B8FF).withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFC9B8FF).withValues(alpha: .3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'RECURRING SELF GIFT',
-            style: GoogleFonts.jetBrainsMono(
-              color: const Color(0xFFD9CEFF),
-              fontSize: 10,
-              letterSpacing: .8,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _PaymentSummaryRow(label: 'Frequency', value: frequency),
-          const SizedBox(height: 6),
-          _PaymentSummaryRow(
-            label: 'Next card charge',
-            value: '£${budget.toStringAsFixed(2)} on $_dateLabel',
-          ),
-          const SizedBox(height: 10),
-          Text(
-            senderGiftRecurringConsentCopy,
-            style: GoogleFonts.inter(
-              color: const Color(0xFFE8E1FF),
-              fontSize: 12,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: accepted,
-            onChanged: (value) => onChanged(value == true),
-            title: const Text('I agree to the recurring Gift charges.'),
-            controlAffinity: ListTileControlAffinity.leading,
-          ),
         ],
       ),
     );

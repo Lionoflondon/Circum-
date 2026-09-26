@@ -50,12 +50,4 @@ void main() {
         source, contains("!kIsWeb && paymentData['paymentStatus'] == 'paid'"));
     expect(source, contains('_paymentComplete || _paymentMethod == null'));
   });
-
-  test('recurring Self Gift requires explicit consent and shows the next charge', () {
-    expect(source, contains('_recurringConsentAccepted = false'));
-    expect(source, contains("'recurringConsentAccepted'"));
-    expect(source, contains("'recurringConsentCopy': senderGiftRecurringConsentCopy"));
-    expect(source, contains("'Next card charge'"));
-    expect(source, contains('senderGiftRecurringConsentCopy'));
-  });
 }
