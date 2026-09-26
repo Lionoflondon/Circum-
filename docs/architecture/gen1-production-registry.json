@@ -4384,8 +4384,8 @@
       "authRequired": true,
       "appCheckRequired": true,
       "secrets": [
-        "GOOGLE_MAPS_DIRECTIONS_API_KEY",
-        "STRIPE_SECRET_KEY"
+        "CIRCUM_QA_STRIPE_SECRET_KEY",
+        "GOOGLE_MAPS_DIRECTIONS_API_KEY"
       ],
       "firestoreCollections": [
         "businessAccounts",
@@ -6720,8 +6720,8 @@
       "authRequired": true,
       "appCheckRequired": true,
       "secrets": [
-        "GOOGLE_MAPS_DIRECTIONS_API_KEY",
-        "STRIPE_SECRET_KEY"
+        "CIRCUM_QA_STRIPE_SECRET_KEY",
+        "GOOGLE_MAPS_DIRECTIONS_API_KEY"
       ],
       "firestoreCollections": [
         "businessAccounts",
