@@ -53,10 +53,14 @@ function createStripeWebhookProcessor(deps) {
     };
 
     if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
+      const giftSubscription = giftsPayment && typeof giftsPayment.handleGiftSubscriptionEvent === "function" ? await giftsPayment.handleGiftSubscriptionEvent({db, event}) : {handled: false};
+      if (giftSubscription.handled) return finish({success: true, gift: giftSubscription}, "gift_subscription");
       const result = await healthMembershipLifecycle.handleHealthSubscriptionEvent({db, event});
       return finish({success: true, healthMembership: result}, "health_membership_subscription");
     }
     if (["invoice.paid", "invoice.payment_failed"].includes(event.type)) {
+      const giftInvoice = giftsPayment && typeof giftsPayment.handleGiftSubscriptionInvoice === "function" ? await giftsPayment.handleGiftSubscriptionInvoice({db, stripe, event}) : {handled: false};
+      if (giftInvoice.handled) return finish({success: true, gift: giftInvoice}, "gift_subscription_invoice");
       const result = await healthMembershipLifecycle.handleHealthInvoiceEvent({db, event});
       return finish({success: true, healthMembership: result}, "health_membership_invoice");
     }
@@ -132,6 +136,7 @@ function createStripeWebhookProcessor(deps) {
         routed = await routeCheckoutSessionCompleted(session, event.id, {
           businessPayments,
           giftsPayment,
+          stripe,
           healthPlus,
           rothLedger,
           senderBooking: {handleSenderCheckoutSession: (value, eventId) => senderBooking.handleSenderCheckoutSession(stripe, value, eventId)},

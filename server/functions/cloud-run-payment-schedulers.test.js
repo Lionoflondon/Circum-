@@ -14,6 +14,7 @@ test("payment scheduler service exposes only bounded maintenance routes", () => 
   assert.match(source, /processHealthPlusRemindersCore/);
   assert.match(source, /reconcileDeliveryTipsCore/);
   assert.match(source, /reconcileDeliveryTipsCore\(stripeClient\(\), \{dryRun: true\}\)/);
+  assert.match(source, /reconcileGiftRecurringRenewalsCore\(stripeClient\(\)\)/);
   assert.match(payoutSource, /FieldPath\.documentId\(\)/);
   assert.doesNotMatch(source, /createRiderTransferOrPayout\(stripeClient/);
   assert.doesNotMatch(source, /createBusinessInvoiceCheckout/);
@@ -37,6 +38,7 @@ test("Pub/Sub Eventarc envelopes select only an explicit scheduler handler", () 
   assert.equal(eventHandlerName(wrap({handler: "unknown"}), "https://service.example/?topic=firebase-schedule-processHealthPlusReminders-us-central1"), "processHealthPlusReminders");
   assert.equal(eventHandlerName({}, "/", {"ce-source": "//pubsub.googleapis.com/projects/circum-2797c/topics/firebase-schedule-processHealthPlusReminders-us-central1"}), "processHealthPlusReminders");
   assert.equal(eventHandlerName({}, "/", {"ce-source": "//pubsub.googleapis.com/projects/circum-2797c/topics/firebase-schedule-reconcileDeliveryTips-us-central1"}), "reconcileDeliveryTips");
+  assert.equal(eventHandlerName({}, "/", {"ce-source": "//pubsub.googleapis.com/projects/circum-2797c/topics/firebase-schedule-reconcileGiftRecurringRenewals-us-central1"}), "reconcileGiftRecurringRenewals");
 });
 
 test("Firebase Scheduler Eventarc metadata selects only the exact migrated topics", () => {
@@ -44,5 +46,6 @@ test("Firebase Scheduler Eventarc metadata selects only the exact migrated topic
   assert.equal(eventHandlerName({}, "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-reconcilePendingDeliverySettlements-us-central1"), "reconcilePendingDeliverySettlements");
   assert.equal(eventHandlerName({}, "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-processHealthPlusReminders-us-central1"), "processHealthPlusReminders");
   assert.equal(eventHandlerName({}, "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-reconcileDeliveryTips-us-central1"), "reconcileDeliveryTips");
+  assert.equal(eventHandlerName({}, "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-reconcileGiftRecurringRenewals-us-central1"), "reconcileGiftRecurringRenewals");
   assert.equal(eventHandlerName({}, "/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Funmigrated-topic"), "");
 });

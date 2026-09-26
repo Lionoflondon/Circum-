@@ -8,6 +8,7 @@ const riderConnect = require("./rider-connect");
 const deliveryTracking = require("./delivery-tracking");
 const healthPlusOperations = require("./health-plus-operations");
 const ratingsTipping = require("./ratings-tipping");
+const giftRecurring = require("./gift-recurring");
 
 if (!getApps().length) initializeApp();
 
@@ -36,12 +37,15 @@ const handlers = Object.freeze({
     ratingsTipping.reconcileDeliveryTipsCore(stripeClient()),
   reconcileDeliveryTipsDryRun: () =>
     ratingsTipping.reconcileDeliveryTipsCore(stripeClient(), {dryRun: true}),
+  reconcileGiftRecurringRenewals: () =>
+    giftRecurring.reconcileGiftRecurringRenewalsCore(stripeClient()),
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
   "firebase-schedule-reconcilePendingDeliverySettlements-us-central1": "reconcilePendingDeliverySettlements",
   "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
   "firebase-schedule-reconcileDeliveryTips-us-central1": "reconcileDeliveryTips",
+  "firebase-schedule-reconcileGiftRecurringRenewals-us-central1": "reconcileGiftRecurringRenewals",
 });
 
 function topicHandlerName(requestUrl = "", headers = {}) {
