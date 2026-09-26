@@ -1,6 +1,6 @@
 # Gifts platform current matrix
 
-Reconciled against canonical `main` at `0af76f1896289c69b8c3254dbfbac1f03c2dc3cf` on 2026-09-26 after PR #370 merged. PR #371 was rebased onto this commit and is awaiting its fresh protected checks at the time of this edit. This is a source/architecture matrix; it is not production certification.
+Reconciled against canonical `main` at `9851d59b85b291c5d63402532eaa7015c31daa58` on 2026-09-26 after PRs #370 and #371 merged. This is a source/architecture matrix; it is not production certification.
 
 | Area | State | Current evidence and implementation boundary |
 |---|---|---|
@@ -15,7 +15,7 @@ Reconciled against canonical `main` at `0af76f1896289c69b8c3254dbfbac1f03c2dc3cf
 | Story | PRESENT / PROTECTED | Existing Gift Story ownership/runtime is out of scope and must not be reopened by this work. |
 | Notifications / email | PRESENT / INCOMPLETE | Central queue and Gifts sender family exist. Recurring payment-problem/cancellation messages now use deterministic queue IDs; queue/provider certification remains outstanding. Renewal Gift confirmation reuses the existing Gift-created email policy. |
 | Admin | PRESENT / INCOMPLETE | Admin Gift workspace and campaign actions exist. Recurring status is customer-authenticated through status/cancellation/portal callables; read-only Admin visibility and audited safe retry still need a dedicated surface review. |
-| Privacy | PRESENT / INCOMPLETE | Existing recipient privacy/request semantics and PR #371 metric repair are present in source/branch work. Business direct Gift privacy must remain server-authoritative and must not reveal private destinations. |
+| Privacy | PRESENT / INCOMPLETE | Existing recipient privacy/request semantics and merged PR #371 metric repair are present in source/branch work. Business direct Gift privacy must remain server-authoritative and must not reveal private destinations. |
 | Event / queue ownership | INCOMPLETE → NARROWED IN BRANCH | Stripe subscription/invoice routing is added to the existing webhook owner; no second webhook owner is created. Existing Gift movement/Story ownership remains unchanged. Exact deployed subscription/event/queue topology still needs read-only reconciliation before activation. |
 | Reconciliation | IMPLEMENTED / UNVERIFIED | A bounded 25-series/10-invoice-per-series reconciliation is wired as `reconcileGiftRecurringRenewals`; deterministic claims make a second run zero-effective for already fulfilled invoices. Live scheduled invocation and controlled failure-recovery proof remain outstanding. |
 
