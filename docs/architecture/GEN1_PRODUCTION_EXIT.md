@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 273
 - Gen 1 exports: 271
 - Files importing Firebase Functions v1: 64
-- MIGRATE TO CLOUD RUN: 167
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 62
+- MIGRATE TO CLOUD RUN: 166
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 63
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -186,7 +186,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | previewSenderCancellation | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_tracking_screen.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js<br>server/functions/payments-cancellation-contract.test.js<br>server/functions/rider-cancellation.emulator.test.js |
 | processHealthPlusReminders | server/functions/health-plus-operations.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js<br>server/functions/health-plus-operations.test.js |
 | qaLifecycleFixture | server/functions/qa-lifecycle.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/QA-LIFECYCLE.md |
-| qaSpecialFlowFixture | server/functions/qa-special-flow.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/qa/private-special-flow-fixture.md |
+| qaSpecialFlowFixture | server/functions/qa-special-flow.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/qa/private-special-flow-fixture.md<br>server/functions/cloud-run-qa-special-flow.js<br>server/functions/cloud-run-qa-special-flow.test.js |
 | reconcileBusinessInvoiceCheckouts | server/functions/business-payments.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/payment-runtime-bindings.test.js |
 | reconcilePendingDeliverySettlements | server/functions/delivery-tracking.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js<br>server/functions/dispatch-completion-spine.test.js |
 | reconcilePendingSenderCancellations | server/functions/delivery-policy.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/cloud-run-sender-cancellation-reconciler.js<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/production-functions-inventory.json |
