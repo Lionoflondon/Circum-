@@ -820,7 +820,7 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
     if (source === "cloud_run" || source === "reconciliation") {
       throw new Error("gift_story_downstream_retry_required");
     }
-  } else {
+  } else if (unlockResult.status !== "duplicate" || emailResults.some((result) => result.value && result.value.status !== "duplicate")) {
     await giftRef.set({
       giftStoryEmailStatus: "queued",
       giftStoryEmailError: FieldValue.delete(),
@@ -853,6 +853,9 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       return {status: "recorded"};
     },
   });
+  if (auditResult.status === "busy" && (source === "cloud_run" || source === "reconciliation")) {
+    throw new Error("gift_story_audit_retry_required");
+  }
   const effectiveEffects = [unlockResult, auditResult, ...emailResults.filter((result) => result.status === "fulfilled").map((result) => result.value)]
       .filter((result) => result && result.status === "completed").length;
   return {giftId, token, recipientToken, expiresAt, effectiveEffects};

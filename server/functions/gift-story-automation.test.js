@@ -73,6 +73,10 @@ test("20 concurrent Story unlocks reuse one sender and recipient token and one s
   await story.unlockGiftStory(db, snapshot, "d-1", {source: "cloud_run"});
   assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "queued");
   assert.equal([...values.keys()].filter((key) => key.startsWith("emailQueue/")).length, 3);
+  values.get("giftRequests/g-1").giftStoryEmailStatus = "sent";
+  const secondPass = await story.unlockGiftStory(db, snapshot, "d-1", {source: "reconciliation"});
+  assert.equal(secondPass.effectiveEffects, 0);
+  assert.equal(values.get("giftRequests/g-1").giftStoryEmailStatus, "sent");
 });
 
 test("admin recovery requires a completed linked Gift delivery and keeps the original Story tokens", async () => {
