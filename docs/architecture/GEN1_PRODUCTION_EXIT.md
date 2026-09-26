@@ -6,9 +6,9 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Gen 1 exports: 271
 - Files importing Firebase Functions v1: 64
 - MIGRATE TO CLOUD RUN: 169
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 58
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 60
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
-- REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 15
+- REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
@@ -184,11 +184,11 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | onStoryNotificationWrite | server/functions/gift-story-automation.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onSupportTicketCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/platform-notifications.test.js |
 | previewSenderCancellation | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_tracking_screen.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js<br>server/functions/payments-cancellation-contract.test.js<br>server/functions/rider-cancellation.emulator.test.js |
-| processHealthPlusReminders | server/functions/health-plus-operations.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | server/functions/health-plus-operations.test.js |
+| processHealthPlusReminders | server/functions/health-plus-operations.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/health-plus-operations.test.js |
 | qaLifecycleFixture | server/functions/qa-lifecycle.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/QA-LIFECYCLE.md |
 | qaSpecialFlowFixture | server/functions/qa-special-flow.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/qa/private-special-flow-fixture.md |
 | reconcileBusinessInvoiceCheckouts | server/functions/business-payments.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/payment-runtime-bindings.test.js |
-| reconcilePendingDeliverySettlements | server/functions/delivery-tracking.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | scripts/scoped_functions_deploy_list.test.js<br>server/functions/dispatch-completion-spine.test.js |
+| reconcilePendingDeliverySettlements | server/functions/delivery-tracking.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-payment-schedulers.js<br>server/functions/dispatch-completion-spine.test.js |
 | reconcilePendingSenderCancellations | server/functions/delivery-policy.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/cloud-run-sender-cancellation-reconciler.js<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/production-functions-inventory.json |
 | reconcileRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
 | reconcileStaleDeliveryLocks | server/functions/stale-delivery.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |

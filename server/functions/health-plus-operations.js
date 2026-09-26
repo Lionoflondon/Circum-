@@ -214,38 +214,45 @@ exports.onHealthPlusPickupOperationalWrite = functions.firestore
       return null;
     });
 
+async function processHealthPlusRemindersCore(db = getFirestore(), now = new Date()) {
+  const horizon = new Date(now.getTime() + 7 * DAY_MS);
+  const snapshot = await db.collection("prescriptionPickups")
+      .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
+      .limit(300)
+      .get();
+  let queued = 0;
+  let escalated = 0;
+  await Promise.all(snapshot.docs.map(async (doc) => {
+    const pickup = {...doc.data(), id: doc.id};
+    const scheduledAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
+    if (!scheduledAt || scheduledAt > horizon) return;
+    const msUntil = scheduledAt.getTime() - now.getTime();
+    if (msUntil <= DAY_MS && msUntil > 23 * HOUR_MS) {
+      await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
+      await queueHealthAdminNotification(db, pickup, "pickup_tomorrow", "Health+ pickup tomorrow", `${pickupLabel(pickup)} is scheduled tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
+      queued++;
+    }
+    if (msUntil <= 2 * HOUR_MS && msUntil > 90 * 60 * 1000) {
+      await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
+      queued++;
+    }
+    if (msUntil <= DAY_MS && !pickup.assignedDriverId) {
+      await doc.ref.set({riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+    if (msUntil < 0 && !["collected", "out_for_delivery", "delivered"].includes(pickup.status)) {
+      await doc.ref.set({riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      escalated++;
+    }
+  }));
+  return {scanned: snapshot.size, queued, escalated};
+}
+
 exports.processHealthPlusReminders = functions.pubsub
     .schedule("every 30 minutes")
     .timeZone("Europe/London")
-    .onRun(async () => {
-      const db = getFirestore();
-      const now = new Date();
-      const horizon = new Date(now.getTime() + 7 * DAY_MS);
-      const snapshot = await db.collection("prescriptionPickups")
-          .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
-          .limit(300)
-          .get();
-      await Promise.all(snapshot.docs.map(async (doc) => {
-        const pickup = {...doc.data(), id: doc.id};
-        const scheduledAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
-        if (!scheduledAt || scheduledAt > horizon) return;
-        const msUntil = scheduledAt.getTime() - now.getTime();
-        if (msUntil <= DAY_MS && msUntil > 23 * HOUR_MS) {
-          await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
-          await queueHealthAdminNotification(db, pickup, "pickup_tomorrow", "Health+ pickup tomorrow", `${pickupLabel(pickup)} is scheduled tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
-        }
-        if (msUntil <= 2 * HOUR_MS && msUntil > 90 * 60 * 1000) {
-          await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
-        }
-        if (msUntil <= DAY_MS && !pickup.assignedDriverId) {
-          await doc.ref.set({riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-        }
-        if (msUntil < 0 && !["collected", "out_for_delivery", "delivered"].includes(pickup.status)) {
-          await doc.ref.set({riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-        }
-      }));
-      return null;
-    });
+    .onRun(() => processHealthPlusRemindersCore());
+
+exports._private = {processHealthPlusRemindersCore};
 
 exports.resetHealthPlusMonthlyUsage = functions.pubsub
     .schedule("0 2 1 * *")

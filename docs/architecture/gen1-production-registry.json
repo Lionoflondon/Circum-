@@ -6632,6 +6632,7 @@
       "generation": "Gen 1",
       "productionPurpose": "healthPlusOperations.processHealthPlusReminders",
       "callers": [
+        "server/functions/cloud-run-payment-schedulers.js",
         "server/functions/health-plus-operations.test.js"
       ],
       "criticality": "review-required",
@@ -6651,8 +6652,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
+      "cloudRunReplacement": [
+        "cloud-run-payment-schedulers.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6802,6 +6805,7 @@
       "productionPurpose": "deliveryTracking.reconcilePendingDeliverySettlements",
       "callers": [
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/cloud-run-payment-schedulers.js",
         "server/functions/dispatch-completion-spine.test.js"
       ],
       "criticality": "P0/P1-review-required",
@@ -6825,8 +6829,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
+      "cloudRunReplacement": [
+        "cloud-run-payment-schedulers.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
