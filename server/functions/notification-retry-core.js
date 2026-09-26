@@ -18,6 +18,7 @@ const PERMANENT_ERRORS = new Set([
 ]);
 const INVALID_TOKEN_ERRORS = new Set(["messaging/invalid-registration-token", "messaging/registration-token-not-registered"]);
 const SAFE_RETRY_ERRORS = new Set(["messaging/quota-exceeded", "messaging/message-rate-exceeded"]);
+const SAFE_PREVIOUS_FAILURES = new Set([...SAFE_RETRY_ERRORS, "retry_worker_exited_before_send"]);
 const OPEN_DELIVERY_STATUSES = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
 
 const clean = (value) => `${value || ""}`.trim();
@@ -153,6 +154,16 @@ async function processNotificationRetriesCore({
         retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
       });
       result.exhausted++;
+      continue;
+    }
+    if (!SAFE_PREVIOUS_FAILURES.has(clean(row.failureReason))) {
+      await writeClaim(db, doc.ref, claimId, {
+        pushDeliveryStatus: PERMANENT_ERRORS.has(clean(row.failureReason)) ? "exhausted" : "manual_review",
+        retryable: false, nextRetryAt: null,
+        failureReason: clean(row.failureReason) || "prior_push_outcome_unknown",
+        retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
+      });
+      result.uncertain++;
       continue;
     }
     const token = await ownedToken(clean(row.recipientId), clean(row.recipientRole));

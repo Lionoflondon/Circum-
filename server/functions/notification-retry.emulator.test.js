@@ -24,6 +24,7 @@ async function seed(db, id, patch = {}) {
     title: "New delivery", body: "A job is ready", data: {deliveryId: "delivery-1"},
     destination: {route: "jobs", bookingId: "delivery-1"},
     pushDeliveryStatus: "failed", retryable: true, deliveryAttempts: 1,
+    failureReason: "messaging/quota-exceeded",
     createdAt: Timestamp.fromMillis(Date.now() - 30000), ...patch,
   });
 }
@@ -115,4 +116,15 @@ test("a recently delivered job offer and an exhausted retry are skipped", async 
   assert.equal(result.exhausted, 2);
   assert.equal((await db.doc("notifications/completed-job").get()).data().failureReason, "stale_notification");
   assert.equal((await db.doc("notifications/max-attempts").get()).data().failureReason, "max_attempts");
+}));
+
+test("publisher timeout or missing failure reason never causes an automatic resend", async () => withDb("prior-unknown", async (db) => {
+  await seed(db, "timeout", {type: "chat_message", failureReason: "ETIMEDOUT"});
+  await seed(db, "missing-reason", {type: "chat_message", failureReason: null});
+  const result = await processNotificationRetriesCore({db, ownedToken: async () => "token-1", sendPush: async () => {
+    throw new Error("unexpected push");
+  }});
+  assert.equal(result.uncertain, 2);
+  assert.equal((await db.doc("notifications/timeout").get()).data().pushDeliveryStatus, "manual_review");
+  assert.equal((await db.doc("notifications/missing-reason").get()).data().pushDeliveryStatus, "manual_review");
 }));
