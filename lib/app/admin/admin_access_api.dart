@@ -10,6 +10,7 @@ const _adminCallableRoutes = {
   'adminResolveAccess',
   'adminQueryPage',
   'adminSaveGiftRequestEditor',
+  'adminRequestGiftRecurringRecovery',
 };
 
 class AdminAccessException implements Exception {
