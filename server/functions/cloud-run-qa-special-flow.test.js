@@ -76,6 +76,14 @@ test("transport has no live Stripe binding or webhook capability", () => {
   assert.doesNotMatch(source, /webhook/i);
 });
 
+test("fixture ownership stays with the approved Sender participant", () => {
+  const source = fs.readFileSync(require.resolve("./qa-special-flow"), "utf8");
+  assert.match(source, /special-v3:/);
+  assert.match(source, /senderId: lists\.senders\[0\]/);
+  assert.match(source, /ownerUid: lists\.senders\[0\]/);
+  assert.match(source, /"verify_receiver_pin"/);
+});
+
 test("missing Firebase Auth or App Check never reaches QA handler", async () => {
   let calls = 0;
   await withServer(dependencies(async () => {

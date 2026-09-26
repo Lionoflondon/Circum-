@@ -42,20 +42,20 @@ function factory({db, env = process.env, stripe}) {
   }
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
-    const lifecycleActions = new Set(["book", "pay", "read", "accept", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "capture_tip", "send_message", "cancel"]);
+    const lifecycleActions = new Set(["book", "pay", "read", "accept", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
     if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
     if (["health", "health_finalize", "business", "business_finalize"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
-    const id = createHash("sha256").update(`special-v2:${lists.operators[0]}`).digest("hex");
+    const id = createHash("sha256").update(`special-v3:${lists.operators[0]}`).digest("hex");
     const ref = db.collection(ROOT).doc(id);
     if (data.action === "prepare") {
-      const created = await lifecycle.handle({action: "create", requestId: `special_v2_${lists.operators[0]}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
+      const created = await lifecycle.handle({action: "create", requestId: `special_v3_${lists.operators[0]}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
       await db.runTransaction(async (tx) => {
         const current = await tx.get(ref); if (current.exists) return;
         const now = Timestamp.now();
-        tx.create(ref, {id, isSyntheticQa: true, qaCreatedBy: uid, qaCreatedAt: now, senderId: uid, riderId: lists.riders[0], lifecycleFixtureId: created.fixtureId, expiresAt: Timestamp.fromMillis(now.toMillis() + 3600000), archived: false});
-        tx.create(ref.collection("businessAccounts").doc("qa_business"), {ownerUid: uid, isSyntheticQa: true, qaFixtureId: id});
+        tx.create(ref, {id, isSyntheticQa: true, qaCreatedBy: uid, qaCreatedAt: now, senderId: lists.senders[0], riderId: lists.riders[0], lifecycleFixtureId: created.fixtureId, expiresAt: Timestamp.fromMillis(now.toMillis() + 3600000), archived: false});
+        tx.create(ref.collection("businessAccounts").doc("qa_business"), {ownerUid: lists.senders[0], isSyntheticQa: true, qaFixtureId: id});
         // An unpaid, fixed synthetic invoice is setup data, not a payment transition.
         tx.create(ref.collection("businessInvoices").doc("qa_invoice"), {businessId: "qa_business", total: 5, balanceDue: 5, amountPaid: 0, status: "issued", checkoutProtocolVersion: 1, isSyntheticQa: true, qaFixtureId: id});
       });
