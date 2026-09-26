@@ -61,6 +61,7 @@ async function routeCheckoutSessionCompleted(
       giftDraftId: metadata.giftDraftId,
       session: sessionData,
       eventId,
+      stripe: deps.stripe,
     });
     return {handled: true, type};
   }

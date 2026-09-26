@@ -389,6 +389,49 @@ function giftStory({role, storyUrl} = {}) {
   return copy;
 }
 
+function recurringDate(value) {
+  if (!value) return "the next scheduled renewal";
+  const date = new Date(typeof value === "number" ? value : value);
+  if (Number.isNaN(date.getTime())) return "the next scheduled renewal";
+  return new Intl.DateTimeFormat("en-GB", {dateStyle: "long", timeZone: "Europe/London"}).format(date);
+}
+
+function giftRecurringPaymentProblem({amount, frequency, ctaUrl = `${APP_URL}/?app=gifts`} = {}) {
+  return result({
+    templateId: "gift-recurring-payment-problem",
+    subject: "Action needed for your recurring Gift",
+    preheader: "Your next recurring Gift payment needs attention before the next Gift can be prepared.",
+    heading: "Your recurring Gift payment needs attention",
+    paragraphs: [
+      "We could not confirm the next payment for your recurring Gift.",
+      `Your ${frequency || "scheduled"} Gift renewal${amount ? ` of ${money(amount)}` : ""} has not created a new Gift while the payment remains unresolved.`,
+      "Please open CIRCUM to review your payment method and the current recurring Gift status. No future Gift will be prepared until the payment is confirmed.",
+    ],
+    ctaLabel: "Review recurring Gift",
+    ctaUrl,
+    senderCategory: "gifts",
+    tags: [{name: "product", value: "gifts"}, {name: "message", value: "recurring-payment-problem"}],
+  });
+}
+
+function giftRecurringCancellationScheduled({amount, frequency, nextChargeAt, ctaUrl = `${APP_URL}/?app=gifts`} = {}) {
+  return result({
+    templateId: "gift-recurring-cancellation-scheduled",
+    subject: "Your recurring Gift cancellation is scheduled",
+    preheader: "Future recurring Gift renewals will stop at the end of the current billing period.",
+    heading: "Your recurring Gift cancellation is scheduled",
+    paragraphs: [
+      "Your current paid Gift remains unchanged.",
+      `No further ${frequency || "scheduled"} Gift renewal will be charged after the current billing period ends${nextChargeAt ? ` on ${recurringDate(nextChargeAt)}` : ""}.`,
+      amount ? `The recurring budget is ${money(amount)} per renewal.` : "",
+    ].filter(Boolean),
+    ctaLabel: "View Gift settings",
+    ctaUrl,
+    senderCategory: "gifts",
+    tags: [{name: "product", value: "gifts"}, {name: "message", value: "recurring-cancellation"}],
+  });
+}
+
 function assertCustomerFacingContent(copy) {
   const fields = visibleCustomerText(copy).toLowerCase();
   if (/[a-z][a-z0-9]*_[a-z0-9_]+/.test(fields)) throw new Error("customer_copy_contains_snake_case");
@@ -423,6 +466,8 @@ module.exports = {
   giftReadyForDelivery,
   giftRejected,
   giftStory,
+  giftRecurringCancellationScheduled,
+  giftRecurringPaymentProblem,
   healthUpdate,
   referralReward,
   riderDecision,

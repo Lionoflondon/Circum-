@@ -12,7 +12,14 @@ const FAMILY_ROUTES = Object.freeze({
     "createBusinessInvoiceCheckout",
     "cancelBusinessInvoiceCheckout",
   ],
-  gifts: ["createGiftPayment", "finalizeGiftPayment", "cancelGiftPayment"],
+  gifts: [
+    "createGiftPayment",
+    "finalizeGiftPayment",
+    "cancelGiftPayment",
+    "cancelGiftRecurring",
+    "getGiftRecurringStatus",
+    "createGiftRecurringBillingPortalSession",
+  ],
   tips: ["submitDeliveryTip", "refundDeliveryTip"],
   delivery_adjustments: [
     "createDeliveryAdjustmentPayment",
