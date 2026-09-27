@@ -15,6 +15,9 @@ const verifiedBindings = Object.freeze({
   deleteSenderDraft: {
     files: ["cloud-run-sender-drafts.js", "cloud-run-sender-drafts.test.js"],
   },
+  createSenderBookingQuote: {
+    files: ["cloud-run-sender-booking-quotes.js", "cloud-run-sender-booking-quotes.test.js"],
+  },
   submitRiderApplication: {
     file: "cloud-run-account-bootstrap.js",
     pattern: /submitRiderApplication\s*:\s*\{\s*handler:\s*riderAccount\.submitRiderApplication,\s*appCheckRequired:\s*true\s*\}/,
@@ -51,6 +54,13 @@ function findCloudRunReplacements(name, files, textByFile) {
 }
 
 function productionCallers(name, scannedCallers) {
+  if (name === "createSenderBookingQuote") {
+    return [
+      "lib/app/send_package/bloc/send_package_bloc.dart",
+      "lib/app/account/bloc/account_bloc.dart",
+      "lib/website/shared/circum_website_app.dart",
+    ];
+  }
   if (name === "submitRiderApplication") return ["lib/website/shared/circum_website_app.dart"];
   if (name === "adminResolveAccess") return ["lib/app/admin/admin_access_api.dart"];
   if (name === "adminQueryPage") return ["lib/app/admin/admin_phase1_shell.dart"];

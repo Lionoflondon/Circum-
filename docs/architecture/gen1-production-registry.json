@@ -3607,13 +3607,9 @@
       "generation": "Gen 1",
       "productionPurpose": "senderBooking.createSenderBookingQuote",
       "callers": [
-        "lib/app/account/bloc/account_bloc.dart",
         "lib/app/send_package/bloc/send_package_bloc.dart",
-        "lib/website/shared/circum_website_app.dart",
-        "server/functions/core-payment-amount-security.test.js",
-        "server/functions/sender-payment-app-check.test.js",
-        "server/functions/sender-route-preview.test.js",
-        "test/sender_mobile/sender_canonical_destination_guard_test.dart"
+        "lib/app/account/bloc/account_bloc.dart",
+        "lib/website/shared/circum_website_app.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -3643,8 +3639,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-sender-booking-quotes.js",
+        "cloud-run-sender-booking-quotes.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -3712,6 +3711,7 @@
         "lib/app/account/bloc/account_bloc.dart",
         "lib/app/send_package/bloc/send_package_bloc.dart",
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-sender-booking-quotes.test.js",
         "server/functions/cloud-run-sender-delivery-payments.js",
         "server/functions/cloud-run-sender-delivery-payments.test.js",
         "server/functions/core-payment-amount-security.test.js",
@@ -3751,6 +3751,7 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-sender-booking-quotes.test.js",
         "cloud-run-sender-delivery-payments.js",
         "cloud-run-sender-delivery-payments.test.js"
       ],

@@ -10,6 +10,8 @@ const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
+const {deriveCircumRouteFacts} = require("./road-charge-geography");
+const {evaluateRoadCharges} = require("./road-charges-core");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {start: startLatency} = require("./latency-observability");
 const {senderPaymentCallable} = require("./sender-app-check");
@@ -206,6 +208,70 @@ function routeCoordinate(value, name) {
     );
   }
   return {latitude, longitude};
+}
+
+function decodeGooglePolyline(encoded) {
+  const points = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte;
+    do {
+      if (index >= encoded.length) return [];
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    latitude += (result & 1) ? ~(result >> 1) : result >> 1;
+    shift = 0;
+    result = 0;
+    do {
+      if (index >= encoded.length) return [];
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    longitude += (result & 1) ? ~(result >> 1) : result >> 1;
+    points.push({latitude: latitude / 1e5, longitude: longitude / 1e5});
+  }
+  return points;
+}
+
+function senderRoadChargeSummary({route, selectedVehicle, at = new Date()} = {}) {
+  const points = decodeGooglePolyline(text(route && route.encodedPolyline));
+  const routeFacts = deriveCircumRouteFacts(
+      points.map((point) => [point.longitude, point.latitude]),
+      {at},
+  );
+  if (routeFacts.authority !== "authoritative_route") {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Delivery route could not be verified for applicable road charges.",
+    );
+  }
+  return evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle,
+    at,
+    pricingContext: "quote",
+  });
+}
+
+function senderQuoteEffectiveAt(deliveryTime, fallback = new Date()) {
+  const timing = cleanMap(deliveryTime);
+  if (text(timing.type).toLowerCase() !== "scheduled") return fallback;
+  const date = text(timing.scheduledDate);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fallback;
+  const window = text(timing.customWindowStart || timing.scheduledWindow).toLowerCase();
+  const time = window === "morning" ? "09:00" :
+    window === "afternoon" ? "14:00" :
+      window === "evening" ? "18:00" :
+        /^\d{2}:\d{2}$/.test(window) ? window : "12:00";
+  const scheduled = new Date(`${date}T${time}:00Z`);
+  return Number.isNaN(scheduled.getTime()) ? fallback : scheduled;
 }
 
 async function fetchSenderRoute({origin, destination, apiKey, fetchImpl = fetch}) {
@@ -650,7 +716,7 @@ function speedAdjustment(subtotal, speed) {
 function riderEligibleFareFromQuote(quote = {}) {
   if (Array.isArray(quote.lineItems)) {
     const eligible = quote.lineItems
-        .filter((item) => `${item && item.key || ""}`.toLowerCase() !== "vanguard")
+        .filter((item) => !["vanguard", "road_charge"].includes(`${item && item.key || ""}`.toLowerCase()))
         .reduce((sum, item) => sum + Number(item && item.amount || 0), 0);
     if (Number.isFinite(eligible) && eligible > 0) return money(eligible);
   }
@@ -937,15 +1003,27 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
         giftDelivery ?
           "Vanguard is required for Gifts deliveries." :
           safety && safety.iris.vanguardRequiredReason || "";
-  const total = money(Math.max(0, subtotal + speed + vanguard));
+  const roadChargeSummary = cleanMap(data.roadChargeSummary);
+  const roadChargeTotal = money(roadChargeSummary.customerContribution);
+  const roadChargeLineItems = Array.isArray(roadChargeSummary.charges) ?
+    roadChargeSummary.charges
+        .filter((charge) => Number(charge && charge.customerContribution || 0) > 0)
+        .map((charge) => ({
+          key: "road_charge",
+          label: cleanString(charge.customerLabel, 160) || "Road charge",
+          amount: money(charge.customerContribution),
+          chargeId: cleanString(charge.chargeId, 120),
+          currency: "GBP",
+        })) : [];
+  const total = money(Math.max(0, subtotal + speed + vanguard + roadChargeTotal));
   const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
   const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
   const totalRiderEarnings = riderBaseShare;
-  const totalCircumRevenue = money(total - totalRiderEarnings);
+  const totalCircumRevenue = platformBaseShare;
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   const speedOptions = ["standard", "express"].map((speedOption) => {
     const optionSpeed = money(speedAdjustment(subtotal, speedOption));
-    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard));
+    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard + roadChargeTotal));
     return {
       speed: `${speedOption[0].toUpperCase()}${speedOption.slice(1)}`,
       total: optionTotal,
@@ -961,6 +1039,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     userId: uid,
     currency: "GBP",
     selectedSpeed,
+    deliveryTime: cleanMap(data.deliveryTime),
     distanceMiles: Number(data.distanceMiles || 0),
     weightKg,
     selectedVehicle,
@@ -978,10 +1057,13 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       {key: "speed_adjustment", label: selectedSpeed === "express" ? "Express priority" : `${selectedSpeed[0].toUpperCase()}${selectedSpeed.slice(1)} service`, amount: speed},
       ...(vanguardIncluded ? [{key: "vanguard", label: "Vanguard Included", amount: 0}] : []),
       ...(!vanguardIncluded && vanguard > 0 ? [{key: "vanguard", label: "Vanguard Protection", amount: vanguard}] : []),
+      ...roadChargeLineItems,
     ],
     total,
     finalAmount: total,
     amountDue: total,
+    roadCharges: roadChargeSummary,
+    roadChargeCustomerContribution: roadChargeTotal,
     speedOptions,
     driverPayout: totalRiderEarnings,
     riderPayout: totalRiderEarnings,
@@ -1162,10 +1244,20 @@ exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) =
     );
   }
   const authoritativeDistanceMiles = authoritativeRoute.distanceMetres / 1609.344;
+  const selectedVehicle = canonicalVehicle(
+      data && (data.selectedVehicle || data.vehicleType || data.recommendedVehicle ||
+      data.iris && (data.iris.recommendedVehicle || data.iris.vehicleType)),
+  );
+  const roadChargeSummary = senderRoadChargeSummary({
+    route: authoritativeRoute,
+    selectedVehicle,
+    at: senderQuoteEffectiveAt(data && data.deliveryTime),
+  });
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
     distanceMiles: authoritativeDistanceMiles,
+    roadChargeSummary,
   }, sender.uid, serverPhotoAnalysis);
   quote.route = {
     origin,
@@ -2375,7 +2467,10 @@ exports._private = {
   quotePayload,
   parcelSafety,
   routeCoordinate,
+  decodeGooglePolyline,
+  senderQuoteEffectiveAt,
   fetchSenderRoute,
+  senderRoadChargeSummary,
   assertDeliveryMatchesQuote,
   normalizeSenderPaymentFallback,
   riderDisplayAliases,
