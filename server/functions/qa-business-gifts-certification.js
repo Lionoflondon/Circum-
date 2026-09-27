@@ -243,7 +243,10 @@ async function run() {
     const beforeRenewal = await qa.collection("giftRequests").get();
     const expectedRenewalAt = Number((await qa.collection("giftRecurringSeries").doc(recurring.seriesId).get()).data().nextExpectedRenewalAt);
     if (!Number.isFinite(expectedRenewalAt) || expectedRenewalAt <= Date.now()) throw new Error("QA recurring renewal date is invalid.");
-    await stripe.testHelpers.testClocks.advance(recurringClockId, {frozen_time: Math.floor(expectedRenewalAt / 1000) + 120});
+    // Stripe can wait up to an hour before finalizing a renewal invoice when
+    // webhook acknowledgements are not yet observed. Advance beyond that
+    // window so the clock proves actual collection, not invoice creation.
+    await stripe.testHelpers.testClocks.advance(recurringClockId, {frozen_time: Math.floor(expectedRenewalAt / 1000) + 2 * 60 * 60});
     let advancedClock;
     for (let attempt = 0; attempt < 60; attempt += 1) {
       advancedClock = await stripe.testHelpers.testClocks.retrieve(recurringClockId);
@@ -253,7 +256,10 @@ async function run() {
     if (!advancedClock || advancedClock.status !== "ready") throw new Error("Stripe TEST renewal clock did not settle.");
     const renewalInvoices = await stripe.invoices.list({subscription: recurring.stripeSubscriptionId, limit: 20});
     const paidRenewal = (renewalInvoices.data || []).find((invoice) => invoice.billing_reason === "subscription_cycle" && invoice.status === "paid" && invoice.amount_paid === 5000);
-    if (!paidRenewal || paidRenewal.livemode !== false || paidRenewal.customer !== recurringCustomer.id) throw new Error("Authoritative Stripe TEST paid renewal invoice missing.");
+    if (!paidRenewal || paidRenewal.livemode !== false || paidRenewal.customer !== recurringCustomer.id) {
+      const states = (renewalInvoices.data || []).map((invoice) => `${invoice.billing_reason}:${invoice.status}:${invoice.amount_paid}:${invoice.attempt_count}`).join(",");
+      throw new Error(`Authoritative Stripe TEST paid renewal invoice missing (${states}).`);
+    }
     const paidRenewalEvent = await waitForEvent(stripe, {type: "invoice.paid", objectId: paidRenewal.id});
     const renewalPayload = Buffer.from(JSON.stringify(paidRenewalEvent));
     const renewalSignature = stripe.webhooks.generateTestHeaderString({payload: renewalPayload.toString(), secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
