@@ -50,7 +50,9 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
     const path = ref.path;
     if (typeof path !== "string" || !path.startsWith(prefix)) fail("Cross-fixture access denied.", "permission-denied");
     const parts = path.slice(prefix.length).split("/");
-    if (parts.length !== 2 || !collections.has(parts[0]) || !id(parts[1])) fail("Invalid QA record path.", "permission-denied");
+    const flatRecord = parts.length === 2 && collections.has(parts[0]) && id(parts[1]);
+    const businessWalletTransaction = parts.length === 4 && parts[0] === "business_wallets" && parts[2] === "transactions" && collections.has(parts[0]) && id(parts[1]) && id(parts[3]);
+    if (!flatRecord && !businessWalletTransaction) fail("Invalid QA record path.", "permission-denied");
   }
   return {
     collection(name) {
