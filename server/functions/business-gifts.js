@@ -217,6 +217,7 @@ async function createBusinessGiftOrderHandler(stripe, data, context, dependencie
   if (rail === "roth") {
     const businessPayments = require("./business-payments");
     const paid = await businessPayments._private.payBusinessInvoiceAtomically({
+      db,
       businessId,
       invoiceId: invoiceRef.id,
       cardAmount: 0,
