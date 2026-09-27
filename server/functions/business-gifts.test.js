@@ -63,6 +63,12 @@ test("Business Gift order identity and rail validation are deterministic", () =>
   assert.equal(gifts.giftIdFor(first), `business_gift_${first}`);
 });
 
+test("Business Gift preserves the reservation checkout session id", () => {
+  assert.equal(gifts._private.checkoutSessionIdFor({sessionId: "cs_test_123"}), "cs_test_123");
+  assert.equal(gifts._private.checkoutSessionIdFor({providerSessionId: "cs_test_legacy"}), "cs_test_legacy");
+  assert.equal(gifts._private.checkoutSessionIdFor({}), null);
+});
+
 test("Business Gift rejects a delivery date in the past", () => {
   assert.throws(
       () => gifts.normalizeRecipient(input({deliveryDate: "2020-01-01"})),
