@@ -2088,6 +2088,8 @@
       "callers": [
         "docs/project_memory.md",
         "lib/app/send_package/bloc/send_package_bloc.dart",
+        "server/functions/cloud-run-iris.js",
+        "server/functions/cloud-run-iris.test.js",
         "server/functions/iris-adjudication-auth.test.js",
         "test/sender_mobile/sender_canonical_destination_guard_test.dart"
       ],
@@ -2105,8 +2107,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-iris.js",
+        "cloud-run-iris.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -2118,7 +2123,9 @@
       "productionPurpose": "irisPhotoAnalysis.analyseParcelPhotoForIris",
       "callers": [
         "lib/app/sender_mobile/sender_booking_canvas.dart",
-        "lib/website/shared/circum_website_app.dart"
+        "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-iris.js",
+        "server/functions/cloud-run-iris.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -2130,8 +2137,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-iris.js",
+        "cloud-run-iris.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

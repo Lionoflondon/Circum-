@@ -146,4 +146,5 @@ module.exports = {
   writeLearningSnapshotForRequest,
   customerSafeIris,
   privateIris,
+  _private: {loadLearningExamples},
 };

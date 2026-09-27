@@ -212,6 +212,7 @@ module.exports = {
   verifiedPhotoAnalysis,
   _private: {
     buildPhotoAnalysis,
+    decodeBase64Image,
     detectImageType,
     imageDimensions,
   },
