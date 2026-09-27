@@ -16,6 +16,7 @@ const businessPayments = require("./business-payments");
 const businessReservations = require("./business-checkout-reservations");
 const checkoutRouter = require("./checkout-session-router");
 const giftRecurring = require("./gift-recurring");
+const giftRecurringCore = require("./gift-recurring-core");
 const giftsPayment = require("./gifts-payment");
 
 const ROOT = "qaSpecialFlowFixtures";
@@ -30,6 +31,48 @@ const GBP = "gbp";
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const text = (value) => `${value || ""}`.trim();
 const id = (prefix) => `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
+
+function diagnosticValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  return String(value);
+}
+
+function renewalReplayDiagnostic({index, invoice, subscriptionId, renewalId, delivery, requestId}) {
+  const body = delivery && delivery.body || {};
+  const gift = body.gift || {};
+  return {
+    replayIndex: index,
+    requestId,
+    stripeEventId: invoice.eventId || null,
+    stripeInvoiceId: invoice.invoiceId || null,
+    subscriptionId,
+    renewalId,
+    paymentState: {
+      invoiceStatus: diagnosticValue(invoice.status),
+      paymentStatus: diagnosticValue(invoice.paymentStatus),
+      paid: invoice.paid === true,
+      amountPaid: diagnosticValue(invoice.amountPaid),
+      currency: diagnosticValue(invoice.currency),
+      livemode: invoice.livemode === true,
+    },
+    giftOrderId: diagnosticValue(gift.giftOrderId || gift.orderId),
+    giftId: diagnosticValue(gift.giftId),
+    giftCreationStatus: gift.handled === true ? (gift.idempotent === true ? "idempotent_existing" : gift.actionRequired === true ? "action_required" : gift.giftId ? "created" : "handled_without_gift") : "not_handled",
+    queuePublisherState: {emailQueue: "not_created_by_runner_probe", publisher: "not_invoked_by_runner_probe"},
+    replaySuppressionDecision: gift.idempotent === true ? "suppressed_existing_claim_or_gift" : gift.actionRequired === true ? "suppressed_action_required" : gift.giftId ? "not_suppressed" : "unknown",
+    nonCreationReason: diagnosticValue(gift.reason || (gift.validationFailures || []).join(",") || gift.lastActionRequiredReason),
+    handlerResponse: {
+      success: body.success === true,
+      handled: gift.handled === true,
+      idempotent: gift.idempotent === true,
+      actionRequired: gift.actionRequired === true,
+      reason: diagnosticValue(gift.reason),
+      validationFailures: Array.isArray(gift.validationFailures) ? gift.validationFailures : [],
+    },
+  };
+}
 
 function must(value, message) {
   if (!value) throw new Error(message);
@@ -263,7 +306,65 @@ async function run() {
     const paidRenewalEvent = await waitForEvent(stripe, {type: "invoice.paid", objectId: paidRenewal.id});
     const renewalPayload = Buffer.from(JSON.stringify(paidRenewalEvent));
     const renewalSignature = stripe.webhooks.generateTestHeaderString({payload: renewalPayload.toString(), secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
-    const renewalDeliveries = await Promise.all(Array.from({length: 20}, (_unused, index) => processor({rawBody: renewalPayload, signature: renewalSignature, requestId: `qa-renewal-${paidRenewalEvent.id}-${index}`})));
+    const renewalId = giftRecurringCore.renewalIdForInvoice(recurring.stripeSubscriptionId, paidRenewal.id);
+    const replayRequests = Array.from({length: 20}, (_unused, index) => ({
+      index,
+      requestId: `qa-renewal-${paidRenewalEvent.id}-${index}`,
+    }));
+    const renewalDeliveries = await Promise.all(replayRequests.map(({requestId}) => processor({rawBody: renewalPayload, signature: renewalSignature, requestId})));
+    const replayDiagnostics = renewalDeliveries.map((delivery, index) => renewalReplayDiagnostic({
+      index,
+      requestId: replayRequests[index].requestId,
+      delivery,
+      renewalId,
+      subscriptionId: recurring.stripeSubscriptionId,
+      invoice: {
+        eventId: paidRenewalEvent.id,
+        invoiceId: paidRenewal.id,
+        status: paidRenewal.status,
+        paymentStatus: paidRenewal.payment_status,
+        paid: paidRenewal.paid,
+        amountPaid: paidRenewal.amount_paid,
+        currency: paidRenewal.currency,
+        livemode: paidRenewal.livemode,
+      },
+    }));
+    const seriesAfterRenewal = (await qa.collection("giftRecurringSeries").doc(recurring.seriesId).get()).data() || {};
+    const renewalClaims = (await qa.collection("giftRecurringRenewals").get()).docs.map((doc) => {
+      const data = doc.data() || {};
+      return {id: doc.id, renewalId: data.renewalId || null, invoiceId: data.invoiceId || null, giftId: data.giftId || null, status: data.status || null, reason: data.reason || null, validationReasons: data.validationReasons || [], eventId: data.eventId || null};
+    }).filter((claim) => claim.renewalId === renewalId || claim.invoiceId === paidRenewal.id);
+    const matchingGifts = (await qa.collection("giftRequests").get()).docs.filter((doc) => doc.data().stripeInvoiceId === paidRenewal.id).map((doc) => ({
+      id: doc.id,
+      paymentStatus: doc.data().paymentStatus || null,
+      paymentMethod: doc.data().paymentMethod || null,
+      cardAmount: doc.data().cardAmount || null,
+      rothApplied: doc.data().rothApplied || null,
+      initialGiftId: doc.data().initialGiftId || null,
+      giftStatus: doc.data().giftStatus || doc.data().status || null,
+    }));
+    const queueRecords = (await qa.collection("emailQueue").get()).docs.map((doc) => ({id: doc.id, eventType: doc.data().eventType || null, status: doc.data().status || null, sourceDocumentId: doc.data().sourceDocumentId || null})).filter((record) => record.sourceDocumentId === recurring.seriesId || record.id.includes(paidRenewal.id));
+    for (const diagnostic of replayDiagnostics) {
+      diagnostic.queuePublisherState = {
+        emailQueueRecords: queueRecords.length,
+        emailQueueIds: queueRecords.map((record) => record.id),
+        publisher: "no_renewal_email_publisher_called",
+      };
+    }
+    const renewalDiagnostic = {
+      stripeEventId: paidRenewalEvent.id,
+      invoiceId: paidRenewal.id,
+      subscriptionId: recurring.stripeSubscriptionId,
+      renewalId,
+      payment: {status: paidRenewal.status, paymentStatus: paidRenewal.payment_status || null, paid: paidRenewal.paid === true, amountPaid: paidRenewal.amount_paid, currency: paidRenewal.currency, livemode: paidRenewal.livemode === true},
+      invoicePeriod: giftRecurringCore.invoiceBillingPeriod(paidRenewal),
+      series: {status: seriesAfterRenewal.status || null, lastActionRequiredRenewalId: seriesAfterRenewal.lastActionRequiredRenewalId || null, lastActionRequiredReason: seriesAfterRenewal.lastActionRequiredReason || null, lastFulfilledRenewalId: seriesAfterRenewal.lastFulfilledRenewalId || null, lastFulfilledInvoiceId: seriesAfterRenewal.lastFulfilledInvoiceId || null},
+      renewalClaims,
+      matchingGifts,
+      queueRecords,
+      replayDiagnostics,
+    };
+    console.error(JSON.stringify({type: "self_gift_renewal_diagnostic", ...renewalDiagnostic}));
     if (renewalDeliveries.some((delivery) => delivery.status !== 200)) throw new Error("20-way paid renewal replay was not acknowledged.");
     const afterRenewal = await qa.collection("giftRequests").get();
     const renewalGifts = afterRenewal.docs.filter((doc) => doc.data().stripeInvoiceId === paidRenewal.id);
