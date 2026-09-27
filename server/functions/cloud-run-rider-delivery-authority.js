@@ -9,10 +9,13 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {completeDeliveryHandler} = require("./delivery-completion-reconciled")._private;
 const deliveryTracking = require("./delivery-tracking");
 const {getOffers} = require("./rider-offers");
+const qaPublic = require("./qa-public-delivery");
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ROUTES = new Set([
   "completeDelivery",
+  "acceptRideRequests",
+  "recordRiderArrival",
   "updateDeliveryTrackingStatus",
   "updateDeliveryLiveLocation",
   "getAvailableRequests",
@@ -41,8 +44,24 @@ function clean(value, max = 4096) {
 
 function createHandlers(options = {}) {
   const db = options.db || getFirestore();
+  const qaOnly = (operation) => async (data, context) => {
+    const result = await operation(data, context);
+    if (!result) throw callableError("permission-denied", "QA delivery access is not permitted.");
+    return result;
+  };
   return {
     completeDelivery: (data, context) => completeDeliveryHandler(data, context, db),
+    acceptRideRequests: qaOnly((data, context) => qaPublic.accept({
+      db,
+      context,
+      deliveryId: data && (data.requestId || data.deliveryId),
+    })),
+    recordRiderArrival: qaOnly((data, context) => qaPublic.arrive({
+      db,
+      context,
+      deliveryId: data && data.deliveryId,
+      phase: data && data.phase,
+    })),
     updateDeliveryTrackingStatus: (data, context) => deliveryTracking.updateDeliveryTrackingStatus.run(data, context),
     updateDeliveryLiveLocation: (data, context) => deliveryTracking.updateDeliveryLiveLocation.run(data, context),
     getAvailableRequests: (data, context) => getOffers(data, context, db),
@@ -78,7 +97,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(completeDelivery|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(completeDelivery|acceptRideRequests|recordRiderArrival|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests)$/.exec(pathname);
   return match && ROUTES.has(match[1]) ? match[1] : null;
 }
 

@@ -5,15 +5,15 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 279
 - Gen 1 exports: 277
 - Files importing Firebase Functions v1: 67
-- MIGRATE TO CLOUD RUN: 162
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 73
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 75
+- MIGRATE TO CLOUD RUN: 160
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
 |---|---|---|---|---|---|
-| acceptRideRequests | server/functions/accept-ride-requests.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/project_memory.md<br>lib/website/shared/circum_website_app.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/rider-online-intent.emulator.test.js<br>test/sender_mobile/ratings_tipping_v2_test.dart |
+| acceptRideRequests | server/functions/accept-ride-requests.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>lib/website/shared/circum_website_app.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>server/functions/rider-online-intent.emulator.test.js<br>test/sender_mobile/ratings_tipping_v2_test.dart |
 | acknowledgeGiftStory | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/gift_story_view.dart<br>server/functions/gift-story-automation.test.js |
 | activateReferral | server/functions/referrals.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-referral-callable-server.js<br>server/functions/cloud-run-referral-servers.test.js<br>server/functions/firestore-signup-referral-rules.test.js<br>server/functions/referral-authority.test.js |
 | activateReferralOnDeliveryCompleted | server/functions/referrals.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/firestore-signup-referral-rules.test.js<br>server/functions/referral-authority.test.js |
@@ -207,7 +207,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | recordIrisLearningCandidate | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/iris/iris_learning_bridge.dart |
 | recordIrisLearningOutlier | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | recordNewsletterAnalytics | server/functions/newsletter.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>docs/NEWSLETTER_RELEASE.md<br>lib/website/shared/newsletter/newsletter_widgets.dart<br>server/functions/cloud-run-newsletter.js<br>server/functions/production-functions-inventory.json |
-| recordRiderArrival | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/arrival-authority.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js |
+| recordRiderArrival | server/functions/delivery-policy.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/arrival-authority.emulator.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>server/functions/dispatch-completion-spine.test.js |
 | recordRiderJobDecision | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | recordWebsiteVisit | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | redactLegacyPayoutBankFields | server/functions/rider-connect.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | none found |
