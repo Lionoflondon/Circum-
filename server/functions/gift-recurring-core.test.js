@@ -217,6 +217,51 @@ test("renewal validation binds the paid invoice to the approved recurring series
     assert.ok(result.failures.includes(expected), field);
   }
 });
+
+test("renewal validation uses the Stripe subscription line period rather than the invoice trial envelope", () => {
+  const invoice = {
+    id: "in_trial_following_renewal",
+    subscription: "sub_expected",
+    customer: "cus_expected",
+    status: "paid",
+    currency: "gbp",
+    amount_paid: 5000,
+    billing_reason: "subscription_cycle",
+    // Stripe's aggregate invoice envelope spans the original trial. The
+    // subscription line is the authoritative paid renewal billing period.
+    period_start: 1790518084,
+    period_end: 1801058886,
+    lines: {data: [
+      {type: "subscription", proration: false, period: {start: 1801058886, end: 1811426886}},
+    ]},
+  };
+  const result = core.validateRenewalInvoice({
+    series: {stripeSubscriptionId: "sub_expected", stripeCustomerId: "cus_expected", budgetGbp: 50, currentPeriodEnd: 1801058886000, status: "active"},
+    subscriptionId: "sub_expected",
+    invoice,
+  });
+  assert.deepEqual(result, {ok: true, failures: []});
+  assert.deepEqual(core.invoiceBillingPeriod(invoice), {start: 1801058886, end: 1811426886});
+  const localResult = recurring.validateRenewalInvoice(invoice, {
+    stripeSubscriptionId: "sub_expected", stripeCustomerId: "cus_expected", budgetGbp: 50, currentPeriodEnd: 1801058886000,
+  });
+  assert.equal(localResult.valid, true);
+  assert.deepEqual(localResult.reasons, []);
+});
+
+test("renewal period extraction ignores prorations and falls back only when subscription lines are absent", () => {
+  const invoice = {
+    period_start: 1801058886,
+    period_end: 1811426886,
+    lines: {data: [
+      {type: "subscription", proration: true, period: {start: 1801058886, end: 1801060000}},
+      {type: "subscription", proration: false, period: {start: 1801058886, end: 1811426886}},
+    ]},
+  };
+  assert.deepEqual(core.invoiceBillingPeriod(invoice), {start: 1801058886, end: 1811426886});
+  assert.deepEqual(core.invoiceBillingPeriod({period_start: 10, period_end: 20}), {start: 10, end: 20});
+});
+
 test("next renewal advances by the actual Stripe interval and preserves a safe month boundary", () => {
   assert.equal(
       new Date(core.nextRenewalAt({from: "2026-01-31T12:00:00Z", frequency: "monthly"})).toISOString(),
