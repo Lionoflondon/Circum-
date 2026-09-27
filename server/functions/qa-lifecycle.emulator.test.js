@@ -66,8 +66,9 @@ test("canonical lifecycle, rating, tip, FIFO and reversals remain isolated and i
   await assert.rejects(scoped.runTransaction((tx) => tx.set(db.doc("riderEarnings/real"), {availableBalance: 100})));
   await assert.rejects(scoped.runTransaction((tx) => tx.delete(root.collection("walletTransactions").doc(`delivery_tip_qa_${fixtureId}_a`))));
   const walletScoped = scopedDatabase(db, fixture, false, "qaLifecycleFixtures", ["business_wallets"]);
-  await walletScoped.runTransaction((tx) => tx.create(walletScoped.collection("business_wallets").doc("business-1").collection("transactions").doc("tx-1"), {amount: 50, isSyntheticQa: true}));
-  assert.equal((await root.collection("business_wallets").doc("business-1").collection("transactions").doc("tx-1").get()).data().amount, 50);
+  const longWalletTransactionId = `invoice_roth_${"a".repeat(140)}`;
+  await walletScoped.runTransaction((tx) => tx.create(walletScoped.collection("business_wallets").doc("business-1").collection("transactions").doc(longWalletTransactionId), {amount: 50, isSyntheticQa: true}));
+  assert.equal((await root.collection("business_wallets").doc("business-1").collection("transactions").doc(longWalletTransactionId).get()).data().amount, 50);
   for (const name of ["deliveryRequests", "riderEarnings", "walletTransactions", "offers", "notifications", "referrals", "payoutRequests"]) assert.equal((await db.collection(name).get()).size, 0, name);
   await run("cleanup", "operator"); await run("cleanup", "operator");
   assert.equal((await root.get()).data().archived, true);

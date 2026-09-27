@@ -14,6 +14,7 @@ const ROOT = "qaLifecycleFixtures";
 const LEGACY_QA_SEEDS = Object.freeze({rider_assigned: "accepted", en_route_to_pickup: "navigating_to_pickup"});
 const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "notifications", "activeDeliveries", "audit", "qaProviderObjects"]);
 const id = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+const nestedRecordId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,1500}$/.test(value);
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
@@ -52,7 +53,7 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
     if (typeof path !== "string" || !path.startsWith(prefix)) fail("Cross-fixture access denied.", "permission-denied");
     const parts = path.slice(prefix.length).split("/");
     const flatRecord = parts.length === 2 && collections.has(parts[0]) && id(parts[1]);
-    const businessWalletTransaction = parts.length === 4 && parts[0] === "business_wallets" && parts[2] === "transactions" && collections.has(parts[0]) && id(parts[1]) && id(parts[3]);
+    const businessWalletTransaction = parts.length === 4 && parts[0] === "business_wallets" && parts[2] === "transactions" && collections.has(parts[0]) && id(parts[1]) && nestedRecordId(parts[3]);
     if (!flatRecord && !businessWalletTransaction) fail(`Invalid QA record path: ${path}`, "permission-denied");
   }
   return {
