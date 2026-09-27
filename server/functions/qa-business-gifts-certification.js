@@ -228,7 +228,11 @@ async function run() {
     createdSubscriptions.push(failureSubscription.id);
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
     if (failureSubscription.latest_invoice) {
-      try { await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: "pm_card_chargeDeclined"}); } catch (_) {}
+      try {
+        await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: "pm_card_chargeDeclined"});
+      } catch (_) {
+        // The declined payment is expected for this fixture.
+      }
     }
     const recurringFailureEvent = await waitForEvent(stripe, {type: "invoice.payment_failed", predicate: (_event, object) => object.subscription === failureSubscription.id});
     const recurringFailureDelivery = await deliver(processor, stripe, recurringFailureEvent, webhookSecret);
@@ -244,7 +248,9 @@ async function run() {
       try {
         const session = await stripe.checkout.sessions.retrieve(sessionId);
         if (session.status === "open") await stripe.checkout.sessions.expire(session.id);
-      } catch (_) {}
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
     }
     for (const paymentIntentId of createdPaymentIntents.filter(Boolean)) {
       try {
@@ -253,16 +259,24 @@ async function run() {
         const refunds = await stripe.refunds.list({payment_intent: intent.id, limit: 100});
         const refunded = (refunds.data || []).filter((refund) => refund.status === "succeeded").reduce((sum, refund) => sum + refund.amount, 0);
         if (refunded < intent.amount_received) await stripe.refunds.create({payment_intent: intent.id, amount: intent.amount_received - refunded}, {idempotencyKey: `${fixture.id}:refund:${intent.id}`});
-      } catch (_) {}
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
     }
     for (const subscriptionId of createdSubscriptions.filter(Boolean)) {
       try {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         if (!["canceled", "incomplete_expired"].includes(subscription.status)) await stripe.subscriptions.cancel(subscriptionId);
-      } catch (_) {}
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
     }
     for (const customerId of createdCustomers.filter(Boolean)) {
-      try { await stripe.customers.del(customerId); } catch (_) {}
+      try {
+        await stripe.customers.del(customerId);
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
     }
     await rootDb.collection(ROOT).doc(fixture.id).set({archived: true, closedAt: Timestamp.now(), cleanup: "stripe_test_objects_refunded_or_canceled"}, {merge: true});
   }
