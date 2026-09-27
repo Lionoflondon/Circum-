@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {createServer, createHandlers} = require("./cloud-run-iris");
+const {syntheticParcelPng} = require("./qa-iris-certification");
 
 test("IRIS callable security and safe compliance", async () => {
   const handlers = createHandlers({examples: async () => [], db: {}});
@@ -30,4 +31,26 @@ test("IRIS callable security and safe compliance", async () => {
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("IRIS photo route writes only the caller-scoped canonical analysis", async () => {
+  const writes = [];
+  const db = {collection(name) {
+    assert.equal(name, "irisPhotoAnalyses");
+    return {doc(id) {
+      return {async set(value) {
+        writes.push({id, value});
+      }};
+    }};
+  }};
+  const handlers = createHandlers({db, examples: async () => []});
+  const data = {imageBase64: syntheticParcelPng().toString("base64"), contentType: "image/png", description: "sealed cardboard parcel", declaredWeightText: "2 kg"};
+  const first = await handlers.analyseParcelPhotoForIris(data, {auth: {uid: "qa_sender"}});
+  const replay = await handlers.analyseParcelPhotoForIris(data, {auth: {uid: "qa_sender"}});
+  assert.equal(first.analysisId, replay.analysisId);
+  assert.equal(first.imageHash, undefined);
+  assert.equal(first.descriptionHash, undefined);
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].id, first.analysisId);
+  assert.equal(writes[0].value.userId, "qa_sender");
 });
