@@ -320,6 +320,6 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error(JSON.stringify({status: "FAIL", message: error.message || "certification_failed"}));
+  console.error(JSON.stringify({status: "FAIL", message: error.message || "certification_failed", stack: error.stack || ""}));
   process.exitCode = 1;
 });
