@@ -180,6 +180,7 @@ async function run() {
   const createdPaymentIntents = [];
   const createdSubscriptions = [];
   const createdCustomers = [];
+  const createdPaymentMethods = [];
   try {
     const cardRequest = {businessId, idempotencyKey: `${fixture.id}:card`, budgetGbp: 50, paymentRail: "card", ...recipient("CARD")};
     const cardOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, cardRequest, context, {db: qa});
@@ -228,11 +229,14 @@ async function run() {
     const recurringGiftId = `qa_initial_${fixture.id}`;
     const recurringCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring"}});
     createdCustomers.push(recurringCustomer.id);
-    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: "pm_card_visa", confirm: true, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
+    const recurringPaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_visa"}}, {idempotencyKey: `${fixture.id}:recurring-payment-method`});
+    await stripe.paymentMethods.attach(recurringPaymentMethod.id, {customer: recurringCustomer.id});
+    createdPaymentMethods.push(recurringPaymentMethod.id);
+    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, confirm: true, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
     createdPaymentIntents.push(initialIntent.id);
     const initialGiftRef = qa.collection("giftRequests").doc(recurringGiftId);
     await initialGiftRef.set(marker(fixture, {giftRequestId: recurringGiftId, giftId: recurringGiftId, senderId: senderUid, senderEmail, giftMode: "gift_myself", selfGiftFrequency: "monthly", grossGiftBudget: 50, cardAmount: 50, remainingStripeAmountGbp: 50, deliveryDate: Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)), deliveryTimeWindow: "09:00-12:00", recurringConsentAccepted: true, recurringConsentCopy: "QA consent", paidAt: Timestamp.now(), paymentStatus: "paid", recipientPrivacy: "protected", recipientValueVisibility: "sender_only"}));
-    const recurring = await giftRecurring.ensureSeriesAfterInitialPayment({db: qa, stripe, giftId: recurringGiftId, payment: {customerId: recurringCustomer.id, paymentIntentId: initialIntent.id, paymentMethodId: text(initialIntent.payment_method)}, eventId: `qa-${initialIntent.id}`});
+    const recurring = await giftRecurring.ensureSeriesAfterInitialPayment({db: qa, stripe, giftId: recurringGiftId, payment: {customerId: recurringCustomer.id, paymentIntentId: initialIntent.id, paymentMethodId: recurringPaymentMethod.id}, eventId: `qa-${initialIntent.id}`});
     createdSubscriptions.push(recurring.stripeSubscriptionId);
     const recurringCreatedEvent = await waitForEvent(stripe, {type: "customer.subscription.created", objectId: recurring.stripeSubscriptionId});
     const recurringCreatedDelivery = await deliver(processor, stripe, recurringCreatedEvent, webhookSecret);
@@ -247,7 +251,10 @@ async function run() {
     const failureSeriesId = `qa_failure_series_${fixture.id}`;
     const failureCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}});
     createdCustomers.push(failureCustomer.id);
-    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product_data: {name: "CIRCUM QA recurring failure"}, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: "pm_card_chargeDeclined", metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
+    const failurePaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_chargeDeclined"}}, {idempotencyKey: `${fixture.id}:recurring-failure-payment-method`});
+    await stripe.paymentMethods.attach(failurePaymentMethod.id, {customer: failureCustomer.id});
+    createdPaymentMethods.push(failurePaymentMethod.id);
+    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product_data: {name: "CIRCUM QA recurring failure"}, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: failurePaymentMethod.id, metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
     createdSubscriptions.push(failureSubscription.id);
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
     if (failureSubscription.latest_invoice) {
@@ -290,6 +297,13 @@ async function run() {
       try {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         if (!["canceled", "incomplete_expired"].includes(subscription.status)) await stripe.subscriptions.cancel(subscriptionId);
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
+    }
+    for (const paymentMethodId of createdPaymentMethods.filter(Boolean)) {
+      try {
+        await stripe.paymentMethods.detach(paymentMethodId);
       } catch (_) {
         // Cleanup is best effort and bounded to this fixture's test object.
       }
