@@ -46,3 +46,17 @@ test("accepted rider payload never exposes personal phone numbers to sender surf
   assert.doesNotMatch(payloadSource, /rider\.phoneNumber/);
   assert.doesNotMatch(payloadSource, /rider\.mobile/);
 });
+
+test("accepted rider payload uses a generic Rider label when canonical name is absent", () => {
+  const source = fs.readFileSync(
+      path.join(__dirname, "accept-ride-requests.js"),
+      "utf8",
+  );
+  const payloadStart = source.indexOf("const riderPayload =");
+  const payloadEnd = source.indexOf("const findDeliveryRequest", payloadStart);
+  const payloadSource = source.slice(payloadStart, payloadEnd);
+
+  assert.match(payloadSource, /rider\.fullName \|\| rider\.name \|\| rider\.displayName/);
+  assert.match(payloadSource, /cleanText\([^\n]+, "Rider"\)/);
+  assert.doesNotMatch(payloadSource, /rider\.email/);
+});
