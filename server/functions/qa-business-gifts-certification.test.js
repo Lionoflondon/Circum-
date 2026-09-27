@@ -12,7 +12,7 @@ test("Business Gifts certification runner is test-only and isolated", () => {
   assert.match(source, /STRIPE_WEBHOOK_TEST_SECRET/);
   assert.match(source, /qaSpecialFlowFixtures/);
   assert.match(source, /isSyntheticQa/);
-  assert.match(source, /stripeMode: \"TEST\"/);
+  assert.match(source, /stripeMode: "TEST"/);
   assert.doesNotMatch(source, /process\.env\.STRIPE_SECRET_KEY/);
   assert.doesNotMatch(source, /STRIPE_LIVE_MODE_ENABLED/);
 });
