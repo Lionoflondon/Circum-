@@ -41,10 +41,12 @@ try {
       pane?.shadowRoot?.querySelector('flt-scene-host canvas, canvas');
     return { width: canvas?.width || 0, height: canvas?.height || 0 };
   });
-  const recovery = /We're having trouble starting Circum|Circum could not start|Circum is taking longer than expected to start/.test(visibleText);
+  const recovery = /We're having trouble starting Circum|Circum could not start/.test(visibleText);
+  const htmlFallback = /Circum is taking longer than expected to start/.test(visibleText);
   const screenshot = await page.screenshot({ path: `${artifactDir}/sender-startup.png`, fullPage: true });
   const normal = !recovery && renderSurface.width > 0 &&
     renderSurface.height > 0 && screenshot.length > 10000;
+  if (htmlFallback) throw new Error('Sender HTML startup fallback remained visible');
   if (!normal && !recovery) throw new Error('no visible Sender normal or recovery surface');
   const unexpectedErrors = errors.filter(
     (error) => !error.includes('requestStorageAccess: Permission denied.'),

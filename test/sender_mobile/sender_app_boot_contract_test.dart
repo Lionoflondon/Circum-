@@ -60,6 +60,25 @@ void main() {
     expect(source, contains('on TimeoutException'));
   });
 
+  test('Sender App Check startup cannot block the authenticated shell', () {
+    final source =
+        File('lib/app/sender_mobile/sender_mobile_preview.dart').readAsStringSync();
+    expect(
+      source,
+      contains(
+        "_runOptionalStartupValue(\n      'Service protection initialization'",
+      ),
+    );
+    expect(
+      source,
+      isNot(
+        contains(
+          "_runRequiredStartupValue(\n      'Service protection initialization'",
+        ),
+      ),
+    );
+  });
+
   test('Sender session restore never signs out existing users by account age',
       () {
     final authBloc =
