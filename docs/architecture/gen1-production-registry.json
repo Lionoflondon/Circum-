@@ -4568,6 +4568,7 @@
         "businessCheckoutReservations",
         "businessInvoices",
         "healthPlusPayments",
+        "irisPhotoAnalyses",
         "qaCheckoutProviderObjects"
       ],
       "externalProviders": [
@@ -6979,6 +6980,7 @@
         "businessCheckoutReservations",
         "businessInvoices",
         "healthPlusPayments",
+        "irisPhotoAnalyses",
         "qaCheckoutProviderObjects"
       ],
       "externalProviders": [

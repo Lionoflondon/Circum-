@@ -12,9 +12,10 @@ const business = require("./business-payments")._qaHandlers;
 const businessReservations = require("./business-checkout-reservations");
 const movement = require("./movement-ledger");
 const qaRoth = require("./qa-roth-certification");
+const irisQa = require("./qa-iris-certification");
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
-const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests"];
+const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
@@ -54,10 +55,10 @@ function factory({db, env = process.env, stripe}) {
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -106,6 +107,20 @@ function factory({db, env = process.env, stripe}) {
         if (data.scenario === "insufficient") return qaRoth.insufficient(args);
         if (data.scenario === "read") return qaRoth.read(args);
         return qaRoth.reconcile(args);
+      }
+      if (data.action === "iris") {
+        if (typeof data.scenario !== "string" || !Object.hasOwn(irisQa.SCENARIOS, data.scenario)) fail("Unknown synthetic IRIS scenario.", "invalid-argument");
+        const result = irisQa.analyse({uid, scenario: data.scenario});
+        if (!result.photo) return result;
+        const photoRef = qa.collection("irisPhotoAnalyses").doc(result.photo.analysisId);
+        const idempotent = await qa.runTransaction(async (tx) => {
+          const existing = await tx.get(photoRef);
+          if (!existing.exists) tx.create(photoRef, {...result.photo, createdAt: FieldValue.serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000)});
+          return existing.exists;
+        });
+        const safePhoto = {...result.photo};
+        delete safePhoto.imageHash; delete safePhoto.descriptionHash;
+        return {scenario: result.scenario, iris: result.iris, photo: safePhoto, idempotent};
       }
       if (data.action === "health_finalize") {
         const payments = await qa.collection("healthPlusPayments").limit(2).get();
