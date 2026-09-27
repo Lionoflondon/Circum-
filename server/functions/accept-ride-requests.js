@@ -65,7 +65,7 @@ const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => 
 const riderPayload = (riderId, rider) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
   return {
-    courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
+    courierName: cleanText(rider.fullName || rider.name || rider.displayName, "Rider"),
     phoneNumber: "",
     contactMethod: "circum_relay",
     maskedCommunicationOnly: true,
