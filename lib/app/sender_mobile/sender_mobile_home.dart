@@ -2481,30 +2481,24 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
           children: [
             _RebuiltSenderServiceCard(
               title: 'Health+',
-              status: _summaryError != null ? 'Unavailable' : '',
-              description: _summaryError != null
-                  ? 'Try again shortly.'
-                  : 'Book medical and healthcare deliveries.',
+              status: '',
+              description: 'Book medical and healthcare deliveries.',
               icon: Icons.medical_services_outlined,
               accent: _SenderTokens.health,
               onTap: widget.onOpenHealth,
             ),
             _RebuiltSenderServiceCard(
               title: 'Business',
-              status: _summaryError != null ? 'Unavailable' : '',
-              description: _summaryError != null
-                  ? 'Try again shortly.'
-                  : 'Manage deliveries and invoices.',
+              status: '',
+              description: 'Manage deliveries and invoices.',
               icon: Icons.business_center_outlined,
               accent: _SenderTokens.business,
               onTap: widget.onOpenBusiness,
             ),
             _RebuiltSenderServiceCard(
               title: 'Gifts',
-              status: _summaryError != null ? 'Unavailable' : '',
-              description: _summaryError != null
-                  ? 'Try again shortly.'
-                  : 'Thoughtful gifting powered by Circum.',
+              status: '',
+              description: 'Thoughtful gifting powered by Circum.',
               icon: Icons.card_giftcard_rounded,
               accent: _SenderTokens.gifts,
               onTap: widget.onOpenGifts,
@@ -3937,7 +3931,6 @@ class _YourCircumHub extends StatelessWidget {
   });
 
   String _detail(String ready, String empty) {
-    if (hasError) return 'Unavailable right now';
     if (summary == null) return 'Loading…';
     return ready.isEmpty ? empty : ready;
   }
@@ -3987,11 +3980,9 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Gifts',
-                subtitle: hasError
-                    ? 'Unavailable right now'
-                    : summary == null
-                        ? 'Loading…'
-                        : 'Thoughtful gifting powered by Circum.',
+                subtitle: summary == null
+                    ? 'Loading…'
+                    : 'Thoughtful gifting powered by Circum.',
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
                 onTap: onOpenGifts,
