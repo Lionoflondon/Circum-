@@ -21,6 +21,8 @@ void main() {
 
     expect(preview, contains('initialAuthenticated: false'));
     expect(preview, contains('senderAuthEnabled: true'));
+    expect(preview, contains('BlocProvider<AuthBloc>'));
+    expect(preview, contains('AuthBloc()..add(SortSessionState())'));
     expect(preview, isNot(contains('initialAuthenticated: true')));
     expect(preview, isNot(contains('senderAuthEnabled: false')));
     expect(app, isNot(contains('initialAuthenticated: true')));
