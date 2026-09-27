@@ -2,6 +2,7 @@
 
 const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const businessPayments = require("./business-payments");
 const riderConnect = require("./rider-connect");
@@ -41,7 +42,7 @@ const handlers = Object.freeze({
   reconcileGiftRecurringRenewals: () =>
     giftRecurring.reconcileGiftRecurringRenewalsCore({stripe: stripeClient()}),
   reconcileHealthMembershipEvents: () =>
-    healthMembershipLifecycle.reconcileHealthMembershipEventsCore({stripe: stripeClient()}),
+    healthMembershipLifecycle.reconcileHealthMembershipEventsCore({db: getFirestore(), stripe: stripeClient()}),
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
