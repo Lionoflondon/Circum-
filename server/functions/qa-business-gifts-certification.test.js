@@ -27,3 +27,8 @@ test("certification cleanup is bounded to test objects", () => {
   assert.match(source, /stripe\.subscriptions\.cancel/);
   assert.match(source, /archived: true/);
 });
+
+test("headless TEST confirmations provide a QA return URL", () => {
+  assert.equal((source.match(/return_url: "https:\/\/example\.invalid\/qa"/g) || []).length, 2);
+  assert.match(source, /generateTestHeaderString\(\{payload:/);
+});

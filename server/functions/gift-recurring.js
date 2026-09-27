@@ -194,12 +194,19 @@ async function ensureSeriesAfterInitialPayment({db = getFirestore(), stripe, gif
   if (paymentMethodId && stripe.customers && stripe.customers.update) {
     await stripe.customers.update(customerId, {invoice_settings: {default_payment_method: paymentMethodId}}, {idempotencyKey: `gift_series_default_pm_${seriesId}`});
   }
+  const recurringProductId = text(process.env.STRIPE_GIFT_RECURRING_PRODUCT_ID);
+  const productId = recurringProductId || (stripe.products && typeof stripe.products.create === "function" ?
+    (await stripe.products.create({
+      name: "CIRCUM Self Gift renewal",
+      metadata: {giftRecurringSeriesId: seriesId},
+    }, {idempotencyKey: `gift_recurring_product_${seriesId}`})).id : "");
+  if (!productId) throw new Error("Recurring Gift product configuration is unavailable.");
   const subscription = await stripe.subscriptions.create({
     customer: customerId,
     items: [{price_data: {
       currency: "gbp",
       unit_amount: Math.round(budgetGbp * 100),
-      product_data: {name: "CIRCUM Self Gift renewal"},
+      product: productId,
       recurring: {interval: interval.interval, interval_count: interval.interval_count},
     }, quantity: 1}],
     ...(paymentMethodId ? {default_payment_method: paymentMethodId} : {}),
