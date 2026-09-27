@@ -189,7 +189,8 @@ function sourceDescriptor(record = {}) {
 function sourceState(data = {}) {
   return [data.status, data.state, data.deliveryStatus, data.giftStatus, data.lifecycleStatus,
     data.paymentStatus, data.paymentState, data.settlementStatus, data.cancellationSettlementStatus,
-    data.approvalStatus, data.verificationStatus, data.giftStoryStatus, data.storyStatus]
+    data.approvalStatus, data.verificationStatus, data.payoutStatus, data.stripeStatus,
+    data.stripeConnectStatus, data.giftStoryStatus, data.storyStatus]
       .map((value) => text(value).toLowerCase())
       .filter(Boolean);
 }
@@ -226,6 +227,29 @@ async function revalidateSource(db, record) {
     return {status: "suppressed", reason: "source_state_changed"};
   }
   const sourceData = snapshot.data() || {};
+  const riderEvent = eventType.startsWith("rider_");
+  let riderProfileData = null;
+  if (riderEvent && (record.sourceRiderId || record.recipientId)) {
+    const riderId = text(record.sourceRiderId || record.recipientId);
+    const profileSnapshot = source.collection === "riderProfiles" && source.id === riderId ?
+      snapshot : await db.collection("riderProfiles").doc(riderId).get();
+    if (!profileSnapshot.exists) return {status: "suppressed", reason: "rider_recipient_missing"};
+    riderProfileData = profileSnapshot.data() || {};
+    const authoritativeRecipient = normalizeEmail(riderProfileData.email);
+    const queuedRecipient = normalizeEmail(record.to || record.recipientEmail);
+    if (!authoritativeRecipient || authoritativeRecipient !== queuedRecipient) {
+      return {status: "suppressed", reason: "source_recipient_changed"};
+    }
+    if (source.collection === "riderDocuments" && text(sourceData.riderId || sourceData.driverId || sourceData.uid) !== riderId) {
+      return {status: "suppressed", reason: "source_rider_changed"};
+    }
+    if (source.collection === "riderEarningTransactions" && text(sourceData.riderId || sourceData.driverId || sourceData.uid) !== riderId) {
+      return {status: "suppressed", reason: "source_rider_changed"};
+    }
+    if (source.collection === "payoutRequests" && text(sourceData.riderId) !== riderId) {
+      return {status: "suppressed", reason: "source_rider_changed"};
+    }
+  }
   if (eventType === "gift_payment_confirmed") {
     const roth = Number(record.giftPaymentRothAmount);
     const card = Number(record.giftPaymentCardAmount);
@@ -329,6 +353,11 @@ async function revalidateSource(db, record) {
         text(inviter.data().status).toLowerCase() !== "completed" ||
         text(referred.data().status).toLowerCase() !== "completed") {
       return {status: "suppressed", reason: "source_state_changed"};
+    }
+  }
+  if (riderEvent && riderProfileData && source.collection !== "riderProfiles") {
+    if (source.collection === "riderProfiles" && source.id !== text(record.sourceRiderId || record.recipientId)) {
+      return {status: "suppressed", reason: "source_rider_changed"};
     }
   }
   const recipientField = legacyGiftDelivery ? "senderEmail" : text(record.sourceRecipientField);

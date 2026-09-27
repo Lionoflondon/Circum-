@@ -78,6 +78,10 @@ Set `--event-data-content-type=application/protobuf` on every Firestore trigger,
 | created | `walletTransactions/{transactionId}` | `circum-tx-email-wallet-created-v1` |
 | updated | `referrals/{referralId}` | `circum-tx-email-referral-updated-v1` |
 | updated | `riderProfiles/{riderId}` | `circum-tx-email-rider-decision-updated-v1` |
+| updated | `riderDocuments/{documentId}` | `circum-tx-email-rider-document-updated-v1` |
+| created | `riderEarningTransactions/{transactionId}` | `circum-tx-email-rider-earning-created-v1` |
+| created | `payoutRequests/{requestId}` | `circum-tx-email-rider-payout-created-v1` |
+| updated | `payoutRequests/{requestId}` | `circum-tx-email-rider-payout-updated-v1` |
 | updated | `prescriptionPickups/{pickupId}` | `circum-tx-email-healthplus-updated-v1` |
 | updated | `giftRequests/{giftId}` | `circum-tx-email-gift-updated-v1` |
 | created | `giftRequests/{giftId}` | `circum-tx-email-gift-created-v1` |
