@@ -8,6 +8,7 @@ const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {start: startLatency} = require("./latency-observability");
 const {requireDispatchablePresence, dispatchablePresenceDecision} = require("./rider-presence");
 const deviceTokenAuthority = require("./device-token-authority");
+const qaPublic = require("./qa-public-delivery");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -153,6 +154,11 @@ const acceptRideRequests = riderCallable(async (data, context) => {
   const riderId = context.auth.uid;
   const completeAccept = startLatency("ACCEPT", {correlationId: requestId});
   const db = getFirestore();
+  const qaResult = await qaPublic.accept({db, context, deliveryId: requestId});
+  if (qaResult) {
+    completeAccept({success: true, deliveryId: requestId, qaOnly: true, idempotent: qaResult.idempotent});
+    return qaResult;
+  }
   const rider = await getRiderProfile(db, riderId);
 
   if (!rider) {

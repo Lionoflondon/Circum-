@@ -7,6 +7,7 @@ const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore"
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
 const rothLedger = require("./roth-ledger");
+const qaPublic = require("./qa-public-delivery");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -589,6 +590,24 @@ exports.recordRiderArrival = riderCallable(async (data, context) => {
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
   const phase = data.phase === "dropoff" ? "dropoff" : "pickup";
   const db = getFirestore();
+  const qaResult = await qaPublic.arrive({
+    db,
+    context,
+    deliveryId,
+    phase,
+    location: data.location,
+    gpsAccuracyMeters: data.gpsAccuracyMeters,
+  });
+  if (qaResult) {
+    return {
+      success: true,
+      decision: {
+        state: qaResult.status,
+        qaOnly: true,
+        duplicate: qaResult.idempotent === true,
+      },
+    };
+  }
   return db.runTransaction(async (transaction) => {
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertAssignedRider(uid, delivery);

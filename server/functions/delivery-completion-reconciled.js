@@ -28,6 +28,7 @@ const {
 const evidenceAuthority = require("./delivery-evidence")._private;
 const scheduledOperationalTransitionAllowed =
   require("./delivery-tracking")._private.scheduledOperationalTransitionAllowed;
+const qaPublic = require("./qa-public-delivery");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -1063,6 +1064,14 @@ async function completeDeliveryHandler(data, context, db = getFirestore()) {
   if (data && data.evidenceId && !evidence.evidenceId) {
     evidence.evidenceId = text(data.evidenceId);
   }
+  const qaResult = await qaPublic.transition({
+    db,
+    context,
+    deliveryId,
+    action: "verify_receiver_pin",
+    pin: deliveryPin,
+  });
+  if (qaResult) return qaResult;
   return updateDeliveryTrackingStatusHandler(
     {
       deliveryId,

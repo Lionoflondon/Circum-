@@ -4,7 +4,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 
 - Source exports: 279
 - Gen 1 exports: 277
-- Files importing Firebase Functions v1: 66
+- Files importing Firebase Functions v1: 67
 - MIGRATE TO CLOUD RUN: 162
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 73
 - REPLACE WITH CLOUD RUN + EVENTARC: 28

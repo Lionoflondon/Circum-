@@ -45,6 +45,7 @@
     "server/functions/newsletter.js",
     "server/functions/platform-notifications.js",
     "server/functions/qa-lifecycle.js",
+    "server/functions/qa-public-delivery.js",
     "server/functions/qa-special-flow.js",
     "server/functions/ratings-tipping.js",
     "server/functions/referrals.js",
