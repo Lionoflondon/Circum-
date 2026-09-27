@@ -3,6 +3,18 @@
 const path = require("node:path");
 
 const verifiedBindings = Object.freeze({
+  ensureSenderAccount: {
+    files: ["cloud-run-account-bootstrap.js", "cloud-run-account-bootstrap.test.js"],
+  },
+  saveSenderDraft: {
+    files: ["cloud-run-sender-drafts.js", "cloud-run-sender-drafts.test.js"],
+  },
+  loadSenderDraft: {
+    files: ["cloud-run-sender-drafts.js", "cloud-run-sender-drafts.test.js"],
+  },
+  deleteSenderDraft: {
+    files: ["cloud-run-sender-drafts.js", "cloud-run-sender-drafts.test.js"],
+  },
   submitRiderApplication: {
     file: "cloud-run-account-bootstrap.js",
     pattern: /submitRiderApplication\s*:\s*\{\s*handler:\s*riderAccount\.submitRiderApplication,\s*appCheckRequired:\s*true\s*\}/,
@@ -28,6 +40,9 @@ function findCloudRunReplacements(name, files, textByFile) {
   }
   const binding = verifiedBindings[name];
   if (binding) {
+    if (binding.files) {
+      return files.filter((file) => binding.files.includes(path.basename(file))).map((file) => path.basename(file));
+    }
     return files.filter((file) => path.basename(file) === binding.file &&
       binding.pattern.test(textByFile.get(file) || "")).map((file) => path.basename(file));
   }

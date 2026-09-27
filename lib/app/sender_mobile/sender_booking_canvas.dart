@@ -28,6 +28,7 @@ import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
+import 'sender_draft_api.dart';
 import 'sender_finance.dart';
 import 'sender_manual_address_resolution.dart';
 import 'sender_saved_addresses.dart';
@@ -189,6 +190,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     Map<String, dynamic> payload = const {},
     Duration? timeout,
   ]) async {
+    if (const {'saveSenderDraft', 'loadSenderDraft', 'deleteSenderDraft'}
+        .contains(name)) {
+      try {
+        return await callSenderDraft(
+          name,
+          payload,
+          timeout: timeout ?? const Duration(seconds: 15),
+        );
+      } on SenderDraftApiException catch (error) {
+        throw FirebaseFunctionsException(
+          code: error.status.toLowerCase().replaceAll('_', '-'),
+          message: error.message,
+        );
+      }
+    }
     final result = await FirebaseFunctions.instance
         .httpsCallable(name)
         .call(payload)

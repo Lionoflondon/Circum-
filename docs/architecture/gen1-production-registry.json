@@ -4038,7 +4038,11 @@
       "generation": "Gen 1",
       "productionPurpose": "senderBooking.deleteSenderDraft",
       "callers": [
-        "lib/app/sender_mobile/sender_booking_canvas.dart"
+        "lib/app/sender_mobile/sender_booking_canvas.dart",
+        "lib/app/sender_mobile/sender_draft_api.dart",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-sender-drafts.js",
+        "server/functions/cloud-run-sender-drafts.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -4068,8 +4072,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-sender-drafts.js",
+        "cloud-run-sender-drafts.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -4372,6 +4379,8 @@
         "server/functions/check-functions-inventory.test.js",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-sender-drafts.test.js",
         "server/functions/firestore-sender-bootstrap-rules.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/production-functions-inventory.json",
@@ -5770,6 +5779,10 @@
       "productionPurpose": "senderBooking.loadSenderDraft",
       "callers": [
         "lib/app/sender_mobile/sender_booking_canvas.dart",
+        "lib/app/sender_mobile/sender_draft_api.dart",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-sender-drafts.js",
+        "server/functions/cloud-run-sender-drafts.test.js",
         "test/sender_mobile/sender_checkout_bunker_regression_test.dart"
       ],
       "criticality": "review-required",
@@ -5800,8 +5813,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-sender-drafts.js",
+        "cloud-run-sender-drafts.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8901,7 +8917,12 @@
       "generation": "Gen 1",
       "productionPurpose": "senderBooking.saveSenderDraft",
       "callers": [
-        "lib/app/sender_mobile/sender_booking_canvas.dart"
+        "lib/app/sender_mobile/sender_booking_canvas.dart",
+        "lib/app/sender_mobile/sender_draft_api.dart",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-sender-drafts.js",
+        "server/functions/cloud-run-sender-drafts.test.js",
+        "test/sender_draft_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -8931,8 +8952,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-sender-drafts.js",
+        "cloud-run-sender-drafts.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
