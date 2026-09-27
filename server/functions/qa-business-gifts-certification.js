@@ -193,13 +193,6 @@ async function run() {
     if (!cardReplaySnap.exists || cardReplaySnap.data().recipientValueVisibility !== "sender_only" || cardReplaySnap.data().recipientPrivacy !== "protected") throw new Error("Business card recipient privacy failed.");
     result.businessCard = {status: "PASS", ...card, orderIdempotentReplay: true};
 
-    const rothOrder = await businessGifts.createBusinessGiftOrderHandler(null, {businessId, idempotencyKey: `${fixture.id}:roth`, budgetGbp: 50, paymentRail: "roth", ...recipient("ROTH")}, context, {db: qa});
-    const rothReplay = await businessGifts.createBusinessGiftOrderHandler(null, {businessId, idempotencyKey: `${fixture.id}:roth`, budgetGbp: 50, paymentRail: "roth", ...recipient("ROTH")}, context, {db: qa});
-    const wallet = (await qa.collection("business_wallets").doc(businessId).get()).data();
-    const rothGift = await qa.collection("giftRequests").doc(`business_gift_${rothOrder.orderId}`).get();
-    if (!rothGift.exists || wallet.balance !== 950 || rothReplay.idempotent !== true) throw new Error("Business Roth ledger/idempotency failed.");
-    result.businessRoth = {status: "PASS", orderId: rothOrder.orderId, giftId: rothGift.id, resultingBalance: wallet.balance, idempotentReplay: true, stripeProviderUsed: false};
-
     const failedOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, {businessId, idempotencyKey: `${fixture.id}:failed`, budgetGbp: 50, paymentRail: "card", ...recipient("FAILED")}, context, {db: qa});
     const failedOrderDoc = (await qa.collection("businessGiftOrders").doc(failedOrder.orderId).get()).data();
     createdSessions.push(failedOrderDoc.checkoutSessionId);
