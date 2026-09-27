@@ -131,6 +131,42 @@ test("a recurring series in creating state recovers an already-created Stripe su
   assert.equal(db.read(`giftRecurringSeries/${seriesId}`).stripeSubscriptionId, "sub_recovered");
 });
 
+test("recurring setup uses an idempotent Stripe Product for subscription pricing", async () => {
+  const db = memoryDb({
+    "giftRequests/gift-product": {
+      giftMode: "gift_myself",
+      selfGiftFrequency: "monthly",
+      grossGiftBudget: 50,
+      cardAmount: 50,
+      senderId: "sender-1",
+      senderEmail: "sender@example.test",
+      deliveryDate: "2099-01-15T12:00:00Z",
+      deliveryTimeWindow: "09:00-12:00",
+      recurringConsentAccepted: true,
+      paidAt: "2026-09-01T12:00:00Z",
+    },
+  });
+  let productRequest;
+  let subscriptionRequest;
+  const stripe = {
+    customers: {update: async () => ({})},
+    products: {create: async (request, options) => (productRequest = {request, options}, {id: "prod_recurring"})},
+    subscriptions: {
+      list: async () => ({data: []}),
+      create: async (request, options) => (subscriptionRequest = {request, options}, {id: "sub_product", status: "active", current_period_start: 100, current_period_end: 200}),
+    },
+  };
+  await recurring.ensureSeriesAfterInitialPayment({
+    db,
+    stripe,
+    giftId: "gift-product",
+    payment: {customerId: "cus_product", paymentIntentId: "pi_product", paymentMethodId: "pm_product"},
+  });
+  assert.equal(productRequest.options.idempotencyKey, `gift_recurring_product_${core.seriesIdForGift("gift-product")}`);
+  assert.equal(subscriptionRequest.request.items[0].price_data.product, "prod_recurring");
+  assert.equal(Object.hasOwn(subscriptionRequest.request.items[0].price_data, "product_data"), false);
+});
+
 test("renewal validation binds the paid invoice to the approved recurring series", () => {
   const series = {
     stripeSubscriptionId: "sub_expected",
