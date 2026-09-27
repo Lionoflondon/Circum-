@@ -244,7 +244,9 @@ void main() {
     expect(handlerStart, isNonNegative);
     expect(handlerEnd, greaterThan(handlerStart));
     final handler = bloc.substring(handlerStart, handlerEnd);
-    expect(handler, contains("httpsCallable('analyseIris')"));
+    final irisCall = handler.indexOf('callIris(');
+    expect(irisCall, isNonNegative);
+    expect(handler.substring(irisCall, irisCall + 80), contains("'analyseIris'"));
     expect(handler, contains('.timeout(const Duration(seconds: 15))'));
 
     final matchStart = canvas.indexOf('bool _irisMatchesParcel');
@@ -285,8 +287,7 @@ void main() {
     );
 
     final irisStart = bloc.indexOf('void _handleRequestCanonicalIrisEstimate');
-    final irisCallable =
-        bloc.indexOf("httpsCallable('analyseIris')", irisStart);
+    final irisCallable = bloc.indexOf('callIris(', irisStart);
     expect(irisStart, isNonNegative);
     expect(irisCallable, greaterThan(irisStart));
     final irisPreflight = bloc.substring(irisStart, irisCallable);

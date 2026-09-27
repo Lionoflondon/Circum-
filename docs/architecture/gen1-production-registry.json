@@ -2088,9 +2088,11 @@
       "callers": [
         "docs/project_memory.md",
         "lib/app/send_package/bloc/send_package_bloc.dart",
+        "lib/app/send_package/repo/iris_api.dart",
         "server/functions/cloud-run-iris.js",
         "server/functions/cloud-run-iris.test.js",
         "server/functions/iris-adjudication-auth.test.js",
+        "test/sender_iris_api_test.dart",
         "test/sender_mobile/sender_canonical_destination_guard_test.dart"
       ],
       "criticality": "review-required",
@@ -2122,6 +2124,7 @@
       "generation": "Gen 1",
       "productionPurpose": "irisPhotoAnalysis.analyseParcelPhotoForIris",
       "callers": [
+        "lib/app/send_package/repo/iris_api.dart",
         "lib/app/sender_mobile/sender_booking_canvas.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-iris.js",

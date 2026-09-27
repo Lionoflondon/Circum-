@@ -11,6 +11,7 @@ import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/app/send_package/repo/token_callable_api.dart';
+import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'package:circum/utils/theme/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -1017,13 +1018,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (state.distance != null)
           'distanceMiles': DeliveryPricing.kilometresToMiles(state.distance!),
       };
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('analyseIris')
-          .call(payload)
-          .timeout(const Duration(seconds: 15));
-      final data = result.data is Map
-          ? Map<String, dynamic>.from(result.data as Map)
-          : <String, dynamic>{};
+      final data = await callIris(
+        'analyseIris',
+        payload,
+      ).timeout(const Duration(seconds: 15));
       if (irisRequestId != _irisRequestId) return;
       final canonical = CanonicalIrisResult.fromCallable(
         data,
