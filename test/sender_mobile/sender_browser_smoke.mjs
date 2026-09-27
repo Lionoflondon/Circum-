@@ -9,7 +9,9 @@ const errors = [];
 fs.mkdirSync(artifactDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// CI runners do not guarantee a valid browser locale. Pin the supported UK
+// product locale so a runner default cannot fail Intl before first paint.
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'en-GB' });
 page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => {
   if (message.type() === 'error') errors.push(`console: ${message.text()}`);
@@ -32,8 +34,8 @@ try {
       pane?.shadowRoot?.querySelector('flt-scene-host canvas, canvas');
     const htmlFallback = /Circum is taking longer than expected to start/.test(text);
     const recovery = /We're having trouble starting Circum|Circum could not start/.test(text);
-    return htmlFallback || recovery || (canvas && canvas.width > 0 && canvas.height > 0);
-  }, null, { timeout: 30000 });
+    return !htmlFallback && (recovery || (canvas && canvas.width > 0 && canvas.height > 0));
+  }, null, { timeout: 60000 });
 
   const visibleText = await page.locator('body').innerText();
   const renderSurface = await page.evaluate(() => {
@@ -47,13 +49,13 @@ try {
   const screenshot = await page.screenshot({ path: `${artifactDir}/sender-startup.png`, fullPage: true });
   const normal = !recovery && renderSurface.width > 0 &&
     renderSurface.height > 0 && screenshot.length > 10000;
-  if (!normal && !recovery && !htmlFallback) throw new Error('no visible Sender normal or recovery surface');
+  if (htmlFallback) throw new Error('Sender HTML startup fallback remained visible');
+  if (!normal && !recovery) throw new Error('no visible Sender normal or recovery surface');
   const unexpectedErrors = errors.filter(
     (error) => !error.includes('requestStorageAccess: Permission denied.'),
   );
-  if (unexpectedErrors.length && !recovery && !htmlFallback) throw new Error(unexpectedErrors.join('\n'));
-  const renderState = htmlFallback ? 'HTML_STARTUP_FALLBACK' : recovery ? 'RECOVERY_UI' : 'NORMAL_UI';
-  console.log(`SENDER_BROWSER_RENDER=${renderState}`);
+  if (unexpectedErrors.length && !recovery) throw new Error(unexpectedErrors.join('\n'));
+  console.log(`SENDER_BROWSER_RENDER=${recovery ? 'RECOVERY_UI' : 'NORMAL_UI'}`);
 } catch (error) {
   await page.screenshot({ path: `${artifactDir}/sender-startup-failure.png`, fullPage: true }).catch(() => {});
   fs.writeFileSync(`${artifactDir}/browser-errors.log`, errors.join('\n'));
