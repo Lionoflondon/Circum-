@@ -14,6 +14,7 @@ const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
+  advanceRiderOnboarding: {handler: riderAccount.advanceRiderOnboarding, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
   submitRiderApplication: {handler: riderAccount.submitRiderApplication, appCheckRequired: true},
 });
@@ -42,7 +43,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 

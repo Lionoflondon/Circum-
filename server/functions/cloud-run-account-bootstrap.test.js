@@ -34,6 +34,7 @@ function dependencies(overrides = {}) {
       operations: {
         ensureSenderAccount: handler("ensureSenderAccount"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
+        advanceRiderOnboarding: handler("advanceRiderOnboarding"),
         updateRiderProfile: handler("updateRiderProfile"),
         submitRiderApplication: handler("submitRiderApplication"),
       },
@@ -45,6 +46,7 @@ function dependencies(overrides = {}) {
 test("routes only the supported account operations", () => {
   assert.equal(routeName("/ensureSenderAccount"), "ensureSenderAccount");
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
+  assert.equal(routeName("/advanceRiderOnboarding"), "advanceRiderOnboarding");
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
@@ -98,6 +100,21 @@ test("Rider operation accepts verified Auth and App Check", async () => {
       body: JSON.stringify({data: {section: "personal_details"}}),
     });
     assert.equal(response.status, 200);
+    assert.equal(deps.calls[0].context.app.appId, "circum");
+  });
+});
+
+test("Rider onboarding invokes the canonical callable with verified identity", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/advanceRiderOnboarding`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {stage: "profile_started", name: "Rider"}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true, name: "advanceRiderOnboarding"}});
+    assert.equal(deps.calls[0].context.auth.uid, "user-1");
     assert.equal(deps.calls[0].context.app.appId, "circum");
   });
 });
