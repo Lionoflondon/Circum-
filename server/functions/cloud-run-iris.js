@@ -12,8 +12,28 @@ const {buildPhotoAnalysis, decodeBase64Image, detectImageType} = require("./iris
 
 const ROUTES = new Set(["analyseIris", "analyseParcelPhotoForIris"]);
 const MAX_BODY_BYTES = 14 * 1024 * 1024;
-const STATUS = {"invalid-argument": "INVALID_ARGUMENT", unauthenticated: "UNAUTHENTICATED", "permission-denied": "PERMISSION_DENIED", "failed-precondition": "FAILED_PRECONDITION", "resource-exhausted": "RESOURCE_EXHAUSTED", internal: "INTERNAL"};
+const STATUS = {"invalid-argument": "INVALID_ARGUMENT", unauthenticated: "UNAUTHENTICATED", "permission-denied": "PERMISSION_DENIED", "failed-precondition": "FAILED_PRECONDITION", "resource-exhausted": "RESOURCE_EXHAUSTED", unavailable: "UNAVAILABLE", internal: "INTERNAL"};
+const QA_FAULT_MODES = new Set(["unavailable", "rate_limit", "malformed"]);
 const error = (code, message) => Object.assign(new Error(message), {code});
+
+function qaFaultModeFor({data, uid, env = process.env}) {
+  const mode = data && data.qaFaultMode;
+  if (mode === undefined) return null;
+  if (!QA_FAULT_MODES.has(mode)) throw error("invalid-argument", "Unsupported QA fault mode.");
+  if (env.GCLOUD_PROJECT !== "circum-2797c" || env.STRIPE_MODE !== "TEST" || env.QA_LIFECYCLE_ENABLED !== "true") {
+    throw error("permission-denied", "QA fault injection is not permitted.");
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(env.CIRCUM_QA_CERTIFICATION_CREDENTIALS || "");
+  } catch (_) {
+    throw error("permission-denied", "QA fault injection is not permitted.");
+  }
+  const identities = credentials && credentials.identities;
+  const allowlisted = ["admin", "sender", "rider"].some((role) => identities && identities[role] && identities[role].uid === uid);
+  if (!allowlisted) throw error("permission-denied", "QA fault injection is not permitted.");
+  return mode;
+}
 
 function createHandlers({db = getFirestore(), examples = loadLearningExamples} = {}) {
   return {
@@ -52,7 +72,7 @@ function createRateLimiter({now = Date.now, limit = 30} = {}) {
   };
 }
 
-function createServer({dependenciesFactory = productionDependencies, allowRequest = createRateLimiter()} = {}) {
+function createServer({dependenciesFactory = productionDependencies, allowRequest = createRateLimiter(), env = process.env} = {}) {
   let dependencies;
   return http.createServer((request, response) => {
     if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) return writeJson(response, 200, {status: "ok", source: process.env.CIRCUM_SOURCE_SHA || "unknown", operations: [...ROUTES]});
@@ -81,12 +101,16 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) throw error("invalid-argument", "Callable request must contain data.");
         if (!allowRequest(uid)) throw error("resource-exhausted", "Too many IRIS requests. Try again shortly.");
+        const qaFaultMode = qaFaultModeFor({data: body.data, uid, env});
+        if (qaFaultMode === "unavailable") throw error("unavailable", "QA fault injection requested.");
+        if (qaFaultMode === "rate_limit") throw error("resource-exhausted", "QA fault injection requested.");
+        if (qaFaultMode === "malformed") throw error("internal", "QA fault injection requested.");
         const result = await dependencies.handlers[route](body.data, {auth: {uid, token: decoded}});
         return writeJson(response, 200, {result});
       } catch (failure) {
         const rawCode = String(failure.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
-        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "resource-exhausted" ? 429 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : 500;
+        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "resource-exhausted" ? 429 : code === "unavailable" ? 503 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : 500;
         if (status >= 500) console.error("iris_request_failed", {operation: route, reason: code});
         return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status >= 500 ? "IRIS request failed. Try again." : failure.message}});
       }
@@ -95,4 +119,4 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
 }
 
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
-module.exports = {createHandlers, createRateLimiter, createServer, productionDependencies, MAX_BODY_BYTES};
+module.exports = {createHandlers, createRateLimiter, createServer, productionDependencies, MAX_BODY_BYTES, qaFaultModeFor, QA_FAULT_MODES};

@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {createServer, createHandlers} = require("./cloud-run-iris");
+const {createServer, createHandlers, qaFaultModeFor} = require("./cloud-run-iris");
 const {syntheticParcelPng} = require("./qa-iris-certification");
 
 test("IRIS callable security and safe compliance", async () => {
@@ -28,6 +28,51 @@ test("IRIS callable security and safe compliance", async () => {
     const prohibited = await call("valid", "valid", {description: "weed", declaredWeightText: "1 kg"});
     assert.equal(prohibited.status, 200);
     assert.equal(prohibited.body.result.compliance.status, "prohibited");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("QA fault injection requires the private TEST allowlist", () => {
+  const env = {
+    GCLOUD_PROJECT: "circum-2797c",
+    STRIPE_MODE: "TEST",
+    QA_LIFECYCLE_ENABLED: "true",
+    CIRCUM_QA_CERTIFICATION_CREDENTIALS: JSON.stringify({identities: {
+      admin: {uid: "qa_admin"}, sender: {uid: "qa_sender"}, rider: {uid: "qa_rider"},
+    }}),
+  };
+  assert.equal(qaFaultModeFor({data: {qaFaultMode: "unavailable"}, uid: "qa_sender", env}), "unavailable");
+  assert.throws(() => qaFaultModeFor({data: {qaFaultMode: "unavailable"}, uid: "ordinary", env}), /not permitted/);
+  assert.throws(() => qaFaultModeFor({data: {qaFaultMode: "unknown"}, uid: "qa_sender", env}), /Unsupported/);
+  assert.throws(() => qaFaultModeFor({data: {qaFaultMode: "unavailable"}, uid: "qa_sender", env: {...env, STRIPE_MODE: "LIVE"}}), /not permitted/);
+});
+
+test("deployed QA failure is bounded and sanitized", async () => {
+  const server = createServer({
+    env: {
+      GCLOUD_PROJECT: "circum-2797c",
+      STRIPE_MODE: "TEST",
+      QA_LIFECYCLE_ENABLED: "true",
+      CIRCUM_QA_CERTIFICATION_CREDENTIALS: JSON.stringify({identities: {sender: {uid: "qa_sender"}}}),
+    },
+    dependenciesFactory: () => ({
+      verifyIdToken: async () => ({uid: "qa_sender"}),
+      verifyAppCheck: async () => ({}),
+      handlers: {
+        analyseParcelPhotoForIris: async () => {
+          throw new Error("provider should not run");
+        },
+      },
+    }),
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/analyseParcelPhotoForIris`, {method: "POST", headers: {"content-type": "application/json", authorization: "Bearer valid", "x-firebase-appcheck": "valid"}, body: JSON.stringify({data: {qaFaultMode: "unavailable"}})});
+    assert.equal(response.status, 503);
+    const payload = await response.json();
+    assert.equal(payload.error.status, "UNAVAILABLE");
+    assert.doesNotMatch(JSON.stringify(payload), /provider should not run/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
