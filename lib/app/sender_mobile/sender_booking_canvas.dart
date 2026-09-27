@@ -3026,7 +3026,8 @@ class _IrisPanel extends StatelessWidget {
                 ),
           ),
         ] else ...[
-          if (iris != null) const _IrisSuccessPulse(),
+          if (iris != null && iris.complianceStatus == 'allowed')
+            const _IrisSuccessPulse(),
           if (iris != null && iris.complianceStatus != 'allowed') ...[
             _InfoNote(
               text: iris.complianceMessage?.isNotEmpty == true
