@@ -16,6 +16,14 @@ const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPay
 const fail = (message) => {
 throw new functions.https.HttpsError("failed-precondition", message);
 };
+function fixtureIdForRequest(uid, requestId) {
+  if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
+  return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
+}
+function requiredFixtureId(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) fail("A valid QA fixture ID is required.");
+  return value;
+}
 function factory({db, env = process.env, stripe}) {
   const provider = (fixture) => providerForFixture({stripe, registry: db.collection(ROOT).doc(fixture.id).collection("qaCheckoutProviderObjects"), fixtureId: fixture.id, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
   const paidProvider = (fixture, qa) => paymentProviderForFixture({stripe, qa, fixture, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
@@ -47,10 +55,13 @@ function factory({db, env = process.env, stripe}) {
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
     if (["health", "health_finalize", "business", "business_finalize"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
-    const id = createHash("sha256").update(`special-v4:${lists.operators[0]}`).digest("hex");
+    const id = data.action === "prepare" ?
+      fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
     if (data.action === "prepare") {
-      const created = await lifecycle.handle({action: "create", requestId: `special_v4_${lists.operators[0]}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
+      const previous = await ref.get();
+      if (previous.exists && previous.data().archived === true) fail("This QA request was archived. Use a new request ID.");
+      const created = await lifecycle.handle({action: "create", requestId: `special_v5_${data.requestId}`, senderId: lists.senders[0], riderId: lists.riders[0]}, context);
       await db.runTransaction(async (tx) => {
         const current = await tx.get(ref); if (current.exists) return;
         const now = Timestamp.now();
@@ -155,4 +166,4 @@ function instance() {
 }
 exports.callable = () => functions.runWith({enforceAppCheck: true, timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET, "GOOGLE_MAPS_DIRECTIONS_API_KEY"]}).https.onCall((data, context) => instance().handle(data, context));
 exports.scheduled = () => functions.runWith({timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET]}).pubsub.schedule("every 10 minutes").onRun(() => instance().expire());
-exports._test = {factory};
+exports._test = {factory, fixtureIdForRequest, requiredFixtureId};

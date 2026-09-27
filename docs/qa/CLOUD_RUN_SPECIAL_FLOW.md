@@ -18,6 +18,13 @@ Stripe endpoint, no dispatch capability, and no route to customer financial
 collections. `/health` reports only service identity, source SHA and `TEST`
 mode; request logs contain action/outcome/error-class metadata only.
 
+To start a new certification cycle, the allowlisted operator calls `prepare`
+with a bounded `requestId` such as `lifecycle_20260927_a`. The response returns
+the new `fixtureId`; every later action, including `read` and `cleanup`, must
+send that ID. Retrying the same active request is idempotent. An archived
+request ID cannot be reopened; use a new one so prior audit records remain
+intact. The existing one-active-fixture operator lock still applies.
+
 The service is deployed with internal ingress and without the public
 unauthenticated invoker binding. The existing managed QA exports remain
 untouched; no broad Functions deployment is part of this surface.
