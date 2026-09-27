@@ -4,6 +4,7 @@
 const {normalizeEmail} = require("./email-queue");
 const templates = require("./transactional-email-templates");
 const giftPolicy = require("./gift-communications-policy");
+const riderPolicy = require("./rider-email-policy");
 
 const CREATED = "google.cloud.firestore.document.v1.created";
 const UPDATED = "google.cloud.firestore.document.v1.updated";
@@ -80,6 +81,39 @@ function timestampKey(value) {
   return text(value);
 }
 
+function humanDocumentLabel(value) {
+  const labels = {
+    driving_licence: "your driving licence",
+    proof_of_address: "your proof of address",
+    identity_document: "your identity document",
+    vehicle_document: "your vehicle document",
+  };
+  const key = lower(value).replace(/\s+/g, "_");
+  return labels[key] || `your ${text(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").slice(0, 80) || "required document"}`;
+}
+
+async function riderProfileFor(db, riderId) {
+  if (!riderId) return null;
+  const snapshot = await db.collection("riderProfiles").doc(riderId).get();
+  if (!snapshot.exists) return null;
+  return {id: riderId, ...(snapshot.data() || {})};
+}
+
+async function riderEmailRecord({db, riderId, profileOverride = null, template, eventType, collection, sourceId, required, extra = {}}) {
+  const profile = profileOverride || await riderProfileFor(db, riderId);
+  const payload = record({
+    to: profile && profile.email,
+    template,
+    eventType,
+    collection,
+    sourceId,
+    required,
+    senderCategory: "info",
+    extra: {recipientId: riderId, sourceRiderId: riderId, ...extra},
+  });
+  return {payload, profile};
+}
+
 function isOrdinaryDelivery(data = {}) {
   const kind = lower(data.sourceModule || data.serviceType || data.type);
   return data.businessMode !== true && data.isBusiness !== true &&
@@ -146,7 +180,25 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
       required: lower(after.status || after.deliveryStatus), recipientField: after.senderEmail ? "senderEmail" : "email", senderCategory: "info",
       extra: {recipientId: text(after.senderId)}});
     if (payload) payload.sourceRequiredFields = {settlementStatus: "completed"};
-    return createOnly(db, emailId("delivery_completed", deliveryId), payload);
+    const senderResult = await createOnly(db, emailId("delivery_completed", deliveryId), payload);
+    const riderId = text(after.riderId || after.assignedRiderId || after.driverId || after.assignedDriverId);
+    if (!riderId) return senderResult;
+    const earning = await db.collection("riderEarningTransactions").doc(deliveryId).get();
+    if (!earning.exists || lower(earning.data().status) !== "completed" || lower(earning.data().type) !== "delivery_earning") {
+      return senderResult;
+    }
+    const {payload: riderPayload} = await riderEmailRecord({
+      db,
+      riderId,
+      template: templates.riderEarningsUpdate({kind: "delivery", amount: earning.data().amount, reference: deliveryId}),
+      eventType: riderPolicy.REQUIRED_EVENTS.DELIVERY_EARNINGS,
+      collection: "riderEarningTransactions",
+      sourceId: deliveryId,
+      required: "completed",
+      extra: {sourceRequiredFields: {type: "delivery_earning"}},
+    });
+    const riderResult = await createOnly(db, emailId("rider_earning", "delivery_earning", deliveryId), riderPayload);
+    return {status: "published", sender: senderResult, rider: riderResult};
   }
 
   const settlementId = asId(path, "deliveryCancellationSettlements");
@@ -266,16 +318,113 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
 
   const riderId = asId(path, "riderProfiles");
   const decision = lower(after.approvalStatus);
-  if (riderId && eventType === UPDATED && decision !== lower(before.approvalStatus) &&
-      ["approved", "rejected", "more_information_requested"].includes(decision) &&
-      (after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt)) {
-    const decisionKey = after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt;
-    const decisionId = timestampKey(decisionKey);
-    const payload = record({to: after.email, template: templates.riderDecision({decision}),
-      eventType: "rider_application_decision", collection: "riderProfiles", sourceId: riderId,
-      required: decision, recipientField: "email", senderCategory: "info",
-      extra: {recipientId: riderId, decisionKey: decisionId}});
-    return createOnly(db, emailId("rider_application", riderId, decision, decisionId), payload);
+  if (riderId && eventType === UPDATED) {
+    if (decision !== lower(before.approvalStatus) &&
+        ["approved", "rejected", "more_information_requested"].includes(decision) &&
+        (after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt)) {
+      const decisionKey = after.adminOperationUpdatedAt || after.riderAuthorityUpdatedAt;
+      const decisionId = timestampKey(decisionKey);
+      const payload = record({to: after.email, template: templates.riderDecision({decision}),
+        eventType: riderPolicy.REQUIRED_EVENTS.APPLICATION_DECISION, collection: "riderProfiles", sourceId: riderId,
+        required: decision, recipientField: "email", senderCategory: "info",
+        extra: {recipientId: riderId, sourceRiderId: riderId, decisionKey: decisionId}});
+      return createOnly(db, emailId("rider_application", riderId, decision, decisionId), payload);
+    }
+    const beforeConnect = lower(before.stripeStatus || before.stripeConnectStatus);
+    const connect = lower(after.stripeStatus || after.stripeConnectStatus);
+    const connectKey = timestampKey(after.stripeLastSyncedAt || after.lastStripeSyncAt || after.updatedAt) || connect;
+    if (connect !== beforeConnect && ["action_required", "disabled", "restricted"].includes(connect)) {
+      const {payload} = await riderEmailRecord({
+        db,
+        riderId,
+        profileOverride: after,
+        template: templates.riderConnectUpdate({status: "action_required"}),
+        eventType: riderPolicy.REQUIRED_EVENTS.CONNECT_ACTION_REQUIRED,
+        collection: "riderProfiles",
+        sourceId: riderId,
+        required: connect,
+        extra: {sourceRequiredFields: {stripeStatus: ["action_required", "disabled", "restricted"]}, connectKey},
+      });
+      return createOnly(db, emailId("rider_connect", riderId, "action_required", connectKey), payload);
+    }
+    if (after.stripePayoutsEnabled === true && before.stripePayoutsEnabled !== true) {
+      const {payload} = await riderEmailRecord({
+        db,
+        riderId,
+        profileOverride: after,
+        template: templates.riderConnectUpdate({status: "enabled"}),
+        eventType: riderPolicy.REQUIRED_EVENTS.CONNECT_ENABLED,
+        collection: "riderProfiles",
+        sourceId: riderId,
+        required: "payouts_enabled",
+        extra: {sourceRequiredFields: {stripePayoutsEnabled: true}, connectKey},
+      });
+      return createOnly(db, emailId("rider_connect", riderId, "enabled", connectKey), payload);
+    }
+  }
+
+  const riderDocumentId = asId(path, "riderDocuments");
+  const documentStatus = lower(after.status || after.verificationStatus || after.reviewStatus);
+  const beforeDocumentStatus = lower(before.status || before.verificationStatus || before.reviewStatus);
+  if (riderDocumentId && eventType === UPDATED && documentStatus !== beforeDocumentStatus &&
+      ["rejected", "replacement_requested"].includes(documentStatus)) {
+    const documentRiderId = text(after.riderId || after.driverId || after.uid);
+    const {payload} = await riderEmailRecord({
+      db,
+      riderId: documentRiderId,
+      template: templates.riderDocumentActionRequired({documentLabel: humanDocumentLabel(after.documentType || after.type || after.name)}),
+      eventType: riderPolicy.REQUIRED_EVENTS.DOCUMENT_ACTION,
+      collection: "riderDocuments",
+      sourceId: riderDocumentId,
+      required: documentStatus,
+      extra: {sourceRequiredFields: {status: ["rejected", "replacement_requested"]}, documentRiderId},
+    });
+    const reviewKey = timestampKey(after.riderAuthorityUpdatedAt || after.reviewTimestamp || after.reviewedAt || after.updatedAt) || documentStatus;
+    return createOnly(db, emailId("rider_document", riderDocumentId, documentStatus, reviewKey), payload);
+  }
+
+  const earningId = asId(path, "riderEarningTransactions");
+  const earningType = lower(after.type);
+  if (earningId && eventType === CREATED && lower(after.status) === "completed" &&
+      ["delivery_earning", "cancellation_compensation", "no_show_compensation", "adjustment_credit"].includes(earningType)) {
+    const earningRiderId = text(after.riderId || after.driverId || after.uid);
+    const kind = earningType === "delivery_earning" ? "delivery" :
+      ["cancellation_compensation", "no_show_compensation"].includes(earningType) ? "compensation" : "adjustment";
+    const {payload} = await riderEmailRecord({
+      db,
+      riderId: earningRiderId,
+      template: templates.riderEarningsUpdate({kind, amount: after.amount, reference: after.deliveryId || earningId}),
+      eventType: kind === "delivery" ? riderPolicy.REQUIRED_EVENTS.DELIVERY_EARNINGS :
+        kind === "compensation" ? riderPolicy.REQUIRED_EVENTS.COMPENSATION : riderPolicy.REQUIRED_EVENTS.EARNINGS_ADJUSTMENT,
+      collection: "riderEarningTransactions",
+      sourceId: earningId,
+      required: "completed",
+      extra: {sourceRequiredFields: {status: "completed", type: earningType}, earningRiderId},
+    });
+    return createOnly(db, emailId("rider_earning", earningType, earningId), payload);
+  }
+
+  const payoutRequestId = asId(path, "payoutRequests");
+  const payoutStatus = lower(after.payoutStatus || after.status);
+  const beforePayoutStatus = lower(before.payoutStatus || before.status);
+  const payoutEvent = payoutStatus === "requested" && payoutStatus !== beforePayoutStatus ? "requested" :
+    payoutStatus === "paid" && payoutStatus !== beforePayoutStatus ? "paid" :
+    ["failed", "canceled", "cancelled"].includes(payoutStatus) && payoutStatus !== beforePayoutStatus ? "failed" : "";
+  if (payoutRequestId && (eventType === CREATED || eventType === UPDATED) && payoutEvent) {
+    const payoutRiderId = text(after.riderId);
+    const {payload} = await riderEmailRecord({
+      db,
+      riderId: payoutRiderId,
+      template: templates.riderPayoutUpdate({status: payoutEvent, amount: after.amount || after.riderNetPayout, reference: payoutRequestId}),
+      eventType: payoutEvent === "requested" ? riderPolicy.REQUIRED_EVENTS.WITHDRAWAL_REQUESTED :
+        payoutEvent === "paid" ? riderPolicy.REQUIRED_EVENTS.PAYOUT_PAID : riderPolicy.REQUIRED_EVENTS.PAYOUT_FAILED,
+      collection: "payoutRequests",
+      sourceId: payoutRequestId,
+      required: payoutEvent,
+      extra: {sourceRequiredFields: {riderId: payoutRiderId, payoutStatus: payoutEvent === "failed" ? ["failed", "canceled", "cancelled"] : payoutEvent}, payoutRiderId},
+    });
+    const milestoneKey = timestampKey(after.createdAt || after.paidAt || after.failedAt || after.updatedAt) || payoutEvent;
+    return createOnly(db, emailId("rider_payout", payoutEvent, payoutRequestId, milestoneKey), payload);
   }
 
   const pickupId = asId(path, "prescriptionPickups");

@@ -207,6 +207,52 @@ test("Rider decision email uses only the authoritative application status and co
   assert.doesNotMatch(db.read("emailQueue", result.id).text, /document|internal|reason/i);
 });
 
+test("Rider document action-required email resolves the recipient from riderProfiles", async () => {
+  const db = fakeDb({"riderProfiles/rider-doc": {email: "rider@example.test"}});
+  const input = event("riderDocuments", "doc-1", {status: "pending"}, {
+    status: "replacement_requested", riderId: "rider-doc", documentType: "driving_licence",
+    riderAuthorityUpdatedAt: {seconds: 124},
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "rider_document_doc-1_replacement_requested_124_0");
+  const queued = db.read("emailQueue", result.id);
+  assert.equal(queued.to, "rider@example.test");
+  assert.equal(queued.senderCategory, "info");
+  assert.match(queued.text, /Action is needed/);
+  assert.doesNotMatch(queued.text, /replacement_requested|driving_licence/);
+});
+
+test("Rider earnings and payout publishers are deterministic and exactly once", async () => {
+  const db = fakeDb({
+    "riderProfiles/rider-finance": {email: "rider@example.test"},
+  });
+  const earning = event("riderEarningTransactions", "earn-1", null, {
+    status: "completed", type: "cancellation_compensation", riderId: "rider-finance", amount: 4.5, deliveryId: "delivery-1",
+  });
+  const first = await publishFromEvent({db, ...earning});
+  const replay = await publishFromEvent({db, ...earning});
+  assert.equal(first.id, "rider_earning_cancellation_compensation_earn-1");
+  assert.equal(replay.status, "duplicate");
+  assert.equal(db.read("emailQueue", first.id).senderCategory, "info");
+
+  const payout = event("payoutRequests", "withdrawal-1", {status: "requested", payoutStatus: "requested"}, {
+    status: "processing", payoutStatus: "paid", riderId: "rider-finance", amount: 20, paidAt: {seconds: 200},
+  });
+  const paid = await publishFromEvent({db, ...payout});
+  assert.equal(paid.id, "rider_payout_paid_withdrawal-1_200_0");
+  assert.equal(db.read("emailQueue", paid.id).to, "rider@example.test");
+});
+
+test("Connect action-required status is emailed once and uses Info", async () => {
+  const db = fakeDb();
+  const input = event("riderProfiles", "rider-connect", {stripeStatus: "connected", stripePayoutsEnabled: false, email: "rider@example.test"}, {
+    stripeStatus: "action_required", stripePayoutsEnabled: false, email: "rider@example.test", stripeLastSyncedAt: {seconds: 300},
+  });
+  const result = await publishFromEvent({db, ...input});
+  assert.equal(result.id, "rider_connect_rider-connect_action_required_300_0");
+  assert.equal(db.read("emailQueue", result.id).senderCategory, "info");
+});
+
 test("Health+ status email is limited to the canonical operational status projection", async () => {
   const db = fakeDb();
   const input = event("prescriptionPickups", "pickup-1", {status: "scheduled"}, {
