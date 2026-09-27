@@ -35,36 +35,6 @@ void main() {
     expect(result, {'nearestRequests': []});
   });
 
-  test('migrated tracking routes retain the same protected envelope', () async {
-    final requests = <http.Request>[];
-    final client = MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode({'result': {'status': 'accepted'}}), 200);
-    });
-    for (final operation in [
-      'updateDeliveryTrackingStatus',
-      'updateDeliveryLiveLocation',
-    ]) {
-      final result = await invokeRiderDeliveryAuthority(
-        operation,
-        {'deliveryId': 'qa-delivery'},
-        idToken: 'id-token',
-        appCheckToken: 'app-check-token',
-        client: client,
-      );
-      expect(result['status'], 'accepted');
-    }
-    expect(requests.map((request) => request.url.path), [
-      '/updateDeliveryTrackingStatus',
-      '/updateDeliveryLiveLocation',
-    ]);
-    for (final request in requests) {
-      expect(request.headers['authorization'], 'Bearer id-token');
-      expect(request.headers['x-firebase-appcheck'], 'app-check-token');
-      expect(jsonDecode(request.body), {'data': {'deliveryId': 'qa-delivery'}});
-    }
-  });
-
   test('all website Rider callers use migrated routes', () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
@@ -75,12 +45,6 @@ void main() {
             "callRiderDeliveryAuthority(\n          'getAvailableRequests'"));
     expect(source, contains("action == 'verify_receiver_pin'"));
     expect(source, contains("callRiderDeliveryAuthority('completeDelivery'"));
-    expect(source,
-        contains("callRiderDeliveryAuthority('updateDeliveryTrackingStatus'"));
-    expect(source,
-        contains("callRiderDeliveryAuthority('updateDeliveryLiveLocation'"));
-    expect(source,
-        isNot(contains("httpsCallable('updateDeliveryTrackingStatus')")));
-    expect(source, isNot(contains("httpsCallable('updateDeliveryLiveLocation')")));
+    expect(source, contains("httpsCallable('updateDeliveryTrackingStatus')"));
   });
 }
