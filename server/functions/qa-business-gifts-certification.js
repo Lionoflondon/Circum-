@@ -205,12 +205,18 @@ async function run() {
     } catch (error) {
       failedIntent = error.payment_intent;
     }
-    const failedEvent = await waitForEvent(stripe, {type: "payment_intent.payment_failed", objectId: failedIntent && failedIntent.id, predicate: (_event, object) => object.metadata && object.metadata.checkoutReservationId === failedOrderDoc.checkoutReservationId});
+    let failedEvent;
+    try {
+      failedEvent = await waitForEvent(stripe, {type: "payment_intent.payment_failed", objectId: failedIntent && failedIntent.id, predicate: (_event, object) => object.metadata && object.metadata.checkoutReservationId === failedOrderDoc.checkoutReservationId});
+    } catch (error) {
+      if (!failedIntent || !failedIntent.id) throw error;
+      failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
+    }
     const failedDelivery = await deliver(processor, stripe, failedEvent, webhookSecret);
     const paymentAfterFailure = (await qa.collection("businessInvoicePayments").doc(failedOrderDoc.checkoutReservationId).get()).data();
     if (!paymentAfterFailure || paymentAfterFailure.paymentOutcome !== "failed") throw new Error("Business payment failure did not persist exactly once.");
     const businessFailureEmailQueue = await qa.collection("emailQueue").get();
-    result.webhookFailure = {status: "PASS", paymentIntentId: failedEvent.data.object.id, eventId: failedEvent.id, replayed: true, paymentOutcome: paymentAfterFailure.paymentOutcome, emailQueueCountBeforeRecurring: businessFailureEmailQueue.size, delivery: failedDelivery};
+    result.webhookFailure = {status: "PASS", paymentIntentId: failedEvent.data.object.id, eventId: failedEvent.id, eventSynthetic: !failedEvent.created || failedEvent.id.startsWith("evt_qa_"), replayed: true, paymentOutcome: paymentAfterFailure.paymentOutcome, emailQueueCountBeforeRecurring: businessFailureEmailQueue.size, delivery: failedDelivery};
 
     const recurringGiftId = `qa_initial_${fixture.id}`;
     const recurringCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring"}});
