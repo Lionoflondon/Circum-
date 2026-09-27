@@ -39,6 +39,7 @@ newer projection; terminal deliveries reject updates. This adapter verifies the
 shared policy, while direct public `updateDeliveryLiveLocation` transport still
 needs its own runtime probe.
 
-The service is deployed with internal ingress and without the public
-unauthenticated invoker binding. The existing managed QA exports remain
+The live service currently permits external ingress but has no public
+unauthenticated invoker binding; Cloud Run IAM still rejects unauthenticated
+requests before the Firebase Auth and App Check gates. The existing managed QA exports remain
 untouched; no broad Functions deployment is part of this surface.
