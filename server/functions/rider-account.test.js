@@ -90,6 +90,7 @@ test("new Rider onboarding queues a Rider-only welcome once", () => {
   const body = source.slice(start, end);
   assert.match(body, /const isNewRider = !riderSnap\.exists && !profileSnap\.exists/);
   assert.match(body, /welcomeEligible: isNewRider && onboardingStatus === "profile_started"/);
+  assert.match(body, /const riderWelcomeEmail = require\("\.\/rider-welcome-email"\)/);
   assert.match(body, /riderWelcomeEmail\.queueRiderWelcomeEmail/);
 });
 

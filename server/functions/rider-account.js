@@ -7,7 +7,6 @@ const {canonicalDocumentId, DOCUMENT_MATRIX, requiredDocumentIds} = require("./r
 const {riderCallable} = require("./rider-app-check");
 const documentChunks = require("./rider-document-chunks");
 const deviceTokenAuthority = require("./device-token-authority");
-const riderWelcomeEmail = require("./rider-welcome-email");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -456,6 +455,9 @@ exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
     };
   });
   if (result.welcomeEligible) {
+    // Keep the existing Gen 1 callable activation path lightweight. The email
+    // publisher is loaded only after the onboarding transaction succeeds.
+    const riderWelcomeEmail = require("./rider-welcome-email");
     const welcome = await riderWelcomeEmail.queueRiderWelcomeEmail({
       db,
       uid: rider.uid,
