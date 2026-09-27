@@ -1,6 +1,6 @@
 {
   "project": "circum-2797c",
-  "baselineDate": "2026-09-21",
+  "baselineDate": "2026-09-27",
   "deployedMissingSource": [
     {
       "name": "acknowledgeBusinessOperationalIncident",
@@ -199,10 +199,6 @@
       "category": "INTENTIONALLY_LEGACY"
     },
     {
-      "name": "onDeliveryCompletedEvent",
-      "category": "INTENTIONALLY_LEGACY"
-    },
-    {
       "name": "onDeliveryDisputeIntelligenceCreate",
       "category": "INTENTIONALLY_LEGACY"
     },
@@ -259,19 +255,11 @@
       "category": "INTENTIONALLY_LEGACY"
     },
     {
-      "name": "processNotificationRetries",
-      "category": "INTENTIONALLY_LEGACY"
-    },
-    {
       "name": "proposeGiftSubstitution",
       "category": "INTENTIONALLY_LEGACY"
     },
     {
       "name": "purgeFounderTestPipeline",
-      "category": "INTENTIONALLY_LEGACY"
-    },
-    {
-      "name": "reconcileDeliveryTips",
       "category": "INTENTIONALLY_LEGACY"
     },
     {
@@ -341,6 +329,21 @@
       "owner": "circum-newsletter"
     },
     {
+      "name": "cancelGiftRecurring",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-payments"
+    },
+    {
+      "name": "createBusinessGiftOrder",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-business-invoice-payments"
+    },
+    {
+      "name": "createGiftRecurringBillingPortalSession",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-payments"
+    },
+    {
       "name": "createHealthPlusBillingPortalSession",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-health-plus-payments"
@@ -356,6 +359,16 @@
       "owner": "circum-newsletter"
     },
     {
+      "name": "getGiftRecurringPreview",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-payments"
+    },
+    {
+      "name": "getGiftRecurringStatus",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-payments"
+    },
+    {
       "name": "updateRiderProfile",
       "category": "RESTORABLE_COMPATIBILITY",
       "owner": "circum-account-bootstrap"
@@ -369,6 +382,31 @@
       "name": "onDeliveryCreated",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-delivery-created-events"
+    },
+    {
+      "name": "onGiftDeliveryCompleted",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-completed-events"
+    },
+    {
+      "name": "onGiftMovementWrite",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-gift-movement"
+    },
+    {
+      "name": "processHealthPlusReminders",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-payment-schedulers"
+    },
+    {
+      "name": "reconcileGiftRecurringRenewals",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-payment-schedulers"
+    },
+    {
+      "name": "reconcilePendingDeliverySettlements",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-payment-schedulers"
     },
     {
       "name": "reconcilePendingSenderCancellations",
