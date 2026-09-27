@@ -23,6 +23,29 @@ Future<Map<String, dynamic>> callAddressPlaces(
   FirebaseAuth? auth,
   FirebaseAppCheck? appCheck,
   http.Client? client,
+  Future<String?> Function()? idTokenProvider,
+  Future<String?> Function()? appCheckTokenProvider,
+  Duration requestTimeout = const Duration(seconds: 8),
+}) {
+  return _callAddressPlaces(
+    operation,
+    data,
+    auth: auth,
+    appCheck: appCheck,
+    client: client,
+    idTokenProvider: idTokenProvider,
+    appCheckTokenProvider: appCheckTokenProvider,
+  ).timeout(requestTimeout);
+}
+
+Future<Map<String, dynamic>> _callAddressPlaces(
+  String operation,
+  Map<String, dynamic> data, {
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+  Future<String?> Function()? idTokenProvider,
+  Future<String?> Function()? appCheckTokenProvider,
 }) async {
   if (!const {
     'searchFreeUkAddresses',
@@ -30,16 +53,19 @@ Future<Map<String, dynamic>> callAddressPlaces(
   }.contains(operation)) {
     throw ArgumentError.value(operation, 'operation', 'Unsupported operation');
   }
-  final user = (auth ?? FirebaseAuth.instance).currentUser;
-  final idToken = await user?.getIdToken();
+  final user = idTokenProvider == null
+      ? (auth ?? FirebaseAuth.instance).currentUser
+      : null;
+  Future<String?> defaultIdTokenProvider() async => user?.getIdToken();
+  final idToken = await (idTokenProvider ?? defaultIdTokenProvider)();
   if (idToken == null || idToken.isEmpty) {
     throw const AddressPlacesException(
       'UNAUTHENTICATED',
       'Sign in to continue.',
     );
   }
-  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance)
-      .getToken();
+  final appCheckToken = await (appCheckTokenProvider ??
+      () => (appCheck ?? FirebaseAppCheck.instance).getToken())();
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw const AddressPlacesException(
       'FAILED_PRECONDITION',
@@ -89,4 +115,3 @@ Future<Map<String, dynamic>> invokeAddressPlaces(
     if (ownsClient) transport.close();
   }
 }
-

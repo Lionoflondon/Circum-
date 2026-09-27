@@ -246,7 +246,8 @@ void main() {
     final handler = bloc.substring(handlerStart, handlerEnd);
     final irisCall = handler.indexOf('callIris(');
     expect(irisCall, isNonNegative);
-    expect(handler.substring(irisCall, irisCall + 80), contains("'analyseIris'"));
+    expect(
+        handler.substring(irisCall, irisCall + 80), contains("'analyseIris'"));
     expect(handler, contains('.timeout(const Duration(seconds: 15))'));
 
     final matchStart = canvas.indexOf('bool _irisMatchesParcel');
@@ -342,8 +343,7 @@ void main() {
     expect(source, contains("callAddressPlaces('searchFreeUkAddresses'"));
     expect(source, contains("callAddressPlaces('resolveUkAddressPlace'"));
     expect(source, contains("'sessionToken': '\$sessionToken'"));
-    final transport =
-        read('lib/app/send_package/repo/address_places_api.dart');
+    final transport = read('lib/app/send_package/repo/address_places_api.dart');
     expect(transport, contains(".timeout(const Duration(seconds: 8))"));
     expect(transport, contains('x-firebase-appcheck'));
     expect(source, isNot(contains('maps.googleapis.com')));
@@ -355,6 +355,31 @@ void main() {
     final bookingCanvas =
         read('lib/app/sender_mobile/sender_booking_canvas.dart');
     expect(bookingCanvas, contains('pickup: pickup'));
+
+    final pickupSuggestion =
+        bookingCanvas.indexOf('onSuggestion: (suggestion)');
+    final dropoffSuggestion = bookingCanvas.indexOf(
+      'onSuggestion: (suggestion)',
+      pickupSuggestion + 1,
+    );
+    expect(pickupSuggestion, isNonNegative);
+    expect(dropoffSuggestion, greaterThan(pickupSuggestion));
+    final suggestionHandlers = bookingCanvas.substring(
+      pickupSuggestion,
+      bookingCanvas.indexOf('primaryLabel:', dropoffSuggestion),
+    );
+    expect(
+      suggestionHandlers,
+      isNot(contains('SetPickupAddress(')),
+      reason:
+          'A suggestion tap only selects text; confirmation owns resolution.',
+    );
+    expect(
+      suggestionHandlers,
+      isNot(contains('SetDeliveryAddress(')),
+      reason:
+          'A suggestion tap only selects text; confirmation owns resolution.',
+    );
   });
 
   test('Sender-facing delivery models never expose Rider phone fallbacks', () {
