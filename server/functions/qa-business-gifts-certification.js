@@ -253,7 +253,7 @@ async function run() {
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
     if (failureSubscription.latest_invoice) {
       try {
-        await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: "pm_card_chargeDeclined"});
+        await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: failurePaymentMethod.id});
       } catch (_) {
         // The declined payment is expected for this fixture.
       }
