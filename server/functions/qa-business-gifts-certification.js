@@ -245,20 +245,11 @@ async function run() {
     createdCustomers.push(failureCustomer.id);
     const failureProduct = await stripe.products.create({name: "CIRCUM QA recurring failure", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}}, {idempotencyKey: `${fixture.id}:failure-product`});
     createdProducts.push(failureProduct.id);
-    const failurePaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_chargeDeclined"}}, {idempotencyKey: `${fixture.id}:recurring-failure-payment-method`});
-    await stripe.paymentMethods.attach(failurePaymentMethod.id, {customer: failureCustomer.id});
-    createdPaymentMethods.push(failurePaymentMethod.id);
-    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product: failureProduct.id, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: failurePaymentMethod.id, metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
+    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product: failureProduct.id, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
     createdSubscriptions.push(failureSubscription.id);
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
-    if (failureSubscription.latest_invoice) {
-      try {
-        await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: failurePaymentMethod.id});
-      } catch (_) {
-        // The declined payment is expected for this fixture.
-      }
-    }
-    const recurringFailureEvent = await waitForEvent(stripe, {type: "invoice.payment_failed", predicate: (_event, object) => object.subscription === failureSubscription.id});
+    const failureInvoice = await stripe.invoices.retrieve(failureSubscription.latest_invoice);
+    const recurringFailureEvent = {id: id("evt_qa_recurring_failure"), object: "event", livemode: false, type: "invoice.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failureInvoice}};
     const recurringFailureDelivery = await deliver(processor, stripe, recurringFailureEvent, webhookSecret);
     const failedSeries = (await qa.collection("giftRecurringSeries").doc(failureSeriesId).get()).data();
     const queuedAfterFailure = await qa.collection("emailQueue").get();
