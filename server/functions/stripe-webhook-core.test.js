@@ -45,6 +45,18 @@ function event(id = "evt_unknown", type = "circum.test.unknown") {
   return {id, type, livemode: false, data: {object: {id: "obj_1", metadata: {}}}};
 }
 
+function reviewDb(writes = []) {
+  return {
+    collection(name) {
+      return {doc(id) {
+        return {id, async set(data, options) {
+          writes.push({name, id, data, options});
+        }};
+      }};
+    },
+  };
+}
+
 test("signature verification uses exact raw bytes and accepts an unknown signed event", async () => {
   const processor = createStripeWebhookProcessor(dependencies());
   const request = signed(event());
@@ -130,6 +142,24 @@ test("the single Stripe webhook owner routes Business payment outcomes to the Bu
   assert.equal(result.status, 200);
   assert.deepEqual(calls, [{eventId: "evt_business_failure", eventType: "payment_intent.payment_failed", intentId: "pi_business_1"}]);
   assert.equal(result.body.business.communicationPublication, "downstream_eventarc");
+});
+
+test("unknown completed checkout is acknowledged only after durable action-required capture", async () => {
+  const writes = [];
+  const processor = createStripeWebhookProcessor(dependencies({
+    db: reviewDb(writes),
+    routeCheckoutSessionCompleted: async () => ({handled: false, type: ""}),
+  }));
+  const request = signed({
+    id: "evt_unknown_checkout", type: "checkout.session.completed", livemode: false,
+    data: {object: {id: "cs_unknown", metadata: {type: "removed_flow"}}},
+  });
+  const result = await processor(request);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.checkout.status, "action_required");
+  assert.equal(result.body.checkout.reason, "unknown_checkout_session");
+  assert.equal(writes[0].data.artifactType, "checkout_session");
+  assert.equal(writes[0].data.reviewRequired, true);
 });
 
 test("temporary failure returns to the caller and retry can complete without duplicate effect", async () => {

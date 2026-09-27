@@ -44,11 +44,19 @@ function normalizeRecipient(data = {}) {
   const recipientEmail = text(data.recipientEmail, 254).toLowerCase();
   const deliveryAddress = text(data.deliveryAddress, 500);
   const deliveryDate = text(data.deliveryDate, 40);
-  if (!recipientName || (!recipientPhone && !recipientEmail) || !deliveryAddress || !deliveryDate || Number.isNaN(new Date(deliveryDate).getTime())) {
+  const parsedDeliveryDate = new Date(deliveryDate);
+  const deliveryDayMatch = /^(\d{4}-\d{2}-\d{2})/.exec(deliveryDate);
+  const deliveryDay = deliveryDayMatch ? new Date(`${deliveryDayMatch[1]}T00:00:00.000Z`) : parsedDeliveryDate;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (!recipientName || (!recipientPhone && !recipientEmail) || !deliveryAddress || !deliveryDate || Number.isNaN(parsedDeliveryDate.getTime()) || Number.isNaN(deliveryDay.getTime())) {
     throw new functions.https.HttpsError(
         "invalid-argument",
         "Recipient name, contact, delivery address, and delivery date are required.",
     );
+  }
+  if (deliveryDay < today) {
+    throw new functions.https.HttpsError("failed-precondition", "Choose a future Business Gift delivery date.");
   }
   return {
     recipientName,

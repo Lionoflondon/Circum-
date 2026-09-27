@@ -30,3 +30,40 @@ test("Health+ invoice supports Stripe's nested subscription reference", () => {
     parent: {subscription_details: {subscription: "sub_nested"}},
   }), "sub_nested");
 });
+
+test("unbound Health+ subscription becomes durable action-required review instead of throwing", async () => {
+  const writes = [];
+  const db = {
+    collection(name) {
+      if (name === "healthPlusMemberships") {
+        return {
+          where() {
+            return {limit() {
+              return {async get() {
+                return {empty: true, docs: []};
+              }};
+            }};
+          },
+          doc(id) {
+            return {id, async set(data) {
+              writes.push({name, id, data});
+            }};
+          },
+        };
+      }
+      return {doc(id) {
+        return {id, async set(data) {
+          writes.push({name, id, data});
+        }};
+      }};
+    },
+  };
+  const result = await lifecycle.handleHealthSubscriptionEvent({
+    db,
+    event: {id: "evt_unbound_health", type: "customer.subscription.updated", data: {object: {id: "sub_unbound", status: "active", metadata: {}}}},
+  });
+  assert.equal(result.handled, true);
+  assert.equal(result.actionRequired, true);
+  assert.equal(result.reason, "unbound_health_membership_subscription");
+  assert.equal(writes[0].data.status, "action_required");
+});

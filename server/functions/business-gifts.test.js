@@ -63,6 +63,13 @@ test("Business Gift order identity and rail validation are deterministic", () =>
   assert.equal(gifts.giftIdFor(first), `business_gift_${first}`);
 });
 
+test("Business Gift rejects a delivery date in the past", () => {
+  assert.throws(
+      () => gifts.normalizeRecipient(input({deliveryDate: "2020-01-01"})),
+      (error) => error.code === "failed-precondition",
+  );
+});
+
 test("Business Gift rejects an unauthorized member before creating an order", async () => {
   const db = fakeDb({
     "businessAccounts/business-1": {ownerUid: "owner-1", businessName: "Example Business", status: "approved"},
