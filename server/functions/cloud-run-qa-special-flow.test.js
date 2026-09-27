@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const fs = require("node:fs");
 const {createServer, allowlistFromCredentials, errorResponse, routeName} = require("./cloud-run-qa-special-flow");
+const {fixtureIdForRequest, requiredFixtureId} = require("./qa-special-flow")._test;
 
 async function withServer(dependenciesFactory, run) {
   const server = createServer({dependenciesFactory});
@@ -78,10 +79,20 @@ test("transport has no live Stripe binding or webhook capability", () => {
 
 test("fixture ownership stays with the approved Sender participant", () => {
   const source = fs.readFileSync(require.resolve("./qa-special-flow"), "utf8");
-  assert.match(source, /special-v4:/);
+  assert.match(source, /special-v5:/);
   assert.match(source, /senderId: lists\.senders\[0\]/);
   assert.match(source, /ownerUid: lists\.senders\[0\]/);
   assert.match(source, /"verify_receiver_pin"/);
+});
+
+test("archived QA cycles can use a new bounded request without reusing an old fixture", () => {
+  const first = fixtureIdForRequest("qa-operator", "lifecycle_first");
+  assert.equal(first, fixtureIdForRequest("qa-operator", "lifecycle_first"));
+  assert.notEqual(first, fixtureIdForRequest("qa-operator", "lifecycle_second"));
+  assert.notEqual(first, fixtureIdForRequest("other-operator", "lifecycle_first"));
+  assert.equal(requiredFixtureId(first), first);
+  assert.throws(() => fixtureIdForRequest("qa-operator", "../unsafe"), /bounded QA request ID/);
+  assert.throws(() => requiredFixtureId("qaSpecialFlowFixtures/other"), /valid QA fixture ID/);
 });
 
 test("missing Firebase Auth or App Check never reaches QA handler", async () => {

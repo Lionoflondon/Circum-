@@ -18,6 +18,28 @@ Stripe endpoint, no dispatch capability, and no route to customer financial
 collections. `/health` reports only service identity, source SHA and `TEST`
 mode; request logs contain action/outcome/error-class metadata only.
 
-The service is deployed with internal ingress and without the public
-unauthenticated invoker binding. The existing managed QA exports remain
+To start a new certification cycle, the allowlisted operator calls `prepare`
+with a bounded `requestId` such as `lifecycle_20260927_a`. The response returns
+the new `fixtureId`; every later action, including `read` and `cleanup`, must
+send that ID. Retrying the same active request is idempotent. An archived
+request ID cannot be reopened; use a new one so prior audit records remain
+intact. The existing one-active-fixture operator lock still applies.
+
+The operator may use `seed_legacy_status` only on a paid QA delivery already
+owned by the allowlisted Rider. It accepts exactly `rider_assigned` while the
+canonical state is `accepted`, or `en_route_to_pickup` while it is
+`navigating_to_pickup`. The seed is transactional and idempotent; an out-of-order
+or different-owner request is rejected. It cannot change a production delivery.
+
+The QA Rider may call `publish_location` with synthetic GPS coordinates. This
+bounded adapter uses the production location validator and authoritative phase
+normalizer, ignores a supplied status, and writes only a scoped QA
+`activeDeliveries` projection. A delayed older coordinate cannot regress a
+newer projection; terminal deliveries reject updates. This adapter verifies the
+shared policy, while direct public `updateDeliveryLiveLocation` transport still
+needs its own runtime probe.
+
+The live service currently permits external ingress but has no public
+unauthenticated invoker binding; Cloud Run IAM still rejects unauthenticated
+requests before the Firebase Auth and App Check gates. The existing managed QA exports remain
 untouched; no broad Functions deployment is part of this surface.

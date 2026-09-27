@@ -4500,6 +4500,7 @@
       "appCheckRequired": true,
       "secrets": [],
       "firestoreCollections": [
+        "activeDeliveries",
         "audit",
         "chats",
         "deliveryEvidence",
@@ -6918,6 +6919,7 @@
       "appCheckRequired": true,
       "secrets": [],
       "firestoreCollections": [
+        "activeDeliveries",
         "audit",
         "chats",
         "deliveryEvidence",
@@ -10044,6 +10046,7 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryTracking.updateDeliveryLiveLocation",
       "callers": [
+        "docs/qa/CLOUD_RUN_SPECIAL_FLOW.md",
         "lib/website/shared/circum_website_app.dart",
         "scripts/scoped_functions_deploy_list.test.js",
         "test/sender_mobile/ratings_tipping_v2_test.dart"
