@@ -270,6 +270,21 @@
       "reason": "Sender account lifecycle changes coordinate client-owned Auth flows with backend authority; generated Gen 1 registry artifacts record reviewed caller cutovers."
     },
     {
+      "products": ["sender-app", "backend"],
+      "files": [
+        "deploy-manifest.json",
+        "lib/app/sender_mobile/sender_booking_canvas.dart",
+        "lib/app/sender_mobile/sender_draft_api.dart",
+        "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/Dockerfile.sender-drafts",
+        "server/functions/cloud-run-sender-drafts.js",
+        "server/functions/cloud-run-sender-drafts.test.js",
+        "server/functions/cloudbuild.sender-drafts.yaml",
+        "test/sender_draft_api_test.dart"
+      ],
+      "reason": "Sender draft persistence keeps the client caller and its narrowly scoped Auth/App Check Cloud Run authority in one reviewed cutover."
+    },
+    {
       "products": ["website", "admin", "backend"],
       "files": [
         "deploy-manifest.json",
