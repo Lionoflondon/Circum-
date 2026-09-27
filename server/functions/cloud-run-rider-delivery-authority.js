@@ -10,6 +10,7 @@ const {completeDeliveryHandler} = require("./delivery-completion-reconciled")._p
 const deliveryTracking = require("./delivery-tracking");
 const {getOffers} = require("./rider-offers");
 const qaPublic = require("./qa-public-delivery");
+const riderPresence = require("./rider-presence");
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ROUTES = new Set([
@@ -21,7 +22,14 @@ const ROUTES = new Set([
   "getAvailableRequests",
   "getAvaliableRequests",
   "getNearbyRequests",
+  "goOnline",
+  "goOffline",
+  "updateRiderPresence",
 ]);
+const DEFAULT_ALLOWED_ORIGINS = Object.freeze(new Set([
+  "https://circum-rider-2797c.web.app",
+  "https://circum-rider-2797c.firebaseapp.com",
+]));
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -67,6 +75,9 @@ function createHandlers(options = {}) {
     getAvailableRequests: (data, context) => getOffers(data, context, db),
     getAvaliableRequests: (data, context) => getOffers(data, context, db),
     getNearbyRequests: (data, context) => getOffers(data, context, db),
+    goOnline: (data, context) => riderPresence.goOnline.run(data, context),
+    goOffline: (data, context) => riderPresence.goOffline.run(data, context),
+    updateRiderPresence: (data, context) => riderPresence.updateRiderPresence.run(data, context),
   };
 }
 
@@ -79,14 +90,27 @@ function productionDependencies() {
   };
 }
 
-function writeJson(response, status, body) {
-  response.writeHead(status, {
+function configuredAllowedOrigins(options = {}) {
+  if (options.allowedOrigins instanceof Set) return options.allowedOrigins;
+  const configured = String(process.env.CIRCUM_ALLOWED_RIDER_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  return new Set(configured.length ? configured : DEFAULT_ALLOWED_ORIGINS);
+}
+
+function writeJson(response, status, body, {origin = "", allowedOrigins = DEFAULT_ALLOWED_ORIGINS} = {}) {
+  const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck",
-    "access-control-allow-methods": "POST, OPTIONS",
-  });
+  };
+  if (origin && allowedOrigins.has(origin)) {
+    headers["access-control-allow-origin"] = origin;
+    headers["access-control-allow-headers"] = "Authorization, Content-Type, X-Firebase-AppCheck";
+    headers["access-control-allow-methods"] = "POST, OPTIONS";
+    headers.vary = "Origin";
+  }
+  response.writeHead(status, headers);
   response.end(JSON.stringify(body));
 }
 
@@ -97,7 +121,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(completeDelivery|acceptRideRequests|recordRiderArrival|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(completeDelivery|acceptRideRequests|recordRiderArrival|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests|goOnline|goOffline|updateRiderPresence)$/.exec(pathname);
   return match && ROUTES.has(match[1]) ? match[1] : null;
 }
 
@@ -114,17 +138,22 @@ function statusCode(code) {
 
 function createServer(options = {}) {
   const dependenciesFactory = options.dependenciesFactory || productionDependencies;
+  const allowedOrigins = configuredAllowedOrigins(options);
   let dependencies;
   return http.createServer((request, response) => {
-    if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) {
-      return writeJson(response, 200, {status: "ok", runtime: "node22", source: process.env.CIRCUM_SOURCE_SHA || "unknown"});
+    const origin = String(request.headers.origin || "");
+    if (origin && !allowedOrigins.has(origin)) {
+      return writeJson(response, 403, {error: {status: "PERMISSION_DENIED", message: "This Rider Web origin is not permitted."}}, {origin, allowedOrigins});
     }
-    if (request.method === "OPTIONS") return writeJson(response, 204, {});
+    if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) {
+      return writeJson(response, 200, {status: "ok", runtime: "node22", source: process.env.CIRCUM_SOURCE_SHA || "unknown"}, {origin, allowedOrigins});
+    }
+    if (request.method === "OPTIONS") return writeJson(response, 204, {}, {origin, allowedOrigins});
     const name = routeName(request.url);
-    if (!name) return writeJson(response, 404, {error: {status: "NOT_FOUND", message: "Not found."}});
-    if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}});
+    if (!name) return writeJson(response, 404, {error: {status: "NOT_FOUND", message: "Not found."}}, {origin, allowedOrigins});
+    if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}}, {origin, allowedOrigins});
     if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
-      return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "JSON required."}});
+      return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "JSON required."}}, {origin, allowedOrigins});
     }
     let size = 0;
     const chunks = [];
@@ -133,7 +162,7 @@ function createServer(options = {}) {
       if (size <= MAX_BODY_BYTES) chunks.push(chunk);
     });
     request.on("end", async () => {
-      if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}});
+      if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}}, {origin, allowedOrigins});
       try {
         const idToken = bearer(request);
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
@@ -154,13 +183,13 @@ function createServer(options = {}) {
           app: decodedAppCheck,
         };
         const result = await dependencies.handlers[name](payload.data, context);
-        return writeJson(response, 200, {result});
+        return writeJson(response, 200, {result}, {origin, allowedOrigins});
       } catch (error) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
         const status = statusCode(code);
         if (status === 500) console.error("rider_delivery_authority_failed", {callable: name, reason: code});
-        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Rider delivery request failed." : error.message}});
+        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Rider delivery request failed." : error.message}}, {origin, allowedOrigins});
       }
     });
   });
@@ -168,4 +197,4 @@ function createServer(options = {}) {
 
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
 
-module.exports = {createServer, createHandlers, productionDependencies, routeName, MAX_BODY_BYTES};
+module.exports = {createServer, createHandlers, productionDependencies, routeName, MAX_BODY_BYTES, DEFAULT_ALLOWED_ORIGINS};
