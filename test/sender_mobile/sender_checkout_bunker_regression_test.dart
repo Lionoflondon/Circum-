@@ -108,7 +108,7 @@ void main() {
     expect(enqueue, greaterThan(wait));
     expect(store, greaterThan(wait));
     expect(proceed, greaterThan(store));
-    expect(resolution, contains('coordinateCompleter.future'));
+    expect(resolution, isNot(contains('coordinateCompleter.future')));
     expect(resolution, contains('final coordinate = await'));
     expect(
         resolution, contains('SenderManualAddressResolutionStatus.ambiguous'));
@@ -123,6 +123,7 @@ void main() {
     expect(visibleWait, greaterThanOrEqualTo(0));
     expect(visibleEnqueue, greaterThan(visibleWait));
     expect(visibleResolution, contains('resolvedCoordinate: coordinate'));
+    expect(visibleResolution, contains('Do not make'));
 
     final quote = canvas.substring(
       canvas.indexOf('void _requestBackendQuote('),

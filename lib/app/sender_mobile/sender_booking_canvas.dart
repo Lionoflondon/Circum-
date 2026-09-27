@@ -932,8 +932,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           ),
         );
       }
-      final resolvedCoordinate =
-          await coordinateCompleter.future.timeout(const Duration(seconds: 10));
+      // Place Details is already authoritative and bounded above. Do not make
+      // Web navigation wait for the Bloc's secondary completion signal; route
+      // preview and reverse geocoding are independent follow-up work.
+      final resolvedCoordinate = coordinate;
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
@@ -1027,8 +1029,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           ),
         );
       }
-      final resolvedCoordinate =
-          await coordinateCompleter.future.timeout(const Duration(seconds: 10));
+      // Place Details is already authoritative and bounded above. Do not make
+      // Web navigation wait for the Bloc's secondary completion signal; route
+      // preview and reverse geocoding are independent follow-up work.
+      final resolvedCoordinate = coordinate;
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
