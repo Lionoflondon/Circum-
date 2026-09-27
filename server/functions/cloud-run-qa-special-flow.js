@@ -82,7 +82,9 @@ function productionDependencies() {
 }
 
 function errorResponse(error) {
-  const code = String(error.code || "internal").replace(/^functions\//, "");
+  const rawCode = String(error.code || "internal").replace(/^functions\//, "");
+  const code = rawCode.startsWith("app-check/") ? "failed-precondition" :
+    rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
   const status = code === "unauthenticated" ? 401 :
     code === "permission-denied" ? 403 :
     code === "unavailable" ? 503 :

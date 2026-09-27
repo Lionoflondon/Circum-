@@ -140,3 +140,12 @@ test("internal errors do not expose provider or credential details", () => {
     status: 500, payload: {error: {status: "INTERNAL", message: "QA certification request failed."}}, code: "internal",
   });
 });
+
+test("provider-specific Auth and App Check failures remain fail-closed", () => {
+  assert.deepEqual(errorResponse(Object.assign(new Error("bad app check"), {code: "app-check/invalid-token"})), {
+    status: 400, payload: {error: {status: "FAILED_PRECONDITION", message: "bad app check"}}, code: "failed-precondition",
+  });
+  assert.deepEqual(errorResponse(Object.assign(new Error("bad auth"), {code: "auth/invalid-id-token"})), {
+    status: 401, payload: {error: {status: "UNAUTHENTICATED", message: "bad auth"}}, code: "unauthenticated",
+  });
+});
