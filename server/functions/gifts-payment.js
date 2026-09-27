@@ -457,6 +457,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
 }, {secrets: ["STRIPE_SECRET_KEY"]});
 
 async function finalizeGiftPaymentAuthority({
+  db = getFirestore(),
   giftDraftId,
   payment,
   stripe,
@@ -464,7 +465,6 @@ async function finalizeGiftPaymentAuthority({
   eventId = null,
   verifiedVoiceNote = undefined,
 }) {
-  const db = getFirestore();
   const draftRef = db.collection("giftPaymentDrafts").doc(giftDraftId);
   const giftRef = db.collection("giftRequests").doc(giftDraftId);
   if (!payment || payment.status !== "succeeded") {
