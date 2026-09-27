@@ -2050,7 +2050,9 @@
       "triggerDefinition": {},
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.advanceRiderOnboarding",
-      "callers": [],
+      "callers": [
+        "server/functions/rider-account.test.js"
+      ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
