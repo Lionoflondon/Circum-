@@ -54,3 +54,38 @@ test("IRIS photo route writes only the caller-scoped canonical analysis", async 
   assert.equal(writes[0].id, first.analysisId);
   assert.equal(writes[0].value.userId, "qa_sender");
 });
+
+test("IRIS failures are bounded and never expose provider details", async () => {
+  const server = createServer({
+    dependenciesFactory: () => ({
+      verifyIdToken: async () => ({uid: "qa_sender"}),
+      verifyAppCheck: async () => ({}),
+      handlers: {analyseIris: async () => {
+        throw new Error("private provider detail");
+      }},
+    }),
+    allowRequest: (() => {
+      let remaining = 1;
+      return () => {
+        const allowed = remaining > 0;
+        remaining -= 1;
+        return allowed;
+      };
+    })(),
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/analyseIris`;
+    const headers = {"content-type": "application/json", authorization: "Bearer valid", "x-firebase-appcheck": "valid"};
+    const providerError = await fetch(url, {method: "POST", headers, body: JSON.stringify({data: {description: "parcel"}})});
+    assert.equal(providerError.status, 500);
+    assert.doesNotMatch(JSON.stringify(await providerError.json()), /private provider detail/);
+    const malformed = await fetch(url, {method: "POST", headers, body: "{malformed"});
+    assert.equal(malformed.status, 500);
+    assert.doesNotMatch(JSON.stringify(await malformed.json()), /SyntaxError/);
+    const limited = await fetch(url, {method: "POST", headers, body: JSON.stringify({data: {description: "parcel"}})});
+    assert.equal(limited.status, 429);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
