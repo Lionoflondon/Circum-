@@ -127,7 +127,10 @@ void main() {
 
     expect(
       statusSource,
-      contains("httpsCallable('updateDeliveryTrackingStatus')"),
+      anyOf(
+        contains("httpsCallable('updateDeliveryTrackingStatus')"),
+        contains("callRiderDeliveryAuthority('updateDeliveryTrackingStatus'"),
+      ),
     );
     expect(statusSource, isNot(contains("collection('deliveryRequests')")));
     expect(statusSource, isNot(contains("collection('riderEarnings')")));
@@ -142,7 +145,13 @@ void main() {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
-    expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
+    expect(
+      source,
+      anyOf(
+        contains("httpsCallable('updateDeliveryLiveLocation')"),
+        contains("callRiderDeliveryAuthority('updateDeliveryLiveLocation'"),
+      ),
+    );
     expect(source, contains("httpsCallable('sendCircumMessage')"));
     expect(source,
         isNot(contains("collection('riderEarnings').doc(user.uid).set")));
