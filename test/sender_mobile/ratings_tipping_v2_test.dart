@@ -127,7 +127,7 @@ void main() {
 
     expect(
       statusSource,
-      contains("httpsCallable('updateDeliveryTrackingStatus')"),
+      contains("callRiderDeliveryAuthority('updateDeliveryTrackingStatus'"),
     );
     expect(statusSource, isNot(contains("collection('deliveryRequests')")));
     expect(statusSource, isNot(contains("collection('riderEarnings')")));
@@ -138,11 +138,12 @@ void main() {
     expect(statusSource, isNot(contains('runTransaction')));
   });
 
-  test('legacy web tracking and chat use canonical callables', () {
+  test('web tracking uses migrated authority while chat retains its callable', () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
-    expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
+    expect(source,
+        contains("callRiderDeliveryAuthority('updateDeliveryLiveLocation'"));
     expect(source, contains("httpsCallable('sendCircumMessage')"));
     expect(source,
         isNot(contains("collection('riderEarnings').doc(user.uid).set")));
