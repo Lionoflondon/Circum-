@@ -285,14 +285,22 @@
         "deploy-manifest.json",
         "lib/app/sender_mobile/sender_booking_canvas.dart",
         "lib/app/sender_mobile/sender_draft_api.dart",
+        "lib/app/send_package/bloc/send_package_bloc.dart",
+        "lib/app/send_package/bloc/send_package_event.dart",
         "server/functions/cloud-run-replacement-registry.js",
         "server/functions/Dockerfile.sender-drafts",
         "server/functions/cloud-run-sender-drafts.js",
         "server/functions/cloud-run-sender-drafts.test.js",
         "server/functions/cloudbuild.sender-drafts.yaml",
+        "server/functions/Dockerfile.sender-booking-quotes",
+        "server/functions/cloud-run-sender-booking-quotes.js",
+        "server/functions/cloud-run-sender-booking-quotes.test.js",
+        "server/functions/cloudbuild.sender-booking-quotes.yaml",
+        "server/functions/sender-booking-drafts.test.js",
+        "server/functions/sender-booking.js",
         "test/sender_draft_api_test.dart"
       ],
-      "reason": "Sender draft persistence keeps the client caller and its narrowly scoped Auth/App Check Cloud Run authority in one reviewed cutover."
+      "reason": "Sender draft persistence and booking quotes keep the client caller and their narrowly scoped Auth/App Check Cloud Run authorities in one reviewed cutover."
     },
     {
       "products": ["website", "admin", "backend"],
