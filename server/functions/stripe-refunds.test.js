@@ -42,7 +42,13 @@ test("ambiguous payment intent refund is routed to admin review", async () => {
           };
         },
         doc(id = `audit-${writes.length}`) {
-          return {id, path: `${name}/${id}`};
+          return {
+            id,
+            path: `${name}/${id}`,
+            async set(data, options) {
+              writes.push({op: "set", ref: {id, path: `${name}/${id}`}, data, options});
+            },
+          };
         },
       };
     },
@@ -69,13 +75,68 @@ test("ambiguous payment intent refund is routed to admin review", async () => {
     },
   });
 
-  assert.equal(result.handled, false);
+  assert.equal(result.handled, true);
+  assert.equal(result.actionRequired, true);
   assert.equal(result.reviewRequired, true);
   assert.equal(result.reason, "multiple_deliveries_for_payment_intent");
   assert.deepEqual(result.deliveryIds, ["delivery-a", "delivery-b"]);
-  assert.equal(writes.length, 2);
+  assert.equal(writes.length, 3);
   assert.equal(writes[0].data.reviewRequired, true);
   assert.equal(writes[1].data.actionType, "stripe_refund_requires_review");
+  assert.equal(writes[2].data.artifactType, "refund");
+  assert.equal(writes[2].data.status, "action_required");
+});
+
+test("a refund with a forged direct delivery id is captured without creating a delivery", async () => {
+  const writes = [];
+  const db = {
+    collection(name) {
+      return {
+        doc(id) {
+          return {
+            id,
+            path: `${name}/${id}`,
+            async get() {
+              return {exists: false};
+            },
+            async set(data, options) {
+              writes.push({ref: {id, path: `${name}/${id}`}, data, options});
+            },
+          };
+        },
+      };
+    },
+    async runTransaction(callback) {
+      await callback({
+        async get() {
+          return {exists: false};
+        },
+        create(ref, data) {
+          writes.push({ref, data});
+        },
+        set(ref, data) {
+          writes.push({ref, data});
+        },
+      });
+    },
+  };
+  const result = await syncChargeRefund({
+    db,
+    event: {
+      id: "evt_refund_forged_delivery",
+      type: "charge.refunded",
+      data: {object: {
+        id: "ch_forged",
+        payment_intent: "pi_forged",
+        metadata: {deliveryId: "delivery_missing"},
+      }},
+    },
+  });
+  assert.equal(result.handled, false);
+  assert.equal(result.actionRequired, true);
+  assert.equal(result.reason, "unmatched_refund");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].data.artifactType, "refund");
 });
 
 test("unmatched refund is durably captured without creating a delivery or refund mutation", async () => {

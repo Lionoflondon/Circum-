@@ -117,6 +117,8 @@ function createStripeWebhookProcessor(deps) {
         return response(500, {success: false, error: "sender_payment_intent_failed"});
       }
       if (senderIntentResult && senderIntentResult.handled) return finish({success: true, sender: senderIntentResult}, "sender_payment_intent");
+      const review = await recordPaymentArtifactReview({db, event, artifactType: "payment_intent", objectId: event.data.object.id, reason: "unknown_payment_intent", details: {paymentIntentId: event.data.object.id}});
+      return finish({success: true, actionRequired: true, review}, "payment_intent_review");
     }
     if (event.type === "charge.succeeded") {
       const metadata = event.data.object.metadata || {};
@@ -159,6 +161,7 @@ function createStripeWebhookProcessor(deps) {
         logger.error("checkout_finalization_failed", {eventId: event.id, errorType: error.name || "Error"});
         return response(500, {success: false, error: "checkout_finalization_failed"});
       }
+      if (!routed || routed.handled !== true) return finish({success: true, actionRequired: true, checkout: routed}, "checkout_session_review");
       const metadata = session.metadata || {};
       if (metadata.pushToken) {
         await messaging.send({

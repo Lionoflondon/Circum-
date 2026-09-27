@@ -148,6 +148,7 @@ exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 const giftRecurringCallables = giftRecurring.createGiftRecurringCallables(stripe);
 exports.cancelGiftRecurring = giftRecurringCallables.cancel;
 exports.getGiftRecurringStatus = giftRecurringCallables.status;
+exports.getGiftRecurringPreview = giftRecurringCallables.preview;
 exports.createGiftRecurringBillingPortalSession = giftRecurringCallables.portal;
 exports.reconcileGiftRecurringRenewals = giftRecurring.reconcileGiftRecurringRenewals(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);

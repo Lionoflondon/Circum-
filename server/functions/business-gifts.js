@@ -47,20 +47,12 @@ function normalizeRecipient(data = {}) {
   const recipientPhone = text(data.recipientPhone, 40);
   const recipientEmail = text(data.recipientEmail, 254).toLowerCase();
   const deliveryAddress = text(data.deliveryAddress, 500);
-  const deliveryDate = text(data.deliveryDate, 40);
-  const parsedDeliveryDate = new Date(deliveryDate);
-  const deliveryDayMatch = /^(\d{4}-\d{2}-\d{2})/.exec(deliveryDate);
-  const deliveryDay = deliveryDayMatch ? new Date(`${deliveryDayMatch[1]}T00:00:00.000Z`) : parsedDeliveryDate;
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  if (!recipientName || (!recipientPhone && !recipientEmail) || !deliveryAddress || !deliveryDate || Number.isNaN(parsedDeliveryDate.getTime()) || Number.isNaN(deliveryDay.getTime())) {
+  const deliveryDate = normalizeBusinessDeliveryDate(data.deliveryDate);
+  if (!recipientName || (!recipientPhone && !recipientEmail) || !deliveryAddress || !deliveryDate) {
     throw new functions.https.HttpsError(
         "invalid-argument",
         "Recipient name, contact, delivery address, and delivery date are required.",
     );
-  }
-  if (deliveryDay < today) {
-    throw new functions.https.HttpsError("failed-precondition", "Choose a future Business Gift delivery date.");
   }
   return {
     recipientName,
@@ -72,6 +64,25 @@ function normalizeRecipient(data = {}) {
     recipientPrivacy: "protected",
     recipientValueVisibility: "sender_only",
   };
+}
+
+function localDateInTimeZone(now = new Date(), timeZone = "Europe/London") {
+  const parts = new Intl.DateTimeFormat("en-CA", {timeZone, year: "numeric", month: "2-digit", day: "2-digit"}).formatToParts(now);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function normalizeBusinessDeliveryDate(value, {now = new Date(), timeZone = "Europe/London"} = {}) {
+  const raw = text(value, 40);
+  if (!raw) return "";
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : (() => {
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return localDateInTimeZone(parsed, timeZone);
+  })();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return "";
+  if (dateOnly < localDateInTimeZone(now, timeZone)) return "";
+  return dateOnly;
 }
 
 function memberRole(account = {}, uid, email) {
@@ -250,6 +261,11 @@ async function finalizePaidBusinessGiftOrder({db = getFirestore(), orderId, paym
       return {handled: false, reason: "payment_not_final"};
     }
     const recipient = order.recipient || {};
+    const deliveryDate = normalizeBusinessDeliveryDate(recipient.deliveryDate);
+    if (!deliveryDate) {
+      transaction.set(orderRef, {status: "action_required", giftCreationStatus: "action_required", actionRequiredReason: "delivery_date_in_past_or_invalid", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      return {handled: true, actionRequired: true, reason: "delivery_date_in_past_or_invalid", orderId};
+    }
     const now = FieldValue.serverTimestamp();
     const invoice = invoiceSnap.data() || {};
     const paymentMethod = text(invoice.paymentMethod || (order.paymentRail === "roth" ? "roth" : "card"), 40);
@@ -266,7 +282,7 @@ async function finalizePaidBusinessGiftOrder({db = getFirestore(), orderId, paym
       recipientEmail: text(recipient.recipientEmail, 254).toLowerCase(),
       recipientContact: `${text(recipient.recipientPhone, 40)} · ${text(recipient.recipientEmail, 254).toLowerCase()}`,
       deliveryAddress: text(recipient.deliveryAddress, 500),
-      deliveryDate: Timestamp.fromDate(new Date(text(recipient.deliveryDate, 40))),
+      deliveryDate: Timestamp.fromDate(new Date(`${deliveryDate}T00:00:00.000Z`)),
       deliveryTimeWindow: text(recipient.deliveryTimeWindow, 120),
       giftMode: "business_gift",
       status: "submitted_for_review",
@@ -326,6 +342,7 @@ module.exports = {
   createBusinessGiftOrderHandler,
   finalizePaidBusinessGiftOrder,
   normalizeRail,
+  normalizeBusinessDeliveryDate,
   normalizeRecipient,
   orderIdFor,
   giftIdFor,

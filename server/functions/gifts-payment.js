@@ -638,13 +638,14 @@ async function finalizeGiftPaymentAuthority({
     return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId};
   });
   if (result && result.paymentStatus === "paid") {
-    await giftRecurring.ensureSeriesAfterInitialPayment({
+    const recurring = await giftRecurring.ensureSeriesAfterInitialPayment({
       db,
       stripe,
       giftId: result.giftRequestId || giftDraftId,
       payment,
       eventId,
     });
+    return {...result, recurring};
   }
   return result;
 }

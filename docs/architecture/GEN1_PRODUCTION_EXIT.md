@@ -2,11 +2,11 @@
 
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
-- Source exports: 278
-- Gen 1 exports: 276
+- Source exports: 279
+- Gen 1 exports: 277
 - Files importing Firebase Functions v1: 66
 - MIGRATE TO CLOUD RUN: 166
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 68
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 69
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -135,6 +135,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | generateHealthPlusRecurringBookings | server/functions/health-plus-operations.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
 | getAvailableRequests | server/functions/get-avaliable-requests.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>lib/website/shared/circum_website_app.dart<br>lib/website/shared/rider_delivery_authority_api.dart<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>test/website_rider_delivery_authority_api_test.dart |
 | getAvaliableRequests | server/functions/get-avaliable-requests.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js |
+| getGiftRecurringPreview | server/functions/index.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js |
 | getGiftRecurringStatus | server/functions/index.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-family.js |
 | getGiftStoryActionState | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/gift_story_view.dart<br>test/sender_mobile/gift_voice_media_contract_test.dart |
 | getGiftStoryVideoDownload | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart |

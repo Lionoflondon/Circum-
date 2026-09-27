@@ -123,7 +123,7 @@ test("a recurring series in creating state recovers an already-created Stripe su
     db,
     stripe,
     giftId: "gift-recover",
-    payment: {customerId: "cus_1", paymentIntentId: "pi_initial"},
+    payment: {customerId: "cus_1", paymentIntentId: "pi_initial", paymentMethodId: "pm_initial"},
   });
   assert.equal(result.recovered, true);
   assert.equal(result.stripeSubscriptionId, "sub_recovered");
@@ -131,6 +131,51 @@ test("a recurring series in creating state recovers an already-created Stripe su
   assert.equal(db.read(`giftRecurringSeries/${seriesId}`).stripeSubscriptionId, "sub_recovered");
 });
 
+test("renewal validation binds the paid invoice to the approved recurring series", () => {
+  const series = {
+    stripeSubscriptionId: "sub_expected",
+    budgetGbp: 50,
+    currentPeriodEnd: 1800000000000,
+    status: "active",
+  };
+  const correct = core.validateRenewalInvoice({
+    series,
+    subscriptionId: "sub_expected",
+    invoice: {
+      id: "in_correct",
+      subscription: "sub_expected",
+      status: "paid",
+      currency: "gbp",
+      amount_paid: 5000,
+      billing_reason: "subscription_cycle",
+      period_start: 1800000000,
+      period_end: 1826000000,
+    },
+  });
+  assert.deepEqual(correct, {ok: true, failures: []});
+  for (const [field, value, expected] of [
+    ["subscription", "sub_other", "subscription_mismatch"],
+    ["currency", "usd", "currency_mismatch"],
+    ["amount_paid", 4999, "amount_mismatch"],
+    ["billing_reason", "manual", "billing_reason_mismatch"],
+    ["period_start", 1800000001, "billing_period_mismatch"],
+  ]) {
+    const invoice = {
+      id: `in_${field}`,
+      subscription: "sub_expected",
+      status: "paid",
+      currency: "gbp",
+      amount_paid: 5000,
+      billing_reason: "subscription_cycle",
+      period_start: 1800000000,
+      period_end: 1826000000,
+      [field]: value,
+    };
+    const result = core.validateRenewalInvoice({series, subscriptionId: "sub_expected", invoice});
+    assert.equal(result.ok, false, field);
+    assert.ok(result.failures.includes(expected), field);
+  }
+});
 test("next renewal advances by the actual Stripe interval and preserves a safe month boundary", () => {
   assert.equal(
       new Date(core.nextRenewalAt({from: "2026-01-31T12:00:00Z", frequency: "monthly"})).toISOString(),

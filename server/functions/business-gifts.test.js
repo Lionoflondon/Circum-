@@ -69,11 +69,11 @@ test("Business Gift preserves the reservation checkout session id", () => {
   assert.equal(gifts._private.checkoutSessionIdFor({}), null);
 });
 
-test("Business Gift rejects a delivery date in the past", () => {
-  assert.throws(
-      () => gifts.normalizeRecipient(input({deliveryDate: "2020-01-01"})),
-      (error) => error.code === "failed-precondition",
-  );
+test("Business Gift delivery dates use London calendar semantics and reject the past", () => {
+  const now = new Date("2026-09-27T23:30:00.000Z");
+  assert.equal(gifts.normalizeBusinessDeliveryDate("2026-09-26", {now}), "");
+  assert.equal(gifts.normalizeBusinessDeliveryDate("2026-09-28", {now}), "2026-09-28");
+  assert.equal(gifts.normalizeBusinessDeliveryDate("2026-09-27T23:30:00.000Z", {now}), "2026-09-28");
 });
 
 test("Business Gift rejects an unauthorized member before creating an order", async () => {

@@ -9,6 +9,7 @@ const deliveryTracking = require("./delivery-tracking");
 const healthPlusOperations = require("./health-plus-operations");
 const ratingsTipping = require("./ratings-tipping");
 const giftRecurring = require("./gift-recurring");
+const healthMembershipLifecycle = require("./health-membership-lifecycle");
 
 if (!getApps().length) initializeApp();
 
@@ -39,6 +40,8 @@ const handlers = Object.freeze({
     ratingsTipping.reconcileDeliveryTipsCore(stripeClient(), {dryRun: true}),
   reconcileGiftRecurringRenewals: () =>
     giftRecurring.reconcileGiftRecurringRenewalsCore(stripeClient()),
+  reconcileHealthMembershipEvents: () =>
+    healthMembershipLifecycle.reconcileHealthMembershipEventsCore({stripe: stripeClient()}),
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
@@ -46,6 +49,7 @@ const TOPIC_HANDLER_BY_NAME = Object.freeze({
   "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
   "firebase-schedule-reconcileDeliveryTips-us-central1": "reconcileDeliveryTips",
   "firebase-schedule-reconcileGiftRecurringRenewals-us-central1": "reconcileGiftRecurringRenewals",
+  "firebase-schedule-reconcileHealthMembershipEvents-us-central1": "reconcileHealthMembershipEvents",
 });
 
 function topicHandlerName(requestUrl = "", headers = {}) {
