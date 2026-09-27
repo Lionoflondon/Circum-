@@ -15,6 +15,7 @@ void main() {
     expect(source, contains("job['minimumVehicle']"));
     expect(source, contains("job['packageDescription']"));
     expect(source, contains("job['weightKg']"));
+    expect(source, contains("job['offerExpiresAt']"));
     expect(source, contains('Rider payout'));
   });
 }

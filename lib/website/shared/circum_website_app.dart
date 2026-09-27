@@ -7666,6 +7666,7 @@ class _DriverJobCard extends StatelessWidget {
       job['normalizedItemName'],
       job['packageType'],
     ], fallback: 'Parcel')!;
+    final offerExpiry = _offerExpiryLabel(job['offerExpiresAt']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -7799,6 +7800,13 @@ class _DriverJobCard extends StatelessWidget {
             label: 'Delivery timing',
             value: _deliveryTimingLabel(summary, job),
           ),
+          if (onReject != null && offerExpiry != null)
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.hourglass_bottom,
+              label: 'Offer availability',
+              value: offerExpiry,
+            ),
           _JobInfoLine(
             colors: colors,
             icon: Icons.inventory_2,
@@ -7981,6 +7989,17 @@ class _DriverJobCard extends StatelessWidget {
       if (value != null && text.isNotEmpty && text != 'null') return text;
     }
     return fallback;
+  }
+
+  static String? _offerExpiryLabel(Object? value) {
+    final expiresAt = _num(value).round();
+    if (expiresAt <= 0) return null;
+    final remaining = expiresAt - DateTime.now().millisecondsSinceEpoch;
+    if (remaining <= 0) return 'Expired — refresh offers';
+    final seconds = (remaining / 1000).ceil();
+    return seconds < 60
+        ? 'Expires in ${seconds}s'
+        : 'Expires in ${(seconds / 60).ceil()} min';
   }
 
   static double _num(Object? value) {
