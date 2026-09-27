@@ -11,6 +11,7 @@ function customerFields(copy) {
 test("every transactional template has complete customer-facing structure", () => {
   const copies = [
     templates.welcome({displayName: "Vaughn Werner"}),
+    templates.riderWelcome({displayName: "Vaughn Werner"}),
     templates.bookingConfirmed({reference: "booking-1"}),
     templates.deliveryCompleted({reference: "booking-1"}),
     templates.cancellationSettled({reference: "booking-1"}),

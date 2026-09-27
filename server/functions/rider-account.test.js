@@ -84,6 +84,15 @@ test("Rider application email verification uses Firebase auth metadata", () => {
   assert.match(source, /assertEmailVerified\(rider\)/);
 });
 
+test("new Rider onboarding queues a Rider-only welcome once", () => {
+  const start = source.indexOf("exports.advanceRiderOnboarding");
+  const end = source.indexOf("function applicationPatchFromProfile", start);
+  const body = source.slice(start, end);
+  assert.match(body, /const isNewRider = !riderSnap\.exists && !profileSnap\.exists/);
+  assert.match(body, /welcomeEligible: isNewRider && onboardingStatus === "profile_started"/);
+  assert.match(body, /riderWelcomeEmail\.queueRiderWelcomeEmail/);
+});
+
 test("Incomplete application fields and confirmations do not gate submission", () => {
   const start = source.indexOf("exports.submitRiderApplication");
   const end = source.indexOf("exports.updateRiderApplicationSection", start);

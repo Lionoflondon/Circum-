@@ -148,11 +148,13 @@ test("transactional sender identity follows the activity family", async () => {
   assert.equal(senderCategoryForRecord({eventType: "health_plus_delivered"}), "health");
   assert.equal(senderCategoryForRecord({eventType: "roth_movement_completed"}), "info");
   assert.equal(senderCategoryForRecord({eventType: "sender_welcome_ready"}), "info");
+  assert.equal(senderCategoryForRecord({eventType: "rider_welcome_ready"}), "info");
   assert.equal(fromForRecord({eventType: "gift_delivered"}, {}), "Circum Gifts <gifts@circumuk.com>");
   assert.equal(fromForRecord({eventType: "business_invoice_paid"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "health_plus_delivered"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "sender_welcome_ready"}, {}), "Circum <info@circumuk.com>");
+  assert.equal(fromForRecord({eventType: "rider_welcome_ready"}, {}), "Circum <info@circumuk.com>");
   assert.equal(fromForRecord({eventType: "roth_movement_completed"}, {
     NOTIFICATIONS_EMAIL_FROM: "Circum Notifications <notifications@circumuk.com>",
   }), "Circum Notifications <notifications@circumuk.com>");
