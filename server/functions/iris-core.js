@@ -1680,6 +1680,10 @@ function complianceFor(text, rawText = text) {
     "cash",
     "cocaine",
     "heroin",
+    "cannabis",
+    "marijuana",
+    "weed",
+    "hashish",
     "poison",
     "detonator",
     "dynamite",
@@ -2023,6 +2027,11 @@ function customerSafeIris(iris) {
     (protection.reasons || []).join(", ");
   return {
     version: iris.version || "v1",
+    compliance: {
+      status: iris.compliance && iris.compliance.status || "unsupported",
+      customerMessage: iris.compliance && iris.compliance.customerMessage || null,
+      referralType: iris.compliance && iris.compliance.referralType || null,
+    },
     workflow: iris.workflow || "Standard",
     itemName: recommendation.detectedItem || null,
     totalWeightKg: recommendation.estimatedWeightKg || null,

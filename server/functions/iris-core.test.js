@@ -1031,6 +1031,19 @@ test("customer-safe Iris excludes internal, verification, and learning fields", 
   assert.ok(privateDoc.verification);
 });
 
+test("cannabis terms are prohibited and the public IRIS contract carries safe guidance", () => {
+  for (const description of ["weed", "cannabis", "marijuana", "hashish"]) {
+    const full = classifyIris({description});
+    const safe = customerSafeIris(full);
+    assert.equal(full.compliance.status, "prohibited", description);
+    assert.equal(safe.compliance.status, "prohibited", description);
+    assert.equal(safe.compliance.customerMessage, "This item cannot be carried by Circum.");
+    assert.equal(safe.compliance.reasonCodes, undefined);
+  }
+  assert.equal(customerSafeIris(classifyIris({description: "pet dog"})).compliance.referralType, "pet_transport");
+  assert.equal(customerSafeIris(classifyIris({description: "human remains"})).compliance.referralType, "funeral_transport");
+});
+
 test("express jobs receive dispatch priority", () => {
   const standard = classifyIris({description: "documents", speed: "Standard"});
   const express = classifyIris({description: "documents", speed: "Express"});
