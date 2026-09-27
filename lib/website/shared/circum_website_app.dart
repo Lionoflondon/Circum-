@@ -9268,6 +9268,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSignIn: _signInSender,
           onSignUp: _signUpSender,
           onForgotPassword: _sendSenderPasswordReset,
+          onResendVerification: _resendSenderVerificationEmail,
+          onConfirmVerification: _confirmSenderEmailVerification,
           onChangePassword: _changeSenderPassword,
           onChangeEmail: _changeSenderEmail,
           onSignOut: _signOutSender,
@@ -10313,6 +10315,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
+      final verificationSent = await _sendSenderVerificationEmail(user);
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('updateSenderProfile')
           .call({
@@ -10329,11 +10332,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         },
         timeout: _senderAuthOperationTimeout,
       );
+      final accountMessage = user.emailVerified
+          ? 'Account created and ready to use.'
+          : verificationSent
+              ? 'Account created. Check your inbox to verify your email before sending.'
+              : 'Account created, but we could not send the verification email. Try again from your profile.';
+      final cleanReferralMessage = referralMessage.startsWith('Account created.')
+          ? referralMessage.substring('Account created.'.length).trim()
+          : referralMessage;
+      final signupMessage = cleanReferralMessage.isEmpty
+          ? accountMessage
+          : '$accountMessage $cleanReferralMessage';
       if (mounted) {
-        setState(() => _senderProfileMessage = referralMessage);
+        setState(() => _senderProfileMessage = signupMessage);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(referralMessage),
+            content: Text(signupMessage),
             duration: const Duration(seconds: 12),
           ),
         );
@@ -10343,7 +10357,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _loadSenderDeliveries(
         user.uid,
       ).timeout(_senderAuthOperationTimeout);
-      if (mounted) setState(() => _senderProfileMessage = referralMessage);
+      if (mounted) setState(() => _senderProfileMessage = signupMessage);
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } on TimeoutException {
@@ -10356,6 +10370,69 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         () => _senderProfileMessage =
             'Your account may have been created, but setup did not finish. Sign in to continue.',
       );
+    } finally {
+      if (mounted) setState(() => _senderAuthBusy = false);
+    }
+  }
+
+  Future<bool> _sendSenderVerificationEmail(User user) async {
+    try {
+      if (user.emailVerified) return true;
+      await user.sendEmailVerification().timeout(webAuthOperationTimeout);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _resendSenderVerificationEmail() async {
+    if (_senderAuthBusy) return;
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() {
+      _senderAuthBusy = true;
+      _senderProfileMessage = 'Sending verification email...';
+    });
+    try {
+      final sent = await _sendSenderVerificationEmail(user);
+      if (!mounted) return;
+      setState(
+        () => _senderProfileMessage = sent
+            ? 'Verification email sent. Open the link, then choose I have verified.'
+            : 'We could not send the verification email. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _senderAuthBusy = false);
+    }
+  }
+
+  Future<void> _confirmSenderEmailVerification() async {
+    if (_senderAuthBusy) return;
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() {
+      _senderAuthBusy = true;
+      _senderProfileMessage = 'Checking email verification...';
+    });
+    try {
+      await user.reload().timeout(webAuthOperationTimeout);
+      final refreshed = FirebaseAuth.instance.currentUser;
+      if (refreshed == null) throw StateError('missing-user');
+      await refreshed.getIdToken(true).timeout(webAuthOperationTimeout);
+      if (!mounted) return;
+      setState(() {
+        _senderUser = refreshed;
+        _senderProfileMessage = refreshed.emailVerified
+            ? 'Email verified. Your account is ready.'
+            : 'Not verified yet. Open the email link, then try again.';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _senderProfileMessage =
+              'We could not check verification right now. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -17705,6 +17782,8 @@ class _SenderProfileStep extends StatelessWidget {
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
   final VoidCallback onForgotPassword;
+  final VoidCallback onResendVerification;
+  final VoidCallback onConfirmVerification;
   final VoidCallback onChangePassword;
   final VoidCallback onChangeEmail;
   final VoidCallback onSignOut;
@@ -17748,6 +17827,8 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onSignIn,
     required this.onSignUp,
     required this.onForgotPassword,
+    required this.onResendVerification,
+    required this.onConfirmVerification,
     required this.onChangePassword,
     required this.onChangeEmail,
     required this.onSignOut,
@@ -17957,6 +18038,46 @@ class _SenderProfileStep extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(message!, style: TextStyle(color: colors.mutedText)),
             ),
+          if (!user!.emailVerified) ...[
+            _GlassPanel(
+              colors: colors,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Verify your email to finish setting up your account.',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Open the verification link sent to ${user!.email ?? 'your email address'}.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : onResendVerification,
+                        icon: const Icon(Icons.mark_email_unread_outlined),
+                        label: const Text('Resend verification email'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : onConfirmVerification,
+                        icon: const Icon(Icons.verified_outlined),
+                        label: const Text('I have verified'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           _GlassPanel(colors: colors, child: _tabBody(context, summary)),
         ],
       ),
