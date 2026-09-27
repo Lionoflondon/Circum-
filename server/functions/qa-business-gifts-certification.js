@@ -205,6 +205,7 @@ async function run() {
     } catch (error) {
       failedIntent = error.payment_intent;
     }
+    if (typeof failedIntent === "string") failedIntent = await stripe.paymentIntents.retrieve(failedIntent);
     let failedEvent;
     try {
       failedEvent = await waitForEvent(stripe, {type: "payment_intent.payment_failed", objectId: failedIntent && failedIntent.id, predicate: (_event, object) => object.metadata && object.metadata.checkoutReservationId === failedOrderDoc.checkoutReservationId});
