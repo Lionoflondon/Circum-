@@ -208,8 +208,9 @@ async function run() {
       failedIntent = error.payment_intent || await stripe.paymentIntents.retrieve(failedIntentDraft.id);
     }
     if (typeof failedIntent === "string") failedIntent = await stripe.paymentIntents.retrieve(failedIntent);
-    createdPaymentIntents.push(failedIntent.id);
+    if (!failedIntent || !failedIntent.id) failedIntent = failedIntentDraft;
     if (!failedIntent || !failedIntent.id) throw new Error("Stripe TEST declined PaymentIntent missing.");
+    createdPaymentIntents.push(failedIntent.id);
     const failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
     const failedDelivery = await deliver(processor, stripe, failedEvent, webhookSecret);
     const paymentAfterFailure = (await qa.collection("businessInvoicePayments").doc(failedOrderDoc.checkoutReservationId).get()).data();
