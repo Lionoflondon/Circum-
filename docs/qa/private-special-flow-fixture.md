@@ -31,3 +31,19 @@ responses leave cleanup pending and logged.
 This fixture does not yet certify paid delivery projections, Scheduled/Vanguard
 runtime, native completion, or source-level mobile payment-return recovery.
 Those boundaries must remain explicit in release reporting.
+
+## Public Web lifecycle fixture
+
+The optional `public_delivery` action creates one server-owned synthetic delivery
+in the canonical `deliveryRequests` collection. It is marked with the immutable
+`isSyntheticQa`, `qaPublic`, `qaNamespace`, and `qaFixtureId` fields and is
+linked back to the special-flow root. The record is excluded from normal offer
+discovery, dispatch broadcasts, analytics, settlement, payout, and customer
+notifications. Only the allowlisted QA Rider, with Firebase Auth and App Check,
+can receive its safe v2 offer projection or accept it.
+
+Acceptance and tracking continue through the canonical public authorities, but
+the QA marker routes their state writes through the suppressed-side-effect QA
+boundary. PINs remain in the private QA subcollection and are never stored in
+the public delivery document or logs. Cleanup deletes only records carrying the
+matching synthetic marker and clears the special-flow fixture.

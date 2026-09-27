@@ -6,6 +6,7 @@ const {createHash} = require("node:crypto");
 const {config, authorize, assertFixture, scopedDatabase} = require("./qa-lifecycle")._test;
 const {providerForFixture, paymentProviderForFixture} = require("./qa-special-provider");
 const qaLifecycle = require("./qa-lifecycle")._test;
+const qaPublic = require("./qa-public-delivery");
 const health = require("./health-plus")._qaHandlers;
 const business = require("./business-payments")._qaHandlers;
 const businessReservations = require("./business-checkout-reservations");
@@ -37,6 +38,7 @@ function factory({db, env = process.env, stripe}) {
       tx.update(ref, {closing: true});
     });
     if (fixture.lifecycleFixtureId) await lifecycle.handle({action: "cleanup", fixtureId: fixture.lifecycleFixtureId}, {auth: {uid: fixture.qaCreatedBy, token: {}}, app: {appId: "qa-cleanup"}});
+    await qaPublic.cleanup({db, fixture});
     const testStripe = provider(fixture);
     const result = await testStripe.cleanup();
     const qa = scopedDatabase(db, fixture, true, ROOT, COLLECTIONS);
@@ -51,10 +53,10 @@ function factory({db, env = process.env, stripe}) {
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -74,6 +76,10 @@ function factory({db, env = process.env, stripe}) {
     }
     const fixture = (await ref.get()).data(); assertFixture(fixture, lists, uid, Date.now(), data.action === "cleanup");
     if (data.action === "cleanup") return cleanup(fixture);
+    if (data.action === "public_delivery") {
+      if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
+      return qaPublic.createPublicDelivery({db, fixture, actorUid: uid});
+    }
     if (lifecycleActions.has(data.action)) {
       const payload = {...data, fixtureId: fixture.lifecycleFixtureId}; delete payload.profileOverride;
       if (data.action !== "publish_location") delete payload.status;

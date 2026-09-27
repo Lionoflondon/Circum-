@@ -351,6 +351,7 @@ function customerWaitingCharge(data) {
 
 async function handleDeliveryCreated(snapshot, options = {}) {
   const delivery = snapshot.data();
+  if (delivery.isSyntheticQa === true && delivery.qaPublic === true && delivery.suppressExternalSideEffects === true) return {skipped: "synthetic_qa"};
   const ids = deliveryIds({...delivery, id: snapshot.id});
   const runEffect = options.effects && options.effects.run ? options.effects.run : async (_effectId, execute) => execute();
   if (ids.senderId) await runEffect(`sender_notification:${ids.senderId}`, () => notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`}));
@@ -418,6 +419,7 @@ async function handleDeliveryCreated(snapshot, options = {}) {
 async function processDeliveryCreatedOnce(snapshot, eventId, options = {}) {
   const deliveryId = text(snapshot && snapshot.id);
   if (!deliveryId) throw new Error("delivery_id_required");
+  if (snapshot.data()?.isSyntheticQa === true && snapshot.data()?.qaPublic === true && snapshot.data()?.suppressExternalSideEffects === true) return {skipped: "synthetic_qa"};
   const processor = options.processOnce || processOnce;
   const run = options.run || (async () => handleDeliveryCreated(snapshot));
   return processor({
@@ -443,6 +445,7 @@ exports.processDeliveryCreatedOnce = processDeliveryCreatedOnce;
 exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change) => {
   const before = change.before.data();
   const after = change.after.data();
+  if (after.isSyntheticQa === true && after.qaPublic === true && after.suppressExternalSideEffects === true) return;
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
   const statusChanged = status && status !== oldStatus;

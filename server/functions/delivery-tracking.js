@@ -5,6 +5,7 @@ const {assignedRiderId} = require("./delivery-assignment");
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
 const {start: startLatency} = require("./latency-observability");
+const qaPublic = require("./qa-public-delivery");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 const evidenceAuthority = require("./delivery-evidence")._private;
@@ -391,6 +392,14 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
 
   const db = getFirestore();
   const riderId = context.auth.uid;
+  const qaResult = await qaPublic.transition({
+    db,
+    context,
+    deliveryId,
+    action,
+    pin: data && data.pin,
+  });
+  if (qaResult) return qaResult;
   const result = await db.runTransaction(async (transaction) => {
     const found = await findDelivery(db, transaction, deliveryId);
     if (!found) {
@@ -655,12 +664,21 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
   }
   const location = validatedLiveLocation(data && data.location);
+  const trackingStatus = text(data && (data.status || data.trackingStatus || "live"));
   if (location.mocked) {
     throw new functions.https.HttpsError("failed-precondition", "Live tracking requires a trusted GPS signal.");
   }
 
   const db = getFirestore();
   const riderId = context.auth.uid;
+  const qaResult = await qaPublic.liveLocation({
+    db,
+    context,
+    deliveryId,
+    location,
+    trackingStatus,
+  });
+  if (qaResult) return qaResult;
   const completeTracking = startLatency("TRACKING_WRITE", {correlationId: deliveryId});
   const result = await db.runTransaction(async (transaction) => {
     const found = await findDelivery(db, transaction, deliveryId);

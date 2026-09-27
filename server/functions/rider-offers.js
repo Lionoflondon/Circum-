@@ -22,6 +22,7 @@ const {
   dispatchPriority,
 } = require("./iris-core");
 const {pickRequiredVehicle} = require("./vehicle-dispatch");
+const qaPublic = require("./qa-public-delivery");
 const ACTIVE = [
   "accepted",
   "assigned",
@@ -167,6 +168,18 @@ async function getOffers(_data, context, db = getFirestore()) {
       "unauthenticated",
       "Sign in to view offers.",
     );
+  }
+  const qaRequested = _data && typeof _data === "object" &&
+    (_data.qaFixtureId || _data.qaOnly === true || _data.qaMode === true);
+  if (qaRequested || process.env.QA_LIFECYCLE_ENABLED === "true") {
+    const access = await qaPublic.activeFixtureForRider(db, context);
+    if (qaRequested && !access) {
+      throw new functions.https.HttpsError("permission-denied", "QA offer access is not permitted.");
+    }
+    if (qaRequested && _data.qaFixtureId && access && _data.qaFixtureId !== access.fixture.id) {
+      throw new functions.https.HttpsError("permission-denied", "QA fixture access is not permitted.");
+    }
+    if (access) return qaPublic.getPublicOffer({db, access, projection});
   }
   const uid = context.auth.uid;
   const helpers = require("./get-avaliable-requests")._private;

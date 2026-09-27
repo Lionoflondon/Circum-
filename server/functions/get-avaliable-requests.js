@@ -46,6 +46,7 @@ function assignedRiderId(delivery = {}) {
 }
 
 function offerExclusionReason(delivery = {}, now = Date.now()) {
+  if (delivery.isSyntheticQa === true) return "synthetic_qa_only";
   const status = text(delivery.status).toLowerCase();
   const deliveryStatus = text(delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
   const matchingStatus = text(delivery.matchingStatus).toLowerCase();
