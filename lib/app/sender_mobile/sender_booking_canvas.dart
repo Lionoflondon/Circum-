@@ -3027,14 +3027,6 @@ class _IrisPanel extends StatelessWidget {
           ),
         ] else ...[
           if (iris != null) const _IrisSuccessPulse(),
-          if (iris != null && iris.complianceStatus != 'allowed') ...[
-            _InfoNote(
-              text: iris.complianceMessage?.isNotEmpty == true
-                  ? iris.complianceMessage!
-                  : 'This item needs review before a delivery can continue.',
-            ),
-            const SizedBox(height: 10),
-          ],
           if (iris?.partial == true)
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
@@ -3072,7 +3064,7 @@ class _IrisPanel extends StatelessWidget {
         ),
         _PrimaryButton(
           label: 'Choose Delivery Options',
-          enabled: iris == null || iris.complianceStatus == 'allowed',
+          enabled: true,
           onTap: onContinue,
         ),
       ],
