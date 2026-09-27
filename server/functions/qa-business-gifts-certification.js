@@ -131,6 +131,7 @@ async function checkoutAndWebhook({stripe, processor, webhookSecret, db, order, 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: reservation.externalAmount,
     currency: GBP,
+    payment_method_types: ["card"],
     payment_method: "pm_card_visa",
     confirm: true,
     metadata: session.metadata || {},
