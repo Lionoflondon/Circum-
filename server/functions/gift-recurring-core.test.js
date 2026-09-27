@@ -1,6 +1,34 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const core = require("./gift-recurring-core");
+const recurring = require("./gift-recurring");
+
+function memoryDb(seed = {}) {
+  const data = new Map(Object.entries(seed));
+  const ref = (path) => ({
+    id: path.split("/").pop(),
+    path,
+    async get() {
+      const value = data.get(path);
+      return {exists: value !== undefined, data: () => value && {...value}};
+    },
+    async set(value, options = {}) {
+      data.set(path, options.merge ? {...(data.get(path) || {}), ...value} : {...value});
+    },
+  });
+  return {
+    collection(name) {
+      return {doc: (id) => ref(`${name}/${id}`)};
+    },
+    async runTransaction(work) {
+      return work({
+        get: (reference) => reference.get(),
+        set: (reference, value, options) => reference.set(value, options),
+      });
+    },
+    read: (path) => data.get(path),
+  };
+}
 
 test("recurring frequency is explicit and maps to Stripe billing intervals", () => {
   assert.equal(core.normalizeFrequency("one_off"), "one_time");
@@ -46,6 +74,61 @@ test("successful renewal only accepts paid invoice state", () => {
   assert.equal(core.successfulInvoice({status: "open", paid: false}), false);
   assert.equal(core.subscriptionState("active", true), "cancellation_pending");
   assert.equal(core.subscriptionState("canceled"), "ended");
+});
+
+test("renewal invoice validation requires exact subscription, amount, currency, billing reason and period", () => {
+  const series = {stripeSubscriptionId: "sub_1", budgetGbp: 50};
+  const invoice = {
+    subscription: "sub_1",
+    amount_paid: 5000,
+    currency: "gbp",
+    billing_reason: "subscription_cycle",
+    period_start: 1000,
+    period_end: 2000,
+  };
+  assert.equal(recurring.validateRenewalInvoice(invoice, series).valid, true);
+  for (const [field, value] of [["subscription", "sub_other"], ["amount_paid", 4999], ["currency", "usd"], ["billing_reason", "manual"], ["period_end", 999]]) {
+    assert.equal(recurring.validateRenewalInvoice({...invoice, [field]: value}, series).valid, false, field);
+  }
+});
+
+test("a recurring series in creating state recovers an already-created Stripe subscription", async () => {
+  const seriesId = core.seriesIdForGift("gift-recover");
+  const db = memoryDb({
+    "giftRequests/gift-recover": {
+      giftMode: "gift_myself",
+      selfGiftFrequency: "monthly",
+      grossGiftBudget: 50,
+      cardAmount: 50,
+      senderId: "sender-1",
+      senderEmail: "sender@example.test",
+      stripeCustomerId: "cus_1",
+      deliveryDate: "2099-01-15T12:00:00Z",
+      deliveryTimeWindow: "09:00-12:00",
+      recurringConsentAccepted: true,
+      paidAt: "2026-09-01T12:00:00Z",
+    },
+  });
+  let creates = 0;
+  const stripe = {
+    subscriptions: {
+      list: async () => ({data: [{id: "sub_recovered", status: "active", metadata: {giftRecurringSeriesId: seriesId}, current_period_start: 100, current_period_end: 200}]}),
+      create: async () => {
+        creates += 1;
+        return {id: "sub_new", status: "active"};
+      },
+    },
+  };
+  const result = await recurring.ensureSeriesAfterInitialPayment({
+    db,
+    stripe,
+    giftId: "gift-recover",
+    payment: {customerId: "cus_1", paymentIntentId: "pi_initial"},
+  });
+  assert.equal(result.recovered, true);
+  assert.equal(result.stripeSubscriptionId, "sub_recovered");
+  assert.equal(creates, 0);
+  assert.equal(db.read(`giftRecurringSeries/${seriesId}`).stripeSubscriptionId, "sub_recovered");
 });
 
 test("next renewal advances by the actual Stripe interval and preserves a safe month boundary", () => {

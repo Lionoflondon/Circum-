@@ -1,5 +1,6 @@
 /* eslint-disable require-jsdoc */
 const {FieldValue} = require("firebase-admin/firestore");
+const {recordPaymentArtifactReview} = require("./payment-artifact-reconciliation");
 
 function text(value) {
  return `${value || ""}`.trim();
@@ -72,7 +73,20 @@ async function handleHealthSubscriptionEvent({db, event}) {
   const subscription = event.data && event.data.object || {};
   const senderId = text(subscription.metadata && subscription.metadata.userId);
   const membershipRef = senderId ? db.collection("healthPlusMemberships").doc(senderId) : await membershipRefForSubscription(db, subscription.id);
-  if (!membershipRef) throw new Error("Health+ subscription has no bound membership.");
+  if (!membershipRef) {
+    return {
+      handled: true,
+      actionRequired: true,
+      ...(await recordPaymentArtifactReview({
+        db,
+        event,
+        artifactType: "health_membership_subscription",
+        objectId: subscription.id,
+        reason: "unbound_health_membership_subscription",
+        details: {subscriptionId: text(subscription.id), senderId: senderId || null},
+      })),
+    };
+  }
   const status = event.type === "customer.subscription.deleted" ? "canceled" : null;
   return {handled: true, ...await claimMembershipEvent(db, event, membershipRef, membershipPatch({subscription, status}))};
 }
@@ -80,7 +94,20 @@ async function handleHealthInvoiceEvent({db, event}) {
   const invoice = event.data && event.data.object || {};
   const subscriptionId = invoiceSubscriptionId(invoice);
   const membershipRef = await membershipRefForSubscription(db, subscriptionId);
-  if (!membershipRef) throw new Error("Health+ invoice has no bound membership.");
+  if (!membershipRef) {
+    return {
+      handled: true,
+      actionRequired: true,
+      ...(await recordPaymentArtifactReview({
+        db,
+        event,
+        artifactType: "health_membership_invoice",
+        objectId: invoice.id,
+        reason: "unbound_health_membership_invoice",
+        details: {subscriptionId, invoiceId: text(invoice.id)},
+      })),
+    };
+  }
   const current = (await membershipRef.get()).data() || {};
   const subscription = {id: subscriptionId, customer: invoice.customer, current_period_start: invoice.period_start, current_period_end: invoice.period_end};
   const status = event.type === "invoice.paid" ? "active" : "past_due";

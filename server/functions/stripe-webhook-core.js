@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 "use strict";
 
+const {recordPaymentArtifactReview} = require("./payment-artifact-reconciliation");
+
 function response(status, body) {
   return {status, body};
 }
@@ -142,6 +144,17 @@ function createStripeWebhookProcessor(deps) {
           senderBooking: {handleSenderCheckoutSession: (value, eventId) => senderBooking.handleSenderCheckoutSession(stripe, value, eventId)},
           logger,
         });
+        if (routed && routed.handled === false) {
+          const review = await recordPaymentArtifactReview({
+            db,
+            event,
+            artifactType: "checkout_session",
+            objectId: session.id,
+            reason: "unknown_checkout_session",
+            details: {metadataType: metadataType(session)},
+          });
+          routed = {...routed, ...review};
+        }
       } catch (error) {
         logger.error("checkout_finalization_failed", {eventId: event.id, errorType: error.name || "Error"});
         return response(500, {success: false, error: "checkout_finalization_failed"});
@@ -158,6 +171,10 @@ function createStripeWebhookProcessor(deps) {
     }
     return finish({success: true, unsupported: true}, "unsupported");
   };
+}
+
+function metadataType(session) {
+  return session && session.metadata ? `${session.metadata.type || ""}` : "";
 }
 
 module.exports = {createStripeWebhookProcessor};

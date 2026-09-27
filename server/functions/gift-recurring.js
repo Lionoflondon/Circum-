@@ -32,6 +32,22 @@ function invoiceSubscriptionId(invoice = {}) {
   return text(invoice.subscription) || text(invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription);
 }
 
+function validateRenewalInvoice(invoice = {}, series = {}) {
+  const reasons = [];
+  const expectedSubscriptionId = text(series.stripeSubscriptionId);
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!expectedSubscriptionId || subscriptionId !== expectedSubscriptionId) reasons.push("subscription_mismatch");
+  if (text(invoice.currency).toLowerCase() !== "gbp") reasons.push("currency_mismatch");
+  const amountPaid = Number(invoice.amount_paid == null ? invoice.total : invoice.amount_paid);
+  const expectedAmount = Math.round(money(series.budgetGbp) * 100);
+  if (!Number.isFinite(amountPaid) || amountPaid !== expectedAmount) reasons.push("amount_mismatch");
+  if (text(invoice.billing_reason).toLowerCase() !== "subscription_cycle") reasons.push("billing_reason_mismatch");
+  const periodStart = Number(invoice.period_start);
+  const periodEnd = Number(invoice.period_end);
+  if (!Number.isFinite(periodStart) || !Number.isFinite(periodEnd) || periodStart <= 0 || periodEnd <= periodStart) reasons.push("billing_period_mismatch");
+  return {valid: reasons.length === 0, reasons, expectedAmount, expectedSubscriptionId};
+}
+
 async function findSeriesBySubscription(db, subscriptionId) {
   const id = text(subscriptionId);
   if (!id) return null;
@@ -136,12 +152,38 @@ async function ensureSeriesAfterInitialPayment({db = getFirestore(), stripe, gif
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+  let existingSeries;
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
-    if (snap.exists && snap.data().stripeSubscriptionId) return;
-    if (snap.exists && snap.data().senderId !== base.senderId) throw new Error("Recurring Gift ownership changed.");
+    existingSeries = snap.exists ? snap.data() || {} : null;
+    if (existingSeries && existingSeries.stripeSubscriptionId) return;
+    if (existingSeries && existingSeries.senderId !== base.senderId) throw new Error("Recurring Gift ownership changed.");
     transaction.set(ref, {...base, ...(snap.exists ? {createdAt: snap.data().createdAt} : {})}, {merge: true});
   });
+
+  if (existingSeries && existingSeries.stripeSubscriptionId) {
+    return {handled: true, seriesId, stripeSubscriptionId: existingSeries.stripeSubscriptionId, status: existingSeries.status || "active", idempotent: true};
+  }
+
+  if (stripe.subscriptions && typeof stripe.subscriptions.list === "function") {
+    const existing = await stripe.subscriptions.list({customer: customerId, status: "all", limit: 100});
+    const recovered = (existing.data || []).find((subscription) =>
+      text(subscription.metadata && subscription.metadata.giftRecurringSeriesId) === seriesId,
+    );
+    if (recovered) {
+      await ref.set({
+        stripeSubscriptionId: recovered.id,
+        stripeSubscriptionStatus: recovered.status,
+        status: core.subscriptionState(recovered.status, recovered.cancel_at_period_end),
+        cancelAtPeriodEnd: recovered.cancel_at_period_end === true,
+        currentPeriodStart: recovered.current_period_start ? recovered.current_period_start * 1000 : null,
+        currentPeriodEnd: recovered.current_period_end ? recovered.current_period_end * 1000 : null,
+        recoveredAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {handled: true, seriesId, stripeSubscriptionId: recovered.id, status: recovered.status, recovered: true};
+    }
+  }
 
   let paymentMethodId = text(payment.paymentMethodId);
   if (!paymentMethodId && payment.paymentIntentId) {
@@ -244,6 +286,22 @@ async function fulfillPaidRenewal({db = getFirestore(), seriesRefValue, invoice,
     if (claimSnap.exists || giftSnap.exists) return {handled: true, idempotent: true, renewalId, giftId};
     if (!seriesSnap.exists) return {handled: false, reason: "series_missing"};
     const series = seriesData;
+    const validation = validateRenewalInvoice(invoice, series);
+    if (!validation.valid) {
+      transaction.create(claim, {
+        renewalId,
+        seriesId: seriesSnap.id,
+        invoiceId: invoice.id,
+        status: "action_required",
+        reason: "renewal_invoice_validation_failed",
+        validationReasons: validation.reasons,
+        eventId,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(seriesRefValue, {status: "action_required", lastActionRequiredRenewalId: renewalId, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      return {handled: true, actionRequired: true, renewalId, reason: "renewal_invoice_validation_failed", validationReasons: validation.reasons};
+    }
     const initialGift = initialSnap.exists ? initialSnap.data() || {} : {};
     if (!initialSnap.exists || !initialGiftId) {
       transaction.create(claim, {renewalId, seriesId: seriesSnap.id, invoiceId: invoice.id, status: "action_required", reason: "initial_gift_missing", eventId, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
@@ -394,6 +452,7 @@ module.exports = {
   fulfillPaidRenewal,
   handleGiftSubscriptionEvent,
   handleGiftSubscriptionInvoice,
+  validateRenewalInvoice,
   invoiceSubscriptionId,
   reconcileGiftRecurringRenewalsCore,
   reconcileGiftRecurringRenewals: (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).pubsub.schedule("every 15 minutes").onRun(() => reconcileGiftRecurringRenewalsCore({stripe})),
