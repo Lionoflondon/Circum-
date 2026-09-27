@@ -2051,6 +2051,8 @@
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.advanceRiderOnboarding",
       "callers": [
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/rider-account.test.js"
       ],
       "criticality": "review-required",
@@ -2076,8 +2078,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
