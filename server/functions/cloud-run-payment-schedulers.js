@@ -39,7 +39,7 @@ const handlers = Object.freeze({
   reconcileDeliveryTipsDryRun: () =>
     ratingsTipping.reconcileDeliveryTipsCore(stripeClient(), {dryRun: true}),
   reconcileGiftRecurringRenewals: () =>
-    giftRecurring.reconcileGiftRecurringRenewalsCore(stripeClient()),
+    giftRecurring.reconcileGiftRecurringRenewalsCore({stripe: stripeClient()}),
   reconcileHealthMembershipEvents: () =>
     healthMembershipLifecycle.reconcileHealthMembershipEventsCore({stripe: stripeClient()}),
 });
