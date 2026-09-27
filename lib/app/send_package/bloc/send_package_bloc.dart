@@ -518,9 +518,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           await PlaceApiProvider(sessionToken)
               .fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[true] != selectionRequestId) {
-        event.coordinateCompleter?.completeError(
-          StateError('Address selection was superseded.'),
-        );
+        // A newer text invalidation may supersede the Bloc selection counter
+        // after the provider has already returned. The canvas still owns the
+        // generation check and must be allowed to decide whether this result
+        // is current; otherwise a successful Place Details response becomes
+        // an indistinguishable ten-second timeout in the browser.
+        if (event.coordinateCompleter != null &&
+            !event.coordinateCompleter!.isCompleted) {
+          event.coordinateCompleter!.complete(coordinate);
+        }
         return;
       }
 
@@ -616,9 +622,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           await PlaceApiProvider(sessionToken)
               .fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[false] != selectionRequestId) {
-        event.coordinateCompleter?.completeError(
-          StateError('Address selection was superseded.'),
-        );
+        // See the pickup path above. The UI generation guard prevents a
+        // superseded text entry from committing its draft, while an explicit
+        // completion prevents a successful provider response from timing out.
+        if (event.coordinateCompleter != null &&
+            !event.coordinateCompleter!.isCompleted) {
+          event.coordinateCompleter!.complete(coordinate);
+        }
         return;
       }
 

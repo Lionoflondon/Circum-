@@ -151,6 +151,18 @@ void main() {
     expect(bloc, contains('void _handleInvalidateAddressSelection('));
     expect(bloc, contains('clearSenderQuoteId: true'));
     expect(bloc, contains('clearSenderPaymentSession: true'));
+    expect(
+      bloc,
+      contains(
+        'A newer text invalidation may supersede the Bloc selection counter',
+      ),
+    );
+    expect(
+      bloc,
+      contains(
+        'event.coordinateCompleter!.complete(coordinate);',
+      ),
+    );
   });
 
   test('route preview failure preserves locally calculated checkout route', () {
