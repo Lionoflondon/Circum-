@@ -24,7 +24,10 @@ Future<Map<String, dynamic>> callRiderDeliveryAuthority(
   FirebaseAppCheck? appCheck,
   http.Client? client,
 }) async {
-  if (operation != 'completeDelivery' && operation != 'getAvailableRequests') {
+  if (operation != 'completeDelivery' &&
+      operation != 'getAvailableRequests' &&
+      operation != 'updateDeliveryTrackingStatus' &&
+      operation != 'updateDeliveryLiveLocation') {
     throw ArgumentError.value(operation, 'operation', 'Unsupported operation');
   }
   final user = (auth ?? FirebaseAuth.instance).currentUser;
