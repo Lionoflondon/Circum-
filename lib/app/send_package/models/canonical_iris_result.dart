@@ -16,8 +16,6 @@ class CanonicalIrisResult {
   final bool partial;
   final bool vanguardRequired;
   final String? vanguardRequiredReason;
-  final String complianceStatus;
-  final String? complianceMessage;
 
   const CanonicalIrisResult({
     required this.itemName,
@@ -37,8 +35,6 @@ class CanonicalIrisResult {
     this.partial = false,
     this.vanguardRequired = false,
     this.vanguardRequiredReason,
-    this.complianceStatus = 'allowed',
-    this.complianceMessage,
   });
 
   String get itemAndQuantity =>
@@ -64,7 +60,6 @@ class CanonicalIrisResult {
     final weightAuthority = _map(internal['weightAuthority']);
     final riderMatching = _map(internal['riderMatching']);
     final vanguard = _map(data['vanguard']);
-    final compliance = _map(data['compliance']);
     final requiresVanguard = _bool(
       data['requiresVanguard'] ??
           data['vanguardRequired'] ??
@@ -135,10 +130,6 @@ class CanonicalIrisResult {
       vanguardRequiredReason:
           '${vanguard['reason'] ?? recommendation['vanguardReason'] ?? ''}'
               .trim(),
-      complianceStatus: '${compliance['status'] ?? 'allowed'}'.trim(),
-      complianceMessage: compliance['customerMessage'] is String
-          ? (compliance['customerMessage'] as String).trim()
-          : null,
     );
   }
 
