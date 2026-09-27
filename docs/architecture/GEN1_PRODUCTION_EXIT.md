@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 279
 - Gen 1 exports: 277
 - Files importing Firebase Functions v1: 67
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 75
-- MIGRATE TO CLOUD RUN: 160
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 77
+- MIGRATE TO CLOUD RUN: 158
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -61,8 +61,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | adminUpdateSenderAccountStatus | server/functions/admin-operations-authority.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart |
 | adminUpdateSenderTrust | server/functions/sender-trust.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-hardening-contract.test.js<br>test/admin_operations_test.dart |
 | advanceRiderOnboarding | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | none found |
-| analyseIris | server/functions/iris.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/project_memory.md<br>lib/app/send_package/bloc/send_package_bloc.dart<br>server/functions/iris-adjudication-auth.test.js<br>test/sender_mobile/sender_canonical_destination_guard_test.dart |
-| analyseParcelPhotoForIris | server/functions/iris-photo-analysis.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_booking_canvas.dart<br>lib/website/shared/circum_website_app.dart |
+| analyseIris | server/functions/iris.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/project_memory.md<br>lib/app/send_package/bloc/send_package_bloc.dart<br>server/functions/cloud-run-iris.js<br>server/functions/cloud-run-iris.test.js<br>server/functions/iris-adjudication-auth.test.js<br>test/sender_mobile/sender_canonical_destination_guard_test.dart |
+| analyseParcelPhotoForIris | server/functions/iris-photo-analysis.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/sender_booking_canvas.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-iris.js<br>server/functions/cloud-run-iris.test.js |
 | applyCheckoutRoth | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/sender-payment-app-check.test.js |
 | approveRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
 | archiveExpiredDeliveries | server/functions/delivery-cleanup.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
