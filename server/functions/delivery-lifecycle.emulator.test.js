@@ -39,6 +39,37 @@ async function photo(stage) {
   });
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
 }
+
+test(
+  "legacy Rider pickup statuses normalize transactionally before canonical transitions",
+  {skip: !enabled},
+  async () => {
+    await db.doc("deliveryRequests/legacy-assigned").set({
+      senderId: "sender",
+      riderId: "rider",
+      status: "rider_assigned",
+    });
+    await db.doc("deliveryRequests/legacy-en-route").set({
+      senderId: "sender",
+      riderId: "rider",
+      status: "en_route_to_pickup",
+    });
+    await db.doc("riders/rider").set({status: "active"});
+
+    await call({deliveryId: "legacy-assigned", action: "start_heading_to_pickup"}, context);
+    await call({deliveryId: "legacy-assigned", action: "arrived_at_pickup"}, context);
+    await call({deliveryId: "legacy-assigned", action: "confirm_collected"}, context);
+    await call({deliveryId: "legacy-en-route", action: "arrived_at_pickup"}, context);
+
+    assert.equal((await db.doc("deliveryRequests/legacy-assigned").get()).data().status, "collected");
+    assert.equal((await db.doc("deliveryRequests/legacy-en-route").get()).data().status, "arrived_at_pickup");
+    await assert.rejects(
+      call({deliveryId: "legacy-assigned", action: "arrived_at_pickup"}, context),
+      /Cannot move delivery from collected/,
+    );
+  },
+);
+
 test(
   "real lifecycle enforces assigned Rider, pickup PIN/evidence, handover and exactly-once earnings/rank",
   {skip: !enabled},

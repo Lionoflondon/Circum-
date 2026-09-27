@@ -53,6 +53,35 @@ const BACKEND_STATUS_TO_SENDER_STATE = Object.freeze({
   error: SENDER_TRACKING_STATES.ERROR,
 });
 
+// These values have existed in persisted delivery documents and older Rider
+// callers. They are aliases only; clients never get to choose the resulting
+// authority state. The transition boundary canonicalizes them after ownership
+// has been proven and before validating the next action.
+const LEGACY_STATUS_ALIASES = Object.freeze({
+  assigned: "accepted",
+  rider_assigned: "accepted",
+  en_route_to_pickup: "navigating_to_pickup",
+  rider_en_route_to_pickup: "navigating_to_pickup",
+  rider_arrived_pickup: "arrived_at_pickup",
+  arriving: "arrived_at_dropoff",
+  picked_up: "collected",
+  out_for_delivery: "navigating_to_dropoff",
+});
+
+const LIVE_LOCATION_STATUSES = Object.freeze([
+  "accepted",
+  "navigating_to_pickup",
+  "arrived_at_pickup",
+  "waiting",
+  "pickup_verification",
+  "pickup_verified",
+  "collected",
+  "navigating_to_dropoff",
+  "in_transit",
+  "arrived_at_dropoff",
+  "pin_required",
+]);
+
 const ALLOWED_TRANSITIONS = Object.freeze({
   requested: ["accepted", "cancelled", "issue_reported"],
   accepted: ["navigating_to_pickup", "arrived_at_pickup", "cancelled", "issue_reported"],
@@ -92,6 +121,11 @@ function normalizeStatus(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/[-\s]+/g, "_");
 }
 
+function normalizeLifecycleStatus(value) {
+  const normalized = normalizeStatus(value);
+  return LEGACY_STATUS_ALIASES[normalized] || normalized;
+}
+
 function senderTrackingStateForBackendStatus(status) {
   const normalized = normalizeStatus(status);
   if (!normalized) return SENDER_TRACKING_STATES.NO_ACTIVE_DELIVERY;
@@ -99,8 +133,8 @@ function senderTrackingStateForBackendStatus(status) {
 }
 
 function canTransitionDeliveryStatus(from, to) {
-  const current = normalizeStatus(from);
-  const next = normalizeStatus(to);
+  const current = normalizeLifecycleStatus(from);
+  const next = normalizeLifecycleStatus(to);
   if (!current || !next) return false;
   return (ALLOWED_TRANSITIONS[current] || []).includes(next);
 }
@@ -112,9 +146,12 @@ function statusForRiderAction(action) {
 module.exports = {
   ALLOWED_TRANSITIONS,
   BACKEND_STATUS_TO_SENDER_STATE,
+  LEGACY_STATUS_ALIASES,
+  LIVE_LOCATION_STATUSES,
   RIDER_ACTION_TO_STATUS,
   SENDER_TRACKING_STATES,
   canTransitionDeliveryStatus,
+  normalizeLifecycleStatus,
   normalizeStatus,
   senderTrackingStateForBackendStatus,
   statusForRiderAction,
