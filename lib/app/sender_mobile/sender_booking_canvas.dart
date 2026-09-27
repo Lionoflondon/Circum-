@@ -905,17 +905,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
       final suggestion = AddressEngine.cleanSuggestion(result.suggestion!);
       final bloc = context.read<SendPackageBloc>();
-      // Subscribe before enqueueing the event. On web, Place Details can
-      // resolve from the provider/cache before Bloc returns control to the
-      // caller; subscribing afterward can miss the coordinate emission and
-      // leave the UI waiting until the ten-second timeout.
-      final coordinateFuture = bloc.stream
-          .firstWhere(
-            (state) => pickup
-                ? state.pickupCoordinate != null
-                : state.desinationCoordinate != null,
-          )
-          .timeout(const Duration(seconds: 10));
+      final coordinateCompleter = Completer<PlaceCoordinate>();
       if (pickup) {
         bloc.add(
           SetPickupAddress(
@@ -923,6 +913,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             pickupLocationSubAddress: suggestion.subText,
             placeId: suggestion.placeId,
             lang: languageCode,
+            coordinateCompleter: coordinateCompleter,
           ),
         );
       } else {
@@ -932,17 +923,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             destinationLocationSubAddress: suggestion.subText,
             placeId: suggestion.placeId,
             lang: languageCode,
+            coordinateCompleter: coordinateCompleter,
           ),
         );
       }
-      final resolved = await coordinateFuture;
+      final coordinate = await coordinateCompleter.future
+          .timeout(const Duration(seconds: 10));
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
         return;
       }
-      final coordinate =
-          pickup ? resolved.pickupCoordinate! : resolved.desinationCoordinate!;
       controller.text = suggestion.description;
       controller.selection = TextSelection.collapsed(
         offset: controller.text.length,
@@ -1002,15 +993,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
     try {
       final bloc = context.read<SendPackageBloc>();
-      // Subscribe before enqueueing the event for the same web-safe ordering
-      // guarantee as manual address resolution above.
-      final coordinateFuture = bloc.stream
-          .firstWhere(
-            (state) => pickup
-                ? state.pickupCoordinate != null
-                : state.desinationCoordinate != null,
-          )
-          .timeout(const Duration(seconds: 10));
+      final coordinateCompleter = Completer<PlaceCoordinate>();
       if (pickup) {
         bloc.add(
           SetPickupAddress(
@@ -1018,6 +1001,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             pickupLocationSubAddress: cleanSuggestion.subText,
             placeId: cleanSuggestion.placeId,
             lang: languageCode,
+            coordinateCompleter: coordinateCompleter,
           ),
         );
       } else {
@@ -1027,17 +1011,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             destinationLocationSubAddress: cleanSuggestion.subText,
             placeId: cleanSuggestion.placeId,
             lang: languageCode,
+            coordinateCompleter: coordinateCompleter,
           ),
         );
       }
-      final resolved = await coordinateFuture;
+      final coordinate = await coordinateCompleter.future
+          .timeout(const Duration(seconds: 10));
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
         return;
       }
-      final coordinate =
-          pickup ? resolved.pickupCoordinate! : resolved.desinationCoordinate!;
       controller.text = cleanSuggestion.description;
       controller.selection = TextSelection.collapsed(
         offset: controller.text.length,
