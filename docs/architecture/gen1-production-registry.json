@@ -2128,7 +2128,8 @@
         "lib/app/sender_mobile/sender_booking_canvas.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-iris.js",
-        "server/functions/cloud-run-iris.test.js"
+        "server/functions/cloud-run-iris.test.js",
+        "test/website_iris_cutover_contract_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
