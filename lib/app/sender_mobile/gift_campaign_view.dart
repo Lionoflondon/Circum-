@@ -1070,12 +1070,11 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       _listenForParticipantStatus();
       if (!mounted) return;
       setState(() => _step = 8);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _message = error is FirebaseFunctionsException
-            ? (error.message ?? 'Could not secure campaign participation.')
-            : '$error'.replaceFirst('Bad state: ', '');
+        _message =
+            'Could not secure campaign participation. No duplicate payment or participation will be created.';
       });
     } finally {
       if (mounted) setState(() => _submitting = false);

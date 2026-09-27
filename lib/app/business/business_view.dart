@@ -9,11 +9,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../health_plus/view/health_plus.dart';
-import '../sender_mobile/gift_mode_view.dart';
 import '../sender_mobile/sender_booking_canvas.dart';
 import '../sender_mobile/sender_finance.dart';
 import '../sender_mobile/design_system/sender_design_system.dart';
 import 'business_iris_moments.dart';
+import 'business_gift_view.dart';
 import 'business_journey_context.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
@@ -138,8 +138,11 @@ class _BusinessViewState extends State<BusinessView>
         _accessRequests = results[2] as List<BusinessAccessRequest>;
       });
       unawaited(_loadRequestHistory(selected));
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error =
+            'Business details could not be loaded. Check your connection and retry.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -849,9 +852,7 @@ class _BusinessViewState extends State<BusinessView>
                     value:
                         '${requests.where((item) => item.status.contains('approval')).length}'),
                 _MiniStat(label: 'Completed Gifts', value: '$completed'),
-                _MiniStat(
-                    label: 'Recipient privacy',
-                    value: 'Protected'),
+                _MiniStat(label: 'Recipient privacy', value: 'Protected'),
               ],
       ),
       const SizedBox(height: 14),
@@ -1393,7 +1394,7 @@ class _BusinessViewState extends State<BusinessView>
     _pushBusinessJourney(
       type: BusinessJourneyType.gifts,
       routeName: '/sender-mobile/business/gifts',
-      child: const GiftModeView(),
+      child: BusinessGiftView(account: _account!, repository: _repository),
     );
   }
 
@@ -1453,8 +1454,8 @@ class _BusinessViewState extends State<BusinessView>
           account: _account!, email: email.text, role: role);
       await _load(accountId: _account!.id);
       _showMessage('Team invitation saved.');
-    } catch (error) {
-      _showMessage('Invitation failed: $error');
+    } catch (_) {
+      _showMessage('Invitation could not be saved. Please try again.');
     }
   }
 
@@ -1468,8 +1469,8 @@ class _BusinessViewState extends State<BusinessView>
       await _repository.addIrisMoment(account: _account!, moment: moment);
       await _load(accountId: _account!.id);
       _showMessage('IRIS Moment added.');
-    } catch (error) {
-      _showMessage('IRIS Moment could not be saved: $error');
+    } catch (_) {
+      _showMessage('IRIS Moment could not be saved. Please try again.');
     }
   }
 
@@ -1519,8 +1520,8 @@ class _BusinessViewState extends State<BusinessView>
       await _load(accountId: _account!.id);
       _showMessage(
           approved ? 'Business access approved.' : 'Request rejected.');
-    } catch (error) {
-      _showMessage('Access request could not be updated: $error');
+    } catch (_) {
+      _showMessage('Access request could not be updated. Please try again.');
     }
   }
 
@@ -1594,8 +1595,8 @@ class _BusinessViewState extends State<BusinessView>
           !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('Secure payment could not open.');
       }
-    } catch (error) {
-      _showMessage('Invoice payment could not start: $error');
+    } catch (_) {
+      _showMessage('Invoice payment could not start. Please try again.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -1607,8 +1608,8 @@ class _BusinessViewState extends State<BusinessView>
       await _repository.saveAccount(account);
       await _load(accountId: account.id);
       _showMessage('Business settings saved.');
-    } catch (error) {
-      _showMessage('Settings could not be saved: $error');
+    } catch (_) {
+      _showMessage('Settings could not be saved. Please try again.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -1627,8 +1628,8 @@ class _BusinessViewState extends State<BusinessView>
       }
       await _load(accountId: account.id);
       _showMessage(rotate ? 'Company code changed.' : 'Company code ready.');
-    } catch (error) {
-      _showMessage('Company code could not be retrieved: $error');
+    } catch (_) {
+      _showMessage('Company code could not be retrieved. Please try again.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -2590,20 +2591,6 @@ class _PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       AppButton(label: label, icon: icon, onPressed: onTap);
-}
-
-class _SecondaryButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback? onTap;
-  const _SecondaryButton({required this.label, required this.icon, this.onTap});
-  @override
-  Widget build(BuildContext context) => AppButton(
-      label: label,
-      icon: icon,
-      onPressed: onTap,
-      style: AppButtonStyle.secondary,
-      expanded: false);
 }
 
 class _CompactAction extends StatelessWidget {

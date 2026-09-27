@@ -585,7 +585,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         setState(() {
           _error = _wallet == null
               ? 'Your Roth balance is unavailable. Please retry.'
-              : '$error';
+              : 'Your latest Roth balance could not be loaded. Showing your last saved wallet.';
           _refreshing = false;
         });
         _scheduleWalletRetry();

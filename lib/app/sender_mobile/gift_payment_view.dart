@@ -519,7 +519,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError('Stripe Checkout could not be opened.');
       }
-      await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      if (!opened) throw StateError('Stripe Checkout could not be opened.');
     } on TimeoutException {
       if (!mounted) return;
       setState(() {
@@ -533,12 +534,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
             ? 'Payment was cancelled. Your Gift request remains saved.'
             : 'Payment could not be completed. No duplicate request will be created.';
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _message = error is FirebaseFunctionsException
-            ? (error.message ?? 'Could not start secure checkout.')
-            : 'Could not start secure checkout.';
+        _message =
+            'Could not start secure checkout. No duplicate request will be created.';
       });
     } finally {
       if (mounted) setState(() => _submitting = false);
