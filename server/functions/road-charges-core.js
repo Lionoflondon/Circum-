@@ -1,8 +1,24 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
 
-const ROAD_CHARGE_POLICY_VERSION = "2026-08-road-charges-v1";
+const ROAD_CHARGE_POLICY_VERSION = "2026-09-road-charges-v2";
 const CENTRAL_LONDON_FEE_PENCE = 900;
+const CONGESTION_CHARGE_ON_TIME_PENCE = 1800;
+const CONGESTION_CHARGE_LATE_PENCE = 2100;
+
+const BLACKWALL_SILVERTOWN_PREVIOUS_RATES_PENCE = Object.freeze({
+  motorbike: Object.freeze({offPeak: 150, peak: 250}),
+  car: Object.freeze({offPeak: 150, peak: 400}),
+  van_small: Object.freeze({offPeak: 150, peak: 400}),
+  van_large: Object.freeze({offPeak: 250, peak: 650}),
+});
+
+const BLACKWALL_SILVERTOWN_CURRENT_RATES_PENCE = Object.freeze({
+  motorbike: Object.freeze({offPeak: 155, peak: 260}),
+  car: Object.freeze({offPeak: 155, peak: 420}),
+  van_small: Object.freeze({offPeak: 155, peak: 420}),
+  van_large: Object.freeze({offPeak: 260, peak: 680}),
+});
 
 // Tariffs are versioned data. Route facts must come from an authoritative route
 // provider; client-supplied geometry is intentionally ignored by callers.
@@ -22,7 +38,11 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       id: "congestion_charge",
       authority: "Transport for London",
       type: "daily_zone_charge",
-      amountPence: 1800,
+      customerLabel: "Congestion Charge",
+      amountPence: CONGESTION_CHARGE_ON_TIME_PENCE,
+      onTimeAmountPence: CONGESTION_CHARGE_ON_TIME_PENCE,
+      latePaymentAmountPence: CONGESTION_CHARGE_LATE_PENCE,
+      latePaymentWindowDays: 3,
       effectiveFrom: "2026-01-02T00:00:00+00:00",
       effectiveUntil: null,
       applicableVehicles: Object.freeze(["car", "van"]),
@@ -36,15 +56,25 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       id: "blackwall_silvertown",
       authority: "Transport for London",
       type: "route_toll",
+      customerLabel: "Blackwall/Silvertown tunnel charge",
       effectiveFrom: "2025-04-07T00:00:00+00:00",
       effectiveUntil: null,
       chargingHours: "06:00-22:00 daily",
       ratesPence: Object.freeze({
-        motorbike: Object.freeze({offPeak: 150, peak: 250}),
-        car: Object.freeze({offPeak: 150, peak: 400}),
-        van_small: Object.freeze({offPeak: 150, peak: 400}),
-        van_large: Object.freeze({offPeak: 250, peak: 650}),
+        ...BLACKWALL_SILVERTOWN_CURRENT_RATES_PENCE,
       }),
+      rateSchedule: Object.freeze([
+        Object.freeze({
+          effectiveFrom: "2025-04-07T00:00:00+00:00",
+          effectiveUntil: "2026-09-21T00:00:00+01:00",
+          ratesPence: BLACKWALL_SILVERTOWN_PREVIOUS_RATES_PENCE,
+        }),
+        Object.freeze({
+          effectiveFrom: "2026-09-21T00:00:00+01:00",
+          effectiveUntil: null,
+          ratesPence: BLACKWALL_SILVERTOWN_CURRENT_RATES_PENCE,
+        }),
+      ]),
       settlementTreatment:
         "customer_pass_through_rider_reimbursement_no_commission",
       source: "tfl_blackwall_silvertown",
@@ -53,6 +83,7 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       id: "dartford_crossing",
       authority: "National Highways",
       type: "route_toll",
+      customerLabel: "Dartford Crossing charge",
       amountBasis: "one_off_payment",
       effectiveFrom: "2025-09-01T00:00:00+00:00",
       effectiveUntil: null,
@@ -71,6 +102,8 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       id: "ulez",
       authority: "Transport for London",
       type: "vehicle_compliance_charge",
+      customerLabel: "ULEZ charge",
+      dailyAmountPence: 1250,
       effectiveFrom: "2023-08-29T00:00:00+00:00",
       effectiveUntil: null,
       settlementTreatment: "vehicle_compliance_not_sender_surcharge",
@@ -80,6 +113,7 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       id: "lez",
       authority: "Transport for London",
       type: "vehicle_compliance_charge",
+      customerLabel: "LEZ charge",
       effectiveFrom: "2008-02-04T00:00:00+00:00",
       effectiveUntil: null,
       settlementTreatment: "vehicle_compliance_not_sender_surcharge",
@@ -184,7 +218,10 @@ function vanTunnelTariffAuthority(
 function cczVehicleAuthority(
   vehicleClass,
   vehicleProfile = {},
-  {pricingContext = "quote"} = {},
+  {
+    pricingContext = "quote",
+    chargePence = CONGESTION_CHARGE_ON_TIME_PENCE,
+  } = {},
 ) {
   if (vehicleClass === "motorbike") {
     return {
@@ -215,7 +252,7 @@ function cczVehicleAuthority(
     ) {
       return {
         status: declared,
-        liabilityPence: Math.round((1800 * (100 - discountPercent)) / 100),
+        liabilityPence: Math.round((chargePence * (100 - discountPercent)) / 100),
         discountPercent,
         verified: true,
       };
@@ -224,14 +261,14 @@ function cczVehicleAuthority(
   if (verified && declared === "CHARGEABLE") {
     return {
       status: declared,
-      liabilityPence: 1800,
+      liabilityPence: chargePence,
       discountPercent: 0,
       verified: true,
     };
   }
   return {
     status: "UNKNOWN",
-    liabilityPence: pricingContext === "quote" ? 1800 : null,
+    liabilityPence: pricingContext === "quote" ? chargePence : null,
     discountPercent: null,
     verified: false,
   };
@@ -287,8 +324,13 @@ function isWeekday(parts) {
 function congestionChargeable({at, isBankHoliday = false}) {
   const parts = dateParts(at);
   if (!parts) return false;
+  const [, month, day] = parts.date.split("-").map(Number);
+  if ((month === 12 && day >= 25) || (month === 1 && day === 1)) {
+    return false;
+  }
+  if (isBankHoliday) return withinWindow(parts, 12, 18);
   if (isWeekday(parts)) return withinWindow(parts, 7, 18);
-  return isBankHoliday || withinWindow(parts, 12, 18);
+  return withinWindow(parts, 12, 18);
 }
 
 function tunnelPeak({at, direction}) {
@@ -315,6 +357,24 @@ function chargeIsEffective(charge, at) {
     new Date(charge.effectiveUntil).getTime() :
     Infinity;
   return Number.isFinite(timestamp) && timestamp >= from && timestamp < until;
+}
+
+function ratesForAt(charge, at) {
+  const schedule = Array.isArray(charge && charge.rateSchedule) ?
+    charge.rateSchedule :
+    [];
+  const timestamp = new Date(at || Date.now()).getTime();
+  const scheduled = schedule.find((period) => {
+    const from = new Date(period.effectiveFrom).getTime();
+    const until = period.effectiveUntil ?
+      new Date(period.effectiveUntil).getTime() :
+      Infinity;
+    return Number.isFinite(timestamp) && timestamp >= from && timestamp < until;
+  });
+  return scheduled && scheduled.ratesPence ?
+    scheduled.ratesPence :
+    charge && charge.ratesPence ||
+    {};
 }
 
 function stableLiabilityKey({vehicleId, vehicleClass, date, chargeId}) {
@@ -394,6 +454,7 @@ function baseCharge({
   return {
     chargeId,
     authority: charge.authority,
+    customerLabel: charge.customerLabel,
     type,
     amountPence: integerPence(amountPence),
     amount: moneyFromPence(amountPence),
@@ -478,7 +539,8 @@ function evaluateRoadCharges({
           "van_small" :
           "van_large" :
         vehicleClass;
-    const vehicleRates = charge.ratesPence[tunnelRateKey];
+    const rates = ratesForAt(charge, crossing.at || at);
+    const vehicleRates = rates[tunnelRateKey];
     const dartfordRateKey = conservativeDartford ?
       "van_multi_axle" :
       tariffClassification;
@@ -488,7 +550,7 @@ function evaluateRoadCharges({
         0 :
         chargeId === "blackwall_silvertown" && vehicleRates ?
           vehicleRates[peak ? "peak" : "offPeak"] :
-          charge.ratesPence[dartfordRateKey] || 0;
+          rates[dartfordRateKey] || 0;
     const classificationUnknown = tariffUnknown || vehicleClass === "unknown";
     charges.push({
       ...baseCharge({
@@ -534,6 +596,7 @@ function evaluateRoadCharges({
     const eligibleVehicle = charge.applicableVehicles.includes(vehicleClass);
     const vehicleAuthority = cczVehicleAuthority(vehicleClass, vehicleProfile, {
       pricingContext,
+      chargePence: charge.amountPence,
     });
     const authorityKnownForSettlement =
       pricingContext !== "settlement" || vehicleAuthority.status !== "UNKNOWN";
@@ -773,6 +836,8 @@ function dispatchRoadChargeScore({routeFacts, rider, request, at} = {}) {
 module.exports = {
   ROAD_CHARGE_POLICY_VERSION,
   CENTRAL_LONDON_FEE_PENCE,
+  CONGESTION_CHARGE_ON_TIME_PENCE,
+  CONGESTION_CHARGE_LATE_PENCE,
   ROAD_CHARGE_POLICY,
   normalizeVehicle,
   vehicleTariffClassification,
@@ -781,6 +846,12 @@ module.exports = {
   cczVehicleAuthority,
   stableLiabilityKey,
   dailyRecoveryAllocation,
+  congestionChargeable,
+  tunnelPeak,
+  tunnelChargeable,
+  dartfordChargeable,
+  chargeIsEffective,
+  ratesForAt,
   evaluateRoadCharges,
   dispatchRoadChargeScore,
 };
