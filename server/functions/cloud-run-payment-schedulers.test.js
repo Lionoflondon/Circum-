@@ -15,7 +15,7 @@ test("payment scheduler service exposes only bounded maintenance routes", () => 
   assert.match(source, /reconcileDeliveryTipsCore/);
   assert.match(source, /reconcileDeliveryTipsCore\(stripeClient\(\), \{dryRun: true\}\)/);
   assert.match(source, /reconcileGiftRecurringRenewalsCore\(\{stripe: stripeClient\(\)\}\)/);
-  assert.match(source, /reconcileHealthMembershipEventsCore/);
+  assert.match(source, /reconcileHealthMembershipEventsCore\(\{db: getFirestore\(\), stripe: stripeClient\(\)\}\)/);
   assert.match(payoutSource, /FieldPath\.documentId\(\)/);
   assert.doesNotMatch(source, /createRiderTransferOrPayout\(stripeClient/);
   assert.doesNotMatch(source, /createBusinessInvoiceCheckout/);
