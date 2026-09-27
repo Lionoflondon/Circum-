@@ -21,6 +21,7 @@ class SetPickupAddress extends SendPackageEvent {
   String pickupLocationSubAddress;
   String placeId;
   String lang;
+  final PlaceCoordinate? resolvedCoordinate;
   final Completer<PlaceCoordinate>? coordinateCompleter;
 
   SetPickupAddress({
@@ -28,6 +29,7 @@ class SetPickupAddress extends SendPackageEvent {
     required this.pickupLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.resolvedCoordinate,
     this.coordinateCompleter,
   });
 }
@@ -37,6 +39,7 @@ class SetDeliveryAddress extends SendPackageEvent {
   String destinationLocationSubAddress;
   String placeId;
   String lang;
+  final PlaceCoordinate? resolvedCoordinate;
   final Completer<PlaceCoordinate>? coordinateCompleter;
 
   SetDeliveryAddress({
@@ -44,6 +47,7 @@ class SetDeliveryAddress extends SendPackageEvent {
     required this.destinationLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.resolvedCoordinate,
     this.coordinateCompleter,
   });
 }

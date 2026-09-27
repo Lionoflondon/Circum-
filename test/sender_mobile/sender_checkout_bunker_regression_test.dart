@@ -122,6 +122,7 @@ void main() {
     final visibleEnqueue = visibleResolution.indexOf('bloc.add(', visibleWait);
     expect(visibleWait, greaterThanOrEqualTo(0));
     expect(visibleEnqueue, greaterThan(visibleWait));
+    expect(visibleResolution, contains('resolvedCoordinate: coordinate'));
 
     final quote = canvas.substring(
       canvas.indexOf('void _requestBackendQuote('),
