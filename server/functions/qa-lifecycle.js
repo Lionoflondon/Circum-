@@ -269,6 +269,30 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
         return {idempotent: false};
       });
     }
+    if (action === "seed_legacy_status") {
+      requireActor(fixture, uid, "qaCreatedBy");
+      const expected = {
+        rider_assigned: "accepted",
+        en_route_to_pickup: "navigating_to_pickup",
+      }[data.legacyStatus];
+      if (!expected) fail("Only reviewed legacy QA statuses can be seeded.", "invalid-argument");
+      return qa.runTransaction(async (tx) => {
+        const [snap, offer] = await tx.getAll(ref, qa.collection("offers").doc(deliveryId));
+        const current = snap.data();
+        if (!current || current.riderId !== fixture.riderId || current.driverId !== fixture.riderId ||
+            current.paymentStatus !== "paid" || !offer.exists || offer.data().riderId !== fixture.riderId) {
+          fail("Owned QA delivery is required.", "permission-denied");
+        }
+        if (current.status === data.legacyStatus) return {idempotent: true, normalizedStatus: expected};
+        if (current.status !== expected || current.deliveryState !== expected) fail("Legacy QA seed is out of order.");
+        tx.set(ref, {status: data.legacyStatus, deliveryState: data.legacyStatus, qaLegacySeededAt: FieldValue.serverTimestamp()}, {merge: true});
+        tx.create(qa.collection("audit").doc(`${data.delivery}_legacy_${data.legacyStatus}`), {
+          action: "seed_legacy_status", actorId: uid, deliveryId, legacyStatus: data.legacyStatus,
+          normalizedStatus: expected, at: FieldValue.serverTimestamp(),
+        });
+        return {idempotent: false, normalizedStatus: expected};
+      });
+    }
     if (action === "accept" || tracking.RIDER_ACTION_TO_STATUS[action]) {
       requireActor(fixture, uid, "riderId");
       await qa.runTransaction(async (tx) => {

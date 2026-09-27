@@ -25,6 +25,12 @@ send that ID. Retrying the same active request is idempotent. An archived
 request ID cannot be reopened; use a new one so prior audit records remain
 intact. The existing one-active-fixture operator lock still applies.
 
+The operator may use `seed_legacy_status` only on a paid QA delivery already
+owned by the allowlisted Rider. It accepts exactly `rider_assigned` while the
+canonical state is `accepted`, or `en_route_to_pickup` while it is
+`navigating_to_pickup`. The seed is transactional and idempotent; an out-of-order
+or different-owner request is rejected. It cannot change a production delivery.
+
 The service is deployed with internal ingress and without the public
 unauthenticated invoker binding. The existing managed QA exports remain
 untouched; no broad Functions deployment is part of this surface.
