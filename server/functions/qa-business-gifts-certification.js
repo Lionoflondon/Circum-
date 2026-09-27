@@ -217,7 +217,7 @@ async function run() {
     const recurringPaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_visa"}}, {idempotencyKey: `${fixture.id}:recurring-payment-method`});
     await stripe.paymentMethods.attach(recurringPaymentMethod.id, {customer: recurringCustomer.id});
     createdPaymentMethods.push(recurringPaymentMethod.id);
-    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, confirm: true, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
+    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, setup_future_usage: "off_session", confirm: true, return_url: "https://example.invalid/qa", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
     createdPaymentIntents.push(initialIntent.id);
     const initialGiftRef = qa.collection("giftRequests").doc(recurringGiftId);
     await initialGiftRef.set(marker(fixture, {giftRequestId: recurringGiftId, giftId: recurringGiftId, senderId: senderUid, senderEmail, giftMode: "gift_myself", selfGiftFrequency: "monthly", grossGiftBudget: 50, cardAmount: 50, remainingStripeAmountGbp: 50, deliveryDate: Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)), deliveryTimeWindow: "09:00-12:00", recurringConsentAccepted: true, recurringConsentCopy: "QA consent", paidAt: Timestamp.now(), paymentStatus: "paid", recipientPrivacy: "protected", recipientValueVisibility: "sender_only"}));
