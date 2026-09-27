@@ -77,9 +77,10 @@ test("successful renewal only accepts paid invoice state", () => {
 });
 
 test("renewal invoice validation requires exact subscription, amount, currency, billing reason and period", () => {
-  const series = {stripeSubscriptionId: "sub_1", budgetGbp: 50};
+  const series = {stripeSubscriptionId: "sub_1", stripeCustomerId: "cus_1", budgetGbp: 50};
   const invoice = {
     subscription: "sub_1",
+    customer: "cus_1",
     amount_paid: 5000,
     currency: "gbp",
     billing_reason: "subscription_cycle",
@@ -87,7 +88,7 @@ test("renewal invoice validation requires exact subscription, amount, currency, 
     period_end: 2000,
   };
   assert.equal(recurring.validateRenewalInvoice(invoice, series).valid, true);
-  for (const [field, value] of [["subscription", "sub_other"], ["amount_paid", 4999], ["currency", "usd"], ["billing_reason", "manual"], ["period_end", 999]]) {
+  for (const [field, value] of [["subscription", "sub_other"], ["customer", "cus_other"], ["amount_paid", 4999], ["currency", "usd"], ["billing_reason", "manual"], ["period_end", 999]]) {
     assert.equal(recurring.validateRenewalInvoice({...invoice, [field]: value}, series).valid, false, field);
   }
 });
@@ -170,6 +171,7 @@ test("recurring setup uses an idempotent Stripe Product for subscription pricing
 test("renewal validation binds the paid invoice to the approved recurring series", () => {
   const series = {
     stripeSubscriptionId: "sub_expected",
+    stripeCustomerId: "cus_expected",
     budgetGbp: 50,
     currentPeriodEnd: 1800000000000,
     status: "active",
@@ -180,6 +182,7 @@ test("renewal validation binds the paid invoice to the approved recurring series
     invoice: {
       id: "in_correct",
       subscription: "sub_expected",
+      customer: "cus_expected",
       status: "paid",
       currency: "gbp",
       amount_paid: 5000,
@@ -191,6 +194,7 @@ test("renewal validation binds the paid invoice to the approved recurring series
   assert.deepEqual(correct, {ok: true, failures: []});
   for (const [field, value, expected] of [
     ["subscription", "sub_other", "subscription_mismatch"],
+    ["customer", "cus_other", "customer_mismatch"],
     ["currency", "usd", "currency_mismatch"],
     ["amount_paid", 4999, "amount_mismatch"],
     ["billing_reason", "manual", "billing_reason_mismatch"],
@@ -199,6 +203,7 @@ test("renewal validation binds the paid invoice to the approved recurring series
     const invoice = {
       id: `in_${field}`,
       subscription: "sub_expected",
+      customer: "cus_expected",
       status: "paid",
       currency: "gbp",
       amount_paid: 5000,

@@ -227,9 +227,14 @@ async function run() {
     const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, setup_future_usage: "off_session", confirm: true, return_url: "https://example.invalid/qa", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
     createdPaymentIntents.push(initialIntent.id);
     const initialGiftRef = qa.collection("giftRequests").doc(recurringGiftId);
-    await initialGiftRef.set(marker(fixture, {giftRequestId: recurringGiftId, giftId: recurringGiftId, senderId: senderUid, senderEmail, giftMode: "gift_myself", selfGiftFrequency: "monthly", grossGiftBudget: 50, cardAmount: 50, remainingStripeAmountGbp: 50, deliveryDate: Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)), deliveryTimeWindow: "09:00-12:00", recurringConsentAccepted: true, recurringConsentCopy: "QA consent", paidAt: Timestamp.now(), paymentStatus: "paid", recipientPrivacy: "protected", recipientValueVisibility: "sender_only"}));
+    await initialGiftRef.set(marker(fixture, {giftRequestId: recurringGiftId, giftId: recurringGiftId, senderId: senderUid, senderEmail, giftMode: "gift_myself", selfGiftFrequency: "every_4_months", grossGiftBudget: 50, cardAmount: 50, remainingStripeAmountGbp: 50, deliveryDate: Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)), deliveryTimeWindow: "09:00-12:00", recurringConsentAccepted: true, recurringConsentCopy: "QA consent", paidAt: Timestamp.now(), paymentStatus: "paid", recipientPrivacy: "protected", recipientValueVisibility: "sender_only"}));
     const recurring = await giftRecurring.ensureSeriesAfterInitialPayment({db: qa, stripe, giftId: recurringGiftId, payment: {customerId: recurringCustomer.id, paymentIntentId: initialIntent.id, paymentMethodId: recurringPaymentMethod.id}, eventId: `qa-${initialIntent.id}`});
     createdSubscriptions.push(recurring.stripeSubscriptionId);
+    const recurringSubscription = await stripe.subscriptions.retrieve(recurring.stripeSubscriptionId, {expand: ["items.data.price"]});
+    const recurringPrice = recurringSubscription.items.data[0].price;
+    if (recurringPrice.recurring.interval !== "month" || recurringPrice.recurring.interval_count !== 4 || recurringPrice.unit_amount !== 5000 || recurringPrice.currency !== GBP) {
+      throw new Error("Every-4-month Self Gift subscription interval or full card budget is wrong.");
+    }
     const recurringCreatedEvent = await waitForEvent(stripe, {type: "customer.subscription.created", objectId: recurring.stripeSubscriptionId});
     const recurringCreatedDelivery = await deliver(processor, stripe, recurringCreatedEvent, webhookSecret);
     const canceledSubscription = await stripe.subscriptions.update(recurring.stripeSubscriptionId, {cancel_at_period_end: true}, {idempotencyKey: `${fixture.id}:cancel`});
@@ -238,7 +243,7 @@ async function run() {
     const series = (await qa.collection("giftRecurringSeries").doc(recurring.seriesId).get()).data();
     const queuedAfterCancel = await qa.collection("emailQueue").get();
     if (!series || series.cancellationState !== "pending_period_end" || queuedAfterCancel.size !== 1) throw new Error("Recurring cancellation/idempotency failed.");
-    result.recurring = {status: "PASS", subscriptionId: recurring.stripeSubscriptionId, createdEventId: recurringCreatedEvent.id, canceledEventId: recurringCanceledEvent.id, cancellationState: series.cancellationState, emailQueueCountAfterReplay: queuedAfterCancel.size, createdDelivery: recurringCreatedDelivery, canceledDelivery: recurringCanceledDelivery};
+    result.recurring = {status: "PASS", frequency: "every_4_months", interval: recurringPrice.recurring.interval, intervalCount: recurringPrice.recurring.interval_count, renewalAmountPence: recurringPrice.unit_amount, subscriptionId: recurring.stripeSubscriptionId, createdEventId: recurringCreatedEvent.id, canceledEventId: recurringCanceledEvent.id, cancellationState: series.cancellationState, emailQueueCountAfterReplay: queuedAfterCancel.size, createdDelivery: recurringCreatedDelivery, canceledDelivery: recurringCanceledDelivery};
 
     const failureSeriesId = `qa_failure_series_${fixture.id}`;
     const failureCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}});

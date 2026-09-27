@@ -38,6 +38,7 @@ function validateRenewalInvoice(invoice = {}, series = {}) {
   const expectedSubscriptionId = text(series.stripeSubscriptionId);
   const subscriptionId = invoiceSubscriptionId(invoice);
   if (!expectedSubscriptionId || subscriptionId !== expectedSubscriptionId) reasons.push("subscription_mismatch");
+  if (text(series.stripeCustomerId) && text(typeof invoice.customer === "object" ? invoice.customer && invoice.customer.id : invoice.customer) !== text(series.stripeCustomerId)) reasons.push("customer_mismatch");
   if (text(invoice.currency).toLowerCase() !== "gbp") reasons.push("currency_mismatch");
   const amountPaid = Number(invoice.amount_paid == null ? invoice.total : invoice.amount_paid);
   const expectedAmount = Math.round(money(series.budgetGbp) * 100);
