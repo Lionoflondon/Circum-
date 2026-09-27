@@ -293,6 +293,7 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
 }
 
 async function payBusinessInvoiceAtomically({
+  db = getFirestore(),
   businessId,
   invoiceId,
   cardAmount = 0,
@@ -303,7 +304,6 @@ async function payBusinessInvoiceAtomically({
   paymentId = null,
   metadata = {},
 }) {
-  const db = getFirestore();
   const paymentRef = db.collection("businessInvoicePayments")
       .doc(paymentId || stripeSessionId || `roth_${invoiceId}`);
   const invoiceRef = db.collection("businessInvoices").doc(invoiceId);
