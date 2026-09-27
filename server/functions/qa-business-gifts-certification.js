@@ -199,13 +199,16 @@ async function run() {
     createdSessions.push(failedOrderDoc.checkoutSessionId);
     const failedReservation = (await qa.collection("businessCheckoutReservations").doc(failedOrderDoc.checkoutReservationId).get()).data();
     const failedMetadata = {type: "business_invoice_payment", businessId, invoiceId: failedOrder.invoiceId, checkoutReservationId: failedOrderDoc.checkoutReservationId, qaFixtureId: fixture.id};
+    const declinedCard = {type: "card", card: {number: "4000000000000002", exp_month: 12, exp_year: 2034, cvc: "123"}};
+    const failedIntentDraft = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method_types: ["card"], metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
     let failedIntent;
     try {
-    failedIntent = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method_data: {type: "card", card: {number: "4000000000000002", exp_month: 12, exp_year: 2034, cvc: "123"}}, confirm: true, return_url: "https://example.invalid/qa", metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
+      failedIntent = await stripe.paymentIntents.confirm(failedIntentDraft.id, {payment_method_data: declinedCard, return_url: "https://example.invalid/qa"}, {idempotencyKey: `${fixture.id}:failed-confirm`});
     } catch (error) {
-      failedIntent = error.payment_intent;
+      failedIntent = error.payment_intent || await stripe.paymentIntents.retrieve(failedIntentDraft.id);
     }
     if (typeof failedIntent === "string") failedIntent = await stripe.paymentIntents.retrieve(failedIntent);
+    createdPaymentIntents.push(failedIntent.id);
     if (!failedIntent || !failedIntent.id) throw new Error("Stripe TEST declined PaymentIntent missing.");
     const failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
     const failedDelivery = await deliver(processor, stripe, failedEvent, webhookSecret);
