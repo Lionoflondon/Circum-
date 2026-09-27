@@ -194,7 +194,15 @@ async function run() {
     result.businessCard = {status: "PASS", ...card, orderIdempotentReplay: true};
 
     const invoiceOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, {businessId, idempotencyKey: `${fixture.id}:invoice`, budgetGbp: 50, paymentRail: "invoice", ...recipient("INVOICE")}, context, {db: qa});
-    const invoiceCheckout = await businessPayments._qaHandlers.createBusinessInvoiceCheckoutHandler(stripe, {invoiceId: invoiceOrder.invoiceId, businessId, returnUrl: "https://example.invalid/qa"}, context, {db: qa});
+    let invoiceId = invoiceOrder.invoiceId;
+    let invoiceSnap = await qa.collection("businessInvoices").doc(invoiceId).get();
+    if (!invoiceSnap.exists) {
+      const candidates = await qa.collection("businessInvoices").where("businessGiftOrderId", "==", invoiceOrder.orderId).limit(1).get();
+      if (candidates.empty) throw new Error(`QA Business Gift invoice missing for ${invoiceOrder.orderId}.`);
+      invoiceId = candidates.docs[0].id;
+      invoiceSnap = candidates.docs[0];
+    }
+    const invoiceCheckout = await businessPayments._qaHandlers.createBusinessInvoiceCheckoutHandler(stripe, {invoiceId, businessId, returnUrl: "https://example.invalid/qa"}, context, {db: qa});
     const invoiceWithCheckout = {...invoiceOrder, checkoutSessionId: invoiceCheckout.sessionId, checkoutReservationId: invoiceCheckout.checkoutReservationId};
     createdSessions.push(invoiceCheckout.sessionId);
     const invoice = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: invoiceWithCheckout, label: "Business invoice", createdPaymentIntents});
