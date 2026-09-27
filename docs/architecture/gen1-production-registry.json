@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 278,
-  "gen1ExportCount": 276,
+  "sourceExportCount": 279,
+  "gen1ExportCount": 277,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -4861,6 +4861,37 @@
       "cloudRunReplacement": [
         "cloud-run-rider-delivery-authority.js",
         "cloud-run-rider-delivery-authority.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "getGiftRecurringPreview",
+      "sourceFile": "server/functions/index.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "giftRecurringCallables.preview",
+      "callers": [
+        "lib/app/sender_mobile/gift_payment_view.dart",
+        "server/functions/cloud-run-payment-family.js",
+        "test/sender_mobile/gift_native_payment_contract_test.dart"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": true,
+      "secrets": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET"
+      ],
+      "firestoreCollections": [],
+      "externalProviders": [
+        "Stripe"
+      ],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [
+        "cloud-run-payment-family.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
