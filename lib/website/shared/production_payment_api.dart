@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,7 +30,8 @@ class WebsiteProductionPaymentApi {
   }) async {
     final origin = _origins[family];
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-    if (origin == null || token == null) {
+    final appCheckToken = await FirebaseAppCheck.instance.getToken();
+    if (origin == null || token == null || appCheckToken == null || appCheckToken.isEmpty) {
       throw StateError('payment_auth_required');
     }
     final response = await http
@@ -37,6 +40,7 @@ class WebsiteProductionPaymentApi {
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
+            'X-Firebase-AppCheck': appCheckToken,
           },
           body: jsonEncode(callable ? {'data': data} : data),
         )
