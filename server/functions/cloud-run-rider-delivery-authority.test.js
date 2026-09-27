@@ -22,6 +22,9 @@ test("routes expose only the migrated Rider delivery authorities", () => {
   assert.equal(routeName("/getNearbyRequests"), "getNearbyRequests");
   assert.equal(routeName("/updateDeliveryTrackingStatus"), "updateDeliveryTrackingStatus");
   assert.equal(routeName("/v1/callable/updateDeliveryLiveLocation"), "updateDeliveryLiveLocation");
+  assert.equal(routeName("/goOnline"), "goOnline");
+  assert.equal(routeName("/goOffline"), "goOffline");
+  assert.equal(routeName("/v1/callable/updateRiderPresence"), "updateRiderPresence");
   assert.equal(routeName("/unreviewedRiderMutation"), null);
 });
 
@@ -35,6 +38,9 @@ test("handlers preserve the canonical completion and offer cores", async () => {
   assert.equal(typeof handlers.getAvailableRequests, "function");
   assert.equal(typeof handlers.updateDeliveryTrackingStatus, "function");
   assert.equal(typeof handlers.updateDeliveryLiveLocation, "function");
+  assert.equal(typeof handlers.goOnline, "function");
+  assert.equal(typeof handlers.goOffline, "function");
+  assert.equal(typeof handlers.updateRiderPresence, "function");
   const server = createServer({dependenciesFactory: () => ({
     verifyIdToken: async (token) => token === "valid-id" ? {uid: "rider-1"} : Promise.reject(Object.assign(new Error("Bad ID token."), {code: "auth/invalid-id-token"})),
     verifyAppCheck: async (token) => token === "valid-app" ? {appId: "rider-app"} : Promise.reject(Object.assign(new Error("Bad App Check token."), {code: "app-check/invalid-argument"})),
@@ -81,6 +87,44 @@ test("handlers preserve the canonical completion and offer cores", async () => {
   assert.deepEqual(calls[3][1], {deliveryId: "qa_public_1", phase: "pickup"});
   assert.deepEqual(calls[4][1], {deliveryId: "delivery-1", action: "start_heading_to_pickup"});
   assert.equal(calls[5][2].auth.uid, "rider-1");
+});
+
+test("presence transport has exact CORS and security boundaries", async () => {
+  const server = createServer({
+    allowedOrigins: new Set(["https://circum-rider-2797c.web.app"]),
+    dependenciesFactory: () => ({
+      verifyIdToken: async () => ({uid: "rider-1"}),
+      verifyAppCheck: async () => ({appId: "rider-app"}),
+      handlers: {goOnline: async () => ({success: true, onlineIntent: true})},
+    }),
+  });
+  await listen(server, async (url) => {
+    let response = await fetch(`${url}/goOnline`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://circum-rider-2797c.web.app",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,x-firebase-appcheck,content-type",
+      },
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("access-control-allow-origin"), "https://circum-rider-2797c.web.app");
+
+    response = await fetch(`${url}/goOnline`, {
+      method: "OPTIONS",
+      headers: {origin: "https://evil.example", "access-control-request-method": "POST"},
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+
+    response = await fetch(`${url}/goOnline`, {
+      method: "POST",
+      headers: {origin: "https://circum-rider-2797c.web.app", "content-type": "application/json"},
+      body: JSON.stringify({data: {}}),
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("access-control-allow-origin"), "https://circum-rider-2797c.web.app");
+  });
 });
 
 test("health is lazy and reports immutable source provenance", async () => {
