@@ -63,7 +63,10 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
     if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}});
     if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "JSON required."}});
     let size = 0; const chunks = [];
-    request.on("data", (chunk) => {size += chunk.length; if (size <= MAX_BODY_BYTES) chunks.push(chunk);});
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size <= MAX_BODY_BYTES) chunks.push(chunk);
+    });
     request.on("end", async () => {
       if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}});
       try {
