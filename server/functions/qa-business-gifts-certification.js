@@ -181,6 +181,7 @@ async function run() {
   const createdSubscriptions = [];
   const createdCustomers = [];
   const createdPaymentMethods = [];
+  const createdProducts = [];
   try {
     const cardRequest = {businessId, idempotencyKey: `${fixture.id}:card`, budgetGbp: 50, paymentRail: "card", ...recipient("CARD")};
     const cardOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, cardRequest, context, {db: qa});
@@ -236,10 +237,12 @@ async function run() {
     const failureSeriesId = `qa_failure_series_${fixture.id}`;
     const failureCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}});
     createdCustomers.push(failureCustomer.id);
+    const failureProduct = await stripe.products.create({name: "CIRCUM QA recurring failure", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}}, {idempotencyKey: `${fixture.id}:failure-product`});
+    createdProducts.push(failureProduct.id);
     const failurePaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_chargeDeclined"}}, {idempotencyKey: `${fixture.id}:recurring-failure-payment-method`});
     await stripe.paymentMethods.attach(failurePaymentMethod.id, {customer: failureCustomer.id});
     createdPaymentMethods.push(failurePaymentMethod.id);
-    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product_data: {name: "CIRCUM QA recurring failure"}, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: failurePaymentMethod.id, metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
+    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product: failureProduct.id, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: failurePaymentMethod.id, metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
     createdSubscriptions.push(failureSubscription.id);
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
     if (failureSubscription.latest_invoice) {
@@ -296,6 +299,13 @@ async function run() {
     for (const customerId of createdCustomers.filter(Boolean)) {
       try {
         await stripe.customers.del(customerId);
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
+    }
+    for (const productId of createdProducts.filter(Boolean)) {
+      try {
+        await stripe.products.del(productId);
       } catch (_) {
         // Cleanup is best effort and bounded to this fixture's test object.
       }
