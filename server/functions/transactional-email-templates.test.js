@@ -98,6 +98,24 @@ test("Rider financial copy is state-safe and uses the Info sender family", () =>
   assert.match(templates.riderPayoutUpdate({status: "failed"}).text, /not assumed that funds were lost or returned/i);
 });
 
+test("Rider templates inherit the CIRCUM welcome visual system", () => {
+  const copies = [
+    templates.riderDecision({decision: "approved"}),
+    templates.riderDocumentActionRequired({documentLabel: "your driving licence"}),
+    templates.riderEarningsUpdate({kind: "delivery", amount: 18, reference: "delivery-1"}),
+    templates.riderConnectUpdate({status: "enabled"}),
+    templates.riderPayoutUpdate({status: "failed", reference: "withdrawal-1"}),
+  ];
+  for (const copy of copies) {
+    assert.match(copy.html, /background:#edf3ff/);
+    assert.match(copy.html, /circum_wordmark\.png/);
+    assert.match(copy.html, /RIDER UPDATE/);
+    assert.match(copy.html, /Every journey starts with a clear next step/);
+    assert.match(copy.html, /Terms of Service/);
+    assert.match(copy.html, /Privacy Policy/);
+  }
+});
+
 test("technical URLs and email addresses are explicit forbidden-test exclusions", () => {
   const copy = templates.giftStory({role: "sender", storyUrl: "https://circumuk.com/story/private_token"});
   assert.match(copy.html, /private_token/);
