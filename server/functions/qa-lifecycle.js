@@ -52,7 +52,8 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
     const path = ref.path;
     if (typeof path !== "string" || !path.startsWith(prefix)) fail("Cross-fixture access denied.", "permission-denied");
     const parts = path.slice(prefix.length).split("/");
-    const flatRecord = parts.length === 2 && collections.has(parts[0]) && id(parts[1]);
+    const qaWalletEmail = parts.length === 2 && parts[0] === "wallets" && collections.has("wallets") && /^[A-Za-z0-9._%+-]{1,100}@[A-Za-z0-9.-]{1,100}$/.test(parts[1]) && parts[1].length <= 128;
+    const flatRecord = parts.length === 2 && collections.has(parts[0]) && (id(parts[1]) || qaWalletEmail);
     const businessWalletTransaction = parts.length === 4 && parts[0] === "business_wallets" && parts[2] === "transactions" && collections.has(parts[0]) && id(parts[1]) && nestedRecordId(parts[3]);
     if (!flatRecord && !businessWalletTransaction) fail(`Invalid QA record path: ${path}`, "permission-denied");
   }
@@ -84,7 +85,7 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
  guard(ref); return tx.update(ref, clean({...data, ...markers}));
 },
         delete: (ref) => {
- guard(ref); if (!["offers", "deliveryEvidence"].includes(ref.parent.id)) fail("QA audit and finance records are immutable."); return tx.delete(ref);
+ guard(ref); if (!["offers", "deliveryEvidence", "giftPaymentDrafts"].includes(ref.parent.id)) fail("QA audit and finance records are immutable."); return tx.delete(ref);
 },
       });
       });

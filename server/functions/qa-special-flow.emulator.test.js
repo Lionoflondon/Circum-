@@ -19,6 +19,7 @@ test("private canonical Health/Business checkouts are retry-safe, root-isolated 
   process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-only";
   t.mock.method(global, "fetch", async () => ({ok: true, json: async () => ({routes: [{distanceMeters: 1609.344}]})}));
   t.mock.method(getAuth(), "verifyIdToken", async () => ({uid: "qa_sender", email: "qa@example.invalid"}));
+  t.mock.method(getAuth(), "getUserByEmail", async (email) => ({uid: "qa_sender", email}));
   const objects = new Map(); const intents = new Map(); const refunds = []; let calls = 0;
   const stripe = {checkout: {sessions: {
     async create(params, options) {
@@ -48,7 +49,7 @@ const row = {id: `re_test_${refunds.length + 1}`, livemode: false, status: "succ
 return {data: refunds.filter((r) => r.payment_intent === id)};
 },
   }};
-  const env = {GCLOUD_PROJECT: "circum-2797c", STRIPE_MODE: "TEST", STRIPE_SECRET_KEY: "sk_test_fixture", QA_LIFECYCLE_ENABLED: "true", QA_LIFECYCLE_ALLOWLIST: JSON.stringify({operators: ["qa_operator"], senders: ["qa_sender"], riders: ["qa_rider"]})};
+  const env = {GCLOUD_PROJECT: "circum-2797c", STRIPE_MODE: "TEST", STRIPE_SECRET_KEY: "sk_test_fixture", CIRCUM_QA_STRIPE_SECRET_KEY: "sk_test_fixture", QA_LIFECYCLE_ENABLED: "true", QA_LIFECYCLE_ALLOWLIST: JSON.stringify({operators: ["qa_operator"], senders: ["qa_sender"], riders: ["qa_rider"]})};
   const f = require("./qa-special-flow")._test.factory({db, env, stripe});
   const ctx = {auth: {uid: "qa_sender", token: {email: "qa@example.invalid"}}, app: {appId: "emulator"}, rawRequest: {headers: {authorization: "Bearer test"}}};
   await assert.rejects(f.handle({action: "prepare", requestId: "lifecycle_a"}, {...ctx, app: undefined}), /attestation/);
@@ -56,6 +57,16 @@ return {data: refunds.filter((r) => r.payment_intent === id)};
   const operator = {...ctx, auth: {uid: "qa_operator", token: {email: "operator@example.invalid"}}};
   const {fixtureId} = await f.handle({action: "prepare", requestId: "lifecycle_a"}, operator);
   const handle = (data, actor = ctx) => f.handle({...data, fixtureId}, actor);
+  await assert.rejects(handle({action: "roth", scenario: "prepare"}, operator), /QA Sender required/);
+  assert.equal((await handle({action: "roth", scenario: "prepare"})).balance, 57);
+  assert.equal((await handle({action: "roth", scenario: "roth_only"})).rothApplied, 50);
+  assert.equal((await handle({action: "roth", scenario: "roth_only"})).idempotent, true);
+  assert.equal((await handle({action: "roth", scenario: "split"})).cardAmount, 43);
+  assert.equal((await handle({action: "roth", scenario: "split"})).idempotent, true);
+  assert.equal((await handle({action: "roth", scenario: "insufficient"})).balanceUnchanged, true);
+  assert.equal((await handle({action: "roth", scenario: "read"})).completedDebits, 2);
+  assert.equal((await handle({action: "roth", scenario: "reconcile"})).errors, 0);
+  assert.equal((await handle({action: "roth", scenario: "reconcile"})).effective, 0);
   const fixture = (await db.doc(`qaSpecialFlowFixtures/${fixtureId}`).get()).data();
   assert.equal(fixture.senderId, "qa_sender");
   assert.equal((await db.doc(`qaSpecialFlowFixtures/${fixtureId}/businessAccounts/qa_business`).get()).data().ownerUid, "qa_sender");

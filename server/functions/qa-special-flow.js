@@ -11,9 +11,10 @@ const health = require("./health-plus")._qaHandlers;
 const business = require("./business-payments")._qaHandlers;
 const businessReservations = require("./business-checkout-reservations");
 const movement = require("./movement-ledger");
+const qaRoth = require("./qa-roth-certification");
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
-const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "paymentArtifactReconciliations", "deliveryRequests"];
+const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests"];
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
@@ -53,10 +54,10 @@ function factory({db, env = process.env, stripe}) {
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -95,6 +96,17 @@ function factory({db, env = process.env, stripe}) {
     try {
       const qa = scopedDatabase(db, fixture, false, ROOT, COLLECTIONS); const testStripe = provider(fixture);
       const actual = paidProvider(fixture, qa);
+      if (data.action === "roth") {
+        if (!qaRoth.ACTIONS.has(data.scenario)) fail("Unknown QA Roth scenario.", "invalid-argument");
+        const email = context.auth.token.email;
+        if (typeof email !== "string" || !email.includes("@")) fail("QA Sender email is required.", "permission-denied");
+        const args = {qa, fixture, uid, email, stripe: actual};
+        if (data.scenario === "prepare") return qaRoth.seed(args);
+        if (data.scenario === "roth_only" || data.scenario === "split") return qaRoth.pay({...args, type: data.scenario});
+        if (data.scenario === "insufficient") return qaRoth.insufficient(args);
+        if (data.scenario === "read") return qaRoth.read(args);
+        return qaRoth.reconcile(args);
+      }
       if (data.action === "health_finalize") {
         const payments = await qa.collection("healthPlusPayments").limit(2).get();
         if (payments.size !== 1) fail("One canonical Health+ checkout is required.");
