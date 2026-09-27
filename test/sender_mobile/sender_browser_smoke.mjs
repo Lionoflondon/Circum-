@@ -30,9 +30,10 @@ try {
     const pane = document.querySelector('flt-glass-pane');
     const canvas = document.querySelector('canvas') ||
       pane?.shadowRoot?.querySelector('flt-scene-host canvas, canvas');
-    return /We're having trouble starting Circum|Circum could not start|Circum is taking longer than expected to start/.test(text) ||
-      (canvas && canvas.width > 0 && canvas.height > 0);
-  }, null, { timeout: 30000 });
+    const htmlFallback = /Circum is taking longer than expected to start/.test(text);
+    const recovery = /We're having trouble starting Circum|Circum could not start/.test(text);
+    return !htmlFallback && (recovery || (canvas && canvas.width > 0 && canvas.height > 0));
+  }, null, { timeout: 60000 });
 
   const visibleText = await page.locator('body').innerText();
   const renderSurface = await page.evaluate(() => {
