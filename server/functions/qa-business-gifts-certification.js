@@ -182,6 +182,7 @@ async function run() {
   const createdCustomers = [];
   const createdPaymentMethods = [];
   const createdProducts = [];
+  let recurringClockId = null;
   try {
     const cardRequest = {businessId, idempotencyKey: `${fixture.id}:card`, budgetGbp: 50, paymentRail: "card", ...recipient("CARD")};
     const cardOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, cardRequest, context, {db: qa});
@@ -219,7 +220,9 @@ async function run() {
     result.webhookFailure = {status: "PASS", paymentIntentId: failedEvent.data.object.id, eventId: failedEvent.id, eventSynthetic: !failedEvent.created || failedEvent.id.startsWith("evt_qa_"), replayed: true, paymentOutcome: paymentAfterFailure.paymentOutcome, emailQueueCountBeforeRecurring: businessFailureEmailQueue.size, delivery: failedDelivery};
 
     const recurringGiftId = `qa_initial_${fixture.id}`;
-    const recurringCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring"}});
+    const recurringClock = await stripe.testHelpers.testClocks.create({frozen_time: Math.floor(Date.now() / 1000), name: `CIRCUM QA ${fixture.id}`});
+    recurringClockId = recurringClock.id;
+    const recurringCustomer = await stripe.customers.create({email: senderEmail, test_clock: recurringClockId, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring"}});
     createdCustomers.push(recurringCustomer.id);
     const recurringPaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_visa"}}, {idempotencyKey: `${fixture.id}:recurring-payment-method`});
     await stripe.paymentMethods.attach(recurringPaymentMethod.id, {customer: recurringCustomer.id});
@@ -237,6 +240,30 @@ async function run() {
     }
     const recurringCreatedEvent = await waitForEvent(stripe, {type: "customer.subscription.created", objectId: recurring.stripeSubscriptionId});
     const recurringCreatedDelivery = await deliver(processor, stripe, recurringCreatedEvent, webhookSecret);
+    const beforeRenewal = await qa.collection("giftRequests").get();
+    const expectedRenewalAt = Number((await qa.collection("giftRecurringSeries").doc(recurring.seriesId).get()).data().nextExpectedRenewalAt);
+    if (!Number.isFinite(expectedRenewalAt) || expectedRenewalAt <= Date.now()) throw new Error("QA recurring renewal date is invalid.");
+    await stripe.testHelpers.testClocks.advance(recurringClockId, {frozen_time: Math.floor(expectedRenewalAt / 1000) + 120});
+    let advancedClock;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      advancedClock = await stripe.testHelpers.testClocks.retrieve(recurringClockId);
+      if (advancedClock.status === "ready") break;
+      await wait(2000);
+    }
+    if (!advancedClock || advancedClock.status !== "ready") throw new Error("Stripe TEST renewal clock did not settle.");
+    const renewalInvoices = await stripe.invoices.list({subscription: recurring.stripeSubscriptionId, limit: 20});
+    const paidRenewal = (renewalInvoices.data || []).find((invoice) => invoice.billing_reason === "subscription_cycle" && invoice.status === "paid" && invoice.amount_paid === 5000);
+    if (!paidRenewal || paidRenewal.livemode !== false || paidRenewal.customer !== recurringCustomer.id) throw new Error("Authoritative Stripe TEST paid renewal invoice missing.");
+    const paidRenewalEvent = await waitForEvent(stripe, {type: "invoice.paid", objectId: paidRenewal.id});
+    const renewalPayload = Buffer.from(JSON.stringify(paidRenewalEvent));
+    const renewalSignature = stripe.webhooks.generateTestHeaderString({payload: renewalPayload.toString(), secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
+    const renewalDeliveries = await Promise.all(Array.from({length: 20}, (_unused, index) => processor({rawBody: renewalPayload, signature: renewalSignature, requestId: `qa-renewal-${paidRenewalEvent.id}-${index}`})));
+    if (renewalDeliveries.some((delivery) => delivery.status !== 200)) throw new Error("20-way paid renewal replay was not acknowledged.");
+    const afterRenewal = await qa.collection("giftRequests").get();
+    const renewalGifts = afterRenewal.docs.filter((doc) => doc.data().stripeInvoiceId === paidRenewal.id);
+    const renewalGift = renewalGifts[0] && renewalGifts[0].data();
+    if (afterRenewal.size !== beforeRenewal.size + 1 || renewalGifts.length !== 1 || renewalGift.paymentStatus !== "paid" || renewalGift.rothApplied !== 0 || renewalGift.cardAmount !== 50 || renewalGift.initialGiftId !== recurringGiftId) throw new Error("Paid renewal did not create exactly one card-funded new Gift.");
+    result.recurringPaidRenewal = {status: "PASS", invoiceId: paidRenewal.id, giftId: renewalGifts[0].id, concurrentReplays: renewalDeliveries.length, effectiveNewGifts: afterRenewal.size - beforeRenewal.size, rothApplied: renewalGift.rothApplied, cardAmount: renewalGift.cardAmount};
     const canceledSubscription = await stripe.subscriptions.update(recurring.stripeSubscriptionId, {cancel_at_period_end: true}, {idempotencyKey: `${fixture.id}:cancel`});
     const recurringCanceledEvent = await waitForEvent(stripe, {type: "customer.subscription.updated", objectId: canceledSubscription.id, predicate: (_event, object) => object.cancel_at_period_end === true});
     const recurringCanceledDelivery = await deliver(processor, stripe, recurringCanceledEvent, webhookSecret);
@@ -310,6 +337,13 @@ async function run() {
         await stripe.products.del(productId);
       } catch (_) {
         // Cleanup is best effort and bounded to this fixture's test object.
+      }
+    }
+    if (recurringClockId) {
+      try {
+        await stripe.testHelpers.testClocks.del(recurringClockId);
+      } catch (_) {
+        // The fixture is archived even if Stripe retains its TEST clock for audit.
       }
     }
     await rootDb.collection(ROOT).doc(fixture.id).set({archived: true, closedAt: Timestamp.now(), cleanup: "stripe_test_objects_refunded_or_canceled"}, {merge: true});
