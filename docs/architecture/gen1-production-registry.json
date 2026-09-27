@@ -2594,7 +2594,8 @@
       "generation": "Gen 1",
       "productionPurpose": "giftRecurringCallables.cancel",
       "callers": [
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -3059,6 +3060,7 @@
         "lib/app/sender_mobile/gift_payment_view.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
+        "server/functions/production-functions-inventory.json",
         "test/sender_mobile/business_gift_flow_contract_test.dart"
       ],
       "criticality": "review-required",
@@ -3266,7 +3268,8 @@
       "generation": "Gen 1",
       "productionPurpose": "giftRecurringCallables.portal",
       "callers": [
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -4383,7 +4386,6 @@
         "server/functions/cloud-run-sender-drafts.test.js",
         "server/functions/firestore-sender-bootstrap-rules.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
-        "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
         "test/sender_account_bootstrap_api_test.dart",
@@ -4884,6 +4886,7 @@
       "callers": [
         "lib/app/sender_mobile/gift_payment_view.dart",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/production-functions-inventory.json",
         "test/sender_mobile/gift_native_payment_contract_test.dart"
       ],
       "criticality": "review-required",
@@ -4913,7 +4916,8 @@
       "generation": "Gen 1",
       "productionPurpose": "giftRecurringCallables.status",
       "callers": [
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -6090,8 +6094,7 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryCompletedEvent.onDeliveryCompletedEvent",
       "callers": [
-        "docs/BACKEND_REMEDIATION_2026-09-21.md",
-        "server/functions/production-functions-inventory.json"
+        "docs/BACKEND_REMEDIATION_2026-09-21.md"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": false,
@@ -6347,6 +6350,7 @@
       "callers": [
         "docs/GIFTS_EMAIL_FAILURE_CERTIFICATION.md",
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/production-functions-inventory.json",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
       "criticality": "P0/P1-review-required",
@@ -6392,7 +6396,9 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "movementLedger.onGiftMovementWrite",
-      "callers": [],
+      "callers": [
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6870,7 +6876,8 @@
       "callers": [
         "server/functions/cloud-run-payment-schedulers.js",
         "server/functions/cloud-run-payment-schedulers.test.js",
-        "server/functions/health-plus-operations.test.js"
+        "server/functions/health-plus-operations.test.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": false,
@@ -7049,7 +7056,8 @@
       "callers": [
         "docs/GIFTS_PLATFORM_CURRENT_MATRIX.md",
         "server/functions/cloud-run-payment-schedulers.js",
-        "server/functions/cloud-run-payment-schedulers.test.js"
+        "server/functions/cloud-run-payment-schedulers.test.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -7093,7 +7101,8 @@
         "scripts/scoped_functions_deploy_list.test.js",
         "server/functions/cloud-run-payment-schedulers.js",
         "server/functions/cloud-run-payment-schedulers.test.js",
-        "server/functions/dispatch-completion-spine.test.js"
+        "server/functions/dispatch-completion-spine.test.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -10379,7 +10388,6 @@
         "server/functions/check-functions-inventory.test.js",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
-        "server/functions/production-functions-inventory.json",
         "server/functions/rider-account.js",
         "server/functions/rider-account.test.js",
         "server/functions/rider-onboarding-flow.emulator.test.js",
