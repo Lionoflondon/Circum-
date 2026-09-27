@@ -31,6 +31,14 @@ canonical state is `accepted`, or `en_route_to_pickup` while it is
 `navigating_to_pickup`. The seed is transactional and idempotent; an out-of-order
 or different-owner request is rejected. It cannot change a production delivery.
 
+The QA Rider may call `publish_location` with synthetic GPS coordinates. This
+bounded adapter uses the production location validator and authoritative phase
+normalizer, ignores a supplied status, and writes only a scoped QA
+`activeDeliveries` projection. A delayed older coordinate cannot regress a
+newer projection; terminal deliveries reject updates. This adapter verifies the
+shared policy, while direct public `updateDeliveryLiveLocation` transport still
+needs its own runtime probe.
+
 The service is deployed with internal ingress and without the public
 unauthenticated invoker binding. The existing managed QA exports remain
 untouched; no broad Functions deployment is part of this surface.

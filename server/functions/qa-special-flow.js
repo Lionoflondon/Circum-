@@ -50,7 +50,7 @@ function factory({db, env = process.env, stripe}) {
   }
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
-    const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
+    const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
     if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
@@ -75,7 +75,8 @@ function factory({db, env = process.env, stripe}) {
     const fixture = (await ref.get()).data(); assertFixture(fixture, lists, uid, Date.now(), data.action === "cleanup");
     if (data.action === "cleanup") return cleanup(fixture);
     if (lifecycleActions.has(data.action)) {
-      const payload = {...data, fixtureId: fixture.lifecycleFixtureId}; delete payload.profileOverride; delete payload.status;
+      const payload = {...data, fixtureId: fixture.lifecycleFixtureId}; delete payload.profileOverride;
+      if (data.action !== "publish_location") delete payload.status;
       return lifecycle.handle(payload, context);
     }
     const leaseId = require("node:crypto").randomUUID();

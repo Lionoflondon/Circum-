@@ -11,7 +11,7 @@ const payout = require("./rider-payout-allocation");
 const refunds = require("./tip-refunds");
 const tipAuthority = require("./ratings-tipping")._test;
 const ROOT = "qaLifecycleFixtures";
-const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "notifications", "audit", "qaProviderObjects"]);
+const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "notifications", "activeDeliveries", "audit", "qaProviderObjects"]);
 const id = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
@@ -130,7 +130,7 @@ function factory({db, env = process.env, providerFactory = simulatedProvider}) {
     const stripe = providerFactory(qa, fixture);
     if (action === "read") {
       const result = {};
-      const names = uid === fixture.riderId ? ["deliveryRequests", "chats", "notifications", "publishedDriverRatings", "driverPerformanceMetrics", "riderEarnings", "riderWalletTransactions", "riderPayoutAllocations"] : ["deliveryRequests", "chats", "notifications", "driverRatings", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "walletTransactions", "riderPayoutAllocations", "supportCases", "audit"];
+      const names = uid === fixture.riderId ? ["deliveryRequests", "chats", "notifications", "activeDeliveries", "publishedDriverRatings", "driverPerformanceMetrics", "riderEarnings", "riderWalletTransactions", "riderPayoutAllocations"] : ["deliveryRequests", "chats", "notifications", "activeDeliveries", "driverRatings", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "walletTransactions", "riderPayoutAllocations", "supportCases", "audit"];
       for (const name of names) {
 result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
         const row = {id: d.id, ...d.data()};
@@ -291,6 +291,31 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
           normalizedStatus: expected, at: FieldValue.serverTimestamp(),
         });
         return {idempotent: false, normalizedStatus: expected};
+      });
+    }
+    if (action === "publish_location") {
+      requireActor(fixture, uid, "riderId");
+      const location = lifecycle.validatedLiveLocation(data.location);
+      if (location.mocked) fail("Trusted QA GPS is required.");
+      return qa.runTransaction(async (tx) => {
+        const projectionRef = qa.collection("activeDeliveries").doc(deliveryId);
+        const [snap, previous] = await tx.getAll(ref, projectionRef);
+        const current = snap.data();
+        if (!current || current.riderId !== uid || current.paymentStatus !== "paid") fail("Only the assigned QA Rider can publish location.", "permission-denied");
+        const status = lifecycle.authoritativeLiveLocationStatus(current);
+        if (!status) fail("Live tracking is not active for this QA delivery.");
+        const previousData = previous.data() || {};
+        const staleCoordinate = Number(previousData.clientRecordedAt || 0) > location.clientRecordedAt;
+        if (previousData.status === status && staleCoordinate) return {status, staleCoordinate: true, statusFromClientIgnored: true};
+        tx.set(projectionRef, {
+          deliveryId, riderId: uid, status,
+          latitude: staleCoordinate ? previousData.latitude : location.latitude,
+          longitude: staleCoordinate ? previousData.longitude : location.longitude,
+          accuracyMeters: staleCoordinate ? previousData.accuracyMeters : location.accuracy,
+          clientRecordedAt: staleCoordinate ? previousData.clientRecordedAt : location.clientRecordedAt,
+          updatedAt: FieldValue.serverTimestamp(), source: "qa_live_location_projection",
+        }, {merge: true});
+        return {status, staleCoordinate, statusFromClientIgnored: true};
       });
     }
     if (action === "accept" || tracking.RIDER_ACTION_TO_STATUS[action]) {
