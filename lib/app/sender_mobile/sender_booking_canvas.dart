@@ -904,6 +904,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       }
 
       final suggestion = AddressEngine.cleanSuggestion(result.suggestion!);
+      final coordinate = await provider
+          .fetchPlaceDetails(suggestion.placeId, languageCode)
+          .timeout(const Duration(seconds: 8));
       final bloc = context.read<SendPackageBloc>();
       final coordinateCompleter = Completer<PlaceCoordinate>();
       if (pickup) {
@@ -913,6 +916,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             pickupLocationSubAddress: suggestion.subText,
             placeId: suggestion.placeId,
             lang: languageCode,
+            resolvedCoordinate: coordinate,
             coordinateCompleter: coordinateCompleter,
           ),
         );
@@ -923,12 +927,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             destinationLocationSubAddress: suggestion.subText,
             placeId: suggestion.placeId,
             lang: languageCode,
+            resolvedCoordinate: coordinate,
             coordinateCompleter: coordinateCompleter,
           ),
         );
       }
-      final coordinate = await coordinateCompleter.future
-          .timeout(const Duration(seconds: 10));
+      final resolvedCoordinate =
+          await coordinateCompleter.future.timeout(const Duration(seconds: 10));
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
@@ -941,15 +946,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final nextDraft = pickup
           ? _draft.copyWith(
               pickupAddress: suggestion.description,
-              pickupLat: coordinate.lat,
-              pickupLng: coordinate.lng,
+              pickupLat: resolvedCoordinate.lat,
+              pickupLng: resolvedCoordinate.lng,
               dropoffAddress: '',
               clearDropoffCoordinate: true,
             )
           : _draft.copyWith(
               dropoffAddress: suggestion.description,
-              dropoffLat: coordinate.lat,
-              dropoffLng: coordinate.lng,
+              dropoffLat: resolvedCoordinate.lat,
+              dropoffLng: resolvedCoordinate.lng,
             );
       setState(() {
         _addressResolving = false;
@@ -992,6 +997,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     });
 
     try {
+      final coordinate = await PlaceApiProvider(
+        'visible-${pickup ? 'pickup' : 'dropoff'}-$generation',
+      ).fetchPlaceDetails(cleanSuggestion.placeId, languageCode).timeout(
+            const Duration(seconds: 8),
+          );
       final bloc = context.read<SendPackageBloc>();
       final coordinateCompleter = Completer<PlaceCoordinate>();
       if (pickup) {
@@ -1001,6 +1011,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             pickupLocationSubAddress: cleanSuggestion.subText,
             placeId: cleanSuggestion.placeId,
             lang: languageCode,
+            resolvedCoordinate: coordinate,
             coordinateCompleter: coordinateCompleter,
           ),
         );
@@ -1011,12 +1022,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             destinationLocationSubAddress: cleanSuggestion.subText,
             placeId: cleanSuggestion.placeId,
             lang: languageCode,
+            resolvedCoordinate: coordinate,
             coordinateCompleter: coordinateCompleter,
           ),
         );
       }
-      final coordinate = await coordinateCompleter.future
-          .timeout(const Duration(seconds: 10));
+      final resolvedCoordinate =
+          await coordinateCompleter.future.timeout(const Duration(seconds: 10));
       if (!mounted ||
           generation != _addressResolutionGeneration ||
           controller.text.trim() != typedSnapshot) {
@@ -1029,15 +1041,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final nextDraft = pickup
           ? _draft.copyWith(
               pickupAddress: cleanSuggestion.description,
-              pickupLat: coordinate.lat,
-              pickupLng: coordinate.lng,
+              pickupLat: resolvedCoordinate.lat,
+              pickupLng: resolvedCoordinate.lng,
               dropoffAddress: '',
               clearDropoffCoordinate: true,
             )
           : _draft.copyWith(
               dropoffAddress: cleanSuggestion.description,
-              dropoffLat: coordinate.lat,
-              dropoffLng: coordinate.lng,
+              dropoffLat: resolvedCoordinate.lat,
+              dropoffLng: resolvedCoordinate.lng,
             );
       setState(() {
         _addressResolving = false;

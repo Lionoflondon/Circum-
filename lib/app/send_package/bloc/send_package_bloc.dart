@@ -99,23 +99,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
   StreamSubscription? _activeDeliverySubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-  _activeDeliveryLiveLocationSubscription;
+      _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
   final Map<bool, String> _addressSessionTokens = {};
   final Map<bool, int> _addressSearchRequestIds = {true: 0, false: 0};
   late final RouteRequestCoordinator<Map<String, dynamic>> _routeRequests =
       RouteRequestCoordinator<Map<String, dynamic>>(
-        load: (origin, destination) => _callableMap('getSenderRoutePreview', {
-          'origin': {
-            'latitude': origin.latitude,
-            'longitude': origin.longitude,
-          },
-          'destination': {
-            'latitude': destination.latitude,
-            'longitude': destination.longitude,
-          },
-        }).timeout(_senderRoutePreviewTimeout),
-      );
+    load: (origin, destination) => _callableMap('getSenderRoutePreview', {
+      'origin': {
+        'latitude': origin.latitude,
+        'longitude': origin.longitude,
+      },
+      'destination': {
+        'latitude': destination.latitude,
+        'longitude': destination.longitude,
+      },
+    }).timeout(_senderRoutePreviewTimeout),
+  );
   int _routeRequestId = 0;
   int _quoteRequestId = 0;
   int _irisRequestId = 0;
@@ -228,31 +228,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final normalized = requestId.trim();
     if (normalized.isEmpty) return;
     _activeDeliverySubscription?.cancel();
-    _activeDeliverySubscription = db
-        .collection('deliveryRequests')
-        .doc(normalized)
-        .snapshots()
-        .listen(
-          (doc) {
-            if (!doc.exists) {
-              unawaited(_resolveActiveDeliveryByRequestId(normalized));
-              return;
-            }
-            _listenToActiveDeliveryLiveLocation(doc.id);
-            add(
-              ActiveDeliverySnapshotChanged(
-                data: {...?doc.data(), 'id': doc.id},
-              ),
-            );
-          },
-          onError: (Object error) {
-            add(
-              ActiveDeliverySnapshotChanged(
-                errorMessage: 'Unable to load live delivery status.',
-              ),
-            );
-          },
+    _activeDeliverySubscription =
+        db.collection('deliveryRequests').doc(normalized).snapshots().listen(
+      (doc) {
+        if (!doc.exists) {
+          unawaited(_resolveActiveDeliveryByRequestId(normalized));
+          return;
+        }
+        _listenToActiveDeliveryLiveLocation(doc.id);
+        add(
+          ActiveDeliverySnapshotChanged(
+            data: {...?doc.data(), 'id': doc.id},
+          ),
         );
+      },
+      onError: (Object error) {
+        add(
+          ActiveDeliverySnapshotChanged(
+            errorMessage: 'Unable to load live delivery status.',
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _resolveActiveDeliveryByRequestId(String requestId) async {
@@ -269,10 +266,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         return;
       }
       await Future<void>.delayed(const Duration(seconds: 3));
-      final retryDoc = await db
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .get();
+      final retryDoc =
+          await db.collection('deliveryRequests').doc(requestId).get();
       if (retryDoc.exists) {
         _listenToActiveDeliveryLiveLocation(retryDoc.id);
         add(
@@ -323,8 +318,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         .doc(normalized)
         .snapshots()
         .listen((snapshot) {
-          add(ActiveDeliveryLiveLocationChanged(data: snapshot.data()));
-        });
+      add(ActiveDeliveryLiveLocationChanged(data: snapshot.data()));
+    });
   }
 
   void _handleCheckForPushToken(
@@ -519,9 +514,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        sessionToken,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.resolvedCoordinate ??
+          await PlaceApiProvider(sessionToken)
+              .fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[true] != selectionRequestId) {
         event.coordinateCompleter?.completeError(
           StateError('Address selection was superseded.'),
@@ -617,9 +612,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        sessionToken,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.resolvedCoordinate ??
+          await PlaceApiProvider(sessionToken)
+              .fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[false] != selectionRequestId) {
         event.coordinateCompleter?.completeError(
           StateError('Address selection was superseded.'),
@@ -676,14 +671,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
           final sourceIcon =
               await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-                'assets/svg/source_marker.svg',
-                const Size(27, 43),
-              );
+            'assets/svg/source_marker.svg',
+            const Size(27, 43),
+          );
           final destinationIcon =
               await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-                'assets/svg/destination_marker.svg',
-                const Size(27, 43),
-              );
+            'assets/svg/destination_marker.svg',
+            const Size(27, 43),
+          );
           if (routeRequestId != _routeRequestId) return;
 
           final Marker sourceMarker = Marker(
@@ -894,9 +889,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         parcelWeightKg: quickWeight,
         irisResult: quickEstimate,
-        itemDescription: itemDescription.trim().isEmpty
-            ? null
-            : itemDescription,
+        itemDescription:
+            itemDescription.trim().isEmpty ? null : itemDescription,
         isIrisResolving: quickEstimate != null,
         irisWeightReviewMessage: quickEstimate == null
             ? ''
@@ -996,9 +990,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ].where((value) => value.trim().isNotEmpty).join(' · ');
     emit(
       state.copyWith(
-        itemDescription: itemDescription.trim().isEmpty
-            ? null
-            : itemDescription,
+        itemDescription:
+            itemDescription.trim().isEmpty ? null : itemDescription,
         clearItemDescription: itemDescription.trim().isEmpty,
         isIrisResolving: true,
         irisErrorMessage: '',
@@ -1020,12 +1013,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
     try {
       final payload = <String, dynamic>{
-        'description': itemDescription.trim().isEmpty
-            ? event.itemName
-            : itemDescription,
-        'packageDescription': itemDescription.trim().isEmpty
-            ? event.itemName
-            : itemDescription,
+        'description':
+            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
+        'packageDescription':
+            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
         'declaredWeightText': event.declaredWeightText,
         'weight': event.declaredWeightText,
         'quantity': event.quantity,
@@ -1128,8 +1119,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     try {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendPackage')
-          .call({'requestId': requestId})
-          .timeout(_senderCallableTimeout);
+          .call({'requestId': requestId}).timeout(_senderCallableTimeout);
     } catch (error) {
       debugPrint(
         'sendPackage dispatch after $context failed; delivery remains created: $error',
@@ -1189,9 +1179,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             'longitude': dropoffLongitude,
           },
         },
-        'weightKg': state.parcelWeightKg <= 0
-            ? event.weightKg
-            : state.parcelWeightKg,
+        'weightKg':
+            state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
         'parcel': {
           'itemName': event.itemName,
           'description': event.description,
@@ -1389,8 +1378,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               paymentUid,
             ).timeout(_senderCallableTimeout)
           : null;
-      final stablePayload =
-          savedPayment != null && savedPayment['quoteId'] == paymentQuoteId
+      final stablePayload = savedPayment != null &&
+              savedPayment['quoteId'] == paymentQuoteId
           ? Map<String, dynamic>.from(savedPayment['deliveryPayload'] as Map)
           : event.deliveryPayload;
       final data = await _callableMap('createSenderPaymentSession', {
@@ -1433,28 +1422,24 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           senderPaymentSessionId: '${data['paymentSessionId'] ?? ''}',
           senderPaymentStatus:
               '${data['paymentStatus'] ?? data['status'] ?? ''}',
-          senderPaymentClientSecret: data['clientSecret'] == null
-              ? null
-              : '${data['clientSecret']}',
+          senderPaymentClientSecret:
+              data['clientSecret'] == null ? null : '${data['clientSecret']}',
           senderPaymentIntentId: data['stripePaymentIntentId'] == null
               ? null
               : '${data['stripePaymentIntentId']}',
-          senderPaymentCustomerId: data['customerId'] == null
-              ? null
-              : '${data['customerId']}',
+          senderPaymentCustomerId:
+              data['customerId'] == null ? null : '${data['customerId']}',
           senderPaymentEphemeralKeySecret: data['ephemeralKeySecret'] == null
               ? null
               : '${data['ephemeralKeySecret']}',
-          senderPaymentCheckoutUrl: data['checkoutUrl'] == null
-              ? null
-              : '${data['checkoutUrl']}',
+          senderPaymentCheckoutUrl:
+              data['checkoutUrl'] == null ? null : '${data['checkoutUrl']}',
           senderCreatedRequestId: requestId.isEmpty ? null : requestId,
           deliveryStatus: requestId.isEmpty
               ? state.deliveryStatus
               : DeliveryStatus.deliveryConfirmed,
-          deliveryRequestStatus: requestId.isEmpty
-              ? state.deliveryRequestStatus
-              : 'requested',
+          deliveryRequestStatus:
+              requestId.isEmpty ? state.deliveryRequestStatus : 'requested',
           senderPaymentError: '',
         ),
       );
@@ -1523,8 +1508,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           : null;
       final stablePayload =
           saved != null && saved['quoteId'] == state.senderQuoteId
-          ? Map<String, dynamic>.from(saved['deliveryPayload'] as Map)
-          : event.bookingPayload;
+              ? Map<String, dynamic>.from(saved['deliveryPayload'] as Map)
+              : event.bookingPayload;
       final payload = {
         ...stablePayload,
         'quoteId': state.senderQuoteId,
@@ -1740,9 +1725,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       add(SetMapCameraStatus(status: MapCameraStatus.showRiderLocation));
 
       if (state.deliveryData == null) {
-        final documentReference = db
-            .collection('deliveryRequests')
-            .doc(user!.uid);
+        final documentReference =
+            db.collection('deliveryRequests').doc(user!.uid);
 
         final docResponse = await documentReference.get();
 
@@ -1818,16 +1802,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         dropoffDetails: dropoffDetails,
         pickupLocation:
             '${data['pickupDetails']?['address'] ?? state.pickupLocation ?? ''}'
-                .trim()
-                .isEmpty
-            ? state.pickupLocation
-            : '${data['pickupDetails']?['address']}',
+                    .trim()
+                    .isEmpty
+                ? state.pickupLocation
+                : '${data['pickupDetails']?['address']}',
         destinationLocation:
             '${data['dropoffDetails']?['address'] ?? state.destinationLocation ?? ''}'
-                .trim()
-                .isEmpty
-            ? state.destinationLocation
-            : '${data['dropoffDetails']?['address']}',
+                    .trim()
+                    .isEmpty
+                ? state.destinationLocation
+                : '${data['dropoffDetails']?['address']}',
         price: (data['price'] as num?)?.toDouble() ?? state.price,
         currency: '${data['currency'] ?? state.currency}',
         deliveryData: deliveryData,
@@ -2031,12 +2015,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         return;
       }
       add(WatchActiveDelivery(requestId: activeRequest));
-      final userDocumentReference = db
-          .collection('deliveryRequests')
-          .doc(user.uid);
-      final requestDocumentReference = db
-          .collection('deliveryRequests')
-          .doc(activeRequest);
+      final userDocumentReference =
+          db.collection('deliveryRequests').doc(user.uid);
+      final requestDocumentReference =
+          db.collection('deliveryRequests').doc(activeRequest);
 
       var docResponse = await userDocumentReference.get();
       if (!docResponse.exists) {
@@ -2094,9 +2076,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         }
 
         final normalizedRequestStatus = requestStatus.toLowerCase().replaceAll(
-          '-',
-          '_',
-        );
+              '-',
+              '_',
+            );
         if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
           await prefs.remove('activeRequest');
         }
@@ -2222,8 +2204,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
     final prefs = await SharedPreferences.getInstance();
-    final activeRequest =
-        prefs.getString('activeRequest') ??
+    final activeRequest = prefs.getString('activeRequest') ??
         '${state.activeDeliveryData['id'] ?? ''}';
     if (activeRequest.trim().isEmpty) {
       emit(
