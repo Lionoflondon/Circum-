@@ -52,7 +52,7 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
     const parts = path.slice(prefix.length).split("/");
     const flatRecord = parts.length === 2 && collections.has(parts[0]) && id(parts[1]);
     const businessWalletTransaction = parts.length === 4 && parts[0] === "business_wallets" && parts[2] === "transactions" && collections.has(parts[0]) && id(parts[1]) && id(parts[3]);
-    if (!flatRecord && !businessWalletTransaction) fail("Invalid QA record path.", "permission-denied");
+    if (!flatRecord && !businessWalletTransaction) fail(`Invalid QA record path: ${path}`, "permission-denied");
   }
   return {
     collection(name) {

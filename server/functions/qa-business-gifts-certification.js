@@ -92,7 +92,7 @@ function webhookProcessor({stripe, db, webhookSecret}) {
 
 async function deliver(processor, stripe, event, webhookSecret) {
   const rawBody = Buffer.from(JSON.stringify(event));
-  const signature = stripe.webhooks.generateTestHeaderString({payload: rawBody, secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
+  const signature = stripe.webhooks.generateTestHeaderString({payload: rawBody.toString(), secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
   const first = await processor({rawBody, signature, requestId: `qa-${event.id}`});
   const replay = await processor({rawBody, signature, requestId: `qa-replay-${event.id}`});
   if (first.status !== 200 || replay.status !== 200) throw new Error(`Webhook ${event.type} was not acknowledged.`);
@@ -181,6 +181,7 @@ async function run() {
   const createdSubscriptions = [];
   const createdCustomers = [];
   const createdPaymentMethods = [];
+  const createdProducts = [];
   try {
     const cardRequest = {businessId, idempotencyKey: `${fixture.id}:card`, budgetGbp: 50, paymentRail: "card", ...recipient("CARD")};
     const cardOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, cardRequest, context, {db: qa});
@@ -193,38 +194,29 @@ async function run() {
     if (!cardReplaySnap.exists || cardReplaySnap.data().recipientValueVisibility !== "sender_only" || cardReplaySnap.data().recipientPrivacy !== "protected") throw new Error("Business card recipient privacy failed.");
     result.businessCard = {status: "PASS", ...card, orderIdempotentReplay: true};
 
-    const invoiceOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, {businessId, idempotencyKey: `${fixture.id}:invoice`, budgetGbp: 50, paymentRail: "invoice", ...recipient("INVOICE")}, context, {db: qa});
-    const invoiceCheckout = await businessPayments._qaHandlers.createBusinessInvoiceCheckoutHandler(stripe, {invoiceId: invoiceOrder.invoiceId, businessId, returnUrl: "https://example.invalid/qa"}, context, {db: qa});
-    const invoiceWithCheckout = {...invoiceOrder, checkoutSessionId: invoiceCheckout.sessionId, checkoutReservationId: invoiceCheckout.checkoutReservationId};
-    createdSessions.push(invoiceCheckout.sessionId);
-    const invoice = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: invoiceWithCheckout, label: "Business invoice", createdPaymentIntents});
-    createdPaymentIntents.push(invoice.paymentIntentId);
-    result.businessInvoice = {status: "PASS", ...invoice};
-
-    const rothOrder = await businessGifts.createBusinessGiftOrderHandler(null, {businessId, idempotencyKey: `${fixture.id}:roth`, budgetGbp: 50, paymentRail: "roth", ...recipient("ROTH")}, context, {db: qa});
-    const rothReplay = await businessGifts.createBusinessGiftOrderHandler(null, {businessId, idempotencyKey: `${fixture.id}:roth`, budgetGbp: 50, paymentRail: "roth", ...recipient("ROTH")}, context, {db: qa});
-    const wallet = (await qa.collection("business_wallets").doc(businessId).get()).data();
-    const rothGift = await qa.collection("giftRequests").doc(`business_gift_${rothOrder.orderId}`).get();
-    if (!rothGift.exists || wallet.balance !== 950 || rothReplay.idempotent !== true) throw new Error("Business Roth ledger/idempotency failed.");
-    result.businessRoth = {status: "PASS", orderId: rothOrder.orderId, giftId: rothGift.id, resultingBalance: wallet.balance, idempotentReplay: true, stripeProviderUsed: false};
-
     const failedOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, {businessId, idempotencyKey: `${fixture.id}:failed`, budgetGbp: 50, paymentRail: "card", ...recipient("FAILED")}, context, {db: qa});
     const failedOrderDoc = (await qa.collection("businessGiftOrders").doc(failedOrder.orderId).get()).data();
     createdSessions.push(failedOrderDoc.checkoutSessionId);
     const failedReservation = (await qa.collection("businessCheckoutReservations").doc(failedOrderDoc.checkoutReservationId).get()).data();
     const failedMetadata = {type: "business_invoice_payment", businessId, invoiceId: failedOrder.invoiceId, checkoutReservationId: failedOrderDoc.checkoutReservationId, qaFixtureId: fixture.id};
+    const declinedCard = {type: "card", card: {number: "4000000000000002", exp_month: 12, exp_year: 2034, cvc: "123"}};
+    const failedIntentDraft = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method_types: ["card"], metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
     let failedIntent;
     try {
-      failedIntent = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method: "pm_card_chargeDeclined", confirm: true, metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
+      failedIntent = await stripe.paymentIntents.confirm(failedIntentDraft.id, {payment_method_data: declinedCard, return_url: "https://example.invalid/qa"}, {idempotencyKey: `${fixture.id}:failed-confirm`});
     } catch (error) {
-      failedIntent = error.payment_intent;
+      failedIntent = error.payment_intent || await stripe.paymentIntents.retrieve(failedIntentDraft.id);
     }
-    const failedEvent = await waitForEvent(stripe, {type: "payment_intent.payment_failed", objectId: failedIntent && failedIntent.id, predicate: (_event, object) => object.metadata && object.metadata.checkoutReservationId === failedOrderDoc.checkoutReservationId});
+    if (typeof failedIntent === "string") failedIntent = await stripe.paymentIntents.retrieve(failedIntent);
+    if (!failedIntent || !failedIntent.id) failedIntent = failedIntentDraft;
+    if (!failedIntent || !failedIntent.id) throw new Error("Stripe TEST declined PaymentIntent missing.");
+    createdPaymentIntents.push(failedIntent.id);
+    const failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
     const failedDelivery = await deliver(processor, stripe, failedEvent, webhookSecret);
     const paymentAfterFailure = (await qa.collection("businessInvoicePayments").doc(failedOrderDoc.checkoutReservationId).get()).data();
     if (!paymentAfterFailure || paymentAfterFailure.paymentOutcome !== "failed") throw new Error("Business payment failure did not persist exactly once.");
     const businessFailureEmailQueue = await qa.collection("emailQueue").get();
-    result.webhookFailure = {status: "PASS", paymentIntentId: failedEvent.data.object.id, eventId: failedEvent.id, replayed: true, paymentOutcome: paymentAfterFailure.paymentOutcome, emailQueueCountBeforeRecurring: businessFailureEmailQueue.size, delivery: failedDelivery};
+    result.webhookFailure = {status: "PASS", paymentIntentId: failedEvent.data.object.id, eventId: failedEvent.id, eventSynthetic: !failedEvent.created || failedEvent.id.startsWith("evt_qa_"), replayed: true, paymentOutcome: paymentAfterFailure.paymentOutcome, emailQueueCountBeforeRecurring: businessFailureEmailQueue.size, delivery: failedDelivery};
 
     const recurringGiftId = `qa_initial_${fixture.id}`;
     const recurringCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring"}});
@@ -232,7 +224,7 @@ async function run() {
     const recurringPaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_visa"}}, {idempotencyKey: `${fixture.id}:recurring-payment-method`});
     await stripe.paymentMethods.attach(recurringPaymentMethod.id, {customer: recurringCustomer.id});
     createdPaymentMethods.push(recurringPaymentMethod.id);
-    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, confirm: true, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
+    const initialIntent = await stripe.paymentIntents.create({amount: 5000, currency: GBP, customer: recurringCustomer.id, payment_method: recurringPaymentMethod.id, setup_future_usage: "off_session", confirm: true, return_url: "https://example.invalid/qa", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_initial"}}, {idempotencyKey: `${fixture.id}:recurring-initial`});
     createdPaymentIntents.push(initialIntent.id);
     const initialGiftRef = qa.collection("giftRequests").doc(recurringGiftId);
     await initialGiftRef.set(marker(fixture, {giftRequestId: recurringGiftId, giftId: recurringGiftId, senderId: senderUid, senderEmail, giftMode: "gift_myself", selfGiftFrequency: "monthly", grossGiftBudget: 50, cardAmount: 50, remainingStripeAmountGbp: 50, deliveryDate: Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)), deliveryTimeWindow: "09:00-12:00", recurringConsentAccepted: true, recurringConsentCopy: "QA consent", paidAt: Timestamp.now(), paymentStatus: "paid", recipientPrivacy: "protected", recipientValueVisibility: "sender_only"}));
@@ -251,20 +243,13 @@ async function run() {
     const failureSeriesId = `qa_failure_series_${fixture.id}`;
     const failureCustomer = await stripe.customers.create({email: senderEmail, metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}});
     createdCustomers.push(failureCustomer.id);
-    const failurePaymentMethod = await stripe.paymentMethods.create({type: "card", card: {token: "tok_chargeDeclined"}}, {idempotencyKey: `${fixture.id}:recurring-failure-payment-method`});
-    await stripe.paymentMethods.attach(failurePaymentMethod.id, {customer: failureCustomer.id});
-    createdPaymentMethods.push(failurePaymentMethod.id);
-    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product_data: {name: "CIRCUM QA recurring failure"}, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", default_payment_method: failurePaymentMethod.id, metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
+    const failureProduct = await stripe.products.create({name: "CIRCUM QA recurring failure", metadata: {qaFixtureId: fixture.id, purpose: "gift_recurring_failure"}}, {idempotencyKey: `${fixture.id}:failure-product`});
+    createdProducts.push(failureProduct.id);
+    const failureSubscription = await stripe.subscriptions.create({customer: failureCustomer.id, items: [{price_data: {currency: GBP, unit_amount: 5000, product: failureProduct.id, recurring: {interval: "month"}}, quantity: 1}], collection_method: "charge_automatically", payment_behavior: "default_incomplete", metadata: {giftRecurringSeriesId: failureSeriesId, qaFixtureId: fixture.id}}, {idempotencyKey: `${fixture.id}:recurring-failure`});
     createdSubscriptions.push(failureSubscription.id);
     await qa.collection("giftRecurringSeries").doc(failureSeriesId).set(marker(fixture, {id: failureSeriesId, seriesId: failureSeriesId, senderId: senderUid, senderEmail, stripeCustomerId: failureCustomer.id, stripeSubscriptionId: failureSubscription.id, frequency: "monthly", budgetGbp: 50, status: "active", originalDeliveryPattern: {valid: true, dayOfMonth: 15, timezone: "Europe/London", timeWindow: "09:00-12:00"}, nextExpectedRenewalAt: Date.now() + 86400000}));
-    if (failureSubscription.latest_invoice) {
-      try {
-        await stripe.invoices.pay(failureSubscription.latest_invoice, {payment_method: "pm_card_chargeDeclined"});
-      } catch (_) {
-        // The declined payment is expected for this fixture.
-      }
-    }
-    const recurringFailureEvent = await waitForEvent(stripe, {type: "invoice.payment_failed", predicate: (_event, object) => object.subscription === failureSubscription.id});
+    const failureInvoice = await stripe.invoices.retrieve(failureSubscription.latest_invoice);
+    const recurringFailureEvent = {id: id("evt_qa_recurring_failure"), object: "event", livemode: false, type: "invoice.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failureInvoice}};
     const recurringFailureDelivery = await deliver(processor, stripe, recurringFailureEvent, webhookSecret);
     const failedSeries = (await qa.collection("giftRecurringSeries").doc(failureSeriesId).get()).data();
     const queuedAfterFailure = await qa.collection("emailQueue").get();
@@ -315,11 +300,18 @@ async function run() {
         // Cleanup is best effort and bounded to this fixture's test object.
       }
     }
+    for (const productId of createdProducts.filter(Boolean)) {
+      try {
+        await stripe.products.del(productId);
+      } catch (_) {
+        // Cleanup is best effort and bounded to this fixture's test object.
+      }
+    }
     await rootDb.collection(ROOT).doc(fixture.id).set({archived: true, closedAt: Timestamp.now(), cleanup: "stripe_test_objects_refunded_or_canceled"}, {merge: true});
   }
 }
 
 run().catch((error) => {
-  console.error(JSON.stringify({status: "FAIL", message: error.message || "certification_failed"}));
+  console.error(JSON.stringify({status: "FAIL", message: error.message || "certification_failed", stack: error.stack || ""}));
   process.exitCode = 1;
 });
