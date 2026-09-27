@@ -16,6 +16,7 @@ test("Business Gifts certification runner is test-only and isolated", () => {
   assert.match(source, /checkoutEventSynthetic: true/);
   assert.match(source, /paymentIntents\.create/);
   assert.match(source, /payment_method_types: \["card"\]/);
+  assert.match(source, /generateTestHeaderString\(\{payload: rawBody/);
   assert.doesNotMatch(source, /process\.env\.STRIPE_SECRET_KEY/);
   assert.doesNotMatch(source, /STRIPE_LIVE_MODE_ENABLED/);
 });

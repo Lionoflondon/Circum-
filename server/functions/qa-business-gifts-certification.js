@@ -92,7 +92,7 @@ function webhookProcessor({stripe, db, webhookSecret}) {
 
 async function deliver(processor, stripe, event, webhookSecret) {
   const rawBody = Buffer.from(JSON.stringify(event));
-  const signature = stripe.webhooks.generateTestHeaderString(rawBody.toString(), {secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
+  const signature = stripe.webhooks.generateTestHeaderString({payload: rawBody, secret: webhookSecret, timestamp: Math.floor(Date.now() / 1000)});
   const first = await processor({rawBody, signature, requestId: `qa-${event.id}`});
   const replay = await processor({rawBody, signature, requestId: `qa-replay-${event.id}`});
   if (first.status !== 200 || replay.status !== 200) throw new Error(`Webhook ${event.type} was not acknowledged.`);
