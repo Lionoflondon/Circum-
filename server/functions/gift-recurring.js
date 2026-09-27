@@ -44,8 +44,7 @@ function validateRenewalInvoice(invoice = {}, series = {}) {
   const expectedAmount = Math.round(money(series.budgetGbp) * 100);
   if (!Number.isFinite(amountPaid) || amountPaid !== expectedAmount) reasons.push("amount_mismatch");
   if (text(invoice.billing_reason).toLowerCase() !== "subscription_cycle") reasons.push("billing_reason_mismatch");
-  const periodStart = Number(invoice.period_start);
-  const periodEnd = Number(invoice.period_end);
+  const {start: periodStart, end: periodEnd} = core.invoiceBillingPeriod(invoice);
   if (!Number.isFinite(periodStart) || !Number.isFinite(periodEnd) || periodStart <= 0 || periodEnd <= periodStart) reasons.push("billing_period_mismatch");
   return {valid: reasons.length === 0, reasons, expectedAmount, expectedSubscriptionId};
 }
@@ -332,8 +331,9 @@ async function fulfillPaidRenewal({db = getFirestore(), seriesRefValue, invoice,
       transaction.set(seriesRefValue, {status: "action_required", lastActionRequiredRenewalId: renewalId, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       return {handled: true, actionRequired: true, renewalId};
     }
-    const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000) : null;
-    const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000) : null;
+    const {start: invoicePeriodStart, end: invoicePeriodEnd} = core.invoiceBillingPeriod(invoice);
+    const periodStart = invoicePeriodStart ? new Date(invoicePeriodStart * 1000) : null;
+    const periodEnd = invoicePeriodEnd ? new Date(invoicePeriodEnd * 1000) : null;
     const delivery = core.deliveryDateForPeriod({pattern: series.originalDeliveryPattern, periodStart, periodEnd, now: new Date()});
     if (delivery.status !== "scheduled") {
       transaction.create(claim, {renewalId, seriesId: seriesSnap.id, invoiceId: invoice.id, status: "action_required", reason: delivery.reason, eventId, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
@@ -350,8 +350,8 @@ async function fulfillPaidRenewal({db = getFirestore(), seriesRefValue, invoice,
       status: "fulfilled",
       giftId,
       eventId,
-      periodStart: invoice.period_start ? invoice.period_start * 1000 : null,
-      periodEnd: invoice.period_end ? invoice.period_end * 1000 : null,
+      periodStart: invoicePeriodStart ? invoicePeriodStart * 1000 : null,
+      periodEnd: invoicePeriodEnd ? invoicePeriodEnd * 1000 : null,
       createdAt: now,
       updatedAt: now,
     });
@@ -384,7 +384,7 @@ async function fulfillPaidRenewal({db = getFirestore(), seriesRefValue, invoice,
       status: "active",
       lastFulfilledInvoiceId: invoice.id,
       lastFulfilledRenewalId: renewalId,
-      lastFulfilledPeriodEnd: invoice.period_end ? invoice.period_end * 1000 : null,
+      lastFulfilledPeriodEnd: invoicePeriodEnd ? invoicePeriodEnd * 1000 : null,
       nextExpectedRenewalAt: core.nextRenewalAt({from: periodEnd || new Date(), frequency: series.frequency}),
       updatedAt: now,
     }, {merge: true});
