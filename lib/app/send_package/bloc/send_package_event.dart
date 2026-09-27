@@ -21,11 +21,14 @@ class SetPickupAddress extends SendPackageEvent {
   String pickupLocationSubAddress;
   String placeId;
   String lang;
+  final Completer<PlaceCoordinate>? coordinateCompleter;
+
   SetPickupAddress({
     required this.val,
     required this.pickupLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.coordinateCompleter,
   });
 }
 
@@ -34,11 +37,14 @@ class SetDeliveryAddress extends SendPackageEvent {
   String destinationLocationSubAddress;
   String placeId;
   String lang;
+  final Completer<PlaceCoordinate>? coordinateCompleter;
+
   SetDeliveryAddress({
     required this.val,
     required this.destinationLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.coordinateCompleter,
   });
 }
 

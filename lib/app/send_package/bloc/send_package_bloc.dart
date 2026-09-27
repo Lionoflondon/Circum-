@@ -522,12 +522,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate coordinate = await PlaceApiProvider(
         sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
-      if (_addressSelectionRequestIds[true] != selectionRequestId) return;
+      if (_addressSelectionRequestIds[true] != selectionRequestId) {
+        event.coordinateCompleter?.completeError(
+          StateError('Address selection was superseded.'),
+        );
+        return;
+      }
 
       // The provider coordinate is authoritative for the booking flow. Do not
       // make address selection wait for optional reverse geocoding, which is
       // unavailable or slow in some web runtimes.
       emit(state.copyWith(pickupCoordinate: coordinate));
+      event.coordinateCompleter?.complete(coordinate);
       if (state.desinationCoordinate != null) {
         add(CalculateDistance());
       }
@@ -549,6 +555,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
       }
     } catch (error, stackTrace) {
+      if (event.coordinateCompleter != null &&
+          !event.coordinateCompleter!.isCompleted) {
+        event.coordinateCompleter!.completeError(error, stackTrace);
+      }
       _logRecoverableSenderError(
         'pickup place details lookup failed',
         error,
@@ -610,12 +620,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate coordinate = await PlaceApiProvider(
         sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
-      if (_addressSelectionRequestIds[false] != selectionRequestId) return;
+      if (_addressSelectionRequestIds[false] != selectionRequestId) {
+        event.coordinateCompleter?.completeError(
+          StateError('Address selection was superseded.'),
+        );
+        return;
+      }
 
       // Publish the provider coordinate before optional reverse geocoding so
       // browser address selection can continue on the canonical Place Details
       // result even when the platform geocoder is unavailable.
       emit(state.copyWith(desinationCoordinate: coordinate));
+      event.coordinateCompleter?.complete(coordinate);
       if (state.pickupCoordinate != null) {
         add(CalculateDistance());
       }
@@ -737,6 +753,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
       }
     } catch (error, stackTrace) {
+      if (event.coordinateCompleter != null &&
+          !event.coordinateCompleter!.isCompleted) {
+        event.coordinateCompleter!.completeError(error, stackTrace);
+      }
       if (routeRequestId != _routeRequestId) return;
       _senderFlowDiagnostic(
         error is TimeoutException ? 'route_timeout' : 'route_failure',
