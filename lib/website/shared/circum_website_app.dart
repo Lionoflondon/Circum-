@@ -27,7 +27,6 @@ import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
-import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'package:circum/website/shared/account_bootstrap_api.dart';
 import 'package:circum/website/shared/rider_delivery_authority_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
@@ -11541,7 +11540,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       final bytes = await photo.readAsBytes();
-      final data = await callIris('analyseParcelPhotoForIris', {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('analyseParcelPhotoForIris')
+          .call({
         'imageBase64': base64Encode(bytes),
         'contentType': photo.mimeType,
         'fileName': photo.name,
@@ -11551,6 +11552,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'selectedSpeed': _selectedSpeed,
         'vehicleType': _effectiveVehicle.name,
       });
+      final data = Map<String, dynamic>.from(result.data as Map);
       return _IrisImageInsight.fromBackend(data, fallbackFileName: photo.name);
     } catch (_) {
       return _IrisImageInsight.fallback(photo.name);
