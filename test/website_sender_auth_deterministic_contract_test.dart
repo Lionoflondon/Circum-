@@ -62,6 +62,11 @@ void main() {
     }
     expect(signUp, contains('account may have been created'));
     expect(signUp, isNot(contains('Sign in could not be completed')));
+    expect(signUp, contains('_sendSenderVerificationEmail'));
+    expect(signUp, contains('Account created. Check your inbox'));
+    expect(signUp, contains('showSnackBar'));
+    expect(website, contains('onResendVerification: _resendSenderVerificationEmail'));
+    expect(website, contains('onConfirmVerification: _confirmSenderEmailVerification'));
   });
 
   test('Sender web payment sheet uses the legal company display name', () {
