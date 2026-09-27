@@ -314,6 +314,115 @@ function riderDecision({decision, ctaUrl = APP_URL} = {}) {
   });
 }
 
+function riderDocumentActionRequired({documentLabel = "a required document", ctaUrl = APP_URL} = {}) {
+  const label = safeName(documentLabel) || "a required document";
+  return result({
+    templateId: "rider-document-action-required",
+    subject: "Action needed for your CIRCUM Rider account",
+    preheader: "Please review a document request in the Rider app.",
+    heading: "Action is needed for your Rider account",
+    paragraphs: [
+      `We need you to review ${label} before your Rider account can continue through verification.`,
+      "Open the Rider app to see the next step and provide a replacement or updated document if requested.",
+      "For your security, this email does not include document details.",
+    ],
+    ctaLabel: "Review in Rider",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "document-action-required"}],
+  });
+}
+
+function riderEarningsUpdate({kind = "delivery", amount = null, reference = "", ctaUrl = APP_URL} = {}) {
+  const amountText = money(amount);
+  const descriptions = {
+    delivery: amountText ? `${amountText} has been recorded for a completed delivery.` : "Your completed delivery earnings have been recorded.",
+    compensation: amountText ? `${amountText} compensation has been recorded for a delivery outcome.` : "Compensation has been recorded for a delivery outcome.",
+    adjustment: amountText ? `${amountText} has been added to your earnings as an adjustment.` : "An adjustment has been added to your earnings.",
+  };
+  const description = descriptions[kind] || descriptions.delivery;
+  return result({
+    templateId: `rider-earnings-${kind}`,
+    subject: "Your CIRCUM Rider earnings have been updated",
+    preheader: description,
+    heading: "Your Rider earnings have been updated",
+    paragraphs: [
+      description,
+      "You can review the balance and earning details in the Rider app. This email confirms the recorded earning; it is not a payment confirmation.",
+      reference ? `Delivery reference: ${safeReference(reference)}` : "",
+    ].filter(Boolean),
+    ctaLabel: "View earnings",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "earnings-update"}],
+  });
+}
+
+function riderConnectUpdate({status, ctaUrl = APP_URL} = {}) {
+  const copy = {
+    action_required: {
+      subject: "Action needed to receive CIRCUM Rider payouts",
+      preheader: "Please complete the requested payout details in the Rider app.",
+      heading: "Action is needed for Rider payouts",
+      body: "Stripe needs more information before your Rider payout setup can be completed. Open the Rider app to continue securely.",
+    },
+    enabled: {
+      subject: "Your CIRCUM Rider payouts are enabled",
+      preheader: "Your payout setup is ready for eligible Rider earnings.",
+      heading: "Rider payouts are enabled",
+      body: "Your payout setup is ready. Eligible Rider earnings can now move through the configured payout process.",
+    },
+  }[text(status).toLowerCase()];
+  if (!copy) throw new Error("Unsupported Rider payout setup status.");
+  return result({
+    templateId: `rider-connect-${text(status).toLowerCase()}`,
+    subject: copy.subject,
+    preheader: copy.preheader,
+    heading: copy.heading,
+    paragraphs: [copy.body],
+    ctaLabel: "Open payout setup",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "payout-setup"}],
+  });
+}
+
+function riderPayoutUpdate({status, amount = null, reference = "", ctaUrl = APP_URL} = {}) {
+  const amountText = money(amount);
+  const copy = {
+    requested: {
+      subject: "Your CIRCUM Rider withdrawal was requested",
+      preheader: "Your withdrawal request has been recorded.",
+      heading: "Withdrawal request received",
+      body: amountText ? `Your request to withdraw ${amountText} has been recorded and is being processed.` : "Your withdrawal request has been recorded and is being processed.",
+    },
+    paid: {
+      subject: "Your CIRCUM Rider payout has been paid",
+      preheader: "Your payout has been marked as paid by the payout provider.",
+      heading: "Your Rider payout has been paid",
+      body: amountText ? `Your payout of ${amountText} has been marked as paid by the payout provider.` : "Your payout has been marked as paid by the payout provider.",
+    },
+    failed: {
+      subject: "Action may be needed for your CIRCUM Rider payout",
+      preheader: "Your payout could not be completed and needs review.",
+      heading: "Your Rider payout needs attention",
+      body: "Your payout could not be completed. Open the Rider app to review the payout status and any available next step. We have not assumed that funds were lost or returned.",
+    },
+  }[text(status).toLowerCase()];
+  if (!copy) throw new Error("Unsupported Rider payout status.");
+  return result({
+    templateId: `rider-payout-${text(status).toLowerCase()}`,
+    subject: copy.subject,
+    preheader: copy.preheader,
+    heading: copy.heading,
+    paragraphs: [copy.body, reference ? `Withdrawal reference: ${safeReference(reference)}` : ""].filter(Boolean),
+    ctaLabel: "View payout status",
+    ctaUrl,
+    senderCategory: "info",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "payout-update"}],
+  });
+}
+
 const HEALTH_COPY = Object.freeze({
   scheduled: ["Your Health+ collection is scheduled", "Your Health+ collection has been scheduled. We will keep you updated as it progresses."],
   assigned: ["A rider has been assigned to your Health+ collection", "A verified rider has been assigned to your Health+ collection."],
@@ -470,7 +579,11 @@ module.exports = {
   giftRecurringPaymentProblem,
   healthUpdate,
   referralReward,
+  riderConnectUpdate,
   riderDecision,
+  riderDocumentActionRequired,
+  riderEarningsUpdate,
+  riderPayoutUpdate,
   rothActivity,
   welcome,
 };

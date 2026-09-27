@@ -26,6 +26,15 @@ test("every transactional template has complete customer-facing structure", () =
     templates.riderDecision({decision: "approved"}),
     templates.riderDecision({decision: "rejected"}),
     templates.riderDecision({decision: "more_information_requested"}),
+    templates.riderDocumentActionRequired({documentLabel: "your driving licence"}),
+    templates.riderEarningsUpdate({kind: "delivery", amount: 18.5, reference: "delivery-1"}),
+    templates.riderEarningsUpdate({kind: "compensation", amount: 4, reference: "delivery-2"}),
+    templates.riderEarningsUpdate({kind: "adjustment", amount: 2.25, reference: "adjustment-1"}),
+    templates.riderConnectUpdate({status: "action_required"}),
+    templates.riderConnectUpdate({status: "enabled"}),
+    templates.riderPayoutUpdate({status: "requested", amount: 20, reference: "withdrawal-1"}),
+    templates.riderPayoutUpdate({status: "paid", amount: 20, reference: "withdrawal-1"}),
+    templates.riderPayoutUpdate({status: "failed", amount: 20, reference: "withdrawal-1"}),
     ...Object.keys({
       scheduled: true,
       assigned: true,
@@ -75,6 +84,18 @@ test("rendered customer content rejects snake_case and internal labels", () => {
   }
   assert.throws(() => templates.assertCustomerFacingContent({subject: "roth_movement_completed"}), /snake_case|internal_token/);
   assert.throws(() => templates.assertCustomerFacingContent({subject: "delivery_in_progress"}), /snake_case|internal_token/);
+});
+
+test("Rider financial copy is state-safe and uses the Info sender family", () => {
+  const copies = [
+    templates.riderEarningsUpdate({kind: "delivery", amount: 12.5, reference: "delivery-9"}),
+    templates.riderPayoutUpdate({status: "failed", amount: 12.5, reference: "withdrawal-9"}),
+  ];
+  for (const copy of copies) {
+    assert.equal(copy.senderCategory, "info");
+    assert.doesNotMatch(customerFields(copy), /stripe|provider id|payout_status|rider_earning|sourceCollection|Firestore/i);
+  }
+  assert.match(templates.riderPayoutUpdate({status: "failed"}).text, /not assumed that funds were lost or returned/i);
 });
 
 test("technical URLs and email addresses are explicit forbidden-test exclusions", () => {

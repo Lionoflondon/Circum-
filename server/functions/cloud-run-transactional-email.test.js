@@ -583,6 +583,52 @@ test("Rider decision uses approvalStatus as an authoritative source state", asyn
   assert.equal(result.status, "sent");
 });
 
+test("Rider financial queue items revalidate the Rider profile recipient and source ledger", async () => {
+  const db = fakeDb({
+    "emailQueue/rider-earnings": record({
+      eventType: "rider_delivery_earnings",
+      senderCategory: "info",
+      sourceCollection: "riderEarningTransactions",
+      sourceDocumentId: "earning-1",
+      sourceRequiredStatus: "completed",
+      sourceRiderId: "rider-1",
+      sourceRequiredFields: {status: "completed", type: "delivery_earning"},
+      to: "rider@example.test",
+    }),
+    "riderEarningTransactions/earning-1": {status: "completed", type: "delivery_earning", riderId: "rider-1", amount: 12},
+    "riderProfiles/rider-1": {email: "rider@example.test"},
+  });
+  const result = await processEmailQueueRecord({
+    db, emailId: "rider-earnings", eventId: "rider-earnings-event", apiKey: "test-key",
+    fetchImpl: async () => ({ok: true, status: 200, json: async () => ({id: "provider-rider-earnings"})}),
+  });
+  assert.equal(result.status, "sent");
+
+  const staleDb = fakeDb({
+    "emailQueue/rider-stale": record({
+      eventType: "rider_payout_paid",
+      sourceCollection: "payoutRequests",
+      sourceDocumentId: "withdrawal-1",
+      sourceRequiredStatus: "paid",
+      sourceRiderId: "rider-2",
+      sourceRequiredFields: {riderId: "rider-2", payoutStatus: "paid"},
+      to: "old@example.test",
+    }),
+    "payoutRequests/withdrawal-1": {status: "processing", payoutStatus: "paid", riderId: "rider-2"},
+    "riderProfiles/rider-2": {email: "new@example.test"},
+  });
+  let calls = 0;
+  const suppressed = await processEmailQueueRecord({
+    db: staleDb, emailId: "rider-stale", eventId: "rider-stale-event", apiKey: "test-key",
+    fetchImpl: async () => {
+      calls += 1;
+      return {ok: true, status: 200, json: async () => ({id: "must-not-send"})};
+    },
+  });
+  assert.deepEqual(suppressed, {status: "suppressed", reason: "source_recipient_changed"});
+  assert.equal(calls, 0);
+});
+
 test("welcome queue item revalidates the authoritative account and Starter Roth grant", async () => {
   const db = fakeDb({
     "emailQueue/sender_welcome_u-1": record({
