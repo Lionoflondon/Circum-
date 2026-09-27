@@ -57,5 +57,9 @@ void main() {
     expect(source, contains("'recurringConsentCopy': senderGiftRecurringConsentCopy"));
     expect(source, contains("'Next card charge'"));
     expect(source, contains('senderGiftRecurringConsentCopy'));
+    expect(source, contains("getGiftRecurringPreview"));
+    expect(source, isNot(contains('_nextRecurringChargeDate')));
+    expect(source, contains('Confirmed by Stripe after the initial payment'));
+    expect(source, contains('_rothCanFullyCover && !_isRecurringSelfGift'));
   });
 }

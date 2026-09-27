@@ -42,6 +42,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   bool _applyRoth = false;
   bool _recurringConsentAccepted = false;
   bool _platformPaySupported = false;
+  DateTime? _serverPreviewNextChargeDate;
   String _businessPaymentRail = 'card';
   List<SenderPaymentMethod> _savedMethods = const [];
   String? _selectedPaymentMethodId;
@@ -56,7 +57,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   bool get _showRothToggle =>
       _paymentMethod != null && _paymentMethod != 'Roth' && _rothBalance > 0;
   double get _rothApplied =>
-      _applyRoth ? _rothBalance.clamp(0, widget.draft.budget).toDouble() : 0;
+      _applyRoth
+          ? _rothBalance
+              .clamp(0, _isRecurringSelfGift ? widget.draft.budget - 0.01 : widget.draft.budget)
+              .toDouble()
+          : 0;
   double get _remainingCardAmount => widget.draft.budget - _rothApplied;
   bool get _isRecurringSelfGift =>
       widget.draft.mode == SenderGiftMode.myself &&
@@ -66,15 +71,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       widget.draft.selfGiftFrequency == 'quarterly'
           ? 'Every 4 months'
           : 'Monthly';
-  DateTime _nextRecurringChargeDate() {
-    final now = DateTime.now();
-    final months = widget.draft.selfGiftFrequency == 'quarterly' ? 4 : 1;
-    final targetMonth = now.month - 1 + months;
-    final year = now.year + targetMonth ~/ 12;
-    final month = targetMonth % 12 + 1;
-    final lastDay = DateTime(year, month + 1, 0).day;
-    return DateTime(year, month, now.day.clamp(1, lastDay));
-  }
 
   bool get _isBusinessGift =>
       widget.draft.businessContext['businessMode'] == true &&
@@ -125,7 +121,21 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           'Payment cancelled. Your gift request is saved. You can try again.';
     }
     _loadRothBalance();
+    if (_isRecurringSelfGift) _loadRecurringPreview();
     _loadPaymentOptions();
+  }
+
+  Future<void> _loadRecurringPreview() async {
+    try {
+      final result = await ProductionPaymentApi.call('gifts', 'getGiftRecurringPreview', {
+        'frequency': widget.draft.selfGiftFrequency,
+      }).timeout(_backendTimeout);
+      final epoch = (result['nextExpectedRenewalAt'] as num?)?.toInt();
+      if (!mounted || epoch == null) return;
+      setState(() => _serverPreviewNextChargeDate = DateTime.fromMillisecondsSinceEpoch(epoch));
+    } catch (_) {
+      // The payment authority remains the source of truth; do not invent a client date.
+    }
   }
 
   Future<void> _loadPaymentOptions() async {
@@ -230,7 +240,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           _RecurringConsentCard(
             frequency: _recurringFrequencyLabel,
             budget: widget.draft.budget,
-            nextChargeDate: _nextRecurringChargeDate(),
+            nextChargeDate: _serverPreviewNextChargeDate,
             accepted: _recurringConsentAccepted,
             onChanged: (value) =>
                 setState(() => _recurringConsentAccepted = value),
@@ -303,7 +313,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
               const SizedBox(height: 10),
             ],
           ),
-          if (_rothCanFullyCover) ...[
+          if (_rothCanFullyCover && !_isRecurringSelfGift) ...[
             const SizedBox(height: 10),
             _PaymentMethodTile(
               label: 'Roth',
@@ -838,7 +848,7 @@ class _RothToggleCard extends StatelessWidget {
 class _RecurringConsentCard extends StatelessWidget {
   final String frequency;
   final double budget;
-  final DateTime nextChargeDate;
+  final DateTime? nextChargeDate;
   final bool accepted;
   final ValueChanged<bool> onChanged;
 
@@ -850,8 +860,9 @@ class _RecurringConsentCard extends StatelessWidget {
     required this.onChanged,
   });
 
-  String get _dateLabel =>
-      '${nextChargeDate.day}/${nextChargeDate.month}/${nextChargeDate.year}';
+  String get _dateLabel => nextChargeDate == null
+      ? 'Confirmed by Stripe after the initial payment'
+      : '${nextChargeDate!.day}/${nextChargeDate!.month}/${nextChargeDate!.year}';
 
   @override
   Widget build(BuildContext context) {
