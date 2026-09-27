@@ -201,7 +201,7 @@ async function run() {
     const failedMetadata = {type: "business_invoice_payment", businessId, invoiceId: failedOrder.invoiceId, checkoutReservationId: failedOrderDoc.checkoutReservationId, qaFixtureId: fixture.id};
     let failedIntent;
     try {
-    failedIntent = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method: "pm_card_chargeDeclined", confirm: true, return_url: "https://example.invalid/qa", metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
+    failedIntent = await stripe.paymentIntents.create({amount: failedReservation.externalAmount, currency: GBP, payment_method_data: {type: "card", card: {number: "4000000000000002", exp_month: 12, exp_year: 2034, cvc: "123"}}, confirm: true, return_url: "https://example.invalid/qa", metadata: failedMetadata}, {idempotencyKey: `${fixture.id}:failed-intent`});
     } catch (error) {
       failedIntent = error.payment_intent;
     }
