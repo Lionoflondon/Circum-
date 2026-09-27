@@ -46,7 +46,10 @@ const senderGiftRevealModeOptions = {
 const senderGiftSelfFrequencyOptions = {
   'one_off': 'One-off',
   'monthly': 'Monthly',
-  'quarterly': 'Quarterly',
+  // The canonical Stripe subscription contract uses a four-month interval.
+  // Keep the customer-facing label truthful until the provider contract is
+  // intentionally changed across both client and backend.
+  'quarterly': 'Every 4 months',
   'custom': 'Custom',
 };
 

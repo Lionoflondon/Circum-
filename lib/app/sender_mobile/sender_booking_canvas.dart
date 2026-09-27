@@ -1946,8 +1946,8 @@ class _AddressPanel extends StatelessWidget {
               itemBuilder: (context, index) {
                 final suggestion = suggestions[index];
                 return _SuggestionTile(
-                  title: '${suggestion.mainText}',
-                  subtitle: '${suggestion.subText}',
+                  title: suggestion.mainText,
+                  subtitle: suggestion.subText,
                   onTap: () => onSuggestion(suggestion),
                 );
               },

@@ -57,6 +57,18 @@ abstract class BusinessRepository {
     required double amount,
     required String idempotencyKey,
   });
+  Future<BusinessGiftOrderResult> createBusinessGiftOrder({
+    required BusinessAccount account,
+    required double budgetGbp,
+    required String paymentRail,
+    required String idempotencyKey,
+    required String recipientName,
+    required String recipientPhone,
+    required String recipientEmail,
+    required String deliveryAddress,
+    required String deliveryDate,
+    required String deliveryTimeWindow,
+  });
 }
 
 const businessOperationTimeout = Duration(seconds: 15);
@@ -69,6 +81,42 @@ class BusinessRothCheckoutResult {
     required this.checkoutUrl,
     required this.purchaseId,
   });
+}
+
+class BusinessGiftOrderResult {
+  final String orderId;
+  final String invoiceId;
+  final String status;
+  final String paymentRail;
+  final Uri? checkoutUrl;
+  final bool idempotent;
+  final String? giftRequestId;
+
+  const BusinessGiftOrderResult({
+    required this.orderId,
+    required this.invoiceId,
+    required this.status,
+    required this.paymentRail,
+    required this.checkoutUrl,
+    required this.idempotent,
+    required this.giftRequestId,
+  });
+
+  factory BusinessGiftOrderResult.fromMap(Map<String, dynamic> data) {
+    final rawUrl = '${data['checkoutUrl'] ?? ''}'.trim();
+    final parsedUrl = Uri.tryParse(rawUrl);
+    return BusinessGiftOrderResult(
+      orderId: '${data['orderId'] ?? ''}',
+      invoiceId: '${data['invoiceId'] ?? ''}',
+      status: '${data['status'] ?? ''}'.trim().toLowerCase(),
+      paymentRail: '${data['paymentRail'] ?? ''}'.trim().toLowerCase(),
+      checkoutUrl: parsedUrl != null && parsedUrl.hasScheme ? parsedUrl : null,
+      idempotent: data['idempotent'] == true,
+      giftRequestId: '${data['giftRequestId'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${data['giftRequestId']}'.trim(),
+    );
+  }
 }
 
 class BusinessRequestHistory {
@@ -92,10 +140,10 @@ class FirebaseBusinessRepository implements BusinessRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  }) : auth = auth ?? FirebaseAuth.instance,
-       firestore = firestore ?? FirebaseFirestore.instance,
-       functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+  })  : auth = auth ?? FirebaseAuth.instance,
+        firestore = firestore ?? FirebaseFirestore.instance,
+        functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   User get _user {
     final user = auth.currentUser;
@@ -159,24 +207,22 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final invoiceDocs = results[1] as QuerySnapshot<Map<String, dynamic>>;
     final walletDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
 
-    final deliveries =
-        deliveryDocs.docs
-            .map((doc) => BusinessDelivery.fromMap(doc.id, doc.data()))
-            .toList(growable: false)
-          ..sort(
-            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
-              a.createdAt ?? DateTime(1970),
-            ),
-          );
-    final invoices =
-        invoiceDocs.docs
-            .map((doc) => BusinessInvoice.fromMap(doc.id, doc.data()))
-            .toList(growable: false)
-          ..sort(
-            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
-              a.createdAt ?? DateTime(1970),
-            ),
-          );
+    final deliveries = deliveryDocs.docs
+        .map((doc) => BusinessDelivery.fromMap(doc.id, doc.data()))
+        .toList(growable: false)
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
+        ),
+      );
+    final invoices = invoiceDocs.docs
+        .map((doc) => BusinessInvoice.fromMap(doc.id, doc.data()))
+        .toList(growable: false)
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
+        ),
+      );
     return BusinessWorkspaceData(
       account: account,
       deliveries: deliveries,
@@ -493,14 +539,14 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final result = await _bounded(
       functions
           .httpsCallableFromUrl(
-            'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
-          )
+        'https://circum-business-roth-checkout-j2b7cicfwq-uc.a.run.app',
+      )
           .call({
-            'businessId': account.id,
-            'amount': amount,
-            'idempotencyKey': requestKey,
-            'returnUrl': 'https://circumuk.com/?app=business&section=finance',
-          }),
+        'businessId': account.id,
+        'amount': amount,
+        'idempotencyKey': requestKey,
+        'returnUrl': 'https://circumuk.com/?app=business&section=finance',
+      }),
     );
     final data = Map<String, dynamic>.from(result.data as Map);
     final checkoutUrl = Uri.tryParse('${data['checkoutUrl'] ?? ''}');
@@ -510,6 +556,46 @@ class FirebaseBusinessRepository implements BusinessRepository {
     return BusinessRothCheckoutResult(
       checkoutUrl: checkoutUrl,
       purchaseId: '${data['purchaseId'] ?? ''}',
+    );
+  }
+
+  @override
+  Future<BusinessGiftOrderResult> createBusinessGiftOrder({
+    required BusinessAccount account,
+    required double budgetGbp,
+    required String paymentRail,
+    required String idempotencyKey,
+    required String recipientName,
+    required String recipientPhone,
+    required String recipientEmail,
+    required String deliveryAddress,
+    required String deliveryDate,
+    required String deliveryTimeWindow,
+  }) async {
+    final normalizedRail = paymentRail.trim().toLowerCase();
+    if (!const {'card', 'invoice', 'roth'}.contains(normalizedRail)) {
+      throw ArgumentError('Choose a valid Business Gift payment rail.');
+    }
+    if (!budgetGbp.isFinite || budgetGbp < 50 || budgetGbp > 100000) {
+      throw ArgumentError('Choose an approved Business Gift amount.');
+    }
+    final result = await _bounded(
+      functions.httpsCallable('createBusinessGiftOrder').call({
+        'businessId': account.id,
+        'budgetGbp': budgetGbp,
+        'paymentRail': normalizedRail,
+        'idempotencyKey': idempotencyKey.trim(),
+        'recipientName': recipientName.trim(),
+        'recipientPhone': recipientPhone.trim(),
+        'recipientEmail': recipientEmail.trim().toLowerCase(),
+        'deliveryAddress': deliveryAddress.trim(),
+        'deliveryDate': deliveryDate.trim(),
+        'deliveryTimeWindow': deliveryTimeWindow.trim(),
+        'returnUrl': 'https://circumuk.com/?app=business&section=gifts',
+      }),
+    );
+    return BusinessGiftOrderResult.fromMap(
+      Map<String, dynamic>.from(result.data as Map),
     );
   }
 }
