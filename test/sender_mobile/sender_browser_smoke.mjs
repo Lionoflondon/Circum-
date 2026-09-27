@@ -9,7 +9,9 @@ const errors = [];
 fs.mkdirSync(artifactDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// CI runners do not guarantee a valid browser locale. Pin the supported UK
+// product locale so a runner default cannot fail Intl before first paint.
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: 'en-GB' });
 page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => {
   if (message.type() === 'error') errors.push(`console: ${message.text()}`);
