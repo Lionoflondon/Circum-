@@ -100,10 +100,12 @@ void main() {
       canvas.indexOf('Future<void> _resolveTypedAddress'),
       canvas.indexOf('Future<void> _resolveVisibleAddressSuggestion'),
     );
-    final wait = resolution.indexOf('await bloc.stream');
+    final wait = resolution.indexOf('final coordinateFuture');
+    final enqueue = resolution.indexOf('bloc.add(', wait);
     final store = resolution.indexOf('_setDraft(nextDraft)');
     final proceed = resolution.indexOf('_advanceResolved()');
     expect(wait, greaterThanOrEqualTo(0));
+    expect(enqueue, greaterThan(wait));
     expect(store, greaterThan(wait));
     expect(proceed, greaterThan(store));
     expect(resolution, contains('state.pickupCoordinate != null'));
@@ -111,6 +113,15 @@ void main() {
     expect(
         resolution, contains('SenderManualAddressResolutionStatus.ambiguous'));
     expect(resolution, isNot(contains('_requestBackendQuote(')));
+
+    final visibleResolution = canvas.substring(
+      canvas.indexOf('Future<void> _resolveVisibleAddressSuggestion'),
+      canvas.indexOf('void _requestBackendQuote('),
+    );
+    final visibleWait = visibleResolution.indexOf('final coordinateFuture');
+    final visibleEnqueue = visibleResolution.indexOf('bloc.add(', visibleWait);
+    expect(visibleWait, greaterThanOrEqualTo(0));
+    expect(visibleEnqueue, greaterThan(visibleWait));
 
     final quote = canvas.substring(
       canvas.indexOf('void _requestBackendQuote('),
