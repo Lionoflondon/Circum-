@@ -2,6 +2,7 @@
 "use strict";
 
 const {FieldValue} = require("firebase-admin/firestore");
+const {recordPaymentArtifactReview} = require("./payment-artifact-reconciliation");
 
 function refundPatch(charge) {
   const refundedAmount = Number(charge.amount_refunded || 0);
@@ -27,9 +28,26 @@ async function syncChargeRefund({db, event}) {
   const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent && charge.payment_intent.id;
   if (!paymentIntentId) return {handled: false, reason: "missing_payment_intent"};
   const directId = charge.metadata && (charge.metadata.deliveryId || charge.metadata.requestId);
-  const query = directId ? null : await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
-  const refs = directId ? [db.collection("deliveryRequests").doc(directId)] : query.docs.map((doc) => doc.ref);
-  if (!refs.length) return {handled: false, reason: "delivery_not_found", paymentIntentId};
+  let refs;
+  if (directId) {
+    const ref = db.collection("deliveryRequests").doc(directId);
+    const snapshot = await ref.get();
+    refs = snapshot.exists ? [ref] : [];
+  } else {
+    const query = await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
+    refs = query.docs.map((doc) => doc.ref);
+  }
+  if (!refs.length) {
+    const review = await recordPaymentArtifactReview({
+      db,
+      event,
+      artifactType: "refund",
+      objectId: charge.id || paymentIntentId,
+      reason: "unmatched_refund",
+      details: {paymentIntentId, stripeChargeId: charge.id || null},
+    });
+    return {handled: false, reason: "unmatched_refund", paymentIntentId, ...review};
+  }
   if (!directId && refs.length > 1) {
     await db.runTransaction(async (transaction) => {
       const seen = await transaction.get(eventRef);

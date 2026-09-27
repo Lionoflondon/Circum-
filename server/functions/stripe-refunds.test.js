@@ -77,3 +77,35 @@ test("ambiguous payment intent refund is routed to admin review", async () => {
   assert.equal(writes[0].data.reviewRequired, true);
   assert.equal(writes[1].data.actionType, "stripe_refund_requires_review");
 });
+
+test("unmatched refund is durably captured without creating a delivery or refund mutation", async () => {
+  const writes = [];
+  const db = {
+    collection(name) {
+      if (name === "deliveryRequests") {
+        return {where() {
+          return {limit() {
+            return {async get() {
+              return {docs: []};
+            }};
+          }};
+        }};
+      }
+      return {doc(id) {
+        return {id, async set(data, options) {
+          writes.push({name, id, data, options});
+        }};
+      }};
+    },
+  };
+  const result = await syncChargeRefund({
+    db,
+    event: {id: "evt_unmatched_refund", type: "charge.refunded", data: {object: {id: "ch_orphan", payment_intent: "pi_orphan"}}},
+  });
+  assert.equal(result.handled, false);
+  assert.equal(result.reason, "unmatched_refund");
+  assert.equal(result.reviewRequired, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].name, "paymentArtifactReconciliations");
+  assert.equal(writes[0].data.status, "action_required");
+});
