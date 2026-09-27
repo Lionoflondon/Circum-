@@ -10,6 +10,10 @@ test("IRIS QA scenarios are fixed, synthetic and customer-safe", () => {
     assert.equal(JSON.stringify(result).includes("privateReason"), false);
   }
   assert.throws(() => analyse({uid: "qa_sender", scenario: "user_supplied"}), /Unsupported synthetic/);
+  assert.equal(analyse({uid: "qa_sender", scenario: "weed"}).iris.compliance.status, "prohibited");
+  assert.equal(analyse({uid: "qa_sender", scenario: "pets"}).iris.compliance.status, "referral_required");
+  assert.equal(analyse({uid: "qa_sender", scenario: "remains"}).iris.compliance.status, "referral_required");
+  assert.ok(analyse({uid: "qa_sender", scenario: "weed"}).iris.compliance.customerMessage);
 });
 
 test("the QA parcel photo is a valid fixed PNG and analysis is replay-stable", () => {
