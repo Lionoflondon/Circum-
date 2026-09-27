@@ -13,8 +13,8 @@ const movement = require("./movement-ledger");
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
 const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "paymentArtifactReconciliations", "deliveryRequests"];
-const fail = (message) => {
-throw new functions.https.HttpsError("failed-precondition", message);
+const fail = (message, code = "failed-precondition") => {
+ throw new functions.https.HttpsError(code, message);
 };
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
