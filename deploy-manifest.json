@@ -236,6 +236,16 @@
   "sharedFiles": [],
   "allowedDependencyIntersections": [
     {
+      "products": [
+        "sender-app",
+        "website"
+      ],
+      "files": [
+        "lib/app/send_package/repo/iris_api.dart"
+      ],
+      "reason": "Shared Auth and App Check transport for the same first-party IRIS authority across Sender native and Sender Web clients."
+    },
+    {
       "products": ["sender-app", "website"],
       "files": ["lib/env/env.dart"],
       "reason": "Shared read-only build-time environment accessors."
