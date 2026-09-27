@@ -11,6 +11,7 @@ const payout = require("./rider-payout-allocation");
 const refunds = require("./tip-refunds");
 const tipAuthority = require("./ratings-tipping")._test;
 const ROOT = "qaLifecycleFixtures";
+const LEGACY_QA_SEEDS = Object.freeze({rider_assigned: "accepted", en_route_to_pickup: "navigating_to_pickup"});
 const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "notifications", "activeDeliveries", "audit", "qaProviderObjects"]);
 const id = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const fail = (message, code = "failed-precondition") => {
@@ -271,10 +272,8 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
     }
     if (action === "seed_legacy_status") {
       requireActor(fixture, uid, "qaCreatedBy");
-      const expected = {
-        rider_assigned: "accepted",
-        en_route_to_pickup: "navigating_to_pickup",
-      }[data.legacyStatus];
+      const expected = typeof data.legacyStatus === "string" && Object.hasOwn(LEGACY_QA_SEEDS, data.legacyStatus) ?
+        LEGACY_QA_SEEDS[data.legacyStatus] : "";
       if (!expected) fail("Only reviewed legacy QA statuses can be seeded.", "invalid-argument");
       return qa.runTransaction(async (tx) => {
         const [snap, offer] = await tx.getAll(ref, qa.collection("offers").doc(deliveryId));

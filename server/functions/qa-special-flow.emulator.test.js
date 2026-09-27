@@ -78,6 +78,7 @@ return {data: refunds.filter((r) => r.payment_intent === id)};
   await handle({action: "book", delivery: "d", profile: "vanguard"}); await handle({action: "pay", delivery: "d"}); await handle({action: "accept", delivery: "d"}, rider);
   await assert.rejects(handle({action: "seed_legacy_status", delivery: "d", legacyStatus: "rider_assigned"}, rider), /Wrong QA actor/);
   await assert.rejects(handle({action: "seed_legacy_status", delivery: "d", legacyStatus: "arbitrary"}, operator), /reviewed legacy/);
+  await assert.rejects(handle({action: "seed_legacy_status", delivery: "d", legacyStatus: "__proto__"}, operator), /reviewed legacy/);
   assert.deepEqual(await handle({action: "seed_legacy_status", delivery: "d", legacyStatus: "rider_assigned"}, operator), {idempotent: false, normalizedStatus: "accepted"});
   await handle({action: "start_heading_to_pickup", delivery: "d"}, rider);
   await assert.rejects(handle({action: "seed_legacy_status", delivery: "d", legacyStatus: "rider_assigned"}, operator), /out of order/);
