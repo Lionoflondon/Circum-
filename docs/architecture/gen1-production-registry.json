@@ -4873,7 +4873,9 @@
       "generation": "Gen 1",
       "productionPurpose": "giftRecurringCallables.preview",
       "callers": [
-        "server/functions/cloud-run-payment-family.js"
+        "lib/app/sender_mobile/gift_payment_view.dart",
+        "server/functions/cloud-run-payment-family.js",
+        "test/sender_mobile/gift_native_payment_contract_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
