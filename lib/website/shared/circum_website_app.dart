@@ -4427,9 +4427,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           timeLimit: Duration(seconds: 6),
         ),
       );
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('updateDeliveryLiveLocation').call({
+      await callRiderDeliveryAuthority('updateDeliveryLiveLocation', {
         'deliveryId': deliveryId,
         'status': status,
         'location': {
@@ -4541,9 +4539,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           ),
     );
     final actions = _backendActionsForRiderTarget(currentStatus, targetStatus);
-    final callable = FirebaseFunctions.instanceFor(
-      region: 'us-central1',
-    ).httpsCallable('updateDeliveryTrackingStatus');
     for (final action in actions) {
       final evidence = <String, dynamic>{
         if (verificationPatch?['riderVerifiedWeightKg'] != null)
@@ -4565,7 +4560,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         });
         continue;
       }
-      await callable.call({
+      await callRiderDeliveryAuthority('updateDeliveryTrackingStatus', {
         'deliveryId': requestId,
         'action': action,
         if (action == 'verify_collection_pin' ||
