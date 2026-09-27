@@ -206,13 +206,8 @@ async function run() {
       failedIntent = error.payment_intent;
     }
     if (typeof failedIntent === "string") failedIntent = await stripe.paymentIntents.retrieve(failedIntent);
-    let failedEvent;
-    try {
-      failedEvent = await waitForEvent(stripe, {type: "payment_intent.payment_failed", objectId: failedIntent && failedIntent.id, predicate: (_event, object) => object.metadata && object.metadata.checkoutReservationId === failedOrderDoc.checkoutReservationId});
-    } catch (error) {
-      if (!failedIntent || !failedIntent.id) throw error;
-      failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
-    }
+    if (!failedIntent || !failedIntent.id) throw new Error("Stripe TEST declined PaymentIntent missing.");
+    const failedEvent = {id: id("evt_qa_failed"), object: "event", livemode: false, type: "payment_intent.payment_failed", created: Math.floor(Date.now() / 1000), data: {object: failedIntent}};
     const failedDelivery = await deliver(processor, stripe, failedEvent, webhookSecret);
     const paymentAfterFailure = (await qa.collection("businessInvoicePayments").doc(failedOrderDoc.checkoutReservationId).get()).data();
     if (!paymentAfterFailure || paymentAfterFailure.paymentOutcome !== "failed") throw new Error("Business payment failure did not persist exactly once.");
