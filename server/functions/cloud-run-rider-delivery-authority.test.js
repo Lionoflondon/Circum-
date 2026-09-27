@@ -15,6 +15,8 @@ async function listen(server, run) {
 
 test("routes expose only the migrated Rider delivery authorities", () => {
   assert.equal(routeName("/completeDelivery"), "completeDelivery");
+  assert.equal(routeName("/acceptRideRequests"), "acceptRideRequests");
+  assert.equal(routeName("/v1/callable/recordRiderArrival"), "recordRiderArrival");
   assert.equal(routeName("/v1/callable/getAvailableRequests"), "getAvailableRequests");
   assert.equal(routeName("/getAvaliableRequests"), "getAvaliableRequests");
   assert.equal(routeName("/getNearbyRequests"), "getNearbyRequests");
@@ -28,6 +30,8 @@ test("handlers preserve the canonical completion and offer cores", async () => {
   const db = {marker: "canonical-db"};
   const handlers = createHandlers({db});
   assert.equal(typeof handlers.completeDelivery, "function");
+  assert.equal(typeof handlers.acceptRideRequests, "function");
+  assert.equal(typeof handlers.recordRiderArrival, "function");
   assert.equal(typeof handlers.getAvailableRequests, "function");
   assert.equal(typeof handlers.updateDeliveryTrackingStatus, "function");
   assert.equal(typeof handlers.updateDeliveryLiveLocation, "function");
@@ -36,6 +40,8 @@ test("handlers preserve the canonical completion and offer cores", async () => {
     verifyAppCheck: async (token) => token === "valid-app" ? {appId: "rider-app"} : Promise.reject(Object.assign(new Error("Bad App Check token."), {code: "app-check/invalid-argument"})),
     handlers: {
       completeDelivery: async (data, context) => (calls.push(["complete", data, context]), {status: "delivered"}),
+      acceptRideRequests: async (data, context) => (calls.push(["accept", data, context]), {status: "accepted", qaOnly: true}),
+      recordRiderArrival: async (data, context) => (calls.push(["arrival", data, context]), {status: "arrived_at_pickup", qaOnly: true}),
       getAvailableRequests: async (data, context) => (calls.push(["offers", data, context]), {riderId: context.auth.uid, nearestRequests: []}),
       updateDeliveryTrackingStatus: async (data, context) => (calls.push(["tracking", data, context]), {status: "navigating_to_pickup"}),
       updateDeliveryLiveLocation: async (data, context) => (calls.push(["location", data, context]), {status: "accepted"}),
@@ -52,6 +58,12 @@ test("handlers preserve the canonical completion and offer cores", async () => {
     response = await fetch(`${url}/completeDelivery`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {deliveryId: "delivery-1", deliveryPin: "123456"}})});
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {result: {status: "delivered"}});
+    response = await fetch(`${url}/acceptRideRequests`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {requestId: "qa_public_1"}})});
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {status: "accepted", qaOnly: true}});
+    response = await fetch(`${url}/recordRiderArrival`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {deliveryId: "qa_public_1", phase: "pickup"}})});
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {status: "arrived_at_pickup", qaOnly: true}});
     response = await fetch(`${url}/updateDeliveryTrackingStatus`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: {deliveryId: "delivery-1", action: "start_heading_to_pickup"}})});
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {result: {status: "navigating_to_pickup"}});
@@ -61,12 +73,14 @@ test("handlers preserve the canonical completion and offer cores", async () => {
     response = await fetch(`${url}/updateDeliveryLiveLocation`, {method: "POST", headers: {authorization: "Bearer valid-id", "x-firebase-appcheck": "valid-app", "content-type": "application/json"}, body: JSON.stringify({data: null})});
     assert.equal(response.status, 400);
   });
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 6);
   assert.equal(calls[0][2].auth.uid, "rider-1");
   assert.equal(calls[0][2].app.appId, "rider-app");
   assert.deepEqual(calls[1][1], {deliveryId: "delivery-1", deliveryPin: "123456"});
-  assert.deepEqual(calls[2][1], {deliveryId: "delivery-1", action: "start_heading_to_pickup"});
-  assert.equal(calls[3][2].auth.uid, "rider-1");
+  assert.deepEqual(calls[2][1], {requestId: "qa_public_1"});
+  assert.deepEqual(calls[3][1], {deliveryId: "qa_public_1", phase: "pickup"});
+  assert.deepEqual(calls[4][1], {deliveryId: "delivery-1", action: "start_heading_to_pickup"});
+  assert.equal(calls[5][2].auth.uid, "rider-1");
 });
 
 test("health is lazy and reports immutable source provenance", async () => {
