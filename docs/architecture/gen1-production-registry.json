@@ -10049,6 +10049,8 @@
         "docs/qa/CLOUD_RUN_SPECIAL_FLOW.md",
         "lib/website/shared/circum_website_app.dart",
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/cloud-run-rider-delivery-authority.js",
+        "server/functions/cloud-run-rider-delivery-authority.test.js",
         "test/sender_mobile/ratings_tipping_v2_test.dart"
       ],
       "criticality": "P0/P1-review-required",
@@ -10072,8 +10074,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-delivery-authority.js",
+        "cloud-run-rider-delivery-authority.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10086,6 +10091,7 @@
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/cloud-run-rider-delivery-authority.js",
         "server/functions/cloud-run-rider-delivery-authority.test.js",
         "server/functions/core-payment-amount-security.test.js",
         "server/functions/delivery-cancellation.emulator.test.js",
@@ -10118,6 +10124,7 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-rider-delivery-authority.js",
         "cloud-run-rider-delivery-authority.test.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",

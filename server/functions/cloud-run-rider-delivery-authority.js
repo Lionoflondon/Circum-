@@ -7,11 +7,14 @@ const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 const {completeDeliveryHandler} = require("./delivery-completion-reconciled")._private;
+const deliveryTracking = require("./delivery-tracking");
 const {getOffers} = require("./rider-offers");
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ROUTES = new Set([
   "completeDelivery",
+  "updateDeliveryTrackingStatus",
+  "updateDeliveryLiveLocation",
   "getAvailableRequests",
   "getAvaliableRequests",
   "getNearbyRequests",
@@ -40,6 +43,8 @@ function createHandlers(options = {}) {
   const db = options.db || getFirestore();
   return {
     completeDelivery: (data, context) => completeDeliveryHandler(data, context, db),
+    updateDeliveryTrackingStatus: (data, context) => deliveryTracking.updateDeliveryTrackingStatus.run(data, context),
+    updateDeliveryLiveLocation: (data, context) => deliveryTracking.updateDeliveryLiveLocation.run(data, context),
     getAvailableRequests: (data, context) => getOffers(data, context, db),
     getAvaliableRequests: (data, context) => getOffers(data, context, db),
     getNearbyRequests: (data, context) => getOffers(data, context, db),
@@ -73,7 +78,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(completeDelivery|getAvailableRequests|getAvaliableRequests|getNearbyRequests)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(completeDelivery|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests)$/.exec(pathname);
   return match && ROUTES.has(match[1]) ? match[1] : null;
 }
 
@@ -122,7 +127,9 @@ function createServer(options = {}) {
         ]);
         if (!decoded || !(decoded.uid || decoded.sub)) throw callableError("unauthenticated", "Invalid authentication token.");
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-        if (!Object.prototype.hasOwnProperty.call(payload, "data")) throw callableError("invalid-argument", "Callable request must contain data.");
+        if (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
+          throw callableError("invalid-argument", "Callable request must contain object data.");
+        }
         const context = {
           auth: {uid: decoded.uid || decoded.sub, token: decoded},
           app: decodedAppCheck,
@@ -133,7 +140,7 @@ function createServer(options = {}) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
         const status = statusCode(code);
-        if (status === 500) console.error("rider_delivery_authority_failed", {callable: name, reason: error.message || "internal_error"});
+        if (status === 500) console.error("rider_delivery_authority_failed", {callable: name, reason: code});
         return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Rider delivery request failed." : error.message}});
       }
     });
