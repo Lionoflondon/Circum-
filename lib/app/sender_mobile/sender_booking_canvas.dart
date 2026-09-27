@@ -1187,7 +1187,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         'fileName': picked.name,
         'description': details,
         'declaredWeightText': _weight.text,
-      }).timeout(const Duration(seconds: 25));
+      }).timeout(const Duration(seconds: 20));
       final estimate = _nullableDouble(data['estimatedWeightKg']);
       if (!mounted) return;
       setState(() {

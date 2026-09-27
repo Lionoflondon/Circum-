@@ -1021,7 +1021,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = await callIris(
         'analyseIris',
         payload,
-      ).timeout(const Duration(seconds: 25));
+      ).timeout(const Duration(seconds: 15));
       if (irisRequestId != _irisRequestId) return;
       final canonical = CanonicalIrisResult.fromCallable(
         data,
