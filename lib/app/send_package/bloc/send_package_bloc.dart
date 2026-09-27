@@ -1018,8 +1018,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (state.distance != null)
           'distanceMiles': DeliveryPricing.kilometresToMiles(state.distance!),
       };
-      final data = await callIris('analyseIris', payload)
-          .timeout(const Duration(seconds: 25));
+      final data = await callIris(
+        'analyseIris',
+        payload,
+      ).timeout(const Duration(seconds: 25));
       if (irisRequestId != _irisRequestId) return;
       final canonical = CanonicalIrisResult.fromCallable(
         data,

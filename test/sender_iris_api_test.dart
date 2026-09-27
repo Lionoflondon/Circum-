@@ -14,7 +14,11 @@ void main() {
       expect(request.headers['x-firebase-appcheck'], 'check');
       expect(jsonDecode(request.body)['data']['description'], 'weed');
       return http.Response(
-        jsonEncode({'result': {'compliance': {'status': 'prohibited'}}}),
+        jsonEncode({
+          'result': {
+            'compliance': {'status': 'prohibited'},
+          },
+        }),
         200,
       );
     });
@@ -29,20 +33,32 @@ void main() {
   });
 
   test('IRIS transport preserves safe failure copy', () async {
-    final client = MockClient((_) async => http.Response(
-          jsonEncode({'error': {
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'error': {
             'status': 'FAILED_PRECONDITION',
             'message': 'Circum security verification is required.',
-          }}),
-          400,
-        ));
+          },
+        }),
+        400,
+      ),
+    );
     await expectLater(
-      invokeIris('analyseIris', {}, idToken: 'auth', appCheckToken: 'check', client: client),
-      throwsA(isA<IrisApiException>().having(
-        (exception) => exception.status,
-        'status',
-        'FAILED_PRECONDITION',
-      )),
+      invokeIris(
+        'analyseIris',
+        {},
+        idToken: 'auth',
+        appCheckToken: 'check',
+        client: client,
+      ),
+      throwsA(
+        isA<IrisApiException>().having(
+          (exception) => exception.status,
+          'status',
+          'FAILED_PRECONDITION',
+        ),
+      ),
     );
   });
 }

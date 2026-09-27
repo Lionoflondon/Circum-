@@ -4,8 +4,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
-const irisServiceUrl =
-    'https://circum-iris-516426305461.us-central1.run.app';
+const irisServiceUrl = 'https://circum-iris-516426305461.us-central1.run.app';
 
 class IrisApiException implements Exception {
   const IrisApiException(this.status, this.message);
@@ -32,7 +31,8 @@ Future<Map<String, dynamic>> callIris(
   if (idToken == null || idToken.isEmpty) {
     throw const IrisApiException('UNAUTHENTICATED', 'Sign in to continue.');
   }
-  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance).getToken();
+  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance)
+      .getToken();
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw const IrisApiException(
       'FAILED_PRECONDITION',
