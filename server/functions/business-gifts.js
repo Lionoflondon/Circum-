@@ -33,6 +33,10 @@ function giftIdFor(orderId) {
   return `business_gift_${orderId}`;
 }
 
+function checkoutSessionIdFor(checkout = {}) {
+  return text(checkout.sessionId || checkout.providerSessionId, 200) || null;
+}
+
 function normalizeRail(value) {
   const rail = text(value, 32).toLowerCase();
   return RAILS.has(rail) ? rail : "";
@@ -226,11 +230,11 @@ async function createBusinessGiftOrderHandler(stripe, data, context, dependencie
   });
   await orderRef.set({
     checkoutReservationId: checkout.checkoutReservationId || null,
-    checkoutSessionId: checkout.providerSessionId || null,
+    checkoutSessionId: checkoutSessionIdFor(checkout),
     checkoutUrl: checkout.checkoutUrl || null,
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
-  return {orderId, invoiceId: invoiceRef.id, paymentRail: rail, status: "awaiting_payment", checkoutUrl: checkout.checkoutUrl || null, checkoutSessionId: checkout.providerSessionId || null};
+  return {orderId, invoiceId: invoiceRef.id, paymentRail: rail, status: "awaiting_payment", checkoutUrl: checkout.checkoutUrl || null, checkoutSessionId: checkoutSessionIdFor(checkout)};
 }
 
 async function finalizePaidBusinessGiftOrder({db = getFirestore(), orderId, payment = {}}) {
@@ -326,5 +330,5 @@ module.exports = {
   orderIdFor,
   giftIdFor,
   RAILS,
-  _private: {MIN_BUDGET_GBP, MAX_BUDGET_GBP, APPROVED_BUDGETS_GBP, memberRole, requireBusinessMember, orderInvoice},
+  _private: {MIN_BUDGET_GBP, MAX_BUDGET_GBP, APPROVED_BUDGETS_GBP, memberRole, requireBusinessMember, orderInvoice, checkoutSessionIdFor},
 };
