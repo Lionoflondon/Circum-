@@ -5514,6 +5514,8 @@
       "productionPurpose": "riderPresence.goOffline",
       "callers": [
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/cloud-run-rider-delivery-authority.js",
+        "server/functions/cloud-run-rider-delivery-authority.test.js",
         "server/functions/founder-review-fixture.test.js",
         "server/functions/rider-presence-core.test.js",
         "server/functions/stale-delivery-authority.test.js"
@@ -5533,8 +5535,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-delivery-authority.js",
+        "cloud-run-rider-delivery-authority.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -5546,6 +5551,8 @@
       "productionPurpose": "riderPresence.goOnline",
       "callers": [
         "scripts/scoped_functions_deploy_list.test.js",
+        "server/functions/cloud-run-rider-delivery-authority.js",
+        "server/functions/cloud-run-rider-delivery-authority.test.js",
         "server/functions/founder-review-fixture.test.js",
         "server/functions/rider-onboarding-flow.emulator.test.js",
         "server/functions/rider-online-intent.emulator.test.js",
@@ -5566,8 +5573,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-delivery-authority.js",
+        "cloud-run-rider-delivery-authority.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10386,6 +10396,8 @@
       "generation": "Gen 1",
       "productionPurpose": "riderPresence.updateRiderPresence",
       "callers": [
+        "server/functions/cloud-run-rider-delivery-authority.js",
+        "server/functions/cloud-run-rider-delivery-authority.test.js",
         "server/functions/rider-presence-core.test.js"
       ],
       "criticality": "review-required",
@@ -10403,8 +10415,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-delivery-authority.js",
+        "cloud-run-rider-delivery-authority.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
