@@ -26,6 +26,7 @@ import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
+import '../send_package/repo/iris_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_draft_api.dart';
@@ -1180,18 +1181,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return;
       }
       final bytes = await picked.readAsBytes();
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('analyseParcelPhotoForIris')
-          .call({
+      final data = await callIris('analyseParcelPhotoForIris', {
         'imageBase64': base64Encode(bytes),
         'contentType': picked.mimeType ?? 'image/jpeg',
         'fileName': picked.name,
         'description': details,
         'declaredWeightText': _weight.text,
-      }).timeout(const Duration(seconds: 20));
-      final data = result.data is Map
-          ? Map<String, dynamic>.from(result.data as Map)
-          : <String, dynamic>{};
+      }).timeout(const Duration(seconds: 25));
       final estimate = _nullableDouble(data['estimatedWeightKg']);
       if (!mounted) return;
       setState(() {
