@@ -62,6 +62,22 @@ function requireRider(context) {
   };
 }
 
+function isEmailVerified(rider) {
+  // Firebase sets email_verified for password accounts and for providers whose
+  // canonical auth metadata verifies the email. Never trust a client field or
+  // a Firestore profile flag for this decision.
+  return rider && rider.claims && rider.claims.email_verified === true;
+}
+
+function assertEmailVerified(rider) {
+  if (!isEmailVerified(rider)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Verify your email before submitting your Rider application. Check your inbox and try again.",
+    );
+  }
+}
+
 
 function onboardingVehicle(value) {
   const token = lower(value, 80).replace(/[ -]+/g, "_");
@@ -807,6 +823,10 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
     if (["approved", "suspended", "archived", "under_review", "submitted", "resubmitted"].includes(applicationData.status)) {
       return {applicationId: applicationRef.id, status: applicationData.status, idempotent: true};
     }
+    // Existing reviewed or already-submitted Riders retain compatibility. New
+    // applications and resubmissions must use Firebase's verified auth claim;
+    // client-supplied profile metadata cannot satisfy this gate.
+    assertEmailVerified(rider);
     const existing = {...riderData, ...profileData, ...applicationData};
     const vehicle = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
 
@@ -1093,4 +1113,11 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
 exports.cleanupRiderDocumentChunks = functions.runWith({timeoutSeconds: 540})
     .pubsub.schedule("every 24 hours").onRun(() => documentChunks.cleanupExpired());
 
-exports._test = {canonicalDateOfBirth, newPublicRiderId, profilePatch, onboardingVehicle};
+exports._test = {
+  assertEmailVerified,
+  canonicalDateOfBirth,
+  isEmailVerified,
+  newPublicRiderId,
+  profilePatch,
+  onboardingVehicle,
+};

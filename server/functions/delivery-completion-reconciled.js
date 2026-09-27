@@ -34,7 +34,7 @@ function text(value) {
 }
 
 function normalized(value) {
-  return tracking.normalizeStatus(value);
+  return tracking.normalizeLifecycleStatus(value);
 }
 
 function firstDefined(...values) {

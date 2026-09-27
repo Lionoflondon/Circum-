@@ -176,6 +176,21 @@ test("live location callable validation rejects invalid or unreliable fixes", ()
   assert.equal(mocked.mocked, true);
 });
 
+test("live location phase is derived from the authoritative delivery state", () => {
+  assert.equal(
+      deliveryTracking.authoritativeLiveLocationStatus({status: "en_route_to_pickup"}),
+      "navigating_to_pickup",
+  );
+  assert.equal(
+      deliveryTracking.authoritativeLiveLocationStatus({status: "collected"}),
+      "collected",
+  );
+  assert.equal(
+      deliveryTracking.authoritativeLiveLocationStatus({status: "delivered"}),
+      "",
+  );
+});
+
 test("PIN lookup uses private Vanguard document fields only", () => {
   assert.equal(deliveryTracking.expectedPin({pickupPin: "123456"}, "verify_collection_pin"), "123456");
   assert.equal(deliveryTracking.expectedPin({
