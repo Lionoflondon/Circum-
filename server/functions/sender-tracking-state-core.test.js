@@ -71,6 +71,34 @@ test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("cancelled", "accepted"), false);
 });
 
+test("legacy Rider lifecycle aliases normalize only at the authority boundary", () => {
+  const aliases = {
+    assigned: "accepted",
+    rider_assigned: "accepted",
+    en_route_to_pickup: "navigating_to_pickup",
+    rider_en_route_to_pickup: "navigating_to_pickup",
+    rider_arrived_pickup: "arrived_at_pickup",
+    arriving: "arrived_at_dropoff",
+    picked_up: "collected",
+    out_for_delivery: "navigating_to_dropoff",
+  };
+  for (const [legacy, canonical] of Object.entries(aliases)) {
+    assert.equal(tracking.normalizeLifecycleStatus(legacy), canonical);
+  }
+  assert.equal(
+      tracking.canTransitionDeliveryStatus("rider_assigned", "navigating_to_pickup"),
+      true,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatus("en_route_to_pickup", "arrived_at_pickup"),
+      true,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatus("delivered", "navigating_to_pickup"),
+      false,
+  );
+});
+
 test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("start_heading_to_pickup"), "navigating_to_pickup");
   assert.equal(tracking.statusForRiderAction("arrived_at_pickup"), "arrived_at_pickup");

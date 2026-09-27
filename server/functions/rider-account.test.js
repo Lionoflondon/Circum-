@@ -74,6 +74,16 @@ test("Rider application submission is non-blocking while lifecycle authority sta
   assert.doesNotMatch(body, /dispatchEligible:\s*true/);
 });
 
+test("Rider application email verification uses Firebase auth metadata", () => {
+  assert.equal(riderAccount._test.isEmailVerified({claims: {email_verified: true}}), true);
+  assert.equal(riderAccount._test.isEmailVerified({claims: {email_verified: false}, emailVerified: true}), false);
+  assert.throws(
+      () => riderAccount._test.assertEmailVerified({claims: {email_verified: false}}),
+      /Verify your email before submitting/,
+  );
+  assert.match(source, /assertEmailVerified\(rider\)/);
+});
+
 test("Incomplete application fields and confirmations do not gate submission", () => {
   const start = source.indexOf("exports.submitRiderApplication");
   const end = source.indexOf("exports.updateRiderApplicationSection", start);

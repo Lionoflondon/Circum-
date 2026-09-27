@@ -3733,6 +3733,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         await user
             .updateDisplayName(_fullName.text.trim())
             .timeout(const Duration(seconds: 20));
+        await _sendRiderVerificationEmail(user);
         await _saveRiderProfile(user);
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
@@ -3765,8 +3766,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
         _authMessage = _signupMode
-            ? 'Your Circum Rider account is ready.'
-            : 'You are signed in.';
+            ? 'Your account is ready. ${user.emailVerified ? 'Your email is verified.' : 'Check your inbox to verify your email before submitting an application.'}'
+            : user.emailVerified
+                ? 'You are signed in.'
+                : 'Check your inbox to verify your email before submitting an application.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
@@ -3776,6 +3779,52 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() => _authMessage = 'We could not continue. Please try again.');
     } finally {
       if (mounted) setState(() => _authSubmitting = false);
+    }
+  }
+
+  Future<bool> _sendRiderVerificationEmail(User user) async {
+    try {
+      if (user.emailVerified) return true;
+      await user.sendEmailVerification().timeout(webAuthOperationTimeout);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _resendRiderVerificationEmail() async {
+    if (_authSubmitting) return;
+    final user = _riderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() {
+      _authSubmitting = true;
+      _authMessage = 'Sending verification email...';
+    });
+    try {
+      final sent = await _sendRiderVerificationEmail(user);
+      if (!mounted) return;
+      setState(() {
+        _authMessage = sent
+            ? 'Verification email sent. Open the link, then reload before submitting your application.'
+            : 'We could not send the verification email. Please try again.';
+      });
+    } finally {
+      if (mounted) setState(() => _authSubmitting = false);
+    }
+  }
+
+  Future<bool> _refreshRiderEmailVerification() async {
+    final user = _riderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+    try {
+      await user.reload().timeout(webAuthOperationTimeout);
+      final refreshed = FirebaseAuth.instance.currentUser;
+      if (refreshed == null) return false;
+      await refreshed.getIdToken(true).timeout(webAuthOperationTimeout);
+      if (mounted) setState(() => _riderUser = refreshed);
+      return refreshed.emailVerified;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -4253,7 +4302,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('acceptRideRequests').call({'requestId': requestId});
-      await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
+      await _startRiderLiveLocationPublishing(requestId);
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
     } catch (_) {
@@ -4268,14 +4317,26 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
+    const activeStatuses = {
+      'accepted',
+      'navigating_to_pickup',
+      'arrived_at_pickup',
+      'waiting',
+      'pickup_verification',
+      'pickup_verified',
+      'collected',
+      'navigating_to_dropoff',
+      'in_transit',
+      'arrived_at_dropoff',
+      'pin_required',
+    };
     final activeJob = _acceptedJobs.cast<Map<String, dynamic>?>().firstWhere((
       job,
     ) {
-      final status = '${job?['status'] ?? ''}'.toLowerCase();
-      return status == 'accepted' ||
-          status == 'picked_up' ||
-          status == 'in_transit' ||
-          status == 'in_progress';
+      final status = _canonicalRiderBackendStatus(
+        '${job?['status'] ?? job?['deliveryStatus'] ?? ''}',
+      );
+      return activeStatuses.contains(status);
     }, orElse: () => null);
     if (activeJob == null) {
       _stopRiderLiveLocationPublishing(status: 'offline');
@@ -4283,15 +4344,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId =
         '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
-    final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
     if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
-    _startRiderLiveLocationPublishing(requestId, user.uid, status);
+    _startRiderLiveLocationPublishing(requestId);
   }
 
   Future<void> _startRiderLiveLocationPublishing(
     String deliveryId,
-    String riderId,
-    String status,
   ) async {
     if (_trackingDeliveryId == deliveryId && _riderLiveLocationTimer != null) {
       return;
@@ -4308,9 +4366,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return;
     }
     _trackingDeliveryId = deliveryId;
-    await _publishRiderLiveLocation(deliveryId, riderId, status);
+    await _publishRiderLiveLocation(deliveryId);
     _riderLiveLocationTimer = Timer.periodic(const Duration(seconds: 7), (_) {
-      _publishRiderLiveLocation(deliveryId, riderId, status);
+      _publishRiderLiveLocation(deliveryId);
     });
   }
 
@@ -4337,10 +4395,32 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _publishRiderLiveLocation(
     String deliveryId,
-    String riderId,
-    String status,
   ) async {
     try {
+      final job = _acceptedJobs.cast<Map<String, dynamic>?>().firstWhere(
+        (candidate) =>
+            '${candidate?['requestId'] ?? candidate?['id'] ?? ''}'.trim() ==
+            deliveryId,
+        orElse: () => null,
+      );
+      if (job == null) return;
+      final status = _canonicalRiderBackendStatus(
+        '${job['status'] ?? job['deliveryStatus'] ?? ''}',
+      );
+      const liveLocationStatuses = {
+        'accepted',
+        'navigating_to_pickup',
+        'arrived_at_pickup',
+        'waiting',
+        'pickup_verification',
+        'pickup_verified',
+        'collected',
+        'navigating_to_dropoff',
+        'in_transit',
+        'arrived_at_dropoff',
+        'pin_required',
+      };
+      if (!liveLocationStatuses.contains(status)) return;
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -4550,11 +4630,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   String _canonicalRiderBackendStatus(String status) {
-    return switch (status) {
+    final normalized = status.trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
+    return switch (normalized) {
+      'assigned' || 'rider_assigned' => 'accepted',
+      'en_route_to_pickup' || 'rider_en_route_to_pickup' =>
+        'navigating_to_pickup',
+      'rider_arrived_pickup' => 'arrived_at_pickup',
+      'arriving' => 'arrived_at_dropoff',
       'picked_up' => 'collected',
       'in_transit' || 'out_for_delivery' => 'navigating_to_dropoff',
       'completed' => 'delivered',
-      _ => status,
+      _ => normalized,
     };
   }
 
@@ -5570,6 +5659,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
+      if (!await _refreshRiderEmailVerification()) {
+        if (mounted) {
+          setState(
+            () => _message =
+                'Verify your email before submitting your Rider application. Check your inbox, then reload and try again.',
+          );
+        }
+        return;
+      }
       final result = await callAccountBootstrap('submitRiderApplication', {
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
@@ -5631,6 +5729,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       onToggleMode: () => setState(() => _signupMode = !_signupMode),
       onSubmit: _submitAuth,
       onForgotPassword: _sendRiderPasswordReset,
+      onResendVerification: _resendRiderVerificationEmail,
       onSignOut: _signOutRider,
     );
   }
@@ -5869,6 +5968,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                 ),
                                 onSubmit: _submitAuth,
                                 onForgotPassword: _sendRiderPasswordReset,
+                                onResendVerification: _resendRiderVerificationEmail,
                                 onSignOut: _signOutRider,
                               ),
                             ],
@@ -5986,6 +6086,7 @@ class _RiderAccessPanel extends StatelessWidget {
   final VoidCallback onToggleMode;
   final VoidCallback onSubmit;
   final VoidCallback onForgotPassword;
+  final VoidCallback onResendVerification;
   final VoidCallback onSignOut;
 
   const _RiderAccessPanel({
@@ -5999,6 +6100,7 @@ class _RiderAccessPanel extends StatelessWidget {
     required this.onToggleMode,
     required this.onSubmit,
     required this.onForgotPassword,
+    required this.onResendVerification,
     required this.onSignOut,
   });
 
@@ -6077,6 +6179,13 @@ class _RiderAccessPanel extends StatelessWidget {
             ),
           ] else ...[
             const SizedBox(height: 12),
+            if (!user!.emailVerified)
+              OutlinedButton.icon(
+                onPressed: submitting ? null : onResendVerification,
+                icon: const Icon(Icons.mark_email_unread_outlined),
+                label: const Text('Resend verification email'),
+              ),
+            if (!user!.emailVerified) const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: onSignOut,
               icon: const Icon(Icons.logout),

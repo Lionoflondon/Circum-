@@ -21,8 +21,8 @@ function pickupVerificationRequired(delivery = {}) {
 }
 
 function canTransitionDeliveryStatusForPolicy(delivery, from, to) {
-  const current = lifecycle.normalizeStatus(from);
-  const next = lifecycle.normalizeStatus(to);
+  const current = lifecycle.normalizeLifecycleStatus(from);
+  const next = lifecycle.normalizeLifecycleStatus(to);
   if (!lifecycle.canTransitionDeliveryStatus(current, next)) return false;
   if (["arrived_at_pickup", "waiting"].includes(current) && next === "collected") {
     return !pickupVerificationRequired(delivery);

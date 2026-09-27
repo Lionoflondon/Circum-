@@ -14,7 +14,14 @@ function text(value) {
 }
 
 function normalized(value) {
-  return tracking.normalizeStatus(value);
+  return tracking.normalizeLifecycleStatus(value);
+}
+
+function authoritativeLiveLocationStatus(delivery = {}) {
+  const current = normalized(
+      delivery.status || delivery.deliveryStatus || delivery.deliveryStage,
+  );
+  return tracking.LIVE_LOCATION_STATUSES.includes(current) ? current : "";
 }
 
 function scheduledPickupMillis(delivery = {}) {
@@ -644,7 +651,6 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
   const deliveryId = text(data && (data.deliveryId || data.requestId));
-  const trackingStatus = text(data && (data.status || data.trackingStatus || "live"));
   if (!deliveryId) {
     throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
   }
@@ -663,8 +669,8 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
     }
     const delivery = found.data || {};
     assertRiderOwnsDelivery(delivery, riderId);
-    const currentStatus = normalized(delivery.status || delivery.deliveryStatus || delivery.deliveryStage);
-    if (["completed", "complete", "delivered", "cancelled", "canceled", "failed", "no_show"].includes(currentStatus)) {
+    const currentStatus = authoritativeLiveLocationStatus(delivery);
+    if (!currentStatus) {
       throw new functions.https.HttpsError("failed-precondition", "Live tracking is not active for this delivery.");
     }
 
@@ -702,7 +708,9 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
       accuracy: location.accuracy,
       heading: location.heading,
       speed: location.speed,
-      status: trackingStatus,
+      // The delivery document is authoritative. A stale client status is
+      // ignored so location writes cannot move or overwrite lifecycle state.
+      status: currentStatus,
       trackingStatus: "live",
       gpsStatus: location.gpsStatus,
       gpsSignalQuality: location.gpsSignalQuality,
@@ -719,7 +727,7 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
       deliveryId: found.id,
       requestId: delivery.requestId || found.id,
       riderId,
-      status: trackingStatus,
+      status: currentStatus,
       riderLiveLocation,
       trackingHealth,
       lastBackendUploadAt: FieldValue.serverTimestamp(),
@@ -913,4 +921,5 @@ exports._private = {
   reconcilePendingDeliverySettlementsCore,
   scheduledPickupMillis,
   scheduledOperationalTransitionAllowed,
+  authoritativeLiveLocationStatus,
 };
