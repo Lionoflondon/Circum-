@@ -119,20 +119,44 @@ function recipient(suffix) {
   return {recipientName: `TEST Recipient ${suffix}`, recipientEmail: "qa-recipient@example.invalid", recipientPhone: "07000000000", deliveryAddress: "QA-only address", deliveryDate: "2099-01-15", deliveryTimeWindow: "09:00-12:00"};
 }
 
-async function checkoutAndWebhook({stripe, processor, webhookSecret, db, order, label}) {
+async function checkoutAndWebhook({stripe, processor, webhookSecret, db, order, label, createdPaymentIntents}) {
   const session = await stripe.checkout.sessions.retrieve(must(order.checkoutSessionId, `${label} checkout session missing`));
-  const paymentIntentId = text(session.payment_intent && session.payment_intent.id || session.payment_intent);
-  must(paymentIntentId, `${label} PaymentIntent missing`);
-  await stripe.paymentIntents.confirm(paymentIntentId, {payment_method: "pm_card_visa"});
+  const reservationId = text(order.checkoutReservationId || session.metadata && session.metadata.checkoutReservationId);
+  const reservationSnap = await db.collection("businessCheckoutReservations").doc(reservationId).get();
+  const reservation = reservationSnap.data() || {};
+  must(reservationId && reservation.externalAmount > 0, `${label} checkout reservation missing`);
+  // Checkout Sessions do not receive a PaymentIntent until a browser completes
+  // the hosted page. The job is headless, so create the TEST PaymentIntent with
+  // the reservation metadata and deliver the canonical completed-session shape.
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: reservation.externalAmount,
+    currency: GBP,
+    payment_method: "pm_card_visa",
+    confirm: true,
+    metadata: session.metadata || {},
+  }, {idempotencyKey: `${reservationId}:qa-payment-intent`});
+  const paymentIntentId = paymentIntent.id;
+  createdPaymentIntents.push(paymentIntentId);
   const successIntentEvent = await waitForEvent(stripe, {type: "payment_intent.succeeded", objectId: paymentIntentId});
-  const paidSession = await stripe.checkout.sessions.retrieve(session.id);
-  const checkoutEvent = await waitForEvent(stripe, {type: "checkout.session.completed", objectId: paidSession.id});
+  const checkoutEvent = {
+    id: id("evt_qa_checkout"), object: "event", livemode: false, type: "checkout.session.completed", created: Math.floor(Date.now() / 1000),
+    data: {object: {
+      ...session,
+      id: session.id,
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: paymentIntentId,
+      amount_total: reservation.externalAmount,
+      currency: GBP,
+      metadata: session.metadata || {},
+    }},
+  };
   const intentDelivery = await deliver(processor, stripe, successIntentEvent, webhookSecret);
   const checkoutDelivery = await deliver(processor, stripe, checkoutEvent, webhookSecret);
   const orderSnap = await db.collection("businessGiftOrders").doc(order.orderId).get();
   const giftSnap = await db.collection("giftRequests").doc(`business_gift_${order.orderId}`).get();
   if (!orderSnap.exists || orderSnap.data().status !== "paid" || !giftSnap.exists) throw new Error(`${label} did not create one paid Gift.`);
-  return {sessionId: session.id, paymentIntentId, successEventId: successIntentEvent.id, checkoutEventId: checkoutEvent.id, intentDelivery, checkoutDelivery, giftId: giftSnap.id};
+  return {sessionId: session.id, paymentIntentId, successEventId: successIntentEvent.id, checkoutEventId: checkoutEvent.id, checkoutEventSynthetic: true, intentDelivery, checkoutDelivery, giftId: giftSnap.id};
 }
 
 async function run() {
@@ -162,18 +186,16 @@ async function run() {
     if (cardReplayOrder.orderId !== cardOrder.orderId || cardReplayOrder.idempotent !== true) throw new Error("Business card order idempotency failed.");
     const cardDoc = (await qa.collection("businessGiftOrders").doc(cardOrder.orderId).get()).data();
     createdSessions.push(cardDoc.checkoutSessionId);
-    const card = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: cardOrder, label: "Business card"});
-    createdPaymentIntents.push(card.paymentIntentId);
+    const card = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: {...cardOrder, checkoutReservationId: cardDoc.checkoutReservationId}, label: "Business card", createdPaymentIntents});
     const cardReplaySnap = await qa.collection("giftRequests").doc(card.giftId).get();
     if (!cardReplaySnap.exists || cardReplaySnap.data().recipientValueVisibility !== "sender_only" || cardReplaySnap.data().recipientPrivacy !== "protected") throw new Error("Business card recipient privacy failed.");
     result.businessCard = {status: "PASS", ...card, orderIdempotentReplay: true};
 
     const invoiceOrder = await businessGifts.createBusinessGiftOrderHandler(stripe, {businessId, idempotencyKey: `${fixture.id}:invoice`, budgetGbp: 50, paymentRail: "invoice", ...recipient("INVOICE")}, context, {db: qa});
     const invoiceCheckout = await businessPayments._qaHandlers.createBusinessInvoiceCheckoutHandler(stripe, {invoiceId: invoiceOrder.invoiceId, businessId, returnUrl: "https://example.invalid/qa"}, context, {db: qa});
-    const invoiceWithCheckout = {...invoiceOrder, checkoutSessionId: invoiceCheckout.sessionId};
-    const invoiceDoc = (await qa.collection("businessGiftOrders").doc(invoiceOrder.orderId).get()).data();
-    createdSessions.push(invoiceDoc.checkoutSessionId);
-    const invoice = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: invoiceWithCheckout, label: "Business invoice"});
+    const invoiceWithCheckout = {...invoiceOrder, checkoutSessionId: invoiceCheckout.sessionId, checkoutReservationId: invoiceCheckout.checkoutReservationId};
+    createdSessions.push(invoiceCheckout.sessionId);
+    const invoice = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: invoiceWithCheckout, label: "Business invoice", createdPaymentIntents});
     createdPaymentIntents.push(invoice.paymentIntentId);
     result.businessInvoice = {status: "PASS", ...invoice};
 
