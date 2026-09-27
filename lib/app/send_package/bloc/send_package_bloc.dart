@@ -336,10 +336,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       if (fcmToken != null) {
         await storage.write(key: "pushToken", value: fcmToken);
         if (auth.currentUser != null) {
-          await callTokenCallable(
-            'updateSenderPushToken',
-            {'fcmToken': fcmToken},
-          );
+          await callTokenCallable('updateSenderPushToken', {
+            'fcmToken': fcmToken,
+          });
         }
       }
     } catch (e) {
@@ -524,20 +523,29 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ).fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[true] != selectionRequestId) return;
 
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-      );
-      if (_addressSelectionRequestIds[true] != selectionRequestId) return;
-
-      emit(
-        state.copyWith(
-          pickupCoordinate: coordinate,
-          pickupLocality: address[0].locality,
-        ),
-      );
+      // The provider coordinate is authoritative for the booking flow. Do not
+      // make address selection wait for optional reverse geocoding, which is
+      // unavailable or slow in some web runtimes.
+      emit(state.copyWith(pickupCoordinate: coordinate));
       if (state.desinationCoordinate != null) {
         add(CalculateDistance());
+      }
+
+      try {
+        final address = await placemarkFromCoordinates(
+          coordinate.lat,
+          coordinate.lng,
+        ).timeout(const Duration(seconds: 3));
+        if (_addressSelectionRequestIds[true] == selectionRequestId &&
+            address.isNotEmpty) {
+          emit(state.copyWith(pickupLocality: address.first.locality));
+        }
+      } catch (error, stackTrace) {
+        _logRecoverableSenderError(
+          'pickup reverse geocoding unavailable',
+          error,
+          stackTrace,
+        );
       }
     } catch (error, stackTrace) {
       _logRecoverableSenderError(
@@ -602,20 +610,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
       if (_addressSelectionRequestIds[false] != selectionRequestId) return;
-      // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-        // localeIdentifier: "en_US"
-      );
-      if (_addressSelectionRequestIds[false] != selectionRequestId) return;
 
-      emit(
-        state.copyWith(
-          desinationCoordinate: coordinate,
-          destinationLocality: address[0].locality,
-        ),
-      );
+      // Publish the provider coordinate before optional reverse geocoding so
+      // browser address selection can continue on the canonical Place Details
+      // result even when the platform geocoder is unavailable.
+      emit(state.copyWith(desinationCoordinate: coordinate));
       if (state.pickupCoordinate != null) {
         add(CalculateDistance());
       }
@@ -718,6 +717,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           );
         }
         // add(CalculateDistance());
+      }
+
+      try {
+        final address = await placemarkFromCoordinates(
+          coordinate.lat,
+          coordinate.lng,
+        ).timeout(const Duration(seconds: 3));
+        if (_addressSelectionRequestIds[false] == selectionRequestId &&
+            address.isNotEmpty) {
+          emit(state.copyWith(destinationLocality: address.first.locality));
+        }
+      } catch (error, stackTrace) {
+        _logRecoverableSenderError(
+          'destination reverse geocoding unavailable',
+          error,
+          stackTrace,
+        );
       }
     } catch (error, stackTrace) {
       if (routeRequestId != _routeRequestId) return;
