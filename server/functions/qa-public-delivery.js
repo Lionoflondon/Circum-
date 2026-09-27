@@ -51,13 +51,13 @@ async function activeFixtureForRider(db, context, env = process.env) {
   return {uid, lists, fixture: current};
 }
 
-async function authorizePublicDelivery(db, context, deliveryId, env = process.env) {
+async function authorizePublicDelivery(db, context, deliveryId, env = process.env, {allowUnassigned = false} = {}) {
   const direct = await db.collection("deliveryRequests").doc(deliveryId).get();
   if (!direct.exists || !isPublicQaDelivery(direct.data())) return null;
   const uid = requireQaAttestation(context);
   const delivery = direct.data();
   const lists = qaConfig(env);
-  if (!lists.riders.includes(uid) || delivery.riderId !== uid) fail("QA delivery access is not permitted.", "permission-denied");
+  if (!lists.riders.includes(uid) || (!allowUnassigned && delivery.riderId !== uid)) fail("QA delivery access is not permitted.", "permission-denied");
   const fixtureSnapshot = await db.collection(ROOT).doc(delivery.qaFixtureId).get();
   const fixture = fixtureSnapshot.exists ? {id: fixtureSnapshot.id, ...fixtureSnapshot.data()} : null;
   assertActiveFixture(fixture, lists, uid);
@@ -156,7 +156,7 @@ async function getPublicOffer({db, access, projection}) {
 }
 
 async function accept({db, context, deliveryId, env = process.env}) {
-  const access = await authorizePublicDelivery(db, context, deliveryId, env);
+  const access = await authorizePublicDelivery(db, context, deliveryId, env, {allowUnassigned: true});
   if (!access) return null;
   const result = await db.runTransaction(async (tx) => {
     const snap = await tx.get(access.ref);
