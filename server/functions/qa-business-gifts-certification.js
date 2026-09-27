@@ -202,7 +202,7 @@ async function run() {
       invoiceId = candidates.docs[0].id;
       invoiceSnap = candidates.docs[0];
     }
-    const invoiceCheckout = await businessPayments._qaHandlers.createBusinessInvoiceCheckoutHandler(stripe, {invoiceId, businessId, returnUrl: "https://example.invalid/qa"}, context, {db: qa});
+    const invoiceCheckout = await businessReservations.checkout({db: qa, stripe, invoiceId, businessId, uid: senderUid, data: {useRoth: false, returnUrl: "https://example.invalid/qa"}});
     const invoiceWithCheckout = {...invoiceOrder, checkoutSessionId: invoiceCheckout.sessionId, checkoutReservationId: invoiceCheckout.checkoutReservationId};
     createdSessions.push(invoiceCheckout.sessionId);
     const invoice = await checkoutAndWebhook({stripe, processor, webhookSecret, db: qa, order: invoiceWithCheckout, label: "Business invoice", createdPaymentIntents});
