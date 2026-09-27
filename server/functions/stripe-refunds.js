@@ -26,17 +26,15 @@ async function syncChargeRefund({db, event}) {
   const eventRef = db.collection("stripeWebhookEvents").doc(event.id);
   const charge = event.data.object;
   const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent && charge.payment_intent.id;
-  if (!paymentIntentId) return {handled: false, reason: "missing_payment_intent"};
-  const directId = charge.metadata && (charge.metadata.deliveryId || charge.metadata.requestId);
-  let refs;
-  if (directId) {
-    const ref = db.collection("deliveryRequests").doc(directId);
-    const snapshot = await ref.get();
-    refs = snapshot.exists ? [ref] : [];
-  } else {
-    const query = await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
-    refs = query.docs.map((doc) => doc.ref);
+  if (!paymentIntentId) {
+    const review = await recordPaymentArtifactReview({db, event, artifactType: "refund", objectId: charge.id, reason: "unmatched_refund", details: {reason: "missing_payment_intent"}});
+    return {handled: true, actionRequired: true, reason: "missing_payment_intent", review};
   }
+  const directId = charge.metadata && (charge.metadata.deliveryId || charge.metadata.requestId);
+  const directRef = directId ? db.collection("deliveryRequests").doc(directId) : null;
+  const directSnapshot = directRef && typeof directRef.get === "function" ? await directRef.get() : null;
+  const query = directId ? null : await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
+  const refs = directId ? (directSnapshot && directSnapshot.exists ? [directRef] : []) : query.docs.map((doc) => doc.ref);
   if (!refs.length) {
     const review = await recordPaymentArtifactReview({
       db,
@@ -46,7 +44,7 @@ async function syncChargeRefund({db, event}) {
       reason: "unmatched_refund",
       details: {paymentIntentId, stripeChargeId: charge.id || null},
     });
-    return {handled: false, reason: "unmatched_refund", paymentIntentId, ...review};
+    return {handled: false, actionRequired: true, reason: "unmatched_refund", paymentIntentId, ...review};
   }
   if (!directId && refs.length > 1) {
     await db.runTransaction(async (transaction) => {
@@ -70,7 +68,8 @@ async function syncChargeRefund({db, event}) {
         createdAt: FieldValue.serverTimestamp(),
       });
     });
-    return {handled: false, reason: "multiple_deliveries_for_payment_intent", paymentIntentId, deliveryIds: refs.map((ref) => ref.id), reviewRequired: true};
+    const review = await recordPaymentArtifactReview({db, event, artifactType: "refund", objectId: charge.id || paymentIntentId, reason: "multiple_deliveries_for_payment_intent", details: {paymentIntentId, deliveryIds: refs.map((ref) => ref.id)}});
+    return {handled: true, actionRequired: true, reason: "multiple_deliveries_for_payment_intent", paymentIntentId, deliveryIds: refs.map((ref) => ref.id), reviewRequired: true, review};
   }
   const patch = refundPatch(charge);
   await db.runTransaction(async (transaction) => {

@@ -122,6 +122,27 @@ function successfulInvoice(invoice = {}) {
   return text(invoice.status).toLowerCase() === "paid" || invoice.paid === true || text(invoice.payment_status).toLowerCase() === "paid";
 }
 
+function validateRenewalInvoice({series = {}, invoice = {}, subscriptionId = ""} = {}) {
+  const failures = [];
+  const actualSubscriptionId = text(invoice.subscription) || text(invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription);
+  if (!actualSubscriptionId || actualSubscriptionId !== text(subscriptionId || series.stripeSubscriptionId)) failures.push("subscription_mismatch");
+  if (!successfulInvoice(invoice)) failures.push("invoice_not_paid");
+  if (text(invoice.currency).toLowerCase() !== "gbp") failures.push("currency_mismatch");
+  const expectedAmount = Math.round(Number(series.budgetGbp || 0) * 100);
+  const amount = Number.isFinite(Number(invoice.amount_paid)) ? Number(invoice.amount_paid) : Number(invoice.total);
+  if (!Number.isFinite(amount) || amount !== expectedAmount) failures.push("amount_mismatch");
+  const billingReason = text(invoice.billing_reason || invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.billing_reason).toLowerCase();
+  if (billingReason !== "subscription_cycle") failures.push("billing_reason_mismatch");
+  const periodStart = Number(invoice.period_start || 0);
+  const periodEnd = Number(invoice.period_end || 0);
+  if (!periodStart || !periodEnd || periodEnd <= periodStart) failures.push("billing_period_invalid");
+  const priorPeriodEnd = Number(series.lastFulfilledPeriodEnd || series.currentPeriodEnd || 0);
+  if (priorPeriodEnd && periodStart * 1000 !== priorPeriodEnd) failures.push("billing_period_mismatch");
+  if (series.status === "ended") failures.push("series_ended");
+  if (series.cancelAtPeriodEnd === true && series.cancelAt && periodStart * 1000 >= Number(series.cancelAt)) failures.push("cancellation_race");
+  return {ok: failures.length === 0, failures};
+}
+
 function subscriptionState(status, cancelAtPeriodEnd = false) {
   const normalized = text(status).toLowerCase();
   if (cancelAtPeriodEnd && ["active", "trialing", "past_due"].includes(normalized)) return "cancellation_pending";
@@ -147,5 +168,6 @@ module.exports = {
   seriesIdForGift,
   subscriptionState,
   successfulInvoice,
+  validateRenewalInvoice,
   toDate,
 };

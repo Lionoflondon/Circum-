@@ -11,6 +11,27 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "giftRecurringSeries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "paymentArtifactReconciliations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "artifactType", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "giftRequests",
       "queryScope": "COLLECTION",
       "fields": [{"fieldPath": "paidAt", "order": "ASCENDING"}, {"fieldPath": "__name__", "order": "ASCENDING"}],
