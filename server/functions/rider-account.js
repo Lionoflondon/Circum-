@@ -7,6 +7,7 @@ const {canonicalDocumentId, DOCUMENT_MATRIX, requiredDocumentIds} = require("./r
 const {riderCallable} = require("./rider-app-check");
 const documentChunks = require("./rider-document-chunks");
 const deviceTokenAuthority = require("./device-token-authority");
+const riderWelcomeEmail = require("./rider-welcome-email");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -403,12 +404,15 @@ exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
       transaction.get(profileRef),
     ]);
     const existing = {...(profileSnap.data() || {}), ...(riderSnap.data() || {})};
+    const isNewRider = !riderSnap.exists && !profileSnap.exists;
     const onboardingStatus = nextOnboardingStatus(existing.onboardingStatus, requestedStage);
     const patch = {
       onboardingStatus,
       profileCompletionStatus: onboardingStatus === "profile_complete" ? "complete" : existing.profileCompletionStatus || "started",
       updatedAt: FieldValue.serverTimestamp(),
     };
+
+    if (rider.email) patch.email = rider.email;
 
     if (onboardingStatus === "profile_complete" && !existing.approvalStatus) {
       Object.assign(patch, {
@@ -446,8 +450,22 @@ exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
       statusAfterEvent: onboardingStatus,
       changedFields: Object.keys(patch).filter((field) => field !== "updatedAt"),
     }));
-    result = {onboardingStatus};
+    result = {
+      onboardingStatus,
+      welcomeEligible: isNewRider && onboardingStatus === "profile_started",
+    };
   });
+  if (result.welcomeEligible) {
+    const welcome = await riderWelcomeEmail.queueRiderWelcomeEmail({
+      db,
+      uid: rider.uid,
+      email: rider.email,
+      displayName: data && data.name ? data.name : rider.name,
+    });
+    result = {onboardingStatus: result.onboardingStatus, welcome};
+  } else {
+    result = {onboardingStatus: result.onboardingStatus};
+  }
   return {ok: true, riderId: rider.uid, ...result};
 });
 

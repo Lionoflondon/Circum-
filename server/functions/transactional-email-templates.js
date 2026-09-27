@@ -139,6 +139,28 @@ function welcome({displayName = "", amount = 5, ctaUrl = APP_URL} = {}) {
   return copy;
 }
 
+function riderWelcome({displayName = "", ctaUrl = APP_URL} = {}) {
+  const name = safeName(displayName);
+  return result({
+    templateId: "rider-welcome",
+    subject: "Welcome to CIRCUM Rider — your account is ready",
+    preheader: "Your Rider account was created. Verify your email to continue.",
+    heading: name ? `Welcome to CIRCUM Rider, ${firstName(name)}` : "Welcome to CIRCUM Rider",
+    paragraphs: [
+      "Your Rider account has been created successfully.",
+      "Please verify your email address using the secure link sent separately by Firebase.",
+      "After verification, return to CIRCUM to complete your Rider profile and application.",
+      "Your account is not eligible to receive jobs until the Rider application is approved.",
+    ],
+    ctaLabel: "Open CIRCUM",
+    ctaUrl,
+    footer: "This is a service email about your new CIRCUM Rider account.\n\nThe Circum team",
+    senderCategory: "info",
+    brand: "rider",
+    tags: [{name: "product", value: "rider"}, {name: "message", value: "welcome"}],
+  });
+}
+
 function bookingConfirmed({reference = "", ctaUrl = APP_URL} = {}) {
   const ref = safeReference(reference);
   return result({
@@ -600,6 +622,7 @@ module.exports = {
   riderDocumentActionRequired,
   riderEarningsUpdate,
   riderPayoutUpdate,
+  riderWelcome,
   rothActivity,
   welcome,
 };
