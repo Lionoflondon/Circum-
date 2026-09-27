@@ -53,6 +53,13 @@ void main() {
     expect(canvas, contains('senderQuoteRequestNeeded('));
   });
 
+  test('IRIS QA fault mode is web-only and allowlisted', () {
+    expect(canvas, contains('_senderQaIrisFaultMode()'));
+    expect(canvas, contains("Uri.base.queryParameters['irisFault']"));
+    expect(canvas, contains("'qaFaultMode': qaFaultMode"));
+    expect(canvas, contains("'unavailable', 'rate_limit', 'malformed'"));
+  });
+
   test('queued draft restores before backend draft retrieval', () {
     final loader = canvas.substring(
       canvas.indexOf('Future<void> _loadBackendDraft'),

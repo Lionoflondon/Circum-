@@ -37,6 +37,13 @@ import 'sender_tracking_screen.dart';
 
 const _senderPaymentSheetInitTimeout = Duration(seconds: 20);
 const _senderPaymentSheetPresentTimeout = Duration(seconds: 90);
+const _senderQaIrisFaultModes = {'unavailable', 'rate_limit', 'malformed'};
+
+String? _senderQaIrisFaultMode() {
+  if (!kIsWeb) return null;
+  final mode = Uri.base.queryParameters['irisFault']?.trim().toLowerCase();
+  return _senderQaIrisFaultModes.contains(mode) ? mode : null;
+}
 
 class SenderBookingCanvas extends StatefulWidget {
   const SenderBookingCanvas({super.key});
@@ -1189,12 +1196,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return;
       }
       final bytes = await picked.readAsBytes();
+      final qaFaultMode = _senderQaIrisFaultMode();
       final data = await callIris('analyseParcelPhotoForIris', {
         'imageBase64': base64Encode(bytes),
         'contentType': picked.mimeType ?? 'image/jpeg',
         'fileName': picked.name,
         'description': details,
         'declaredWeightText': _weight.text,
+        if (qaFaultMode != null) 'qaFaultMode': qaFaultMode,
       }).timeout(const Duration(seconds: 20));
       final estimate = _nullableDouble(data['estimatedWeightKg']);
       if (!mounted) return;
