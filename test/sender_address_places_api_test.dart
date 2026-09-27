@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:circum/app/send_package/repo/address_places_api.dart';
@@ -76,5 +77,23 @@ void main() {
     expect(source, isNot(contains('AIza')));
     expect(source, isNot(contains('BACKEND_GOOGLE_PLACES_API_KEY')));
   });
-}
 
+  test('credential acquisition is bounded before address transport', () async {
+    expect(
+      () => callAddressPlaces(
+        'resolveUkAddressPlace',
+        {'placeId': 'place-1'},
+        idTokenProvider: () => Future<String?>.delayed(
+          const Duration(milliseconds: 50),
+          () => 'id-token',
+        ),
+        appCheckTokenProvider: () => Future<String?>.delayed(
+          const Duration(seconds: 1),
+          () => 'app-check-token',
+        ),
+        requestTimeout: const Duration(milliseconds: 20),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+}

@@ -1685,14 +1685,6 @@ class _BookingPanel extends StatelessWidget {
             final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
             final lat = cleanSuggestion.lat;
             final lng = cleanSuggestion.lng;
-            context.read<SendPackageBloc>().add(
-                  SetPickupAddress(
-                    val: cleanSuggestion.description,
-                    pickupLocationSubAddress: cleanSuggestion.subText,
-                    placeId: cleanSuggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
             pickup.text = cleanSuggestion.description;
             pickup.selection = TextSelection.collapsed(
               offset: pickup.text.length,
@@ -1741,14 +1733,6 @@ class _BookingPanel extends StatelessWidget {
             final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
             final lat = cleanSuggestion.lat;
             final lng = cleanSuggestion.lng;
-            context.read<SendPackageBloc>().add(
-                  SetDeliveryAddress(
-                    val: cleanSuggestion.description,
-                    destinationLocationSubAddress: cleanSuggestion.subText,
-                    placeId: cleanSuggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
             dropoff.text = cleanSuggestion.description;
             dropoff.selection = TextSelection.collapsed(
               offset: dropoff.text.length,
