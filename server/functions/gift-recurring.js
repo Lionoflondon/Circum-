@@ -7,6 +7,7 @@ const {senderPaymentCallable} = require("./sender-app-check");
 const emailQueue = require("./email-queue");
 const templates = require("./transactional-email-templates");
 const core = require("./gift-recurring-core");
+const {recordPaymentArtifactReview} = require("./payment-artifact-reconciliation");
 
 const SERIES_COLLECTION = "giftRecurringSeries";
 const RENEWAL_COLLECTION = "giftRecurringRenewals";
@@ -270,6 +271,21 @@ async function handleGiftSubscriptionEvent({db = getFirestore(), event}) {
 
 async function fulfillPaidRenewal({db = getFirestore(), seriesRefValue, invoice, eventId = ""}) {
   const subscriptionId = invoiceSubscriptionId(invoice);
+  const seriesSnapshot = await seriesRefValue.get();
+  const seriesForValidation = seriesSnapshot.exists ? seriesSnapshot.data() || {} : {};
+  const validation = core.validateRenewalInvoice({series: seriesForValidation, invoice, subscriptionId});
+  if (!validation.ok) {
+    const review = await recordPaymentArtifactReview({
+      db,
+      event: {id: eventId || invoice.id, type: "invoice.paid", livemode: false, data: {object: invoice}},
+      artifactType: "unexpected_renewal_invoice",
+      objectId: invoice.id,
+      reason: validation.failures[0] || "renewal_invoice_validation_failed",
+      details: {seriesId: seriesRefValue.id, validationFailures: validation.failures},
+    });
+    await seriesRefValue.set({status: "action_required", lastActionRequiredRenewalId: core.renewalIdForInvoice(subscriptionId, invoice.id), lastActionRequiredReason: validation.failures[0] || "renewal_invoice_validation_failed", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    return {handled: true, actionRequired: true, renewalId: core.renewalIdForInvoice(subscriptionId, invoice.id), validationFailures: validation.failures, review};
+  }
   const renewalId = core.renewalIdForInvoice(subscriptionId, invoice.id);
   const giftId = core.renewalGiftIdForInvoice(subscriptionId, invoice.id);
   const claim = renewalRef(db, renewalId);
@@ -393,7 +409,54 @@ async function reconcileGiftRecurringRenewalsCore({db = getFirestore(), stripe, 
       .orderBy("nextExpectedRenewalAt")
       .limit(boundedLimit)
       .get();
-  const counts = {examined: snapshot.size, paidInvoices: 0, fulfilled: 0, idempotent: 0, actionRequired: 0};
+  const creatingSnapshot = await db.collection(SERIES_COLLECTION)
+      .where("status", "==", "creating")
+      .where("createdAt", "<=", new Date(nowMs - 15 * 60 * 1000))
+      .orderBy("createdAt")
+      .limit(boundedLimit)
+      .get();
+  const counts = {examined: snapshot.size, creatingExamined: creatingSnapshot.size, recoveredCreating: 0, paidInvoices: 0, fulfilled: 0, idempotent: 0, actionRequired: 0};
+  for (const document of creatingSnapshot.docs) {
+    const series = document.data() || {};
+    let subscription = null;
+    if (series.stripeSubscriptionId && stripe.subscriptions && typeof stripe.subscriptions.retrieve === "function") {
+      try {
+        subscription = await stripe.subscriptions.retrieve(series.stripeSubscriptionId);
+      } catch (_) {
+        subscription = null;
+      }
+    }
+    if (!subscription && series.stripeCustomerId && stripe.subscriptions && typeof stripe.subscriptions.list === "function") {
+      const page = await stripe.subscriptions.list({customer: series.stripeCustomerId, status: "all", limit: 100});
+      subscription = (page.data || []).find((candidate) => candidate.metadata && candidate.metadata.giftRecurringSeriesId === document.id) || null;
+    }
+    if (!subscription) {
+      counts.actionRequired += 1;
+      await document.ref.set({status: "action_required", lastActionRequiredReason: "recurring_subscription_not_found_after_sla", lastReconciliationAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      continue;
+    }
+    if (series.stripeSubscriptionId && series.stripeSubscriptionId !== subscription.id) {
+      counts.actionRequired += 1;
+      await document.ref.set({status: "action_required", lastActionRequiredReason: "recurring_subscription_identity_mismatch", lastReconciliationAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      continue;
+    }
+    await db.runTransaction(async (transaction) => {
+      transaction.set(document.ref, {
+        stripeSubscriptionId: subscription.id,
+        stripeSubscriptionStatus: text(subscription.status),
+        status: core.subscriptionState(subscription.status, subscription.cancel_at_period_end === true),
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        currentPeriodStart: subscription.current_period_start ? subscription.current_period_start * 1000 : null,
+        currentPeriodEnd: subscription.current_period_end ? subscription.current_period_end * 1000 : null,
+        recoveredAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (text(series.initialGiftId)) {
+        transaction.set(db.collection("giftRequests").doc(text(series.initialGiftId)), {recurringSeriesId: document.id, stripeSubscriptionId: subscription.id, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      }
+    });
+    counts.recoveredCreating += 1;
+  }
   for (const document of snapshot.docs) {
     const series = document.data() || {};
     const invoicePage = await stripe.invoices.list({subscription: series.stripeSubscriptionId, limit: 10});
@@ -443,7 +506,19 @@ function createGiftRecurringCallables(stripe) {
     const value = snap.data() || {};
     return {seriesId: snap.id, frequency: value.frequency, budgetGbp: value.budgetGbp, status: value.status, cancelAtPeriodEnd: value.cancelAtPeriodEnd === true, cancellationState: value.cancellationState || "none", nextExpectedRenewalAt: value.nextExpectedRenewalAt || null, stripeSubscriptionId: value.stripeSubscriptionId};
   });
-  return {cancel, portal, status};
+  const preview = senderPaymentCallable(async (data, context) => {
+    requireAuth(context);
+    const frequency = core.normalizeFrequency(data && data.frequency);
+    const interval = core.intervalFor(frequency);
+    if (!interval) throw new functions.https.HttpsError("invalid-argument", "Choose a recurring Gift frequency.");
+    return {
+      frequency,
+      frequencyLabel: interval.label,
+      nextExpectedRenewalAt: core.nextRenewalAt({from: new Date(), frequency}),
+      source: "canonical_server_recurring_preview",
+    };
+  });
+  return {cancel, portal, status, preview};
 }
 
 module.exports = {

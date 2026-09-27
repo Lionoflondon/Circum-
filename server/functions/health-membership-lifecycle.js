@@ -61,6 +61,7 @@ async function membershipRefForSubscription(db, subscriptionId) {
   const matches = await db.collection("healthPlusMemberships").where("stripeSubscriptionId", "==", id).limit(1).get();
   return matches.empty ? null : matches.docs[0].ref;
 }
+
 async function handleHealthMembershipCheckoutSession({db, session, event}) {
   if (session.mode !== "subscription" || !text(session.subscription)) return {handled: false};
   const senderId = text(session.metadata && session.metadata.userId);
@@ -113,4 +114,38 @@ async function handleHealthInvoiceEvent({db, event}) {
   const status = event.type === "invoice.paid" ? "active" : "past_due";
   return {handled: true, ...await claimMembershipEvent(db, event, membershipRef, {...membershipPatch({subscription, invoice, status}), senderId: current.senderId || membershipRef.id})};
 }
-module.exports = {membershipStatus, membershipPatch, claimMembershipEvent, invoiceSubscriptionId, handleHealthMembershipCheckoutSession, handleHealthSubscriptionEvent, handleHealthInvoiceEvent};
+
+async function reconcileHealthMembershipEventsCore({db, stripe, limit = 25}) {
+  if (!stripe || !stripe.events || typeof stripe.events.retrieve !== "function") {
+    throw new Error("Health+ reconciliation requires Stripe event access.");
+  }
+  const boundedLimit = Math.max(1, Math.min(Number(limit) || 25, 25));
+  const snapshot = await db.collection("paymentArtifactReconciliations")
+      .where("artifactType", "in", ["health_membership_subscription", "health_membership_invoice"])
+      .where("status", "==", "action_required")
+      .orderBy("createdAt")
+      .limit(boundedLimit)
+      .get();
+  const counts = {examined: snapshot.size, resolved: 0, stillUnbound: 0, errors: 0};
+  for (const document of snapshot.docs) {
+    const record = document.data() || {};
+    try {
+      const event = await stripe.events.retrieve(record.stripeEventId);
+      const result = event.type && event.type.startsWith("customer.subscription.") ?
+        await handleHealthSubscriptionEvent({db, event}) :
+        await handleHealthInvoiceEvent({db, event});
+      if (result.actionRequired) {
+        counts.stillUnbound += 1;
+        continue;
+      }
+      await document.ref.set({status: "resolved", reviewStatus: "resolved", resolvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      counts.resolved += 1;
+    } catch (error) {
+      counts.errors += 1;
+      await document.ref.set({lastErrorCode: text(error && (error.code || error.name), 80) || "reconciliation_error", lastAttemptAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+  }
+  return counts;
+}
+
+module.exports = {membershipStatus, membershipPatch, claimMembershipEvent, invoiceSubscriptionId, handleHealthMembershipCheckoutSession, handleHealthSubscriptionEvent, handleHealthInvoiceEvent, reconcileHealthMembershipEventsCore};

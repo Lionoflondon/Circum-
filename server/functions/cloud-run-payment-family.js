@@ -19,6 +19,7 @@ const FAMILY_ROUTES = Object.freeze({
     "cancelGiftPayment",
     "cancelGiftRecurring",
     "getGiftRecurringStatus",
+    "getGiftRecurringPreview",
     "createGiftRecurringBillingPortalSession",
   ],
   tips: ["submitDeliveryTip", "refundDeliveryTip"],
