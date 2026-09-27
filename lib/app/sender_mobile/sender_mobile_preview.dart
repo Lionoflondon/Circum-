@@ -75,7 +75,7 @@ Future<void> _startSenderWeb() async {
 
     _appCheckState = 'Starting';
     _refreshRuntimeHealth();
-    final appCheckStartup = await _runRequiredStartupValue(
+    final appCheckStartup = await _runOptionalStartupValue(
       'Service protection initialization',
       initializeCircumAppCheck,
       timeout: _requiredStartupTimeout,
@@ -83,9 +83,7 @@ Future<void> _startSenderWeb() async {
     if (appCheckStartup == null) {
       _appCheckState = 'Startup failed';
       _refreshRuntimeHealth();
-      return;
-    }
-    if (appCheckStartup.blockStartup) {
+    } else if (appCheckStartup.blockStartup) {
       _appCheckState = 'Blocking failure';
       diagnostics.fail(
         'Service protection initialization',
@@ -165,6 +163,23 @@ Future<bool> _runOptionalStartupStep(
   } catch (error, stackTrace) {
     diagnostics.fail(stage, error, stackTrace);
     return false;
+  }
+}
+
+Future<T?> _runOptionalStartupValue<T>(
+  String stage,
+  Future<T> Function() step, {
+  required Duration timeout,
+}) async {
+  final diagnostics = SenderStartupDiagnostics.instance;
+  diagnostics.start(stage);
+  try {
+    final result = await step().timeout(timeout);
+    diagnostics.complete(stage);
+    return result;
+  } catch (error, stackTrace) {
+    diagnostics.fail(stage, error, stackTrace);
+    return null;
   }
 }
 
