@@ -122,6 +122,18 @@ function successfulInvoice(invoice = {}) {
   return text(invoice.status).toLowerCase() === "paid" || invoice.paid === true || text(invoice.payment_status).toLowerCase() === "paid";
 }
 
+function invoiceBillingPeriod(invoice = {}) {
+  const lines = invoice.lines && Array.isArray(invoice.lines.data) ? invoice.lines.data : [];
+  const subscriptionLine = lines.find((line) => {
+    const details = line.parent && line.parent.subscription_item_details;
+    const isSubscription = line.type === "subscription" || Boolean(details) || Boolean(line.subscription);
+    return isSubscription && line.proration !== true && !(details && details.proration === true) &&
+      Number(line.period && line.period.start) > 0 && Number(line.period && line.period.end) > Number(line.period && line.period.start);
+  });
+  if (subscriptionLine) return {start: Number(subscriptionLine.period.start), end: Number(subscriptionLine.period.end)};
+  return {start: Number(invoice.period_start || 0), end: Number(invoice.period_end || 0)};
+}
+
 function validateRenewalInvoice({series = {}, invoice = {}, subscriptionId = ""} = {}) {
   const failures = [];
   const actualSubscriptionId = text(invoice.subscription) || text(invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription);
@@ -136,8 +148,7 @@ function validateRenewalInvoice({series = {}, invoice = {}, subscriptionId = ""}
   if (!Number.isFinite(amount) || amount !== expectedAmount) failures.push("amount_mismatch");
   const billingReason = text(invoice.billing_reason || invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.billing_reason).toLowerCase();
   if (billingReason !== "subscription_cycle") failures.push("billing_reason_mismatch");
-  const periodStart = Number(invoice.period_start || 0);
-  const periodEnd = Number(invoice.period_end || 0);
+  const {start: periodStart, end: periodEnd} = invoiceBillingPeriod(invoice);
   if (!periodStart || !periodEnd || periodEnd <= periodStart) failures.push("billing_period_invalid");
   const priorPeriodEnd = Number(series.lastFulfilledPeriodEnd || series.currentPeriodEnd || 0);
   if (priorPeriodEnd && periodStart * 1000 !== priorPeriodEnd) failures.push("billing_period_mismatch");
@@ -164,6 +175,7 @@ module.exports = {
   deliveryDateForPeriod,
   intervalFor,
   isRecurringFrequency,
+  invoiceBillingPeriod,
   nextRenewalAt,
   normalizeFrequency,
   renewalGiftIdForInvoice,
