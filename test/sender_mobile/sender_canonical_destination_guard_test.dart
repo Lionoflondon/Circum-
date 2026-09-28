@@ -97,7 +97,7 @@ void main() {
       'Gifts',
       'Recent Activity',
       'No deliveries yet',
-      'Your completed deliveries will appear here.',
+      'Your recent deliveries will appear here.',
     ]) {
       expect(canonicalHome, contains(marker));
     }
