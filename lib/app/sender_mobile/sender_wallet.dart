@@ -252,8 +252,13 @@ class _CachedSenderWalletSnapshot {
 class SenderWalletPage {
   final List<SenderWalletTransaction> transactions;
   final String? nextPageToken;
+  final String source;
 
-  const SenderWalletPage(this.transactions, this.nextPageToken);
+  const SenderWalletPage(
+    this.transactions,
+    this.nextPageToken, {
+    this.source = '',
+  });
 }
 
 abstract class SenderWalletRepository
@@ -393,7 +398,11 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
           ),
         )
         .toList(growable: false);
-    return SenderWalletPage(records, data['nextPageToken'] as String?);
+    return SenderWalletPage(
+      records,
+      data['nextPageToken'] as String?,
+      source: '${data['source'] ?? ''}',
+    );
   }
 
   @override

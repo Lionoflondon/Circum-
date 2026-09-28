@@ -18,6 +18,7 @@ import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_notifications.dart';
+import 'sender_notification_routing.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 import 'sender_profile_preferences.dart';
@@ -47,7 +48,8 @@ class SenderTrustActivity {
       data['action'],
     ]);
     return SenderTrustActivity(
-      points: ((data['points'] ?? data['delta'] ?? data['amount']) as num?)
+      points:
+          ((data['points'] ?? data['delta'] ?? data['amount']) as num?)
               ?.toInt() ??
           0,
       label: _friendlyTrustLabel(rawType),
@@ -59,8 +61,11 @@ class SenderTrustActivity {
 
   static String _friendlyTrustLabel(String value) {
     if (value.isEmpty) return 'Trust activity';
-    final normalized =
-        value.trim().toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ');
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ');
     if (normalized.contains('system baseline') ||
         normalized.contains('delivery history baseline')) {
       return 'Account trust baseline established';
@@ -131,16 +136,18 @@ class SenderMobileProfileData {
     List<Map<String, dynamic>>? trustEvents,
   }) {
     final profile = data ?? const <String, dynamic>{};
-    final hasTrustScore = profile.containsKey('senderTrustPoints') ||
+    final hasTrustScore =
+        profile.containsKey('senderTrustPoints') ||
         profile.containsKey('trustPoints') ||
         profile.containsKey('trustScore');
-    final hasCompletedDeliveries = profile.containsKey('completedDeliveries') ||
+    final hasCompletedDeliveries =
+        profile.containsKey('completedDeliveries') ||
         profile.containsKey('deliveriesCompleted');
     final trustScore =
         ((profile['senderTrustPoints'] ?? profile['trustPoints']) as num?)
-                ?.toInt() ??
-            (profile['trustScore'] as num?)?.toInt() ??
-            0;
+            ?.toInt() ??
+        (profile['trustScore'] as num?)?.toInt() ??
+        0;
     final trustTier = SenderTrustPolicy.normalizeTier(
       profile['senderTier'] ?? profile['trustTier'],
       points: trustScore,
@@ -152,17 +159,21 @@ class SenderMobileProfileData {
     final embeddedHistory = (profile['trustHistory'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .toList(growable: false);
-    final historySource =
-        trustEvents?.isNotEmpty == true ? trustEvents! : embeddedHistory;
-    final history = historySource
-        .map(SenderTrustActivity.fromMap)
-        .where((activity) => !activity.isBaselineEvent)
-        .toList(growable: false)
-      ..sort((a, b) {
-        final aDate = a.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bDate.compareTo(aDate);
-      });
+    final historySource = trustEvents?.isNotEmpty == true
+        ? trustEvents!
+        : embeddedHistory;
+    final history =
+        historySource
+            .map(SenderTrustActivity.fromMap)
+            .where((activity) => !activity.isBaselineEvent)
+            .toList(growable: false)
+          ..sort((a, b) {
+            final aDate =
+                a.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bDate =
+                b.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bDate.compareTo(aDate);
+          });
     final dedupedHistory = <SenderTrustActivity>[];
     final seenHistoryKeys = <String>{};
     for (final activity in history) {
@@ -208,10 +219,12 @@ class SenderMobileProfileData {
       hasTrustScore: hasTrustScore,
       trustTier: trustTier,
       nextTier: nextTier,
-      pointsToNextTier: (profile['pointsToNextTier'] as num?)?.toInt() ??
+      pointsToNextTier:
+          (profile['pointsToNextTier'] as num?)?.toInt() ??
           SenderTrustPolicy.pointsForNextTier(trustScore),
-      completedDeliveries: ((profile['completedDeliveries'] ??
-                  profile['deliveriesCompleted']) as num?)
+      completedDeliveries:
+          ((profile['completedDeliveries'] ?? profile['deliveriesCompleted'])
+                  as num?)
               ?.toInt() ??
           0,
       hasCompletedDeliveries: hasCompletedDeliveries,
@@ -253,32 +266,32 @@ class SenderMobileProfileData {
   }
 
   Map<String, dynamic> toCacheMap() => {
-        'userId': userId,
-        'displayName': displayName,
-        'username': username,
-        'email': email,
-        'phone': phone,
-        'photoUrl': photoUrl,
-        'accountType': accountType,
-        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
-        'trustScore': trustScore,
-        'hasTrustScore': hasTrustScore,
-        'trustTier': trustTier,
-        if (nextTier != null) 'nextTier': nextTier,
-        'pointsToNextTier': pointsToNextTier,
-        'completedDeliveries': completedDeliveries,
-        'hasCompletedDeliveries': hasCompletedDeliveries,
-        'trustHistory': trustHistory
-            .map(
-              (item) => {
-                'points': item.points,
-                'label': item.label,
-                if (item.occurredAt != null)
-                  'occurredAt': item.occurredAt!.toIso8601String(),
-              },
-            )
-            .toList(),
-      };
+    'userId': userId,
+    'displayName': displayName,
+    'username': username,
+    'email': email,
+    'phone': phone,
+    'photoUrl': photoUrl,
+    'accountType': accountType,
+    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+    'trustScore': trustScore,
+    'hasTrustScore': hasTrustScore,
+    'trustTier': trustTier,
+    if (nextTier != null) 'nextTier': nextTier,
+    'pointsToNextTier': pointsToNextTier,
+    'completedDeliveries': completedDeliveries,
+    'hasCompletedDeliveries': hasCompletedDeliveries,
+    'trustHistory': trustHistory
+        .map(
+          (item) => {
+            'points': item.points,
+            'label': item.label,
+            if (item.occurredAt != null)
+              'occurredAt': item.occurredAt!.toIso8601String(),
+          },
+        )
+        .toList(),
+  };
 
   String get memberSinceLabel => createdAt == null
       ? 'Member since unavailable'
@@ -373,7 +386,7 @@ class ImagePickerSenderProfilePhotoPicker implements SenderProfilePhotoPicker {
   final ImagePicker picker;
 
   ImagePickerSenderProfilePhotoPicker({ImagePicker? picker})
-      : picker = picker ?? ImagePicker();
+    : picker = picker ?? ImagePicker();
 
   @override
   Future<SenderProfilePhoto?> pick() async {
@@ -407,15 +420,16 @@ class FirebaseSenderMobileProfileRepository
     FirebaseStorage? storage,
     FirebaseFunctions? functions,
     SenderProfileAuthority? profileAuthority,
-  })  : firestore = firestore ?? FirebaseFirestore.instance,
-        storage = storage ?? FirebaseStorage.instance,
-        functions = functions ?? FirebaseFunctions.instance,
-        profileAuthority = profileAuthority ??
-            SenderProfileAuthority(
-              auth: auth,
-              firestore: firestore,
-              functions: functions,
-            );
+  }) : firestore = firestore ?? FirebaseFirestore.instance,
+       storage = storage ?? FirebaseStorage.instance,
+       functions = functions ?? FirebaseFunctions.instance,
+       profileAuthority =
+           profileAuthority ??
+           SenderProfileAuthority(
+             auth: auth,
+             firestore: firestore,
+             functions: functions,
+           );
 
   @override
   Future<SenderMobileProfileData> load() async {
@@ -496,11 +510,14 @@ class FirebaseSenderMobileProfileRepository
       'profile.save.auth',
     );
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
-    await functions.httpsCallable('updateSenderProfile').call({
-      'displayName': displayName.trim(),
-      'username': normalizedUsername,
-      'phone': phone.trim(),
-    }).timeout(profileOperationTimeout);
+    await functions
+        .httpsCallable('updateSenderProfile')
+        .call({
+          'displayName': displayName.trim(),
+          'username': normalizedUsername,
+          'phone': phone.trim(),
+        })
+        .timeout(profileOperationTimeout);
     if (user.displayName != displayName.trim()) {
       await user
           .updateDisplayName(displayName.trim())
@@ -553,11 +570,12 @@ class FirebaseSenderMobileProfileRepository
         )
         .timeout(profileOperationTimeout);
     final downloadUrl = await reference.getDownloadURL().timeout(
-          profileOperationTimeout,
-        );
+      profileOperationTimeout,
+    );
     await functions
         .httpsCallable('updateSenderProfilePhoto')
-        .call({'photoURL': downloadUrl}).timeout(profileOperationTimeout);
+        .call({'photoURL': downloadUrl})
+        .timeout(profileOperationTimeout);
     await user.updatePhotoURL(downloadUrl).timeout(profileOperationTimeout);
     final current = await load().timeout(profileOperationTimeout);
     return SenderMobileProfileData(
@@ -993,7 +1011,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
       phase: 'profile.widget.build',
       path: 'SenderMobileProfileView',
-      event: 'build loading=$_loading hasProfile=${_profile != null} '
+      event:
+          'build loading=$_loading hasProfile=${_profile != null} '
           'hasError=${_error != null}',
     );
     if (_loading) {
@@ -1098,162 +1117,163 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   }
 
   Widget _circumShortcuts() => _ProfileGlassCard(
+    padding: EdgeInsets.zero,
+    child: Column(
+      children: [
+        const _ProfileSectionTitleRow(title: 'Circum tools'),
+        SenderSavedAddressesProfileShortcut(
+          repository:
+              widget.savedAddressesRepository ??
+              (widget.repository == null
+                  ? null
+                  : const EmptySenderSavedAddressesRepository()),
+        ),
+        _ProfileShortcut(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Wallet',
+          subtitle: 'Roth balance, rewards and transactions.',
+          onTap:
+              widget.onOpenWallet ??
+              () => _showLocalMessage('Wallet is unavailable.'),
+        ),
+        _ProfileShortcut(
+          icon: Icons.group_add_outlined,
+          title: 'Referrals',
+          subtitle: 'Invite friends and view referral rewards.',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const SenderReferralScreen(),
+              settings: const RouteSettings(name: '/sender-mobile/wallet/earn'),
+            ),
+          ),
+          showDivider: false,
+        ),
+      ],
+    ),
+  );
+
+  Widget _accountSection() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _ProfileGlassCard(
         padding: EdgeInsets.zero,
         child: Column(
           children: [
-            const _ProfileSectionTitleRow(title: 'Circum tools'),
-            SenderSavedAddressesProfileShortcut(
-              repository: widget.savedAddressesRepository ??
-                  (widget.repository == null
-                      ? null
-                      : const EmptySenderSavedAddressesRepository()),
+            const _ProfileSectionTitleRow(title: 'Account'),
+            _ProfileShortcut(
+              icon: Icons.notifications_none_rounded,
+              title: 'Notifications',
+              subtitle: 'View delivery updates and account alerts.',
+              onTap: _openNotifications,
             ),
             _ProfileShortcut(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'Wallet',
-              subtitle: 'Roth balance, rewards and transactions.',
-              onTap: widget.onOpenWallet ??
-                  () => _showLocalMessage('Wallet is unavailable.'),
+              icon: Icons.tune_rounded,
+              title: 'Notification preferences',
+              subtitle: 'Choose which updates Circum sends you.',
+              onTap: _openNotificationPreferences,
             ),
             _ProfileShortcut(
-              icon: Icons.group_add_outlined,
-              title: 'Referrals',
-              subtitle: 'Invite friends and view referral rewards.',
+              icon: Icons.credit_card_rounded,
+              title: 'Payment methods',
+              subtitle: 'Manage saved payment methods.',
+              onTap: widget.onOpenPaymentMethods ?? _openPaymentMethods,
+            ),
+            _ProfileShortcut(
+              icon: Icons.lock_outline_rounded,
+              title: 'Security',
+              subtitle: 'Password and account protection.',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const SenderReferralScreen(),
-                  settings:
-                      const RouteSettings(name: '/sender-mobile/wallet/earn'),
+                  builder: (_) => const _SenderSecuritySettingsScreen(),
+                  settings: const RouteSettings(
+                    name: '/sender-mobile/profile/security',
+                  ),
                 ),
+              ),
+            ),
+            _ProfileShortcut(
+              icon: Icons.language_rounded,
+              title: 'Language',
+              subtitle: 'Language, region and time format.',
+              onTap: _openLanguage,
+            ),
+            _ProfileShortcut(
+              icon: Icons.accessibility_new_rounded,
+              title: 'Accessibility',
+              subtitle: 'Adjust your Circum experience.',
+              onTap: _openAccessibility,
+            ),
+            _ProfileShortcut(
+              icon: Icons.history_rounded,
+              title: 'Account activity',
+              subtitle: 'Review profile and security changes.',
+              onTap: _openAccountActivity,
+            ),
+            _ProfileShortcut(
+              icon: Icons.download_rounded,
+              title: 'Download my data',
+              subtitle: 'Export the Sender records Circum holds for you.',
+              onTap: _openDataExport,
+              showDivider: false,
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _helpSection() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _ProfileGlassCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            const _ProfileSectionTitleRow(title: 'Support and policies'),
+            _ProfileShortcut(
+              icon: Icons.support_agent_rounded,
+              title: 'Help & Support',
+              subtitle: 'Get help with your profile.',
+              onTap: _openSupport,
+            ),
+            _ProfileShortcut(
+              key: const Key('sender-profile-help-shape-circum'),
+              icon: Icons.auto_awesome_outlined,
+              title: 'Help Shape Circum',
+              subtitle: 'Share product feedback with the Circum team.',
+              onTap: _openFeedback,
+            ),
+            _ProfileShortcut(
+              key: const Key('sender-profile-community-requests'),
+              icon: Icons.forum_outlined,
+              title: 'Community Requests',
+              subtitle: 'View the Circum community request centre.',
+              onTap: _openCommunityRequests,
+            ),
+            _ProfileShortcut(
+              key: const Key('sender-profile-terms'),
+              icon: Icons.description_outlined,
+              title: 'Terms',
+              subtitle: 'Circum Terms of Service.',
+              onTap: () =>
+                  _openLegalDocument('Terms', '/sender-mobile/profile/terms'),
+            ),
+            _ProfileShortcut(
+              key: const Key('sender-profile-privacy'),
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy',
+              subtitle: 'How Circum protects your information.',
+              onTap: () => _openLegalDocument(
+                'Privacy',
+                '/sender-mobile/profile/privacy',
               ),
               showDivider: false,
             ),
           ],
         ),
-      );
-
-  Widget _accountSection() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ProfileGlassCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                const _ProfileSectionTitleRow(title: 'Account'),
-                _ProfileShortcut(
-                  icon: Icons.notifications_none_rounded,
-                  title: 'Notifications',
-                  subtitle: 'View delivery updates and account alerts.',
-                  onTap: _openNotifications,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.tune_rounded,
-                  title: 'Notification preferences',
-                  subtitle: 'Choose which updates Circum sends you.',
-                  onTap: _openNotificationPreferences,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.credit_card_rounded,
-                  title: 'Payment methods',
-                  subtitle: 'Manage saved payment methods.',
-                  onTap: widget.onOpenPaymentMethods ?? _openPaymentMethods,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.lock_outline_rounded,
-                  title: 'Security',
-                  subtitle: 'Password and account protection.',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const _SenderSecuritySettingsScreen(),
-                      settings: const RouteSettings(
-                        name: '/sender-mobile/profile/security',
-                      ),
-                    ),
-                  ),
-                ),
-                _ProfileShortcut(
-                  icon: Icons.language_rounded,
-                  title: 'Language',
-                  subtitle: 'Language, region and time format.',
-                  onTap: _openLanguage,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.accessibility_new_rounded,
-                  title: 'Accessibility',
-                  subtitle: 'Adjust your Circum experience.',
-                  onTap: _openAccessibility,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.history_rounded,
-                  title: 'Account activity',
-                  subtitle: 'Review profile and security changes.',
-                  onTap: _openAccountActivity,
-                ),
-                _ProfileShortcut(
-                  icon: Icons.download_rounded,
-                  title: 'Download my data',
-                  subtitle: 'Export the Sender records Circum holds for you.',
-                  onTap: _openDataExport,
-                  showDivider: false,
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-
-  Widget _helpSection() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ProfileGlassCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                const _ProfileSectionTitleRow(title: 'Support and policies'),
-                _ProfileShortcut(
-                  icon: Icons.support_agent_rounded,
-                  title: 'Help & Support',
-                  subtitle: 'Get help with your profile.',
-                  onTap: _openSupport,
-                ),
-                _ProfileShortcut(
-                  key: const Key('sender-profile-help-shape-circum'),
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Help Shape Circum',
-                  subtitle: 'Share product feedback with the Circum team.',
-                  onTap: _openFeedback,
-                ),
-                _ProfileShortcut(
-                  key: const Key('sender-profile-community-requests'),
-                  icon: Icons.forum_outlined,
-                  title: 'Community Requests',
-                  subtitle: 'View the Circum community request centre.',
-                  onTap: _openCommunityRequests,
-                ),
-                _ProfileShortcut(
-                  key: const Key('sender-profile-terms'),
-                  icon: Icons.description_outlined,
-                  title: 'Terms',
-                  subtitle: 'Circum Terms of Service.',
-                  onTap: () => _openLegalDocument(
-                      'Terms', '/sender-mobile/profile/terms'),
-                ),
-                _ProfileShortcut(
-                  key: const Key('sender-profile-privacy'),
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy',
-                  subtitle: 'How Circum protects your information.',
-                  onTap: () => _openLegalDocument(
-                    'Privacy',
-                    '/sender-mobile/profile/privacy',
-                  ),
-                  showDivider: false,
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
+      ),
+    ],
+  );
 
   void _showLocalMessage(String message) {
     ScaffoldMessenger.of(
@@ -1271,158 +1291,162 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   }
 
   Future<void> _openNotifications() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const SenderNotificationsView(),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/notifications',
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => SenderNotificationsView(
+        onOpenNotification: (notification) {
+          openSenderNotificationDestination(
+            context,
+            notification.destination,
+            onOpenNotifications: _openNotifications,
+          );
+        },
+      ),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/notifications',
+      ),
+    ),
+  );
 
   Future<void> _openPaymentMethods() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const SenderWalletView(
-            initialSection: SenderWalletInitialSection.paymentMethods,
-          ),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/payment-methods',
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const SenderWalletView(
+        initialSection: SenderWalletInitialSection.paymentMethods,
+      ),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/payment-methods',
+      ),
+    ),
+  );
 
   Future<void> _openNotificationPreferences() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderNotificationPreferencesScreen(),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/notification-preferences',
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderNotificationPreferencesScreen(),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/notification-preferences',
+      ),
+    ),
+  );
 
   Future<void> _openAccessibility() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SenderAccessibilityScope.maybeOf(context) == null
-              ? SenderAccessibilityHost(
-                  child: SenderAccessibilityView(onOpenLanguage: _openLanguage),
-                )
-              : SenderAccessibilityView(onOpenLanguage: _openLanguage),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/accessibility',
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => SenderAccessibilityScope.maybeOf(context) == null
+          ? SenderAccessibilityHost(
+              child: SenderAccessibilityView(onOpenLanguage: _openLanguage),
+            )
+          : SenderAccessibilityView(onOpenLanguage: _openLanguage),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/accessibility',
+      ),
+    ),
+  );
 
   Future<void> _openLanguage() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderLanguageSettingsScreen(),
-          settings:
-              const RouteSettings(name: '/sender-mobile/profile/language'),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderLanguageSettingsScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/language'),
+    ),
+  );
 
   Future<void> _openAccountActivity() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderAccountActivityScreen(),
-          settings:
-              const RouteSettings(name: '/sender-mobile/profile/activity'),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderAccountActivityScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/activity'),
+    ),
+  );
 
   Future<void> _openDataExport() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderDataExportScreen(),
-          settings:
-              const RouteSettings(name: '/sender-mobile/profile/data-export'),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderDataExportScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/data-export'),
+    ),
+  );
 
   Future<void> _openSupport() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const RideChatPageView(
-            title: 'Circum Support',
-            supportConversation: true,
-          ),
-          settings: const RouteSettings(name: '/sender-mobile/profile/support'),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => const RideChatPageView(
+        title: 'Circum Support',
+        supportConversation: true,
+      ),
+      settings: const RouteSettings(name: '/sender-mobile/profile/support'),
+    ),
+  );
 
   Future<void> _openFeedback() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderClosedSubmissionScreen(
-            title: 'Help Shape Circum',
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderClosedSubmissionScreen(
+        title: 'Help Shape Circum',
+        subtitle:
+            'Send feedback to Circum Admin. This creates a closed admin note, not a live chat.',
+        topic: 'sender_feedback',
+        messageLabel: 'What should the Circum team know?',
+        messageHint:
+            'Tell us what worked, what broke, or what would improve Circum.',
+        submitLabel: 'Send feedback',
+        successMessage: 'Feedback sent to Circum Admin.',
+        rows: [
+          _SenderSubmissionInfo(
+            icon: Icons.lightbulb_outline_rounded,
+            title: 'Product feedback',
             subtitle:
-                'Send feedback to Circum Admin. This creates a closed admin note, not a live chat.',
-            topic: 'sender_feedback',
-            messageLabel: 'What should the Circum team know?',
-            messageHint:
-                'Tell us what worked, what broke, or what would improve Circum.',
-            submitLabel: 'Send feedback',
-            successMessage: 'Feedback sent to Circum Admin.',
-            rows: [
-              _SenderSubmissionInfo(
-                icon: Icons.lightbulb_outline_rounded,
-                title: 'Product feedback',
-                subtitle:
-                    'Tell us what would make Circum booking, tracking or support better.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.bug_report_outlined,
-                title: 'Report a Circum issue',
-                subtitle:
-                    'Share broken flows, confusing moments or missing Circum details.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.favorite_border_rounded,
-                title: 'What worked well',
-                subtitle:
-                    'Positive feedback helps the Circum team protect the good parts.',
-              ),
-            ],
+                'Tell us what would make Circum booking, tracking or support better.',
           ),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/help-shape-circum',
+          _SenderSubmissionInfo(
+            icon: Icons.bug_report_outlined,
+            title: 'Report a Circum issue',
+            subtitle:
+                'Share broken flows, confusing moments or missing Circum details.',
           ),
-        ),
-      );
+          _SenderSubmissionInfo(
+            icon: Icons.favorite_border_rounded,
+            title: 'What worked well',
+            subtitle:
+                'Positive feedback helps the Circum team protect the good parts.',
+          ),
+        ],
+      ),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/help-shape-circum',
+      ),
+    ),
+  );
 
   Future<void> _openCommunityRequests() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _SenderClosedSubmissionScreen(
-            title: 'Community Requests',
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderClosedSubmissionScreen(
+        title: 'Community Requests',
+        subtitle:
+            'Send a request to Circum Admin. Requests are reviewed internally and are not trackable in-app.',
+        topic: 'community_request',
+        messageLabel: 'What should Circum consider?',
+        messageHint: 'Describe the request, who it helps, and why it matters.',
+        submitLabel: 'Send request',
+        successMessage: 'Community request sent to Circum Admin.',
+        rows: [
+          _SenderSubmissionInfo(
+            icon: Icons.forum_outlined,
+            title: 'One-way submission',
             subtitle:
-                'Send a request to Circum Admin. Requests are reviewed internally and are not trackable in-app.',
-            topic: 'community_request',
-            messageLabel: 'What should Circum consider?',
-            messageHint:
-                'Describe the request, who it helps, and why it matters.',
-            submitLabel: 'Send request',
-            successMessage: 'Community request sent to Circum Admin.',
-            rows: [
-              _SenderSubmissionInfo(
-                icon: Icons.forum_outlined,
-                title: 'One-way submission',
-                subtitle:
-                    'Circum receives the request with your account details for review.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.lock_outline_rounded,
-                title: 'No tracking queue',
-                subtitle:
-                    'You will not need to monitor statuses or manage request history.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.admin_panel_settings_outlined,
-                title: 'Admin review',
-                subtitle:
-                    'The request appears in Admin as a closed message with sender context.',
-              ),
-            ],
+                'Circum receives the request with your account details for review.',
           ),
-          settings: const RouteSettings(
-            name: '/sender-mobile/profile/community-requests',
+          _SenderSubmissionInfo(
+            icon: Icons.lock_outline_rounded,
+            title: 'No tracking queue',
+            subtitle:
+                'You will not need to monitor statuses or manage request history.',
           ),
-        ),
-      );
+          _SenderSubmissionInfo(
+            icon: Icons.admin_panel_settings_outlined,
+            title: 'Admin review',
+            subtitle:
+                'The request appears in Admin as a closed message with sender context.',
+          ),
+        ],
+      ),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/community-requests',
+      ),
+    ),
+  );
 
   void _showTrustDetails(SenderMobileProfileData profile) {
     showModalBottomSheet<void>(
@@ -1491,16 +1515,17 @@ class _SenderGiftStoriesCard extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => GiftStoryView(
-                          draft: GiftJourneyDraft.forMode(
-                            SenderGiftMode.someone,
-                          ).copyWith(
-                            recipientName: recipient,
-                            occasion: occasion,
-                            linkedGiftDeliveryStatus: 'delivered',
-                            riderCompletionAccepted: true,
-                            deliveryVerificationCompleted: true,
-                            deliveryAuditSuccessful: true,
-                          ),
+                          draft:
+                              GiftJourneyDraft.forMode(
+                                SenderGiftMode.someone,
+                              ).copyWith(
+                                recipientName: recipient,
+                                occasion: occasion,
+                                linkedGiftDeliveryStatus: 'delivered',
+                                riderCompletionAccepted: true,
+                                deliveryVerificationCompleted: true,
+                                deliveryAuditSuccessful: true,
+                              ),
                           senderStoryId: doc.id,
                         ),
                       ),
@@ -1842,8 +1867,8 @@ class _ProfileTrustCard extends StatelessWidget {
     final progressCopy = !profile.hasTrustScore
         ? 'Trust progress unavailable'
         : profile.nextTierLabel == null
-            ? 'Highest Circum tier reached'
-            : '${profile.pointsToNextTier} Trust Points until ${profile.nextTierLabel}';
+        ? 'Highest Circum tier reached'
+        : '${profile.pointsToNextTier} Trust Points until ${profile.nextTierLabel}';
     return _ProfileGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2053,8 +2078,9 @@ class _TrustActivityRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final positive = activity.points >= 0;
-    final points =
-        activity.points == 0 ? '—' : '${positive ? '+' : ''}${activity.points}';
+    final points = activity.points == 0
+        ? '—'
+        : '${positive ? '+' : ''}${activity.points}';
     return Semantics(
       label: '$points ${activity.label}',
       child: Container(
@@ -2322,8 +2348,8 @@ class _SenderSecuritySettingsScreenState
           .timeout(const Duration(seconds: 20));
       await FirebaseFunctions.instance
           .httpsCallable('requestSenderEmailChange')
-          .call({'pendingEmail': values.email}).timeout(
-              const Duration(seconds: 20));
+          .call({'pendingEmail': values.email})
+          .timeout(const Duration(seconds: 20));
       _showSecurityMessage(
         'Check your new email address to confirm the change.',
       );
@@ -2365,11 +2391,11 @@ class _SenderSecuritySettingsScreenState
     try {
       await FirebaseFunctions.instance
           .httpsCallable('revokeSenderSessions')
-          .call({'scope': 'all_other_devices'}).timeout(
-              const Duration(seconds: 20));
+          .call({'scope': 'all_other_devices'})
+          .timeout(const Duration(seconds: 20));
       await FirebaseAuth.instance.signOut().timeout(
-            const Duration(seconds: 20),
-          );
+        const Duration(seconds: 20),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -2647,8 +2673,8 @@ class _SenderLanguageSettingsScreenState
   Future<void> _load() async {
     try {
       final value = await _repository.load().timeout(
-            const Duration(seconds: 15),
-          );
+        const Duration(seconds: 15),
+      );
       if (!mounted) return;
       setState(() {
         _preferences = value;
@@ -2673,8 +2699,9 @@ class _SenderLanguageSettingsScreenState
       _error = null;
     });
     try {
-      final saved =
-          await _repository.save(next).timeout(const Duration(seconds: 15));
+      final saved = await _repository
+          .save(next)
+          .timeout(const Duration(seconds: 15));
       if (mounted) {
         setState(() {
           _preferences = saved;
@@ -2780,8 +2807,8 @@ class _SenderNotificationPreferencesScreenState
   Future<void> _load() async {
     try {
       final value = await _repository.load().timeout(
-            const Duration(seconds: 15),
-          );
+        const Duration(seconds: 15),
+      );
       if (mounted) {
         setState(() {
           _preferences = value;
@@ -2807,8 +2834,9 @@ class _SenderNotificationPreferencesScreenState
       _error = null;
     });
     try {
-      final saved =
-          await _repository.save(next).timeout(const Duration(seconds: 15));
+      final saved = await _repository
+          .save(next)
+          .timeout(const Duration(seconds: 15));
       if (mounted) {
         setState(() {
           _preferences = saved;
@@ -2910,53 +2938,52 @@ class _SenderAccountActivityScreenState
 
   @override
   Widget build(BuildContext context) => _SenderSettingsShell(
-        title: 'Account activity',
-        subtitle:
-            'A record of profile, notification and security changes made on this account.',
-        children: [
-          FutureBuilder<List<SenderAccountActivityEvent>>(
-            future: _activity,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const _ProfileLoadingState();
-              }
-              if (snapshot.hasError) {
-                return _ProfileMessage(
-                  message:
-                      'Activity could not be loaded. Please go back and try again.',
-                );
-              }
-              final events = snapshot.data ?? const [];
-              if (events.isEmpty) {
-                return const _ProfileGlassCard(
-                  child: _SettingsStaticRow(
-                    icon: Icons.history_rounded,
-                    title: 'No activity yet',
-                    subtitle:
-                        'New account and security actions will appear here.',
-                  ),
-                );
-              }
-              return _ProfileGlassCard(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: events
-                      .map(
-                        (event) => _ProfileShortcut(
-                          icon: Icons.check_circle_outline_rounded,
-                          title: _friendlyActivityAction(event.action),
-                          subtitle:
-                              '${event.source}${event.createdAt == null ? '' : ' · ${event.createdAt!.toLocal()}'}',
-                          onTap: () {},
-                        ),
-                      )
-                      .toList(),
-                ),
-              );
-            },
-          ),
-        ],
-      );
+    title: 'Account activity',
+    subtitle:
+        'A record of profile, notification and security changes made on this account.',
+    children: [
+      FutureBuilder<List<SenderAccountActivityEvent>>(
+        future: _activity,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _ProfileLoadingState();
+          }
+          if (snapshot.hasError) {
+            return _ProfileMessage(
+              message:
+                  'Activity could not be loaded. Please go back and try again.',
+            );
+          }
+          final events = snapshot.data ?? const [];
+          if (events.isEmpty) {
+            return const _ProfileGlassCard(
+              child: _SettingsStaticRow(
+                icon: Icons.history_rounded,
+                title: 'No activity yet',
+                subtitle: 'New account and security actions will appear here.',
+              ),
+            );
+          }
+          return _ProfileGlassCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: events
+                  .map(
+                    (event) => _ProfileShortcut(
+                      icon: Icons.check_circle_outline_rounded,
+                      title: _friendlyActivityAction(event.action),
+                      subtitle:
+                          '${event.source}${event.createdAt == null ? '' : ' · ${event.createdAt!.toLocal()}'}',
+                      onTap: () {},
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+        },
+      ),
+    ],
+  );
 
   static String _friendlyActivityAction(String value) => value
       .replaceAll('_', ' ')
@@ -3010,35 +3037,35 @@ class _SenderDataExportScreenState extends State<_SenderDataExportScreen> {
 
   @override
   Widget build(BuildContext context) => _SenderSettingsShell(
-        title: 'Download my data',
-        subtitle:
-            'Circum prepares a portable export of your Sender profile, activity, notifications, deliveries and Gifts records.',
-        children: [
-          if (_message case final message?) _ProfileMessage(message: message),
-          _ProfileGlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'The export is generated from the authenticated account and shared through your device or browser. Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.',
-                  style: TextStyle(color: _ProfileTokens.muted, height: 1.45),
-                ),
-                const SizedBox(height: 18),
-                FilledButton.icon(
-                  onPressed: _busy ? null : _export,
-                  icon: _busy
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.download_rounded),
-                  label: Text(_busy ? 'Preparing export...' : 'Prepare export'),
-                ),
-              ],
+    title: 'Download my data',
+    subtitle:
+        'Circum prepares a portable export of your Sender profile, activity, notifications, deliveries and Gifts records.',
+    children: [
+      if (_message case final message?) _ProfileMessage(message: message),
+      _ProfileGlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'The export is generated from the authenticated account and shared through your device or browser. Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.',
+              style: TextStyle(color: _ProfileTokens.muted, height: 1.45),
             ),
-          ),
-        ],
-      );
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _busy ? null : _export,
+              icon: _busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded),
+              label: Text(_busy ? 'Preparing export...' : 'Prepare export'),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _SenderSubmissionInfo {
@@ -3112,14 +3139,15 @@ class _SenderClosedSubmissionScreenState
       await FirebaseFunctions.instance
           .httpsCallable('getOrCreateSupportConversation')
           .call({
-        'topic': widget.topic,
-        'title': widget.title,
-        'participantRole': 'sender',
-        'initialMessage': body,
-        'closeImmediately': true,
-        if ((user?.displayName ?? '').trim().isNotEmpty)
-          'displayName': user!.displayName!.trim(),
-      }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+            'topic': widget.topic,
+            'title': widget.title,
+            'participantRole': 'sender',
+            'initialMessage': body,
+            'closeImmediately': true,
+            if ((user?.displayName ?? '').trim().isNotEmpty)
+              'displayName': user!.displayName!.trim(),
+          })
+          .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
       if (!mounted) return;
       _controller.clear();
       ScaffoldMessenger.of(
@@ -3416,8 +3444,9 @@ class _SettingsChoiceRow<T> extends StatelessWidget {
                         label,
                         style: GoogleFonts.inter(
                           color: Colors.white,
-                          fontWeight:
-                              selected ? FontWeight.w800 : FontWeight.w600,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
                         ),
                       ),
                     ),
@@ -3777,15 +3806,15 @@ class _ProfileSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .07),
-          shape: circular ? BoxShape.circle : BoxShape.rectangle,
-          borderRadius: circular ? null : BorderRadius.circular(10),
-          border: Border.all(color: _ProfileTokens.border),
-        ),
-      );
+    width: width,
+    height: height,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .07),
+      shape: circular ? BoxShape.circle : BoxShape.rectangle,
+      borderRadius: circular ? null : BorderRadius.circular(10),
+      border: Border.all(color: _ProfileTokens.border),
+    ),
+  );
 }
 
 class _TrustDetailsSheet extends StatelessWidget {
@@ -3795,46 +3824,45 @@ class _TrustDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Trust details',
-                style: GoogleFonts.dmSerifDisplay(
-                  color: Colors.white,
-                  fontSize: 26,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _ProfileDetail(
-                  label: 'Current tier', value: profile.trustTierLabel),
-              _ProfileDetail(
-                label: 'Circum Trust Score',
-                value: profile.trustScoreLabel,
-              ),
-              _ProfileDetail(
-                label: 'Deliveries completed',
-                value: profile.completedDeliveriesLabel,
-                showDivider: false,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Circum Trust Score reflects all qualifying account activity. '
-                'Deliveries completed counts completed delivery records only, '
-                'so these totals may change independently.',
-                style: GoogleFonts.inter(
-                  color: _ProfileTokens.muted,
-                  height: 1.45,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Trust details',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 26,
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 14),
+          _ProfileDetail(label: 'Current tier', value: profile.trustTierLabel),
+          _ProfileDetail(
+            label: 'Circum Trust Score',
+            value: profile.trustScoreLabel,
+          ),
+          _ProfileDetail(
+            label: 'Deliveries completed',
+            value: profile.completedDeliveriesLabel,
+            showDivider: false,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Circum Trust Score reflects all qualifying account activity. '
+            'Deliveries completed counts completed delivery records only, '
+            'so these totals may change independently.',
+            style: GoogleFonts.inter(
+              color: _ProfileTokens.muted,
+              height: 1.45,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _TrustHistorySheet extends StatelessWidget {
@@ -3844,36 +3872,36 @@ class _TrustHistorySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Trust history',
-                style: GoogleFonts.dmSerifDisplay(
-                  color: Colors.white,
-                  fontSize: 26,
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (activities.isEmpty)
-                Text(
-                  'No trust activity yet.',
-                  style: GoogleFonts.inter(color: _ProfileTokens.muted),
-                )
-              else
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: activities.map(_TrustActivityRow.new).toList(),
-                  ),
-                ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Trust history',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 26,
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 12),
+          if (activities.isEmpty)
+            Text(
+              'No trust activity yet.',
+              style: GoogleFonts.inter(color: _ProfileTokens.muted),
+            )
+          else
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: activities.map(_TrustActivityRow.new).toList(),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _SenderLegalDocumentScreen extends StatelessWidget {
@@ -4028,14 +4056,14 @@ class _ProfileGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: double.infinity,
-        child: AppGlassContainer(
-          padding: padding,
-          radius: AppTokens.radius22,
-          accent: AppTokens.primary,
-          child: child,
-        ),
-      );
+    width: double.infinity,
+    child: AppGlassContainer(
+      padding: padding,
+      radius: AppTokens.radius22,
+      accent: AppTokens.primary,
+      child: child,
+    ),
+  );
 }
 
 InputDecoration _fieldDecoration(String label) {
