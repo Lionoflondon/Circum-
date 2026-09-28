@@ -176,3 +176,111 @@ test("sender express surcharge is five pounds or twenty percent", () => {
   assert.equal(longQuote.lineItems.find((item) => item.key === "speed_adjustment").amount, 15.4);
   assert.equal(longQuote.total, 92.4);
 });
+
+function encodePolyline(points) {
+  let previousLatitude = 0;
+  let previousLongitude = 0;
+  let encoded = "";
+  const encodeValue = (value) => {
+    let shifted = value < 0 ? ~(value << 1) : value << 1;
+    while (shifted >= 0x20) {
+      encoded += String.fromCharCode((0x20 | (shifted & 0x1f)) + 63);
+      shifted >>= 5;
+    }
+    encoded += String.fromCharCode(shifted + 63);
+  };
+  for (const [latitude, longitude] of points) {
+    const roundedLatitude = Math.round(latitude * 1e5);
+    const roundedLongitude = Math.round(longitude * 1e5);
+    encodeValue(roundedLatitude - previousLatitude);
+    encodeValue(roundedLongitude - previousLongitude);
+    previousLatitude = roundedLatitude;
+    previousLongitude = roundedLongitude;
+  }
+  return encoded;
+}
+
+test("sender quote matrix keeps server vehicle and Vanguard choices authoritative", () => {
+  for (const [selectedVehicle, canonical] of [
+    ["Motorbike", "motorbike"],
+    ["Car", "car"],
+    ["Van", "van"],
+  ]) {
+    const quote = _private.quotePayload({
+      selectedSpeed: "Express",
+      distanceMiles: 3,
+      weightKg: 2,
+      selectedVehicle,
+      vanguard: true,
+      parcel: {itemName: "Book", weightKg: 2},
+    }, "sender-test");
+    assert.equal(quote.selectedVehicle, canonical);
+    assert.equal(quote.vanguardProtocolEnabled, true);
+    assert.equal(quote.lineItems.some((item) => item.key === "vanguard"), true);
+    assert.equal(quote.lineItems.some((item) => item.key === "Economy"), false);
+  }
+});
+
+test("sender quote applies current London tunnel toll as pass-through", () => {
+  const roadChargeSummary = _private.senderRoadChargeSummary({
+    route: {
+      encodedPolyline: encodePolyline([
+        [51.497, -0.0085],
+        [51.5095, -0.0066],
+      ]),
+    },
+    selectedVehicle: "car",
+    at: new Date("2026-09-28T12:00:00.000Z"),
+  });
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "Car",
+    parcel: {itemName: "Book", weightKg: 2},
+    roadChargeSummary,
+  }, "sender-test");
+
+  assert.equal(roadChargeSummary.routeKnown, true);
+  assert.equal(roadChargeSummary.customerContribution, 1.55);
+  assert.equal(quote.roadChargeCustomerContribution, 1.55);
+  assert.equal(quote.total, 13.05);
+  assert.equal(quote.lineItems.find((item) => item.key === "road_charge").amount, 1.55);
+  assert.equal(quote.totalRiderEarnings, 7.48);
+  assert.equal(quote.totalCircumRevenue, 4.02);
+});
+
+test("sender quote preserves ASAP and scheduled delivery timing", () => {
+  const asap = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "Car",
+    deliveryTime: {type: "now", summary: "ASAP"},
+    parcel: {itemName: "Book", weightKg: 2},
+  }, "sender-test");
+  const scheduled = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "Car",
+    deliveryTime: {
+      type: "scheduled",
+      scheduledDate: "2026-09-29",
+      scheduledWindow: "Morning",
+    },
+    parcel: {itemName: "Book", weightKg: 2},
+  }, "sender-test");
+
+  assert.equal(asap.deliveryTime.type, "now");
+  assert.equal(scheduled.deliveryTime.scheduledDate, "2026-09-29");
+  assert.equal(_private.senderQuoteEffectiveAt({type: "now"}).getTime() <= Date.now(), true);
+  assert.equal(
+    _private.senderQuoteEffectiveAt({
+      type: "scheduled",
+      scheduledDate: "2026-09-29",
+      scheduledWindow: "Morning",
+    }).toISOString(),
+    "2026-09-29T09:00:00.000Z",
+  );
+});

@@ -35,6 +35,17 @@ import 'sender_manual_address_resolution.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
+Map<String, dynamic> _senderDeliveryTimePayload(SenderBookingDraft draft) => {
+      'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
+          ? 'now'
+          : 'scheduled',
+      'scheduledDate': draft.scheduledDate,
+      'scheduledWindow': draft.scheduledWindow,
+      'customWindowStart': draft.customWindowStart,
+      'customWindowEnd': draft.customWindowEnd,
+      'summary': draft.deliveryTimeSummary,
+    };
+
 const _senderPaymentSheetInitTimeout = Duration(seconds: 20);
 const _senderPaymentSheetPresentTimeout = Duration(seconds: 90);
 const _senderQaIrisFaultModes = {'unavailable', 'rate_limit', 'malformed'};
@@ -1146,6 +1157,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             pickupLongitude: draft.pickupLng,
             dropoffLatitude: draft.dropoffLat,
             dropoffLongitude: draft.dropoffLng,
+            deliveryTime: _senderDeliveryTimePayload(draft),
           ),
         );
   }
@@ -3505,6 +3517,7 @@ class _OptionsPanel extends StatelessWidget {
             pickupLongitude: draft.pickupLng,
             dropoffLatitude: draft.dropoffLat,
             dropoffLongitude: draft.dropoffLng,
+            deliveryTime: _senderDeliveryTimePayload(draft),
           ),
         );
   }

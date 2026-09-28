@@ -146,6 +146,7 @@ class RequestSenderBookingQuote extends SendPackageEvent {
   final double? pickupLongitude;
   final double? dropoffLatitude;
   final double? dropoffLongitude;
+  final Map<String, dynamic>? deliveryTime;
 
   const RequestSenderBookingQuote({
     required this.selectedSpeed,
@@ -162,6 +163,7 @@ class RequestSenderBookingQuote extends SendPackageEvent {
     this.pickupLongitude,
     this.dropoffLatitude,
     this.dropoffLongitude,
+    this.deliveryTime,
   });
 }
 
