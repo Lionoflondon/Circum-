@@ -179,7 +179,7 @@ function cleanSenderProfilePatch(data, context) {
   };
 }
 
-exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
+async function updateSenderProfileHandler(data, context) {
   const uid = requireSender(context);
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
@@ -227,9 +227,9 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
       welcomeEmailStatus: starterRoth.welcome && starterRoth.welcome.status,
   } : {}),
   };
-});
+}
 
-exports.updateSenderPreferences = functions.https.onCall(async (data, context) => {
+async function updateSenderPreferencesHandler(data, context) {
   const uid = requireSender(context);
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
@@ -248,9 +248,9 @@ exports.updateSenderPreferences = functions.https.onCall(async (data, context) =
     createdAt: FieldValue.serverTimestamp(),
   });
   return {ok: true, preferences};
-});
+}
 
-exports.revokeSenderSessions = functions.https.onCall(async (data, context) => {
+async function revokeSenderSessionsHandler(data, context) {
   const uid = requireSender(context);
   const scope = cleanText(data && data.scope, 40);
   if (scope !== "all_other_devices") {
@@ -271,9 +271,9 @@ exports.revokeSenderSessions = functions.https.onCall(async (data, context) => {
     createdAt: FieldValue.serverTimestamp(),
   });
   return {ok: true, scope: "all_sessions_including_current"};
-});
+}
 
-exports.getSenderAccountActivity = functions.https.onCall(async (_data, context) => {
+async function getSenderAccountActivityHandler(_data, context) {
   const uid = requireSender(context);
   const [profileEvents, notificationEvents, closures] = await Promise.all([
     senderOwnedQuery("senderProfileEvents", "uid", uid, 100),
@@ -285,9 +285,9 @@ exports.getSenderAccountActivity = functions.https.onCall(async (_data, context)
           .localeCompare(String(left.createdAt || left.closedAt || "")))
       .slice(0, 200);
   return {ok: true, events};
-});
+}
 
-exports.exportSenderData = functions.https.onCall(async (_data, context) => {
+async function exportSenderDataHandler(_data, context) {
   const uid = requireSender(context);
   const db = getFirestore();
   const profile = await db.collection("users").doc(uid).get();
@@ -310,9 +310,9 @@ exports.exportSenderData = functions.https.onCall(async (_data, context) => {
     gifts,
     retention: "Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.",
   };
-});
+}
 
-exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
+async function ensureSenderAccountHandler(data, context) {
   const uid = requireSender(context);
   const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
@@ -411,7 +411,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
   delete result.starterRothEligible;
   senderProfileLog("ensure_complete", {uid, path: userRef.path, ...result});
   return {ok: true, ...result};
-});
+}
 
 exports.markSenderLegendCelebrationSeen = functions.https.onCall(async (data, context) => {
   const uid = requireSender(context);
@@ -447,7 +447,7 @@ exports.recordWebsiteVisit = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.requestSenderEmailChange = functions.https.onCall(async (data, context) => {
+async function requestSenderEmailChangeHandler(data, context) {
   const uid = requireSender(context);
   const pendingEmail = cleanEmail(data.pendingEmail || data.email);
   const db = getFirestore();
@@ -466,7 +466,7 @@ exports.requestSenderEmailChange = functions.https.onCall(async (data, context) 
     });
   });
   return {ok: true};
-});
+}
 
 exports.updateSenderLocation = functions.https.onCall(async (data, context) => {
   const uid = requireSender(context);
@@ -554,7 +554,7 @@ exports.recordIrisLearningOutlier = functions.https.onCall(async (data, context)
   return {ok: true};
 });
 
-exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) => {
+async function updateSenderProfilePhotoHandler(data, context) {
   const uid = requireSender(context);
   const photoURL = cleanText(data.photoURL, 2048);
   if (!photoURL) {
@@ -576,7 +576,23 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
   });
   senderProfileLog("update_profile_photo_complete", {uid, path: ref.path});
   return {ok: true, photoURL};
+}
+
+exports.cloudRunSenderProfileHandlers = Object.freeze({
+  ensureSenderAccount: {run: ensureSenderAccountHandler},
+  updateSenderProfile: {run: updateSenderProfileHandler},
+  updateSenderProfilePhoto: {run: updateSenderProfilePhotoHandler},
+  updateSenderPreferences: {run: updateSenderPreferencesHandler},
+  revokeSenderSessions: {run: revokeSenderSessionsHandler},
+  getSenderAccountActivity: {run: getSenderAccountActivityHandler},
+  exportSenderData: {run: exportSenderDataHandler},
+  requestSenderEmailChange: {run: requestSenderEmailChangeHandler},
 });
+
+// These non-deployed handler references keep the Firestore emulator tests and
+// the retired compatibility bridge pointed at the same Cloud Run authority.
+exports.ensureSenderAccount = exports.cloudRunSenderProfileHandlers.ensureSenderAccount;
+exports.updateSenderProfile = exports.cloudRunSenderProfileHandlers.updateSenderProfile;
 
 exports.updateSenderPushToken = functions.https.onCall(async (data, context) => {
   const uid = requireSender(context);

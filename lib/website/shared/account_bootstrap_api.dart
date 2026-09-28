@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 const accountBootstrapServiceUrl =
-    'https://circum-account-bootstrap-516426305461.us-central1.run.app';
+    'https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app';
 
 class AccountBootstrapException implements Exception {
   const AccountBootstrapException(this.status, this.message);
@@ -29,8 +29,19 @@ Future<Map<String, dynamic>> callAccountBootstrap(
     'updateRiderProfile',
     'submitRiderApplication',
   };
+  const senderProfileOperations = {
+    'updateSenderProfile',
+    'updateSenderProfilePhoto',
+    'updateSenderPreferences',
+    'revokeSenderSessions',
+    'getSenderAccountActivity',
+    'exportSenderData',
+    'requestSenderEmailChange',
+    'closeCircumAccount',
+  };
   if (operation != 'ensureSenderAccount' &&
-      !riderOperations.contains(operation)) {
+      !riderOperations.contains(operation) &&
+      !senderProfileOperations.contains(operation)) {
     throw ArgumentError.value(operation, 'operation', 'Unsupported operation');
   }
   final user = (auth ?? FirebaseAuth.instance).currentUser;
@@ -42,7 +53,8 @@ Future<Map<String, dynamic>> callAccountBootstrap(
     );
   }
   String? appCheckToken;
-  if (riderOperations.contains(operation)) {
+  if (riderOperations.contains(operation) ||
+      senderProfileOperations.contains(operation)) {
     appCheckToken = await (appCheck ?? FirebaseAppCheck.instance).getToken();
     if (appCheckToken == null || appCheckToken.isEmpty) {
       throw const AccountBootstrapException(
@@ -81,7 +93,15 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
           body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 25));
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    late final Map<String, dynamic> payload;
+    try {
+      payload = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const AccountBootstrapException(
+        'INTERNAL',
+        'Account service returned an invalid response.',
+      );
+    }
     if (response.statusCode != 200) {
       final error = payload['error'] as Map?;
       throw AccountBootstrapException(
@@ -89,7 +109,14 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
         '${error?['message'] ?? 'Account request failed.'}',
       );
     }
-    return Map<String, dynamic>.from(payload['result'] as Map);
+    final result = payload['result'];
+    if (result is! Map) {
+      throw const AccountBootstrapException(
+        'INTERNAL',
+        'Account service returned an invalid response.',
+      );
+    }
+    return Map<String, dynamic>.from(result);
   } finally {
     if (ownsClient) transport.close();
   }

@@ -33,6 +33,14 @@ function dependencies(overrides = {}) {
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
         ensureSenderAccount: handler("ensureSenderAccount"),
+        updateSenderProfile: handler("updateSenderProfile"),
+        updateSenderProfilePhoto: handler("updateSenderProfilePhoto"),
+        updateSenderPreferences: handler("updateSenderPreferences"),
+        revokeSenderSessions: handler("revokeSenderSessions"),
+        getSenderAccountActivity: handler("getSenderAccountActivity"),
+        exportSenderData: handler("exportSenderData"),
+        requestSenderEmailChange: handler("requestSenderEmailChange"),
+        closeCircumAccount: handler("closeCircumAccount"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         advanceRiderOnboarding: handler("advanceRiderOnboarding"),
         updateRiderProfile: handler("updateRiderProfile"),
@@ -48,6 +56,8 @@ test("routes only the supported account operations", () => {
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
   assert.equal(routeName("/advanceRiderOnboarding"), "advanceRiderOnboarding");
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
+  assert.equal(routeName("/updateSenderPreferences"), "updateSenderPreferences");
+  assert.equal(routeName("/closeCircumAccount"), "closeCircumAccount");
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
 
@@ -88,6 +98,35 @@ test("Rider operations require App Check", async () => {
     });
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error.status, "FAILED_PRECONDITION");
+  });
+});
+
+test("Sender profile operations require App Check", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/updateSenderPreferences`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "content-type": "application/json"},
+      body: JSON.stringify({data: {language: "en"}}),
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.status, "FAILED_PRECONDITION");
+    assert.equal(deps.calls.length, 0);
+  });
+});
+
+test("Sender profile operations preserve verified Auth and App Check", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/updateSenderPreferences`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {language: "en"}}),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(deps.calls[0].name, "updateSenderPreferences");
+    assert.equal(deps.calls[0].context.auth.uid, "user-1");
+    assert.equal(deps.calls[0].context.app.appId, "circum");
   });
 });
 

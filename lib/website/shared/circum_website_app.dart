@@ -10372,12 +10372,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
       final verificationSent = await _sendSenderVerificationEmail(user);
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateSenderProfile')
-          .call({
-        'displayName': _senderName.text.trim(),
-        'phone': _senderPhone.text.trim(),
-      }).timeout(_senderAuthOperationTimeout);
+      await callAccountBootstrap(
+              'updateSenderProfile',
+              {
+                'displayName': _senderName.text.trim(),
+                'phone': _senderPhone.text.trim(),
+              },
+              auth: FirebaseAuth.instance)
+          .timeout(_senderAuthOperationTimeout);
       final referralMessage = await applySignupReferral(
         _senderReferralCode.text,
         (code) async {
@@ -10626,9 +10628,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await user
           .verifyBeforeUpdateEmail(nextEmail)
           .timeout(webAuthOperationTimeout);
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('requestSenderEmailChange')
-          .call({'pendingEmail': nextEmail});
+      await callAccountBootstrap(
+        'requestSenderEmailChange',
+        {'pendingEmail': nextEmail},
+        auth: FirebaseAuth.instance,
+      ).timeout(_senderAuthOperationTimeout);
       _senderNewEmail.clear();
       _senderEmailChangePassword.clear();
       if (!mounted) return;
@@ -10752,15 +10756,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('updateSenderProfile').call({
-        'displayName': _senderName.text.trim(),
-        'phone': _senderPhone.text.trim(),
-        'communicationPreferences': profile.communicationPreferences.isEmpty
-            ? const {'email': true, 'sms': true}
-            : profile.communicationPreferences,
-      });
+      await callAccountBootstrap(
+              'updateSenderProfile',
+              {
+                'displayName': _senderName.text.trim(),
+                'phone': _senderPhone.text.trim(),
+                'communicationPreferences':
+                    profile.communicationPreferences.isEmpty
+                        ? const {'email': true, 'sms': true}
+                        : profile.communicationPreferences,
+              },
+              auth: FirebaseAuth.instance)
+          .timeout(_senderAuthOperationTimeout);
       setState(() => _senderProfileMessage = 'Profile saved.');
     } catch (_) {
       setState(() => _senderProfileMessage = 'Could not save the profile.');

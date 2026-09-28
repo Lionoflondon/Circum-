@@ -80,7 +80,7 @@ test("scope cannot silently recreate a source-only function", () => {
 });
 
 test("restorable compatibility callable requires its exact explicit scope", () => {
-  const name = "ensureSenderAccount";
+  const name = exportsList[0];
   const deployed = exportsList.filter((item) => item !== name);
   const blocked = runClassifiedInventory(deployed, [name], null, {
     restorable: true,
@@ -95,11 +95,14 @@ test("restorable compatibility callable requires its exact explicit scope", () =
     allowRestorable: true,
   });
   assert.equal(allowed.status, 0);
-  assert.match(allowed.stdout, /"scopeNotDeployed": \[\s*"ensureSenderAccount"/);
+  assert.match(
+      allowed.stdout,
+      new RegExp(`"scopeNotDeployed": \\[\\s*"${name}"`),
+  );
 });
 
 test("restored compatibility callable matches inventory after activation", () => {
-  const name = "ensureSenderAccount";
+  const name = exportsList[0];
   const result = runClassifiedInventory(exportsList, [name], null, {restorable: true});
   assert.equal(result.status, 0);
   assert.match(result.stdout, /"classificationMatches": true/);
@@ -126,7 +129,7 @@ test("approved source deployment requires exact explicit scope", () => {
 });
 
 test("exact scoped restoration includes only classified compatibility callables", () => {
-  const names = ["ensureSenderAccount", "updateRiderProfile"];
+  const names = [exportsList[0], exportsList[1]];
   const deployed = exportsList.filter((item) => !names.includes(item));
   const allowed = runClassifiedInventory(deployed, names, null, {
     restorable: true,
@@ -137,7 +140,7 @@ test("exact scoped restoration includes only classified compatibility callables"
 
   const blocked = runClassifiedInventory(deployed, names, null, {
     restorable: true,
-    scope: `functions:${names[0]},functions:${names[1]},functions:${exportsList[0]}`,
+    scope: `functions:${names[0]},functions:${names[1]},functions:${exportsList[2]}`,
     allowRestorable: true,
   });
   assert.equal(blocked.status, 1);

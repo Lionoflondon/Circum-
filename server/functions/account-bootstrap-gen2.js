@@ -59,7 +59,7 @@ function bridgeLegacyCallable(legacyCallable, {enforceAppCheck}) {
 // mandatory. Preserve that released-client contract while retaining auth and
 // account-role enforcement in the canonical handler.
 exports.ensureSenderAccount = bridgeLegacyCallable(
-    senderAccount.ensureSenderAccount,
+    senderAccount.cloudRunSenderProfileHandlers.ensureSenderAccount,
     {enforceAppCheck: false},
 );
 
@@ -75,4 +75,3 @@ exports.updateRiderProfile = bridgeLegacyCallable(
 
 module.exports.bridgeLegacyCallable = bridgeLegacyCallable;
 module.exports.normalizeCode = normalizeCode;
-

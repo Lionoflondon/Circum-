@@ -18,17 +18,19 @@ test("account bootstrap uses Gen 2 callable infrastructure", () => {
   assert.doesNotMatch(source, /firebase-functions\/v1/);
 });
 
-test("retired managed exports stay retired while legacy callables use compatibility edges", () => {
+test("retired managed exports stay retired while Sender uses the Cloud Run authority", () => {
   assert.doesNotMatch(indexSource, /accountBootstrapGen2/);
-  assert.match(indexSource, /exports\.ensureSenderAccount = accountBootstrapCompat\.ensureSenderAccount/);
+  assert.doesNotMatch(indexSource, /exports\.ensureSenderAccount/);
+  assert.doesNotMatch(indexSource, /exports\.updateSenderProfile/);
+  assert.doesNotMatch(indexSource, /exports\.closeCircumAccount/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess/);
-  assert.match(indexSource, /exports\.updateRiderProfile = accountBootstrapCompat\.updateRiderProfile/);
+  assert.match(indexSource, /accountBootstrapCompat/);
   assert.doesNotMatch(indexSource, /exports\.verifyRiderAccountAccess = riderAccount\.verifyRiderAccountAccess/);
   assert.doesNotMatch(indexSource, /exports\.updateRiderProfile = riderAccount\.updateRiderProfile/);
 });
 
 test("superseded bridge retains the historical security contract for reference", () => {
-  assert.match(source, /senderAccount\.ensureSenderAccount,[\s\S]*enforceAppCheck: false/);
+  assert.match(source, /senderAccount\.cloudRunSenderProfileHandlers\.ensureSenderAccount,[\s\S]*enforceAppCheck: false/);
   assert.match(source, /riderAccount\.verifyRiderAccountAccess,[\s\S]*enforceAppCheck: true/);
   assert.match(source, /riderAccount\.updateRiderProfile,[\s\S]*enforceAppCheck: true/);
   assert.match(source, /legacyCallable\.run\(request\.data \|\| \{\}, context\)/);

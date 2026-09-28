@@ -1,6 +1,6 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'account_bootstrap_api.dart';
 import 'sender_profile_authority.dart';
 
 class SenderNotificationPreferences {
@@ -102,17 +102,14 @@ abstract class SenderProfilePreferencesRepository {
 class FirebaseSenderProfilePreferencesRepository
     implements SenderProfilePreferencesRepository {
   final FirebaseAuth auth;
-  final FirebaseFunctions functions;
   final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderProfilePreferencesRepository({
     FirebaseAuth? auth,
-    FirebaseFunctions? functions,
     SenderProfileAuthority? profileAuthority,
   })  : auth = auth ?? FirebaseAuth.instance,
-        functions = functions ?? FirebaseFunctions.instance,
-        profileAuthority = profileAuthority ??
-            SenderProfileAuthority(auth: auth, functions: functions);
+        profileAuthority =
+            profileAuthority ?? SenderProfileAuthority(auth: auth);
 
   @override
   Future<SenderProfilePreferences> load() async {
@@ -124,21 +121,24 @@ class FirebaseSenderProfilePreferencesRepository
 
   @override
   Future<SenderProfilePreferences> save(SenderProfilePreferences value) async {
-    final user = await profileAuthority.requireRestoredUser(
-      'profile.preferences.save.auth',
-    );
-    final result =
-        await functions.httpsCallable('updateSenderPreferences').call({
-      'language': value.language,
-      'timeFormat': value.timeFormat,
-      'notificationPreferences': value.notifications.toMap(),
-    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
-    final data = result.data;
-    if (data is Map && data['preferences'] is Map) {
+    final result = await callAccountBootstrap(
+            'updateSenderPreferences',
+            {
+              'language': value.language,
+              'timeFormat': value.timeFormat,
+              'notificationPreferences': value.notifications.toMap(),
+            },
+            auth: auth)
+        .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+    final data = result;
+    if (data['preferences'] is Map) {
       return SenderProfilePreferences.fromMap(
         Map<String, dynamic>.from(data['preferences'] as Map),
       );
     }
+    final user = await profileAuthority.requireRestoredUser(
+      'profile.preferences.save.read',
+    );
     final snapshot = await profileAuthority.readCanonicalProfile(
       user,
       'profile.preferences.save.read',

@@ -332,7 +332,7 @@ void main() {
       'putData(',
       'getDownloadURL().timeout(',
       'verifyBeforeUpdateEmail',
-      "httpsCallable('revokeSenderSessions')",
+      "callAccountBootstrap(\n        'revokeSenderSessions'",
       'Not enabled in this release. No fake setting is stored.',
       'Not enabled in this build. Device biometrics never claim to protect sign-in.',
       'SenderWalletInitialSection.paymentMethods',
@@ -340,9 +340,11 @@ void main() {
       expect(profile, contains(marker));
     }
     expect(profile, contains('timeout(profileOperationTimeout)'));
-    expect(preferences, contains("httpsCallable('updateSenderPreferences')"));
-    expect(accountData, contains("httpsCallable('getSenderAccountActivity')"));
-    expect(accountData, contains("httpsCallable('exportSenderData')"));
+    expect(preferences, contains('callAccountBootstrap('));
+    expect(preferences, contains("'updateSenderPreferences'"));
+    expect(accountData, contains('callAccountBootstrap('));
+    expect(accountData, contains("'getSenderAccountActivity'"));
+    expect(accountData, contains("'exportSenderData'"));
     expect(wallet, contains('enum SenderWalletInitialSection'));
     expect(wallet, contains('_openManagePayments'));
   });

@@ -184,6 +184,7 @@
         ".github/workflows/ci.yml",
         ".github/workflows/deploy_firestore_rules.yml",
         ".github/workflows/deploy_functions.yml",
+        ".github/workflows/deploy_sender_profile_cloud_run.yml",
         ".github/workflows/rc1_deploy.yml",
         ".github/workflows/rc1_release_build.yml",
         ".github/workflows/repository_flutter_ci.yml",
@@ -251,6 +252,22 @@
       "reason": "Shared read-only build-time environment accessors."
     },
     {
+      "products": ["sender-app", "website"],
+      "files": [
+        "lib/app/authentication/bloc/auth_bloc.dart",
+        "lib/app/authentication/sender_account_closure.dart",
+        "lib/app/sender_mobile/account_bootstrap_api.dart",
+        "lib/app/sender_mobile/sender_account_data.dart",
+        "lib/app/sender_mobile/sender_mobile_home.dart",
+        "lib/app/sender_mobile/sender_mobile_profile.dart",
+        "lib/app/sender_mobile/sender_profile_preferences.dart",
+        "lib/website/shared/account_bootstrap_api.dart",
+        "lib/website/shared/circum_website_app.dart",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "reason": "Sender Profile/account security and persistence use the same authenticated Cloud Run authority across Sender native and Sender Web."
+    },
+    {
       "products": ["sender-app", "backend"],
       "files": [
         "deploy-manifest.json",
@@ -279,6 +296,13 @@
         "server/functions/storage-sender-profile-rules.test.js",
         "server/functions/account-closure.js",
         "server/functions/account-closure.test.js",
+        "server/functions/account-bootstrap-gen2.js",
+        "server/functions/account-bootstrap-gen2.test.js",
+        "server/functions/check-functions-inventory.test.js",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/production-functions-inventory.json",
+        ".github/workflows/deploy_sender_profile_cloud_run.yml",
         "test/authentication/sender_account_closure_sequence_test.dart",
         "test/authentication/sender_auth_commit_sequence_test.dart",
         "test/sender_mobile/sender_canonical_destination_guard_test.dart",
@@ -366,7 +390,22 @@
     {
       "products": ["website", "backend"],
       "files": [
+        "deploy-manifest.json",
+        ".github/workflows/deploy_sender_profile_cloud_run.yml",
+        "docs/architecture/GEN1_PRODUCTION_EXIT.md",
+        "docs/architecture/gen1-production-registry.json",
+        "server/functions/account-bootstrap-gen2.js",
+        "server/functions/account-bootstrap-gen2.test.js",
+        "server/functions/account-closure.js",
+        "server/functions/check-functions-inventory.test.js",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/index.js",
+        "server/functions/production-functions-inventory.json",
         "server/functions/rider-account.test.js",
+        "server/functions/sender-account-authority.test.js",
+        "server/functions/sender-account.js",
+        "lib/website/shared/account_bootstrap_api.dart",
         "test/website_account_bootstrap_api_test.dart",
         "test/website_rider_onboarding_hardening_test.dart"
       ],

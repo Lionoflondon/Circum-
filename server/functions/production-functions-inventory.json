@@ -354,16 +354,6 @@
       "owner": "circum-newsletter"
     },
     {
-      "name": "exportSenderData",
-      "category": "APPROVED_SOURCE_DEPLOYMENT",
-      "owner": "circum-sender-profile"
-    },
-    {
-      "name": "getSenderAccountActivity",
-      "category": "APPROVED_SOURCE_DEPLOYMENT",
-      "owner": "circum-sender-profile"
-    },
-    {
       "name": "getGiftRecurringPreview",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-gift-payments"
@@ -414,11 +404,6 @@
       "owner": "circum-sender-cancellation-reconciler"
     },
     {
-      "name": "revokeSenderSessions",
-      "category": "APPROVED_SOURCE_DEPLOYMENT",
-      "owner": "circum-sender-profile"
-    },
-    {
       "name": "recordNewsletterAnalytics",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-newsletter"
@@ -437,11 +422,6 @@
       "name": "updateNewsletterPreferences",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-newsletter"
-    },
-    {
-      "name": "updateSenderPreferences",
-      "category": "APPROVED_SOURCE_DEPLOYMENT",
-      "owner": "circum-sender-profile"
     }
   ]
 }

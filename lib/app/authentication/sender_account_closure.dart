@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:crypto/crypto.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
+import '../sender_mobile/account_bootstrap_api.dart';
 
 enum SenderReauthenticationProvider { emailPassword, google, apple }
 
@@ -52,27 +55,28 @@ class SenderAccountClosure {
       SenderAccountClosureSequence.defaultOperationTimeout;
 
   final FirebaseAuth _auth;
-  final FirebaseFunctions _functions;
+  final FirebaseAppCheck _appCheck;
+  final http.Client? _client;
   final FlutterSecureStorage _storage;
   final GoogleSignIn _googleSignIn;
   final SenderAccountClosureSequence _sequence;
 
   SenderAccountClosure({
     FirebaseAuth? auth,
-    FirebaseFunctions? functions,
+    FirebaseAppCheck? appCheck,
+    http.Client? client,
     FlutterSecureStorage? storage,
     GoogleSignIn? googleSignIn,
     SenderAccountClosureSequence? sequence,
-  }) : _auth = auth ?? FirebaseAuth.instance,
-       _functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
-       _storage = storage ?? const FlutterSecureStorage(),
-       _googleSignIn = googleSignIn ?? GoogleSignIn(),
-       _sequence = sequence ?? const SenderAccountClosureSequence();
+  })  : _auth = auth ?? FirebaseAuth.instance,
+        _appCheck = appCheck ?? FirebaseAppCheck.instance,
+        _client = client,
+        _storage = storage ?? const FlutterSecureStorage(),
+        _googleSignIn = googleSignIn ?? GoogleSignIn(),
+        _sequence = sequence ?? const SenderAccountClosureSequence();
 
   List<SenderReauthenticationProvider> get availableProviders {
-    final providers =
-        _auth.currentUser?.providerData
+    final providers = _auth.currentUser?.providerData
             .map((provider) => provider.providerId)
             .toSet() ??
         const <String>{};
@@ -151,8 +155,12 @@ class SenderAccountClosure {
           await user.getIdToken(true);
         },
         closeApplicationAccount: () async {
-          await _functions.httpsCallable('closeCircumAccount').call(
-            <String, String>{'accountType': 'sender'},
+          await callAccountBootstrap(
+            'closeCircumAccount',
+            const <String, String>{'accountType': 'sender'},
+            auth: _auth,
+            appCheck: _appCheck,
+            client: _client,
           );
         },
         deleteFirebaseIdentity: user.delete,
@@ -164,8 +172,8 @@ class SenderAccountClosure {
       );
     } on FirebaseAuthException catch (error) {
       throw SenderAccountClosureException(_authErrorMessage(error.code));
-    } on FirebaseFunctionsException catch (error) {
-      throw SenderAccountClosureException(_functionErrorMessage(error.code));
+    } on SenderAccountBootstrapException catch (error) {
+      throw SenderAccountClosureException(_functionErrorMessage(error.status));
     }
   }
 
@@ -211,6 +219,7 @@ class SenderAccountClosure {
   }
 
   static String _functionErrorMessage(String code) {
+    code = code.toLowerCase().replaceAll('_', '-');
     if (code == 'failed-precondition') {
       return 'Your account cannot be closed until outstanding activity is resolved.';
     }

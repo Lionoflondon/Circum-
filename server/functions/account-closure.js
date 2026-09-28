@@ -1,5 +1,4 @@
 /* eslint-disable max-len, require-jsdoc */
-const functions = require("firebase-functions/v1");
 const {getAuth} = require("firebase-admin/auth");
 const {
   FieldValue,
@@ -28,11 +27,15 @@ const DISPUTE_STATUSES = ["open", "pending", "under_review", "active"];
 const PAYOUT_REVIEW_STATUSES = ["requested", "processing", "under_review"];
 const PAYMENT_PENDING_STATUSES = ["pending", "processing", "requires_action"];
 
+function closureError(code, message, details) {
+  return Object.assign(new Error(message), {code, details});
+}
+
 function assertRecentAuthentication(context) {
   const authTime = Number(context.auth && context.auth.token && context.auth.token.auth_time);
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (!authTime || nowSeconds - authTime > 300) {
-    throw new functions.https.HttpsError(
+    throw closureError(
         "failed-precondition",
         "Please sign in again before closing your account.",
     );
@@ -129,9 +132,9 @@ async function deleteCollectionDocs(collection, field, uid, batch) {
   snapshot.docs.forEach((doc) => batch.delete(doc.ref));
 }
 
-async function closeAccount(data, context) {
+async function closeAccountHandler(data, context) {
   if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError(
+    throw closureError(
         "unauthenticated",
         "Sign in before closing your account.",
     );
@@ -141,7 +144,7 @@ async function closeAccount(data, context) {
   const uid = context.auth.uid;
   const accountType = `${data && data.accountType || ""}`.trim();
   if (accountType !== "sender" && accountType !== "rider") {
-    throw new functions.https.HttpsError(
+    throw closureError(
         "invalid-argument",
         "Choose a valid account type.",
     );
@@ -153,7 +156,7 @@ async function closeAccount(data, context) {
   if (existingClosure.exists) {
     const existing = existingClosure.data() || {};
     if (existing.accountType && existing.accountType !== accountType) {
-      throw new functions.https.HttpsError(
+      throw closureError(
           "failed-precondition",
           "This account cannot be closed using that account type.",
       );
@@ -165,7 +168,7 @@ async function closeAccount(data, context) {
     await riderHasBlocker(uid) :
     await senderHasBlocker(uid);
   if (blocker) {
-    throw new functions.https.HttpsError(
+    throw closureError(
         "failed-precondition",
         blockerMessage(accountType, blocker),
         {blocker},
@@ -252,7 +255,8 @@ async function closeAccount(data, context) {
 }
 
 module.exports = {
-  closeAccount: functions.region("us-central1").https.onCall(closeAccount),
+  closeAccount: closeAccountHandler,
+  closeAccountHandler,
   _test: {
     ACTIVE_DELIVERY_STATUSES,
     blockerMessage,

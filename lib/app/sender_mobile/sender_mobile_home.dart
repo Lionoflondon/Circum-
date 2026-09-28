@@ -37,6 +37,7 @@ import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 import 'sender_ui_baseline.dart';
 import 'sender_wallet.dart';
+import 'account_bootstrap_api.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
 const senderMobileHeroSubtitle =
@@ -1073,9 +1074,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         ).ensureCanonicalSenderAccount(user, 'sender_mobile.auth.ensure');
         if (!createAccount) return;
         try {
-          await functions.httpsCallable('updateSenderProfile').call({
-            'firstName': firstName,
-          }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+          await callAccountBootstrap(
+            'updateSenderProfile',
+            {'firstName': firstName},
+            auth: auth,
+          ).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
         } catch (error) {
           debugPrint(
               'Sender post-auth profile update deferred: ${error.runtimeType}');
@@ -2247,35 +2250,39 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-      final items = snapshot.docs.where((doc) {
-        return senderNotificationVisible(doc.data());
-      }).map((doc) {
-        final data = doc.data();
-        final rawDate = data['createdAt'];
-        final nested = data['data'] is Map
-            ? Map<String, dynamic>.from(data['data'] as Map)
-            : const <String, dynamic>{};
-        final rawDestination = data['destination'] ?? nested['destination'];
-        final destination = rawDestination is Map
-            ? Map<String, dynamic>.from(rawDestination)
-            : const <String, dynamic>{};
-        return SenderHomeNotification(
-          id: doc.id,
-          title: '${data['title'] ?? 'Circum update'}'.trim(),
-          body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-          read: data['read'] == true,
-          type: '${data['type'] ?? ''}'.trim(),
-          destination: destination,
-          bookingId: _senderHomeFirstText([
-            data['bookingId'],
-            nested['bookingId'],
-            destination['bookingId'],
-            destination['deliveryId'],
-          ]),
-          archived: data['archived'] == true || data['deletedAt'] != null,
-          createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
-        );
-      }).where((item) => !item.archived).toList(growable: false);
+      final items = snapshot.docs
+          .where((doc) {
+            return senderNotificationVisible(doc.data());
+          })
+          .map((doc) {
+            final data = doc.data();
+            final rawDate = data['createdAt'];
+            final nested = data['data'] is Map
+                ? Map<String, dynamic>.from(data['data'] as Map)
+                : const <String, dynamic>{};
+            final rawDestination = data['destination'] ?? nested['destination'];
+            final destination = rawDestination is Map
+                ? Map<String, dynamic>.from(rawDestination)
+                : const <String, dynamic>{};
+            return SenderHomeNotification(
+              id: doc.id,
+              title: '${data['title'] ?? 'Circum update'}'.trim(),
+              body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
+              read: data['read'] == true,
+              type: '${data['type'] ?? ''}'.trim(),
+              destination: destination,
+              bookingId: _senderHomeFirstText([
+                data['bookingId'],
+                nested['bookingId'],
+                destination['bookingId'],
+                destination['deliveryId'],
+              ]),
+              archived: data['archived'] == true || data['deletedAt'] != null,
+              createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
+            );
+          })
+          .where((item) => !item.archived)
+          .toList(growable: false);
       return items;
     });
   }
