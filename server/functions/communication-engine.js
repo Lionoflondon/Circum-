@@ -57,6 +57,7 @@ function recipientRoleFor(chat, uid) {
 
 function destinationFor(type, data = {}) {
   const bookingId = clean(data.bookingId || data.deliveryId || data.requestId);
+  const deliveryId = clean(data.deliveryId || data.bookingId || data.requestId);
   const giftId = clean(data.giftId);
   const healthId = clean(data.healthPickupId || data.pickupId);
   const businessId = clean(data.businessId);
@@ -71,7 +72,7 @@ function destinationFor(type, data = {}) {
   if (type.startsWith("gift_") || giftId) return {route: "gift", giftId};
   if (type.startsWith("health_") || healthId) return {route: "health", healthPickupId: healthId};
   if (type.startsWith("business_") || businessId) return {route: "business", businessId};
-  if (bookingId) return {route: "tracking", bookingId};
+  if (bookingId) return {route: "tracking", bookingId, deliveryId};
   return {route: "notifications"};
 }
 

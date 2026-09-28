@@ -10,6 +10,17 @@ const notificationSources = [
   "delivery-adjustments.js", "gift-story-automation.js",
 ].map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
+test("Sender delivery notifications carry an authoritative delivery deep link", () => {
+  assert.deepEqual(destinationFor("delivery_created", {
+    bookingId: "request-1",
+    deliveryId: "delivery-1",
+  }), {
+    route: "tracking",
+    bookingId: "request-1",
+    deliveryId: "delivery-1",
+  });
+});
+
 test("Rider job pushes use the native job contract and attention configuration", () => {
   assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1"}), {
     route: "jobs",

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
 const {fixtureDb, isFixtureDeliveryId} = require("./gift-story-fixture-db");
-const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce} = require("./cloud-run-notification-events");
+const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce, handlers} = require("./cloud-run-notification-events");
 const {processDeliveryCreatedOnce} = require("./platform-notifications");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
@@ -36,6 +36,23 @@ function pubsubPushBody(payload) {
 test("extracts only deliveryRequests document ids", () => {
   assert.equal(deliveryIdFromName("projects/p/databases/(default)/documents/deliveryRequests/d1"), "d1");
   assert.equal(deliveryIdFromName("documents/users/u1"), null);
+});
+
+test("trusted synthetic QA delivery events are ignored before claiming side effects", () => {
+  const qa = {
+    isSyntheticQa: true,
+    qaPublic: true,
+    qaNamespace: "qaSpecialFlowFixtures",
+    qaFixtureId: "b".repeat(64),
+    realDispatch: false,
+    suppressExternalSideEffects: true,
+    excludeFromCustomerNotifications: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromAnalytics: true,
+  };
+  assert.equal(handlers.delivery_created.qualifies({after: qa}), false);
+  assert.equal(handlers.delivery_created.qualifies({after: {...qa, qaNamespace: "forged"}}), true);
 });
 
 test("business claim is stable per handler and delivery", () => {
