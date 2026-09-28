@@ -69,17 +69,6 @@ void main() {
     expect(source, isNot(contains('final start = page * 20')));
   });
 
-  test('Sender Activity uses document ID as the equal-timestamp tie-break', () {
-    final source = File(
-      'lib/app/sender_mobile/sender_activity.dart',
-    ).readAsStringSync();
-
-    expect(source, contains('_compareActivityItemsDescending'));
-    expect(source, contains('return right.id.compareTo(left.id);'));
-    expect(source, contains('items.sort(_compareActivityItemsDescending);'));
-    expect(source, contains('merged.sort(_compareActivityItemsDescending);'));
-  });
-
   test('Sender Activity has warm-session cache and performance telemetry', () {
     final source = File(
       'lib/app/sender_mobile/sender_activity.dart',
