@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -77,40 +78,90 @@ class SenderActivityItem {
   });
 
   SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
-        id: id,
-        type: type,
-        title: title,
-        status: status,
-        destination: destination,
-        pickup: pickup,
-        rider: rider,
-        eta: eta,
-        amount: amount,
-        rothAmount: rothAmount,
-        rothDirection: rothDirection,
-        occurredAt: occurredAt,
-        active: active,
-        riderId: riderId,
-        riderPhotoUrl: riderPhotoUrl,
-        riderRank: riderRank,
-        riderRating: riderRating,
-        trustPoints: trustPoints,
-        vanguardProtected: vanguardProtected,
-        irisVerified: irisVerified,
-        repeatRider: repeatRider ?? this.repeatRider,
-        riderTrusted: riderTrusted,
-        riderVanguardApproved: riderVanguardApproved,
-        riderCompletedDeliveries: riderCompletedDeliveries,
-        riderMemberSince: riderMemberSince,
-        riderAchievements: riderAchievements,
-        proofOfDelivery: proofOfDelivery,
-      );
+    id: id,
+    type: type,
+    title: title,
+    status: status,
+    destination: destination,
+    pickup: pickup,
+    rider: rider,
+    eta: eta,
+    amount: amount,
+    rothAmount: rothAmount,
+    rothDirection: rothDirection,
+    occurredAt: occurredAt,
+    active: active,
+    riderId: riderId,
+    riderPhotoUrl: riderPhotoUrl,
+    riderRank: riderRank,
+    riderRating: riderRating,
+    trustPoints: trustPoints,
+    vanguardProtected: vanguardProtected,
+    irisVerified: irisVerified,
+    repeatRider: repeatRider ?? this.repeatRider,
+    riderTrusted: riderTrusted,
+    riderVanguardApproved: riderVanguardApproved,
+    riderCompletedDeliveries: riderCompletedDeliveries,
+    riderMemberSince: riderMemberSince,
+    riderAchievements: riderAchievements,
+    proofOfDelivery: proofOfDelivery,
+  );
 }
 
 class SenderActivityPage {
   final List<SenderActivityItem> items;
   final String? nextPageToken;
   const SenderActivityPage(this.items, this.nextPageToken);
+}
+
+const _senderActivityPageSize = 20;
+
+Map<String, dynamic> _decodeActivityPageToken(String? token) {
+  if (token == null || token.isEmpty) return <String, dynamic>{};
+  try {
+    final decoded = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(token))),
+    );
+    return decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{};
+  } catch (_) {
+    return <String, dynamic>{};
+  }
+}
+
+String _encodeActivityPageToken(Map<String, dynamic> cursors) =>
+    base64UrlEncode(utf8.encode(jsonEncode(cursors)));
+
+Map<String, dynamic>? _activityCursor(
+  Map<String, dynamic> cursors,
+  String source,
+) {
+  final value = cursors[source];
+  return value is Map ? Map<String, dynamic>.from(value) : null;
+}
+
+void _setActivityCursor(
+  Map<String, dynamic> cursors,
+  String source,
+  SenderActivityItem item,
+) {
+  final occurredAt = item.occurredAt;
+  if (occurredAt == null) return;
+  cursors[source] = {'at': occurredAt.millisecondsSinceEpoch, 'id': item.id};
+}
+
+void _setActivityCursorFromDocument(
+  Map<String, dynamic> cursors,
+  String source,
+  QueryDocumentSnapshot<Map<String, dynamic>> document,
+) {
+  final occurredAt = _date(document.data()['updatedAt']);
+  if (occurredAt == null) return;
+  cursors[source] = {
+    'at': occurredAt.millisecondsSinceEpoch,
+    'id': document.id,
+  };
 }
 
 abstract class SenderActivityRepository {
@@ -130,14 +181,17 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     SenderWalletRepository? walletRepository,
-  })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance,
-        walletRepository = walletRepository ?? FirebaseSenderWalletRepository();
+  }) : auth = auth ?? FirebaseAuth.instance,
+       firestore = firestore ?? FirebaseFirestore.instance,
+       walletRepository = walletRepository ?? FirebaseSenderWalletRepository();
 
   String? get _uid {
     final user = auth.currentUser;
     return user?.uid;
   }
+
+  SenderActivityItem itemFromDelivery(String id, Map<String, dynamic> data) =>
+      _delivery(id, data);
 
   @override
   Stream<List<SenderActivityItem>> watchActive() {
@@ -146,17 +200,22 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return firestore
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
+        .orderBy('updatedAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(20)
         .snapshots()
         .map((snapshot) {
-      final items = snapshot.docs
-          .map((doc) => _delivery(doc.id, doc.data()))
-          .where((item) => item.active)
-          .toList();
-      items.sort((a, b) => (b.occurredAt ?? DateTime(1970))
-          .compareTo(a.occurredAt ?? DateTime(1970)));
-      return items;
-    });
+          final items = snapshot.docs
+              .map((doc) => _delivery(doc.id, doc.data()))
+              .where((item) => item.active)
+              .toList();
+          items.sort(
+            (a, b) => (b.occurredAt ?? DateTime(1970)).compareTo(
+              a.occurredAt ?? DateTime(1970),
+            ),
+          );
+          return items;
+        });
   }
 
   @override
@@ -164,31 +223,34 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final totalStopwatch = Stopwatch()..start();
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
-    final page = int.tryParse(pageToken ?? '0') ?? 0;
-    final sourceLimit = (page + 1) * 12;
+    final cursors = _decodeActivityPageToken(pageToken);
+    final deliveryCursor = _activityCursor(cursors, 'deliveries');
+    final giftCursor = _activityCursor(cursors, 'gifts');
+    final healthCursor = _activityCursor(cursors, 'health');
     final deliveriesFuture = _timedActivityFuture(
       'deliveryRequests',
-      firestore
-          .collection('deliveryRequests')
-          .where('senderId', isEqualTo: uid)
-          .limit(sourceLimit)
-          .get(),
+      _activityQuery(
+        firestore
+            .collection('deliveryRequests')
+            .where('senderId', isEqualTo: uid),
+        cursor: deliveryCursor,
+      ).get(),
     );
     final giftsFuture = _optionalActivityDocs(
       'giftRequests',
-      firestore
-          .collection('giftRequests')
-          .where('senderId', isEqualTo: uid)
-          .limit(sourceLimit)
-          .get(),
+      _activityQuery(
+        firestore.collection('giftRequests').where('senderId', isEqualTo: uid),
+        cursor: giftCursor,
+      ).get(),
     );
     final healthFuture = _optionalActivityDocs(
       'prescriptionPickups',
-      firestore
-          .collection('prescriptionPickups')
-          .where('profileId', isEqualTo: uid)
-          .limit(sourceLimit)
-          .get(),
+      _activityQuery(
+        firestore
+            .collection('prescriptionPickups')
+            .where('profileId', isEqualTo: uid),
+        cursor: healthCursor,
+      ).get(),
     );
     final walletFuture = _optionalWalletTransactions(pageToken);
     final deliveries = await deliveriesFuture;
@@ -199,37 +261,83 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final riderProfiles = await riderProfilesFuture;
     final mergeStopwatch = Stopwatch()..start();
     final deliveryItems = deliveries.docs
-        .map((doc) => _delivery(
-              doc.id,
-              doc.data(),
-              riderProfile: riderProfiles[_riderId(doc.data())],
-            ))
+        .map(
+          (doc) => _delivery(
+            doc.id,
+            doc.data(),
+            riderProfile: riderProfiles[_riderId(doc.data())],
+          ),
+        )
         .toList();
     final riderCounts = <String, int>{};
     for (final item in deliveryItems) {
       if (item.riderId.isNotEmpty && _isCompletedStatus(item.status)) {
-        riderCounts.update(item.riderId, (currentCount) => currentCount + 1,
-            ifAbsent: () => 1);
+        riderCounts.update(
+          item.riderId,
+          (currentCount) => currentCount + 1,
+          ifAbsent: () => 1,
+        );
       }
     }
     final merged = <SenderActivityItem>[
-      ...deliveryItems.map((item) => item.copyWith(
-            repeatRider: (riderCounts[item.riderId] ?? 0) > 1,
-          )),
+      ...deliveryItems.map(
+        (item) =>
+            item.copyWith(repeatRider: (riderCounts[item.riderId] ?? 0) > 1),
+      ),
       ...gifts.map((doc) => _gift(doc.id, doc.data())),
       ...health.map((doc) => _health(doc.id, doc.data())),
       ...wallet.transactions.map(_roth),
     ]..removeWhere((item) => item.active);
-    merged.sort((a, b) => (b.occurredAt ?? DateTime(1970))
-        .compareTo(a.occurredAt ?? DateTime(1970)));
-    final start = page * 20;
-    final items = start >= merged.length
-        ? <SenderActivityItem>[]
-        : merged.skip(start).take(20).toList();
-    final hasMore = merged.length > start + items.length ||
-        deliveries.docs.length == sourceLimit ||
-        gifts.length == sourceLimit ||
-        health.length == sourceLimit ||
+    merged.sort(
+      (a, b) => (b.occurredAt ?? DateTime(1970)).compareTo(
+        a.occurredAt ?? DateTime(1970),
+      ),
+    );
+    final items = merged.take(_senderActivityPageSize).toList();
+    final nextCursors = Map<String, dynamic>.from(cursors);
+    final selectedSources = <String>{};
+    for (final item in items) {
+      final source = switch (item.type) {
+        SenderActivityType.gift => 'gifts',
+        SenderActivityType.health => 'health',
+        SenderActivityType.roth => 'wallet',
+        _ => 'deliveries',
+      };
+      selectedSources.add(source);
+      _setActivityCursor(nextCursors, source, item);
+    }
+    if (!selectedSources.contains('deliveries') && deliveries.docs.isNotEmpty) {
+      _setActivityCursorFromDocument(
+        nextCursors,
+        'deliveries',
+        deliveries.docs.last,
+      );
+    }
+    if (!selectedSources.contains('gifts') && gifts.isNotEmpty) {
+      _setActivityCursorFromDocument(nextCursors, 'gifts', gifts.last);
+    }
+    if (!selectedSources.contains('health') && health.isNotEmpty) {
+      _setActivityCursorFromDocument(nextCursors, 'health', health.last);
+    }
+    final walletCursor = _activityCursor(nextCursors, 'wallet');
+    if (walletCursor != null) {
+      nextCursors['walletToken'] = base64UrlEncode(
+        utf8.encode(
+          jsonEncode({
+            'source': wallet.source,
+            'createdAtMillis': walletCursor['at'],
+            'transactionId': walletCursor['id'],
+          }),
+        ),
+      );
+    } else if (wallet.nextPageToken != null) {
+      nextCursors['walletToken'] = wallet.nextPageToken;
+    }
+    final hasMore =
+        merged.length > items.length ||
+        deliveries.docs.length == _senderActivityPageSize ||
+        gifts.length == _senderActivityPageSize ||
+        health.length == _senderActivityPageSize ||
         wallet.nextPageToken != null;
     mergeStopwatch.stop();
     totalStopwatch.stop();
@@ -243,7 +351,29 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       'deliveries=${deliveries.docs.length} gifts=${gifts.length} '
       'health=${health.length} wallet=${wallet.transactions.length}',
     );
-    return SenderActivityPage(items, hasMore ? '${page + 1}' : null);
+    return SenderActivityPage(
+      items,
+      hasMore ? _encodeActivityPageToken(nextCursors) : null,
+    );
+  }
+
+  Query<Map<String, dynamic>> _activityQuery(
+    Query<Map<String, dynamic>> query, {
+    Map<String, dynamic>? cursor,
+  }) {
+    var ordered = query
+        .orderBy('updatedAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
+        .limit(_senderActivityPageSize);
+    final at = (cursor?['at'] as num?)?.toInt();
+    final id = '${cursor?['id'] ?? ''}'.trim();
+    if (at != null && at > 0 && id.isNotEmpty) {
+      ordered = ordered.startAfter([
+        Timestamp.fromMillisecondsSinceEpoch(at),
+        id,
+      ]);
+    }
+    return ordered;
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _timedActivityFuture(
@@ -263,7 +393,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _optionalActivityDocs(
+  _optionalActivityDocs(
     String source,
     Future<QuerySnapshot<Map<String, dynamic>>> query,
   ) async {
@@ -293,7 +423,10 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final stopwatch = Stopwatch()..start();
     try {
       final page = await walletRepository
-          .transactions(pageToken: pageToken)
+          .transactions(
+            pageToken:
+                _decodeActivityPageToken(pageToken)['walletToken'] as String?,
+          )
           .timeout(_optionalSourceTimeout);
       stopwatch.stop();
       debugPrint(
@@ -362,12 +495,16 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final normalized = status.toLowerCase();
     return SenderActivityItem(
       id: id,
-      type: data['businessMode'] == true ||
+      type:
+          data['businessMode'] == true ||
               '${data['businessId'] ?? ''}'.isNotEmpty
           ? SenderActivityType.business
           : SenderActivityType.parcel,
-      title: _first(
-          [parcel['itemName'], parcel['description'], 'Parcel delivery']),
+      title: _first([
+        parcel['itemName'],
+        parcel['description'],
+        'Parcel delivery',
+      ]),
       status: _status(status),
       pickup: _first([pickup['address'], pickup['locality']]),
       destination: _first([
@@ -375,19 +512,22 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         dropoff['address'],
         dropoff['locality'],
       ]),
-      rider: _riderFirstName(_first([
-        profile['firstName'],
-        profile['fullName'],
-        profile['name'],
-        assignedRider['firstName'],
-        assignedRider['name'],
-        data['riderName'],
-        data['driverName'],
-        data['courierName'],
-      ])),
+      rider: _riderFirstName(
+        _first([
+          profile['firstName'],
+          profile['fullName'],
+          profile['name'],
+          assignedRider['firstName'],
+          assignedRider['name'],
+          data['riderName'],
+          data['driverName'],
+          data['courierName'],
+        ]),
+      ),
       eta: _first([data['estimatedDeliveryTime'], data['eta']]),
-      amount:
-          _number(data['paidAmount'] ?? data['price'] ?? data['totalAmount']),
+      amount: _number(
+        data['paidAmount'] ?? data['price'] ?? data['totalAmount'],
+      ),
       occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
       active: senderActivityIsLiveDeliveryStatus(normalized),
       riderId: _riderId(data),
@@ -404,29 +544,39 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       riderRank: _riderRankLabel(
         _first([profile['rank'], profile['riderRank'], data['riderRank']]),
       ),
-      riderRating: _number(profile['averageRating'] ??
-          profile['rating'] ??
-          _map(profile['performance'])['averageRating'] ??
-          data['riderRating']),
-      trustPoints: (_number(data['trustPointsAwarded'] ??
-                  data['senderTrustPointsAwarded'] ??
-                  _map(data['trustAward'])['points']) ??
-              0)
-          .round(),
-      vanguardProtected: data['vanguardEnabled'] == true ||
+      riderRating: _number(
+        profile['averageRating'] ??
+            profile['rating'] ??
+            _map(profile['performance'])['averageRating'] ??
+            data['riderRating'],
+      ),
+      trustPoints:
+          (_number(
+                    data['trustPointsAwarded'] ??
+                        data['senderTrustPointsAwarded'] ??
+                        _map(data['trustAward'])['points'],
+                  ) ??
+                  0)
+              .round(),
+      vanguardProtected:
+          data['vanguardEnabled'] == true ||
           data['vanguardProtected'] == true ||
           vanguard['enabled'] == true ||
           vanguard['protected'] == true,
-      irisVerified: data['irisVerified'] == true ||
+      irisVerified:
+          data['irisVerified'] == true ||
           data['irisClassified'] == true ||
           iris.isNotEmpty ||
           data['irisMatchedItemName'] != null ||
           data['normalizedItemName'] != null,
       riderTrusted: _riderTrusted(profile),
-      riderVanguardApproved: profile['vanguardApproved'] == true ||
+      riderVanguardApproved:
+          profile['vanguardApproved'] == true ||
           '${profile['vanguardStatus'] ?? ''}'.toLowerCase() == 'approved',
-      riderCompletedDeliveries: _optionalInt(profile['completedDeliveries'] ??
-          _map(profile['performance'])['completedDeliveries']),
+      riderCompletedDeliveries: _optionalInt(
+        profile['completedDeliveries'] ??
+            _map(profile['performance'])['completedDeliveries'],
+      ),
       riderMemberSince: _date(profile['memberSince'] ?? profile['createdAt']),
       riderAchievements: _safeAchievementLabels(
         profile['recentAchievements'] ?? profile['achievements'],
@@ -440,8 +590,9 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         id: id,
         type: SenderActivityType.gift,
         title: _first([data['occasion'], 'Gift experience']),
-        status:
-            _status('${data['giftStatus'] ?? data['status'] ?? 'submitted'}'),
+        status: _status(
+          '${data['giftStatus'] ?? data['status'] ?? 'submitted'}',
+        ),
         destination: _first([data['recipientName'], data['formattedAddress']]),
         amount: _number(data['grossGiftBudget'] ?? data['budget']),
         rothAmount: _number(data['rothApplied']),
@@ -455,22 +606,24 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         type: SenderActivityType.health,
         title: 'Health+ request',
         status: _status('${data['status'] ?? 'scheduled'}'),
-        destination:
-            _first([data['careRecipientName'], data['deliveryAddress']]),
+        destination: _first([
+          data['careRecipientName'],
+          data['deliveryAddress'],
+        ]),
         amount: _number(data['price'] ?? data['amount']),
         occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
       );
 
   SenderActivityItem _roth(SenderWalletTransaction item) => SenderActivityItem(
-        id: item.id,
-        type: SenderActivityType.roth,
-        title: item.description,
-        status: _status(item.status),
-        destination: item.paymentMethodLabel,
-        rothAmount: item.amount,
-        rothDirection: item.direction,
-        occurredAt: item.createdAt,
-      );
+    id: item.id,
+    type: SenderActivityType.roth,
+    title: item.description,
+    status: _status(item.status),
+    destination: item.paymentMethodLabel,
+    rothAmount: item.amount,
+    rothDirection: item.direction,
+    occurredAt: item.createdAt,
+  );
 }
 
 class SenderActivityView extends StatefulWidget {
@@ -595,11 +748,19 @@ class _SenderActivityViewState extends State<SenderActivityView> {
       final page = await _repository.history(pageToken: _nextPage);
       if (mounted) {
         setState(() {
-          _history.addAll(page.items.where((item) => !_history.any((existing) =>
-              existing.id == item.id && existing.type == item.type)));
+          _history.addAll(
+            page.items.where(
+              (item) => !_history.any(
+                (existing) =>
+                    existing.id == item.id && existing.type == item.type,
+              ),
+            ),
+          );
           _nextPage = page.nextPageToken;
-          _cachedHistoryPage =
-              SenderActivityPage(List.unmodifiable(_history), _nextPage);
+          _cachedHistoryPage = SenderActivityPage(
+            List.unmodifiable(_history),
+            _nextPage,
+          );
         });
       }
     } finally {
@@ -622,7 +783,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
         item.destination,
         item.pickup,
         date,
-        _typeLabel(item.type)
+        _typeLabel(item.type),
       ].join(' ').toLowerCase().contains(query);
     }).toList();
   }
@@ -646,10 +807,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
       children: [
         Text(
           'Activity',
-          style: GoogleFonts.dmSerifDisplay(
-            color: Colors.white,
-            fontSize: 32,
-          ),
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white, fontSize: 32),
         ),
         const SizedBox(height: 22),
         if (_loading) const _ActivitySkeleton(),
@@ -669,10 +827,12 @@ class _SenderActivityViewState extends State<SenderActivityView> {
               onPrimary: widget.onSendParcel,
             )
           else
-            ..._active.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: ActivityCard.live(item: item),
-                )),
+            ..._active.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: ActivityCard.live(item: item),
+              ),
+            ),
           const SizedBox(height: 24),
           const ActivitySectionHeader(
             title: 'History',
@@ -689,16 +849,22 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              _FilterChip('All',
+            child: Row(
+              children: [
+                _FilterChip(
+                  'All',
                   selected: _filter == null,
-                  onTap: () => setState(() => _filter = null)),
-              ...SenderActivityType.values.map((type) => _FilterChip(
+                  onTap: () => setState(() => _filter = null),
+                ),
+                ...SenderActivityType.values.map(
+                  (type) => _FilterChip(
                     _filterLabel(type),
                     selected: _filter == type,
                     onTap: () => setState(() => _filter = type),
-                  )),
-            ]),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           if (_visible.isEmpty)
@@ -713,9 +879,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
               padding: const EdgeInsets.only(top: 8),
               child: TextButton(
                 onPressed: _loadingMore ? null : _loadMore,
-                child: Text(
-                  _loadingMore ? 'Loading…' : 'Load more activity',
-                ),
+                child: Text(_loadingMore ? 'Loading…' : 'Load more activity'),
               ),
             ),
         ],
@@ -744,8 +908,9 @@ class _ActivityCardState extends State<ActivityCard> {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: reduceMotion ? 1 : 0, end: 1),
-      duration:
-          reduceMotion ? Duration.zero : const Duration(milliseconds: 320),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) => Opacity(
         opacity: value,
@@ -765,10 +930,10 @@ class _ActivityCardState extends State<ActivityCard> {
             onTap: widget.live
                 ? () => _openTracking(context, item)
                 : () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => _ActivityDetail(item: item),
-                      ),
+                    MaterialPageRoute<void>(
+                      builder: (_) => _ActivityDetail(item: item),
                     ),
+                  ),
             child: _ActivityGlass(
               child: widget.live
                   ? _LiveCardContent(item: item)
@@ -787,74 +952,71 @@ class _LiveCardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(
-            children: [
-              ActivityIcon(
-                  type: item.type, status: item.status, tracking: true),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.rider.isEmpty
-                          ? 'Finding your Circum Rider'
-                          : item.rider,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    ActivityStatusBadge(status: item.status, type: item.type),
-                  ],
-                ),
-              ),
-              if (item.eta.isNotEmpty)
+          ActivityIcon(type: item.type, status: item.status, tracking: true),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  item.eta,
+                  item.rider.isEmpty ? 'Finding your Circum Rider' : item.rider,
                   style: GoogleFonts.inter(
                     color: Colors.white,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _RouteLine(label: 'Pickup', value: item.pickup),
-          _RouteLine(label: 'Drop-off', value: item.destination),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: _progress(item.status),
-              minHeight: 4,
-              color: _statusColor(item.status, item.type),
-              backgroundColor: Colors.white.withValues(alpha: .08),
+                const SizedBox(height: 5),
+                ActivityStatusBadge(status: item.status, type: item.type),
+              ],
             ),
           ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _openTracking(context, item),
-                  icon: const Icon(Icons.navigation_rounded, size: 17),
-                  label: const Text('Live Tracking'),
-                ),
+          if (item.eta.isNotEmpty)
+            Text(
+              item.eta,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: 10),
-              OutlinedButton(
-                onPressed: () => _openChat(context, item),
-                child: const Text('Chat'),
-              ),
-            ],
+            ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      _RouteLine(label: 'Pickup', value: item.pickup),
+      _RouteLine(label: 'Drop-off', value: item.destination),
+      const SizedBox(height: 16),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(99),
+        child: LinearProgressIndicator(
+          value: _progress(item.status),
+          minHeight: 4,
+          color: _statusColor(item.status, item.type),
+          backgroundColor: Colors.white.withValues(alpha: .08),
+        ),
+      ),
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => _openTracking(context, item),
+              icon: const Icon(Icons.navigation_rounded, size: 17),
+              label: const Text('Live Tracking'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton(
+            onPressed: () => _openChat(context, item),
+            child: const Text('Chat'),
           ),
         ],
-      );
+      ),
+    ],
+  );
 }
 
 class _HistoryCardContent extends StatelessWidget {
@@ -984,10 +1146,7 @@ class _CompletedDeliverySummary extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           item.title,
-          style: GoogleFonts.dmSerifDisplay(
-            color: Colors.white,
-            fontSize: 17,
-          ),
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white, fontSize: 17),
         ),
         const SizedBox(height: 9),
         _TrustFeature(
@@ -1087,12 +1246,12 @@ class _CompletedProofStatus extends StatelessWidget {
     final color = lower.contains('available')
         ? const Color(0xFF31D17D)
         : lower.contains('review')
-            ? const Color(0xFFFBBF24)
-            : const Color(0xFFF87171);
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
     final detail = proof?.hasAnyProof == true
         ? (proof!.hasPhoto
-            ? 'Photo and delivery evidence recorded.'
-            : 'Delivery evidence recorded.')
+              ? 'Photo and delivery evidence recorded.'
+              : 'Delivery evidence recorded.')
         : 'Proof of delivery is not available for this delivery.';
     return Container(
       width: double.infinity,
@@ -1150,8 +1309,8 @@ class _PremiumRiderSummary extends StatelessWidget {
     final trustLabel = item.riderVanguardApproved
         ? 'Vanguard Approved Circum Rider'
         : item.riderTrusted
-            ? 'Trusted Circum Rider'
-            : null;
+        ? 'Trusted Circum Rider'
+        : null;
     final semantic = [
       'Delivered by $riderName',
       if (item.riderRank.isNotEmpty) item.riderRank,
@@ -1291,9 +1450,8 @@ class _RiderAvatarState extends State<_RiderAvatar> {
                     child: child,
                   );
                 },
-                errorBuilder: (_, __, ___) => _RiderAvatarFallback(
-                  name: widget.name,
-                ),
+                errorBuilder: (_, __, ___) =>
+                    _RiderAvatarFallback(name: widget.name),
               ),
             ),
     );
@@ -1311,14 +1469,14 @@ class _RiderAvatarFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Text(
-          name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase(),
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+    child: Text(
+      name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase(),
+      style: GoogleFonts.inter(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }
 
 class _RiderRankBadge extends StatefulWidget {
@@ -1397,36 +1555,36 @@ class _RiderRating extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 420),
-        curve: Curves.easeOut,
-        builder: (context, value, _) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...List.generate(
-              5,
-              (index) => Icon(
-                Icons.star_rounded,
-                color: const Color(0xFFF5C451).withValues(
-                  alpha: value >= ((index + 1) / 5) ? 1 : .28,
-                ),
-                size: 11,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              rating.toStringAsFixed(2),
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+    tween: Tween(begin: 0, end: 1),
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 420),
+    curve: Curves.easeOut,
+    builder: (context, value, _) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...List.generate(
+          5,
+          (index) => Icon(
+            Icons.star_rounded,
+            color: const Color(
+              0xFFF5C451,
+            ).withValues(alpha: value >= ((index + 1) / 5) ? 1 : .28),
+            size: 11,
+          ),
         ),
-      );
+        const SizedBox(width: 5),
+        Text(
+          rating.toStringAsFixed(2),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RiderTrustBadge extends StatelessWidget {
@@ -1436,24 +1594,24 @@ class _RiderTrustBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            vanguard ? Icons.shield_outlined : Icons.verified_rounded,
-            color: vanguard ? const Color(0xFF60A5FA) : const Color(0xFF31D17D),
-            size: 15,
-          ),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: const Color(0xFFD9E2F0),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(
+        vanguard ? Icons.shield_outlined : Icons.verified_rounded,
+        color: vanguard ? const Color(0xFF60A5FA) : const Color(0xFF31D17D),
+        size: 15,
+      ),
+      const SizedBox(width: 7),
+      Text(
+        label,
+        style: GoogleFonts.inter(
+          color: const Color(0xFFD9E2F0),
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  );
 }
 
 void _showRiderProfile(
@@ -1479,8 +1637,8 @@ class _RiderProfileSheet extends StatelessWidget {
     final trustLabel = item.riderVanguardApproved
         ? 'Vanguard Approved Circum Rider'
         : item.riderTrusted
-            ? 'Trusted Circum Rider'
-            : null;
+        ? 'Trusted Circum Rider'
+        : null;
     return Semantics(
       label: '$riderName Circum Rider profile',
       child: Container(
@@ -1549,8 +1707,9 @@ class _RiderProfileSheet extends StatelessWidget {
                 if (item.riderMemberSince != null)
                   _RiderSheetLine(
                     label: 'Member since',
-                    value:
-                        DateFormat('MMMM yyyy').format(item.riderMemberSince!),
+                    value: DateFormat(
+                      'MMMM yyyy',
+                    ).format(item.riderMemberSince!),
                   ),
                 if (item.riderAchievements.isNotEmpty) ...[
                   const SizedBox(height: 10),
@@ -1606,28 +1765,25 @@ class _RiderSheetLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 9),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: _ActivityColors.muted,
-                fontSize: 12,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Row(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(color: _ActivityColors.muted, fontSize: 12),
         ),
-      );
+        const Spacer(),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _TrustFeature extends StatelessWidget {
@@ -1642,22 +1798,22 @@ class _TrustFeature extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          if (icon == Icons.blur_circular_rounded)
-            _IrisActivityOrb(color: color)
-          else
-            Icon(icon, color: color, size: 15),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: const Color(0xFFD9E2F0),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      );
+    children: [
+      if (icon == Icons.blur_circular_rounded)
+        _IrisActivityOrb(color: color)
+      else
+        Icon(icon, color: color, size: 15),
+      const SizedBox(width: 8),
+      Text(
+        label,
+        style: GoogleFonts.inter(
+          color: const Color(0xFFD9E2F0),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  );
 }
 
 class _IrisActivityOrb extends StatefulWidget {
@@ -1693,31 +1849,31 @@ class _IrisActivityOrbState extends State<_IrisActivityOrb>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => Container(
-          width: 15,
-          height: 15,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              center: const Alignment(-.35, -.45),
-              colors: [
-                Colors.white.withValues(alpha: .9),
-                widget.color.withValues(alpha: .72),
-                const Color(0xFF60A5FA).withValues(alpha: .55),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withValues(
-                  alpha: .14 + (_controller.value * .12),
-                ),
-                blurRadius: 8,
-              ),
-            ],
-          ),
+    animation: _controller,
+    builder: (context, _) => Container(
+      width: 15,
+      height: 15,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: const Alignment(-.35, -.45),
+          colors: [
+            Colors.white.withValues(alpha: .9),
+            widget.color.withValues(alpha: .72),
+            const Color(0xFF60A5FA).withValues(alpha: .55),
+          ],
         ),
-      );
+        boxShadow: [
+          BoxShadow(
+            color: widget.color.withValues(
+              alpha: .14 + (_controller.value * .12),
+            ),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class ActivityReceiptView extends StatelessWidget {
@@ -1726,46 +1882,44 @@ class ActivityReceiptView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: _ActivityColors.bg,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: const Text('Delivery Receipt'),
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _ActivityGlass(
-              child: Column(
-                children: [
-                  _Detail('Delivery', item.title),
-                  _Detail('Status', item.status),
-                  if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
-                  if (item.destination.isNotEmpty)
-                    _Detail('Drop-off', item.destination),
-                  _Detail(
-                    'Completed',
-                    item.occurredAt == null
-                        ? 'Pending timestamp'
-                        : DateFormat('d MMMM yyyy, HH:mm')
-                            .format(item.occurredAt!),
-                  ),
-                  if (item.amount != null)
-                    _Detail(
-                        'Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
-                  _Detail(
-                    'Circum Rider',
-                    item.rider.isEmpty ? 'Circum Rider' : item.rider,
-                  ),
-                  if (item.vanguardProtected)
-                    const _Detail('Protection', 'Vanguard Protected'),
-                  if (item.irisVerified)
-                    const _Detail('Classification', 'IRIS Verified'),
-                ],
+    backgroundColor: _ActivityColors.bg,
+    appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      title: const Text('Delivery Receipt'),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _ActivityGlass(
+          child: Column(
+            children: [
+              _Detail('Delivery', item.title),
+              _Detail('Status', item.status),
+              if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
+              if (item.destination.isNotEmpty)
+                _Detail('Drop-off', item.destination),
+              _Detail(
+                'Completed',
+                item.occurredAt == null
+                    ? 'Pending timestamp'
+                    : DateFormat('d MMMM yyyy, HH:mm').format(item.occurredAt!),
               ),
-            ),
-          ],
+              if (item.amount != null)
+                _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
+              _Detail(
+                'Circum Rider',
+                item.rider.isEmpty ? 'Circum Rider' : item.rider,
+              ),
+              if (item.vanguardProtected)
+                const _Detail('Protection', 'Vanguard Protected'),
+              if (item.irisVerified)
+                const _Detail('Classification', 'IRIS Verified'),
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class ActivityStatusBadge extends StatelessWidget {
@@ -1781,7 +1935,7 @@ class ActivityStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     final color = _statusColor(status, type);
     return Align(
       alignment: Alignment.centerLeft,
@@ -1819,8 +1973,8 @@ class _ActivityIconState extends State<ActivityIcon>
     final seconds = widget.type == SenderActivityType.gift
         ? 12
         : widget.type == SenderActivityType.health
-            ? 8
-            : 5;
+        ? 8
+        : 5;
     _controller = AnimationController(
       vsync: this,
       duration: Duration(seconds: seconds),
@@ -1847,7 +2001,7 @@ class _ActivityIconState extends State<ActivityIcon>
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -1874,15 +2028,19 @@ class _ActivityIconState extends State<ActivityIcon>
                 center: const Alignment(-.35, -.45),
                 colors: [
                   Colors.white.withValues(alpha: .11),
-                  _statusColor(widget.status, widget.type)
-                      .withValues(alpha: highContrast ? .32 : glow),
+                  _statusColor(
+                    widget.status,
+                    widget.type,
+                  ).withValues(alpha: highContrast ? .32 : glow),
                   Colors.transparent,
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _statusColor(widget.status, widget.type)
-                      .withValues(alpha: highContrast ? .34 : glow),
+                  color: _statusColor(
+                    widget.status,
+                    widget.type,
+                  ).withValues(alpha: highContrast ? .34 : glow),
                   blurRadius: highContrast ? 20 : 16,
                 ),
               ],
@@ -1914,7 +2072,7 @@ class ActivityTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     return Column(
       children: groups.entries
           .map(
@@ -1982,27 +2140,21 @@ class ActivitySectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: GoogleFonts.dmSerifDisplay(
-                color: Colors.white,
-                fontSize: 20,
-              ),
-            ),
-          ),
-          if (subtitle != null)
-            Text(
-              subtitle!,
-              style: GoogleFonts.inter(
-                color: _ActivityColors.muted,
-                fontSize: 11,
-              ),
-            ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white, fontSize: 20),
+        ),
+      ),
+      if (subtitle != null)
+        Text(
+          subtitle!,
+          style: GoogleFonts.inter(color: _ActivityColors.muted, fontSize: 11),
+        ),
+    ],
+  );
 }
 
 class _ActivityDetail extends StatelessWidget {
@@ -2010,39 +2162,98 @@ class _ActivityDetail extends StatelessWidget {
   const _ActivityDetail({required this.item});
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: _ActivityColors.bg,
-        appBar: AppBar(
-            backgroundColor: Colors.transparent, title: Text(item.title)),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          _ActivityGlass(
-              child: Column(children: [
-            _Detail('Order ID', item.id),
-            _Detail('Service', _typeLabel(item.type)),
-            _Detail('Status', item.status),
-            if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
-            if (item.destination.isNotEmpty)
-              _Detail('Destination', item.destination),
-            if (item.amount != null)
-              _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
-            if (item.rothAmount != null)
-              _Detail('Roth', '${item.rothAmount!.toStringAsFixed(2)} Roth'),
-            if (_isCompletedDelivery(item)) ...[
+    backgroundColor: _ActivityColors.bg,
+    appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      title: Text(item.title),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _ActivityGlass(
+          child: Column(
+            children: [
+              _Detail('Order ID', item.id),
+              _Detail('Service', _typeLabel(item.type)),
+              _Detail('Status', item.status),
+              if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
+              if (item.destination.isNotEmpty)
+                _Detail('Destination', item.destination),
+              if (item.amount != null)
+                _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
+              if (item.rothAmount != null)
+                _Detail('Roth', '${item.rothAmount!.toStringAsFixed(2)} Roth'),
+              if (_isCompletedDelivery(item)) ...[
+                _Detail(
+                  'Proof of delivery',
+                  item.proofOfDelivery?.statusLabel ?? 'Proof missing',
+                ),
+                if (item.proofOfDelivery?.hasAnyProof == true)
+                  for (final row in item.proofOfDelivery!.visibleRows)
+                    _Detail(row.$1, row.$2),
+              ],
               _Detail(
-                'Proof of delivery',
-                item.proofOfDelivery?.statusLabel ?? 'Proof missing',
-              ),
-              if (item.proofOfDelivery?.hasAnyProof == true)
-                for (final row in item.proofOfDelivery!.visibleRows)
-                  _Detail(row.$1, row.$2),
-            ],
-            _Detail(
                 'Date',
                 item.occurredAt == null
                     ? 'Pending'
-                    : DateFormat('d MMM yyyy, HH:mm').format(item.occurredAt!)),
-          ])),
-        ]),
-      );
+                    : DateFormat('d MMM yyyy, HH:mm').format(item.occurredAt!),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class SenderDeliveryDetailView extends StatelessWidget {
+  final String deliveryId;
+
+  const SenderDeliveryDetailView({super.key, required this.deliveryId});
+
+  Future<SenderActivityItem?> _load() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || deliveryId.trim().isEmpty) return null;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .doc(deliveryId)
+        .get();
+    final data = snapshot.data();
+    if (!snapshot.exists ||
+        data == null ||
+        '${data['senderId'] ?? data['userId'] ?? ''}' != user.uid) {
+      return null;
+    }
+    return FirebaseSenderActivityRepository().itemFromDelivery(
+      snapshot.id,
+      data,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<SenderActivityItem?>(
+    future: _load(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData && !snapshot.hasError) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      final item = snapshot.data;
+      if (item == null) {
+        return const Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'This delivery is no longer available.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      }
+      return _ActivityDetail(item: item);
+    },
+  );
 }
 
 class ActivityEmptyState extends StatelessWidget {
@@ -2060,7 +2271,8 @@ class ActivityEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _ActivityGlass(
-          child: Column(children: [
+    child: Column(
+      children: [
         const SizedBox(height: 8),
         const _AnimatedActivityPath(),
         const SizedBox(height: 18),
@@ -2072,10 +2284,7 @@ class ActivityEmptyState extends StatelessWidget {
         Text(
           subtitle,
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(
-            color: _ActivityColors.muted,
-            height: 1.5,
-          ),
+          style: GoogleFonts.inter(color: _ActivityColors.muted, height: 1.5),
         ),
         if (primaryLabel != null && onPrimary != null) ...[
           const SizedBox(height: 20),
@@ -2087,7 +2296,9 @@ class ActivityEmptyState extends StatelessWidget {
             ),
           ),
         ],
-      ]));
+      ],
+    ),
+  );
 }
 
 class _AnimatedActivityPath extends StatefulWidget {
@@ -2102,9 +2313,10 @@ class _AnimatedActivityPathState extends State<_AnimatedActivityPath>
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 3))
-          ..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
   }
 
   @override
@@ -2125,12 +2337,15 @@ class _AnimatedActivityPathState extends State<_AnimatedActivityPath>
 
   @override
   Widget build(BuildContext context) => SizedBox(
-      height: 92,
-      child: AnimatedBuilder(
-          animation: _controller,
-          builder: (_, __) => CustomPaint(
-              painter: _PathPainter(_controller.value),
-              size: const Size(double.infinity, 92))));
+    height: 92,
+    child: AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => CustomPaint(
+        painter: _PathPainter(_controller.value),
+        size: const Size(double.infinity, 92),
+      ),
+    ),
+  );
 }
 
 class _PathPainter extends CustomPainter {
@@ -2140,25 +2355,34 @@ class _PathPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = Path()
       ..moveTo(20, size.height - 18)
-      ..cubicTo(size.width * .32, 8, size.width * .65, size.height - 8,
-          size.width - 20, 18);
+      ..cubicTo(
+        size.width * .32,
+        8,
+        size.width * .65,
+        size.height - 8,
+        size.width - 20,
+        18,
+      );
     canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white12
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..strokeCap = StrokeCap.round);
+      path,
+      Paint()
+        ..color = Colors.white12
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
+    );
     final metric = path.computeMetrics().first;
     canvas.drawPath(
-        metric.extractPath(0, metric.length * progress),
-        Paint()
-          ..color = _ActivityColors.blue
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..strokeCap = StrokeCap.round);
-    final point =
-        metric.getTangentForOffset(metric.length * progress)?.position;
+      metric.extractPath(0, metric.length * progress),
+      Paint()
+        ..color = _ActivityColors.blue
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
+    );
+    final point = metric
+        .getTangentForOffset(metric.length * progress)
+        ?.position;
     if (point != null) {
       canvas.drawCircle(point, 7, Paint()..color = _ActivityColors.green);
     }
@@ -2173,16 +2397,22 @@ class _ActivitySkeleton extends StatelessWidget {
   const _ActivitySkeleton();
   @override
   Widget build(BuildContext context) => Column(
-      children: List.generate(
-          4,
-          (index) => const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: _ActivityGlass(
-                  child: SizedBox(
-                      height: 64,
-                      child: LinearProgressIndicator(
-                          color: _ActivityColors.blue,
-                          backgroundColor: Colors.transparent))))));
+    children: List.generate(
+      4,
+      (index) => const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: _ActivityGlass(
+          child: SizedBox(
+            height: 64,
+            child: LinearProgressIndicator(
+              color: _ActivityColors.blue,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _ActivityError extends StatelessWidget {
@@ -2190,12 +2420,17 @@ class _ActivityError extends StatelessWidget {
   const _ActivityError({required this.onRetry});
   @override
   Widget build(BuildContext context) => _ActivityGlass(
-          child: Column(children: [
-        const Text('Activity could not load.',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+    child: Column(
+      children: [
+        const Text(
+          'Activity could not load.',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+        ),
         const SizedBox(height: 12),
-        FilledButton(onPressed: onRetry, child: const Text('Retry'))
-      ]));
+        FilledButton(onPressed: onRetry, child: const Text('Retry')),
+      ],
+    ),
+  );
 }
 
 class _FilterChip extends StatelessWidget {
@@ -2205,9 +2440,13 @@ class _FilterChip extends StatelessWidget {
   const _FilterChip(this.label, {required this.selected, required this.onTap});
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-          label: Text(label), selected: selected, onSelected: (_) => onTap()));
+    padding: const EdgeInsets.only(right: 8),
+    child: ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    ),
+  );
 }
 
 class _RouteLine extends StatelessWidget {
@@ -2216,17 +2455,28 @@ class _RouteLine extends StatelessWidget {
   const _RouteLine({required this.label, required this.value});
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
         SizedBox(
-            width: 72,
-            child: Text(label,
-                style: const TextStyle(color: _ActivityColors.muted))),
+          width: 72,
+          child: Text(
+            label,
+            style: const TextStyle(color: _ActivityColors.muted),
+          ),
+        ),
         Expanded(
-            child: Text(value.isEmpty ? 'Updating' : value,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)))
-      ]));
+          child: Text(
+            value.isEmpty ? 'Updating' : value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Detail extends StatelessWidget {
@@ -2235,18 +2485,30 @@ class _Detail extends StatelessWidget {
   const _Detail(this.label, this.value);
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    padding: const EdgeInsets.symmetric(vertical: 9),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         SizedBox(
-            width: 100,
-            child: Text(label,
-                style: const TextStyle(color: _ActivityColors.muted))),
+          width: 100,
+          child: Text(
+            label,
+            style: const TextStyle(color: _ActivityColors.muted),
+          ),
+        ),
         Expanded(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)))
-      ]));
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ActivityGlass extends StatelessWidget {
@@ -2254,25 +2516,27 @@ class _ActivityGlass extends StatelessWidget {
   const _ActivityGlass({required this.child});
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-        padding: const EdgeInsets.all(AppTokens.space20),
-        accent: AppTokens.primary,
-        highContrast:
-            SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-                false,
-        child: child,
-      );
+    padding: const EdgeInsets.all(AppTokens.space20),
+    accent: AppTokens.primary,
+    highContrast:
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+        false,
+    child: child,
+  );
 }
 
 void _openTracking(BuildContext context, SenderActivityItem item) {
   context.read<SendPackageBloc>().add(WatchActiveDelivery(requestId: item.id));
-  Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas()));
+  Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas()));
 }
 
 void _openChat(BuildContext context, SenderActivityItem item) {
   context.read<SendPackageBloc>().add(WatchActiveDelivery(requestId: item.id));
-  Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => RideChatPageView(chatId: item.id)));
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => RideChatPageView(chatId: item.id)),
+  );
 }
 
 Map<String, dynamic> _map(Object? value) =>
@@ -2311,13 +2575,13 @@ String _riderRankLabel(String value) {
 }
 
 Color _rankColor(String rank) => switch (rank.toLowerCase()) {
-      'agent' => const Color(0xFF94A3B8),
-      'sentinel' => const Color(0xFF60A5FA),
-      'warden' => const Color(0xFF10B981),
-      'knight' => const Color(0xFFA78BFA),
-      'veteran' => const Color(0xFFF5C451),
-      _ => const Color(0xFF94A3B8),
-    };
+  'agent' => const Color(0xFF94A3B8),
+  'sentinel' => const Color(0xFF60A5FA),
+  'warden' => const Color(0xFF10B981),
+  'knight' => const Color(0xFFA78BFA),
+  'veteran' => const Color(0xFFF5C451),
+  _ => const Color(0xFF94A3B8),
+};
 
 double? _number(Object? value) =>
     value is num ? value.toDouble() : double.tryParse('$value');
@@ -2340,9 +2604,11 @@ bool _riderTrusted(Map<String, dynamic> profile) {
 List<String> _safeAchievementLabels(Object? value) {
   if (value is! List) return const [];
   return value
-      .map((entry) => entry is Map
-          ? _first([entry['label'], entry['title'], entry['name']])
-          : '$entry'.trim())
+      .map(
+        (entry) => entry is Map
+            ? _first([entry['label'], entry['title'], entry['name']])
+            : '$entry'.trim(),
+      )
       .where((label) => label.isNotEmpty && label.length <= 80)
       .take(3)
       .toList(growable: false);
@@ -2359,27 +2625,27 @@ String _status(String value) {
   return text.isEmpty
       ? 'Pending'
       : text
-          .split(' ')
-          .where((part) => part.isNotEmpty)
-          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-          .join(' ');
+            .split(' ')
+            .where((part) => part.isNotEmpty)
+            .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+            .join(' ');
 }
 
 String _typeLabel(SenderActivityType type) => switch (type) {
-      SenderActivityType.parcel => 'Parcels',
-      SenderActivityType.gift => 'Gifts',
-      SenderActivityType.health => 'Health+',
-      SenderActivityType.business => 'Business',
-      SenderActivityType.roth => 'Roth'
-    };
+  SenderActivityType.parcel => 'Parcels',
+  SenderActivityType.gift => 'Gifts',
+  SenderActivityType.health => 'Health+',
+  SenderActivityType.business => 'Business',
+  SenderActivityType.roth => 'Roth',
+};
 String _filterLabel(SenderActivityType type) => _typeLabel(type);
 IconData _typeIcon(SenderActivityType type) => switch (type) {
-      SenderActivityType.parcel => Icons.inventory_2_outlined,
-      SenderActivityType.gift => Icons.redeem_rounded,
-      SenderActivityType.health => Icons.health_and_safety_rounded,
-      SenderActivityType.business => Icons.apartment_rounded,
-      SenderActivityType.roth => Icons.blur_circular_rounded,
-    };
+  SenderActivityType.parcel => Icons.inventory_2_outlined,
+  SenderActivityType.gift => Icons.redeem_rounded,
+  SenderActivityType.health => Icons.health_and_safety_rounded,
+  SenderActivityType.business => Icons.apartment_rounded,
+  SenderActivityType.roth => Icons.blur_circular_rounded,
+};
 double _progress(String status) {
   final value = status.toLowerCase();
   if (value.contains('delivered')) return 1;
@@ -2400,12 +2666,12 @@ Map<String, List<SenderActivityItem>> _grouped(List<SenderActivityItem> items) {
     final key = difference == 0
         ? 'Today'
         : difference == 1
-            ? 'Yesterday'
-            : difference < 7
-                ? 'Earlier'
-                : date.year == now.year && date.month == now.month
-                    ? 'This Month'
-                    : 'Previous Months';
+        ? 'Yesterday'
+        : difference < 7
+        ? 'Earlier'
+        : date.year == now.year && date.month == now.month
+        ? 'This Month'
+        : 'Previous Months';
     result.putIfAbsent(key, () => []).add(item);
   }
   return result;
