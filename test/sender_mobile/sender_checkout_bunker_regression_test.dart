@@ -54,6 +54,16 @@ void main() {
       expect(senderIrisAllowsContinuation(status), isFalse);
     }
   });
+  test('an IRIS decision applies only to the exact item details requested', () {
+    expect(senderIrisMatchesRequest('weed', 'weed', ''), isTrue);
+    expect(senderIrisMatchesRequest('weed', 'cannabis', ''), isFalse);
+    expect(senderIrisMatchesRequest('weed', 'Books', ''), isFalse);
+    expect(senderIrisMatchesRequest('Books · fragile', 'Books', 'fragile'),
+        isTrue);
+    expect(senderIrisMatchesRequest('Books · fragile', 'Books', 'sealed'),
+        isFalse);
+    expect(senderIrisMatchesRequest(null, 'Books', ''), isFalse);
+  });
   test('persisted route coordinates remain quote-ready after engine restore',
       () {
     const complete = SenderBookingDraft(

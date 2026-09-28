@@ -807,6 +807,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final engine = context.read<SendPackageBloc>().state;
       final irisReady = _irisMatchesParcel(
         engine.canonicalIrisResult,
+        engine.itemDescription,
         _item.text,
         _description.text,
       );
@@ -1812,6 +1813,7 @@ class _BookingPanel extends StatelessWidget {
           weight: weight,
           iris: _irisMatchesParcel(
             engine.canonicalIrisResult,
+            engine.itemDescription,
             item.text,
             description.text,
           )
@@ -3291,35 +3293,10 @@ double? _nullableDouble(Object? value) {
   return double.tryParse('${value ?? ''}'.trim());
 }
 
-bool _irisMatchesParcel(dynamic iris, String itemName, String description) {
-  if (iris == null) return false;
-  final expected = [
-    itemName,
-    description,
-  ].where((value) => value.trim().isNotEmpty).join(' ').trim().toLowerCase();
-  if (expected.isEmpty) return false;
-  final actual = '${iris.itemName ?? ''}'.trim().toLowerCase();
-  if (actual.isEmpty) return false;
-  final item = itemName.trim().toLowerCase();
-  if ((item.isNotEmpty && actual.contains(item)) || expected.contains(actual)) {
-    return true;
-  }
-  final expectedTokens = expected
-      .split(RegExp(r'[^a-z0-9]+'))
-      .where((token) => token.length > 2)
-      .map(
-        (token) =>
-            token.endsWith('s') ? token.substring(0, token.length - 1) : token,
-      )
-      .toSet();
-  final actualTokens = actual
-      .split(RegExp(r'[^a-z0-9]+'))
-      .where((token) => token.length > 2)
-      .map(
-        (token) =>
-            token.endsWith('s') ? token.substring(0, token.length - 1) : token,
-      );
-  return actualTokens.any(expectedTokens.contains);
+bool _irisMatchesParcel(dynamic iris, String? requestedDescription,
+    String itemName, String description) {
+  return iris != null &&
+      senderIrisMatchesRequest(requestedDescription, itemName, description);
 }
 
 String _irisEstimatedWeightDisplay(dynamic iris) {

@@ -3,6 +3,20 @@ import 'package:flutter/foundation.dart';
 bool senderIrisAllowsContinuation(String? complianceStatus) =>
     complianceStatus == 'allowed';
 
+bool senderIrisMatchesRequest(
+  String? requestedDescription,
+  String itemName,
+  String description,
+) {
+  if (requestedDescription == null || requestedDescription.trim().isEmpty) {
+    return false;
+  }
+  final current = [itemName, description]
+      .where((value) => value.trim().isNotEmpty)
+      .join(' · ');
+  return requestedDescription.trim() == current.trim();
+}
+
 String senderDeliveryTimingQuoteKey(SenderBookingDraft draft) => [
       draft.deliveryTimingType.name,
       draft.scheduledDate,
