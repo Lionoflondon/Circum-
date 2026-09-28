@@ -15,6 +15,8 @@ void main() {
     expect(web, contains("'sender_quote'"));
     expect(web, contains("'sender_payment_session'"));
     expect(web, contains("'sender_finalize'"));
+    expect(web, contains("'sender_roth_prepare'"));
+    expect(web, contains("'sender_roth_balance'"));
     expect(web, contains('qaRothEnabled'));
     expect(
       web,
@@ -36,5 +38,6 @@ void main() {
     expect(web, contains('A failed QA capability check must fail closed'));
     expect(web,
         contains('Never retry this operation against the live payment owner'));
+    expect(web, contains('qa_roth_delivery_not_authoritative'));
   });
 }

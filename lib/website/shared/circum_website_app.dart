@@ -9941,6 +9941,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (user == null || !await _allowSenderUser(user)) {
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
+      final qaCapability = await WebsiteProductionPaymentApi.call(
+        'sender_qa',
+        'qaSpecialFlowFixture',
+        const {'action': 'sender_capability'},
+      ).timeout(const Duration(seconds: 8));
+      if (qaCapability['enabled'] == true &&
+          '${qaCapability['fixtureId'] ?? ''}'.isNotEmpty) {
+        final fixtureId = '${qaCapability['fixtureId']}';
+        await WebsiteProductionPaymentApi.call(
+          'sender_qa',
+          'qaSpecialFlowFixture',
+          {'action': 'sender_roth_prepare', 'fixtureId': fixtureId},
+        );
+        final result = await WebsiteProductionPaymentApi.call(
+          'sender_qa',
+          'qaSpecialFlowFixture',
+          {'action': 'sender_roth_balance', 'fixtureId': fixtureId},
+        );
+        if (!mounted) return;
+        setState(() {
+          _healthRothBalance = (result['availableRoth'] as num?)?.toDouble() ??
+              (result['balance'] as num?)?.toDouble() ??
+              0;
+        });
+        return;
+      }
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('getSenderRothBalance')
           .call<Map<String, dynamic>>()
@@ -12399,7 +12425,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           );
           final qaQuoteId = '${qaQuote['quoteId'] ?? ''}';
           if (qaQuoteId.isEmpty) throw StateError('qa_quote_unavailable');
-          const qaRothEnabled = false;
+          final qaRothEnabled = _deliveryUseRoth;
           final sessionResult = await WebsiteProductionPaymentApi.call(
             'sender_qa',
             'qaSpecialFlowFixture',
@@ -12440,6 +12466,41 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         rethrow;
       }
       if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
+        if (qaFixtureId != null) {
+          final requestId =
+              '${session['requestId'] ?? session['deliveryId'] ?? ''}';
+          if (requestId.isEmpty) {
+            throw StateError('qa_roth_delivery_missing');
+          }
+          final read = await WebsiteProductionPaymentApi.call(
+            'sender_qa',
+            'qaSpecialFlowFixture',
+            {
+              'action': 'sender_read',
+              'fixtureId': qaFixtureId,
+              'deliveryId': requestId,
+            },
+          );
+          final delivery = Map<String, dynamic>.from(
+            read['delivery'] as Map? ?? const {},
+          );
+          if (delivery['paymentStatus'] != 'paid' ||
+              delivery['realDispatch'] == true) {
+            throw StateError('qa_roth_delivery_not_authoritative');
+          }
+          _listenToRequest(requestId);
+          _listenToChat(requestId);
+          if (!mounted) return;
+          setState(() {
+            _activeOrderId = requestId;
+            _activeRequestDocId = requestId;
+            _checkoutState = _CheckoutState.matchingRiders;
+            _broadcasting = true;
+            _firebaseOnline = true;
+            _step = _SenderStep.tracking;
+          });
+          return;
+        }
         final paidDeliveryResult = await functions
             .httpsCallableFromUrl(
           'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
