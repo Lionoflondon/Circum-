@@ -43,3 +43,25 @@ test("existing profiles require a pending grant regardless of legacy Sender role
   assert.match(source, /const grantPending = !userSnap\.exists \|\| starterRothPending\(existing\);/);
   assert.match(source, /const starterRothEligible = grantPending \|\| welcomeEmailPending\(existing\);/);
 });
+
+test("Sender preferences are server-owned and validated", () => {
+  assert.match(source, /exports\.updateSenderPreferences = functions\.https\.onCall/);
+  assert.match(source, /notificationPreferences/);
+  assert.match(source, /Unsupported language preference/);
+  assert.match(source, /Unsupported time format preference/);
+  assert.match(source, /sender_preferences_updated/);
+});
+
+test("Sender session revocation reports Firebase global scope honestly", () => {
+  assert.match(source, /exports\.revokeSenderSessions = functions\.https\.onCall/);
+  assert.match(source, /revokeRefreshTokens\(uid\)/);
+  assert.match(source, /all_sessions_including_current/);
+});
+
+test("Sender activity and export read only sender-owned records", () => {
+  assert.match(source, /exports\.getSenderAccountActivity = functions\.https\.onCall/);
+  assert.match(source, /exports\.exportSenderData = functions\.https\.onCall/);
+  assert.match(source, /senderOwnedQuery\("senderProfileEvents", "uid", uid/);
+  assert.match(source, /senderOwnedQuery\("notifications", "recipientId", uid/);
+  assert.match(source, /senderOwnedQuery\("deliveryRequests", "userId", uid/);
+});

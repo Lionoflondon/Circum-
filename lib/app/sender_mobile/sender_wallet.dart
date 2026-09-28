@@ -467,10 +467,17 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   }
 }
 
+enum SenderWalletInitialSection { overview, paymentMethods }
+
 class SenderWalletView extends StatefulWidget {
   final SenderWalletRepository? repository;
+  final SenderWalletInitialSection initialSection;
 
-  const SenderWalletView({super.key, this.repository});
+  const SenderWalletView({
+    super.key,
+    this.repository,
+    this.initialSection = SenderWalletInitialSection.overview,
+  });
 
   @override
   State<SenderWalletView> createState() => _SenderWalletViewState();
@@ -489,6 +496,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   bool _refreshing = false;
   bool _showingCachedWallet = false;
   bool _paymentActionLoading = false;
+  bool _openedInitialSection = false;
   int _loadGeneration = 0;
 
   @override
@@ -588,6 +596,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       });
       unawaited(_cacheSnapshot(wallet, _transactions, _nextPage));
       _walletTelemetry('fresh_load', startedAt);
+      if (widget.initialSection == SenderWalletInitialSection.paymentMethods &&
+          !_openedInitialSection) {
+        _openedInitialSection = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _wallet != null) _openManagePayments();
+        });
+      }
       await _subscription?.cancel();
       _subscription = _repository
           .watch()

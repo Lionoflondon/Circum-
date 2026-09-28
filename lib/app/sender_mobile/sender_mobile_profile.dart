@@ -21,6 +21,9 @@ import 'sender_notifications.dart';
 import 'sender_notification_routing.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
+import 'sender_profile_preferences.dart';
+import 'sender_accessibility.dart';
+import 'sender_account_data.dart';
 import 'sender_wallet.dart';
 import 'gift_journey_draft.dart';
 import 'gift_story_view.dart';
@@ -405,6 +408,7 @@ class ImagePickerSenderProfilePhotoPicker implements SenderProfilePhotoPicker {
 
 class FirebaseSenderMobileProfileRepository
     implements SenderMobileProfileRepository {
+  static const profileOperationTimeout = Duration(seconds: 20);
   final FirebaseFirestore firestore;
   final FirebaseStorage storage;
   final FirebaseFunctions functions;
@@ -438,7 +442,7 @@ class FirebaseSenderMobileProfileRepository
           .where('userId', isEqualTo: user.uid)
           .limit(20)
           .get()
-          .timeout(SenderProfileAuthority.profileReadTimeout);
+          .timeout(profileOperationTimeout);
       trustEvents = eventSnapshot.docs
           .map((document) => document.data())
           .toList(growable: false);
@@ -473,7 +477,7 @@ class FirebaseSenderMobileProfileRepository
             .where('userId', isEqualTo: user.uid)
             .limit(20)
             .get()
-            .timeout(SenderProfileAuthority.profileReadTimeout);
+            .timeout(profileOperationTimeout);
         trustEvents = eventSnapshot.docs
             .map((document) => document.data())
             .toList(growable: false);
@@ -513,9 +517,11 @@ class FirebaseSenderMobileProfileRepository
           'username': normalizedUsername,
           'phone': phone.trim(),
         })
-        .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+        .timeout(profileOperationTimeout);
     if (user.displayName != displayName.trim()) {
-      await user.updateDisplayName(displayName.trim());
+      await user
+          .updateDisplayName(displayName.trim())
+          .timeout(profileOperationTimeout);
     }
     final updated = await profileAuthority.readCanonicalProfile(
       user,
@@ -550,24 +556,28 @@ class FirebaseSenderMobileProfileRepository
     final reference = storage.ref(
       'users/${user.uid}/profile/avatar.$extension',
     );
-    await reference.putData(
-      photo.bytes,
-      SettableMetadata(
-        contentType: photo.contentType,
-        cacheControl: 'public,max-age=3600',
-        customMetadata: {
-          'ownerUid': user.uid,
-          'source': 'sender_mobile_profile',
-        },
-      ),
+    await reference
+        .putData(
+          photo.bytes,
+          SettableMetadata(
+            contentType: photo.contentType,
+            cacheControl: 'public,max-age=3600',
+            customMetadata: {
+              'ownerUid': user.uid,
+              'source': 'sender_mobile_profile',
+            },
+          ),
+        )
+        .timeout(profileOperationTimeout);
+    final downloadUrl = await reference.getDownloadURL().timeout(
+      profileOperationTimeout,
     );
-    final downloadUrl = await reference.getDownloadURL();
     await functions
         .httpsCallable('updateSenderProfilePhoto')
         .call({'photoURL': downloadUrl})
-        .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
-    await user.updatePhotoURL(downloadUrl);
-    final current = await load();
+        .timeout(profileOperationTimeout);
+    await user.updatePhotoURL(downloadUrl).timeout(profileOperationTimeout);
+    final current = await load().timeout(profileOperationTimeout);
     return SenderMobileProfileData(
       userId: current.userId,
       displayName: current.displayName,
@@ -594,7 +604,7 @@ class FirebaseSenderMobileProfileRepository
       final preferences = await SharedPreferences.getInstance();
       await preferences.remove(key);
     }
-    await profileAuthority.auth.signOut();
+    await profileAuthority.auth.signOut().timeout(profileOperationTimeout);
   }
 }
 
@@ -621,6 +631,7 @@ class SenderMobileProfileView extends StatefulWidget {
   final SenderProfilePhotoPicker? photoPicker;
   final VoidCallback? onLoggedOut;
   final VoidCallback? onOpenWallet;
+  final VoidCallback? onOpenPaymentMethods;
   final SenderSavedAddressesRepository? savedAddressesRepository;
 
   const SenderMobileProfileView({
@@ -629,6 +640,7 @@ class SenderMobileProfileView extends StatefulWidget {
     this.photoPicker,
     this.onLoggedOut,
     this.onOpenWallet,
+    this.onOpenPaymentMethods,
     this.savedAddressesRepository,
   });
 
@@ -1155,12 +1167,16 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               onTap: _openNotifications,
             ),
             _ProfileShortcut(
+              icon: Icons.tune_rounded,
+              title: 'Notification preferences',
+              subtitle: 'Choose which updates Circum sends you.',
+              onTap: _openNotificationPreferences,
+            ),
+            _ProfileShortcut(
               icon: Icons.credit_card_rounded,
               title: 'Payment methods',
               subtitle: 'Manage saved payment methods.',
-              onTap:
-                  widget.onOpenWallet ??
-                  () => _showLocalMessage('Wallet is unavailable.'),
+              onTap: widget.onOpenPaymentMethods ?? _openPaymentMethods,
             ),
             _ProfileShortcut(
               icon: Icons.lock_outline_rounded,
@@ -1179,27 +1195,25 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               icon: Icons.language_rounded,
               title: 'Language',
               subtitle: 'Language, region and time format.',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const _SenderLanguageSettingsScreen(),
-                  settings: const RouteSettings(
-                    name: '/sender-mobile/profile/language',
-                  ),
-                ),
-              ),
+              onTap: _openLanguage,
             ),
             _ProfileShortcut(
               icon: Icons.accessibility_new_rounded,
               title: 'Accessibility',
               subtitle: 'Adjust your Circum experience.',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const _SenderAccessibilitySettingsScreen(),
-                  settings: const RouteSettings(
-                    name: '/sender-mobile/profile/accessibility',
-                  ),
-                ),
-              ),
+              onTap: _openAccessibility,
+            ),
+            _ProfileShortcut(
+              icon: Icons.history_rounded,
+              title: 'Account activity',
+              subtitle: 'Review profile and security changes.',
+              onTap: _openAccountActivity,
+            ),
+            _ProfileShortcut(
+              icon: Icons.download_rounded,
+              title: 'Download my data',
+              subtitle: 'Export the Sender records Circum holds for you.',
+              onTap: _openDataExport,
               showDivider: false,
             ),
           ],
@@ -1290,6 +1304,60 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       settings: const RouteSettings(
         name: '/sender-mobile/profile/notifications',
       ),
+    ),
+  );
+
+  Future<void> _openPaymentMethods() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const SenderWalletView(
+        initialSection: SenderWalletInitialSection.paymentMethods,
+      ),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/payment-methods',
+      ),
+    ),
+  );
+
+  Future<void> _openNotificationPreferences() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderNotificationPreferencesScreen(),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/notification-preferences',
+      ),
+    ),
+  );
+
+  Future<void> _openAccessibility() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => SenderAccessibilityScope.maybeOf(context) == null
+          ? SenderAccessibilityHost(
+              child: SenderAccessibilityView(onOpenLanguage: _openLanguage),
+            )
+          : SenderAccessibilityView(onOpenLanguage: _openLanguage),
+      settings: const RouteSettings(
+        name: '/sender-mobile/profile/accessibility',
+      ),
+    ),
+  );
+
+  Future<void> _openLanguage() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderLanguageSettingsScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/language'),
+    ),
+  );
+
+  Future<void> _openAccountActivity() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderAccountActivityScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/activity'),
+    ),
+  );
+
+  Future<void> _openDataExport() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const _SenderDataExportScreen(),
+      settings: const RouteSettings(name: '/sender-mobile/profile/data-export'),
     ),
   );
 
@@ -2202,17 +2270,267 @@ class _SenderSecuritySettingsScreen extends StatefulWidget {
       _SenderSecuritySettingsScreenState();
 }
 
+class _PasswordValues {
+  final String current;
+  final String next;
+  const _PasswordValues(this.current, this.next);
+}
+
+class _EmailValues {
+  final String email;
+  final String password;
+  const _EmailValues(this.email, this.password);
+}
+
 class _SenderSecuritySettingsScreenState
     extends State<_SenderSecuritySettingsScreen> {
-  bool _twoFactorEnabled = false;
-  bool _biometricsEnabled = false;
+  bool _busy = false;
+
+  User? get _user => FirebaseAuth.instance.currentUser;
+
+  Future<void> _changePassword() async {
+    final user = _user;
+    if (user == null ||
+        !user.providerData.any((item) => item.providerId == 'password')) {
+      _showSecurityMessage(
+        'Password changes are unavailable for this sign-in provider. Use the provider account security controls.',
+      );
+      return;
+    }
+    final values = await _passwordDialog();
+    if (values == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await user
+          .reauthenticateWithCredential(
+            EmailAuthProvider.credential(
+              email: user.email ?? '',
+              password: values.current,
+            ),
+          )
+          .timeout(const Duration(seconds: 20));
+      await user
+          .updatePassword(values.next)
+          .timeout(const Duration(seconds: 20));
+      _showSecurityMessage('Password updated.');
+    } on FirebaseAuthException catch (error) {
+      _showSecurityMessage(_authMessage(error.code));
+    } on TimeoutException {
+      _showSecurityMessage('Password update timed out. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _changeEmail() async {
+    final user = _user;
+    if (user == null ||
+        !user.providerData.any((item) => item.providerId == 'password')) {
+      _showSecurityMessage(
+        'Email changes are unavailable for this sign-in provider. Use the provider account security controls.',
+      );
+      return;
+    }
+    final values = await _emailDialog(user.email ?? '');
+    if (values == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await user
+          .reauthenticateWithCredential(
+            EmailAuthProvider.credential(
+              email: user.email ?? '',
+              password: values.password,
+            ),
+          )
+          .timeout(const Duration(seconds: 20));
+      await user
+          .verifyBeforeUpdateEmail(values.email)
+          .timeout(const Duration(seconds: 20));
+      await FirebaseFunctions.instance
+          .httpsCallable('requestSenderEmailChange')
+          .call({'pendingEmail': values.email})
+          .timeout(const Duration(seconds: 20));
+      _showSecurityMessage(
+        'Check your new email address to confirm the change.',
+      );
+    } on FirebaseAuthException catch (error) {
+      _showSecurityMessage(_authMessage(error.code));
+    } on FirebaseFunctionsException catch (error) {
+      _showSecurityMessage(
+        error.message ?? 'Email change could not be recorded.',
+      );
+    } on TimeoutException {
+      _showSecurityMessage('Email change timed out. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _revokeAllSessions() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out all devices?'),
+        content: const Text(
+          'Firebase can revoke all refresh tokens, but it cannot exclude this device. Every device, including this one, will need to sign in again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign out all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('revokeSenderSessions')
+          .call({'scope': 'all_other_devices'})
+          .timeout(const Duration(seconds: 20));
+      await FirebaseAuth.instance.signOut().timeout(
+        const Duration(seconds: 20),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'All sessions were revoked. Sign in again to continue.',
+            ),
+          ),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (_) {
+      _showSecurityMessage('Sessions could not be revoked. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showSecurityMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<_PasswordValues?> _passwordDialog() async {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    final result = await showDialog<_PasswordValues>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: current,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current password'),
+            ),
+            TextField(
+              controller: next,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+            TextField(
+              controller: confirm,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm new password',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (next.text.length < 8 || next.text != confirm.text) return;
+              Navigator.pop(context, _PasswordValues(current.text, next.text));
+            },
+            child: const Text('Update password'),
+          ),
+        ],
+      ),
+    );
+    current.dispose();
+    next.dispose();
+    confirm.dispose();
+    return result;
+  }
+
+  Future<_EmailValues?> _emailDialog(String currentEmail) async {
+    final email = TextEditingController(text: currentEmail);
+    final password = TextEditingController();
+    final result = await showDialog<_EmailValues>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change email address'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'New email address'),
+            ),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!email.text.contains('@') || password.text.isEmpty) return;
+              Navigator.pop(
+                context,
+                _EmailValues(email.text.trim(), password.text),
+              );
+            },
+            child: const Text('Send verification'),
+          ),
+        ],
+      ),
+    );
+    email.dispose();
+    password.dispose();
+    return result;
+  }
+
+  static String _authMessage(String code) {
+    if (code == 'wrong-password' || code == 'invalid-credential') {
+      return 'That password was not accepted.';
+    }
+    if (code == 'requires-recent-login') {
+      return 'Sign in again before changing this setting.';
+    }
+    if (code == 'email-already-in-use') {
+      return 'That email address is already in use.';
+    }
+    return 'This security change could not be completed.';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final platform = Theme.of(context).platform;
-    final biometricLabel = platform == TargetPlatform.iOS
-        ? 'Face ID / Touch ID'
-        : 'Fingerprint';
     return _SenderSettingsShell(
       title: 'Security',
       subtitle: 'Manage sign-in, account protection and signed-in devices.',
@@ -2224,26 +2542,22 @@ class _SenderSecuritySettingsScreenState
               _SettingsActionRow(
                 icon: Icons.password_rounded,
                 title: 'Password',
-                subtitle: 'Change password',
-                onTap: () => _showPending(context, 'Change password'),
+                subtitle: _busy
+                    ? 'Updating...'
+                    : 'Change password with reauthentication',
+                onTap: _changePassword,
               ),
-              _SettingsSwitchRow(
+              const _SettingsStaticRow(
                 icon: Icons.verified_user_outlined,
                 title: 'Two-Factor Authentication',
-                subtitle: _twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA',
-                value: _twoFactorEnabled,
-                onChanged: (value) => setState(() {
-                  _twoFactorEnabled = value;
-                }),
+                subtitle:
+                    'Not enabled in this release. No fake setting is stored.',
               ),
-              _SettingsSwitchRow(
+              const _SettingsStaticRow(
                 icon: Icons.fingerprint_rounded,
                 title: 'Biometrics',
-                subtitle: biometricLabel,
-                value: _biometricsEnabled,
-                onChanged: (value) => setState(() {
-                  _biometricsEnabled = value;
-                }),
+                subtitle:
+                    'Not enabled in this build. Device biometrics never claim to protect sign-in.',
               ),
               _SettingsActionRow(
                 icon: Icons.devices_other_rounded,
@@ -2254,15 +2568,14 @@ class _SenderSecuritySettingsScreenState
               _SettingsActionRow(
                 icon: Icons.alternate_email_rounded,
                 title: 'Email Address',
-                subtitle: 'Change email',
-                onTap: () => _showPending(context, 'Change email'),
+                subtitle: 'Verify a new address before it becomes active',
+                onTap: _changeEmail,
               ),
-              _SettingsActionRow(
+              const _SettingsStaticRow(
                 icon: Icons.phone_iphone_rounded,
                 title: 'Phone Number',
-                subtitle: 'Change phone number',
-                onTap: () => _showPending(context, 'Change phone number'),
-                showDivider: false,
+                subtitle:
+                    'Phone changes are handled by Circum Support while verification is unavailable here.',
               ),
             ],
           ),
@@ -2310,8 +2623,10 @@ class _SenderSecuritySettingsScreenState
                       ),
                     ),
                     TextButton(
-                      onPressed: () =>
-                          _showPending(context, 'Sign out this device'),
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) Navigator.of(context).pop();
+                      },
                       child: const Text('Sign out'),
                     ),
                   ],
@@ -2320,8 +2635,7 @@ class _SenderSecuritySettingsScreenState
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 style: _secondaryButtonStyle(),
-                onPressed: () =>
-                    _showPending(context, 'Sign out all other devices'),
+                onPressed: _revokeAllSessions,
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Sign out all other devices'),
               ),
@@ -2343,24 +2657,89 @@ class _SenderLanguageSettingsScreen extends StatefulWidget {
 
 class _SenderLanguageSettingsScreenState
     extends State<_SenderLanguageSettingsScreen> {
-  String _language = 'Device Default';
-  String _timeFormat = 'Automatic';
+  late final FirebaseSenderProfilePreferencesRepository _repository;
+  SenderProfilePreferences _preferences = const SenderProfilePreferences();
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = FirebaseSenderProfilePreferencesRepository();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final value = await _repository.load().timeout(
+        const Duration(seconds: 15),
+      );
+      if (!mounted) return;
+      setState(() {
+        _preferences = value;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Language preferences could not be loaded.';
+        });
+      }
+    }
+  }
+
+  Future<void> _save(SenderProfilePreferences next) async {
+    if (_saving) return;
+    final previous = _preferences;
+    setState(() {
+      _preferences = next;
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final saved = await _repository
+          .save(next)
+          .timeout(const Duration(seconds: 15));
+      if (mounted) {
+        setState(() {
+          _preferences = saved;
+          _saving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _preferences = previous;
+          _saving = false;
+          _error = 'Language preferences could not be saved.';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const _ProfileLoadingState();
     return _SenderSettingsShell(
       title: 'Language',
       subtitle:
-          'Choose app language preferences where Circum localisation is available.',
+          'Your language and time format are saved to your Circum account.',
       children: [
+        if (_error case final error?) _ProfileMessage(message: error),
         const _ProfileSectionTitle(title: 'App Language'),
         const SizedBox(height: 10),
         _SettingsChoiceCard<String>(
-          value: _language,
-          options: const ['Device Default', 'English'],
-          onChanged: (value) => setState(() {
-            _language = value;
-          }),
+          value: _preferences.language == 'device_default'
+              ? 'Device Default'
+              : 'English',
+          options: const ['English', 'Device Default'],
+          onChanged: (value) => _save(
+            _preferences.copyWith(
+              language: value == 'Device Default' ? 'device_default' : 'en',
+            ),
+          ),
         ),
         const SizedBox(height: 20),
         const _ProfileSectionTitle(title: 'Region'),
@@ -2369,104 +2748,324 @@ class _SenderLanguageSettingsScreenState
           child: _SettingsStaticRow(
             icon: Icons.public_rounded,
             title: 'Region',
-            subtitle: 'Uses device region by default',
+            subtitle: 'United Kingdom · controlled by the account region',
           ),
         ),
         const SizedBox(height: 20),
         const _ProfileSectionTitle(title: 'Date & Time Format'),
         const SizedBox(height: 10),
         _SettingsChoiceCard<String>(
-          value: _timeFormat,
+          value: switch (_preferences.timeFormat) {
+            '12_hour' => '12-hour',
+            '24_hour' => '24-hour',
+            _ => 'Automatic',
+          },
           options: const ['Automatic', '12-hour', '24-hour'],
-          onChanged: (value) => setState(() {
-            _timeFormat = value;
-          }),
+          onChanged: (value) => _save(
+            _preferences.copyWith(
+              timeFormat: switch (value) {
+                '12-hour' => '12_hour',
+                '24-hour' => '24_hour',
+                _ => 'automatic',
+              },
+            ),
+          ),
         ),
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.only(top: 14),
+            child: LinearProgressIndicator(),
+          ),
       ],
     );
   }
 }
 
-class _SenderAccessibilitySettingsScreen extends StatefulWidget {
-  const _SenderAccessibilitySettingsScreen();
+class _SenderNotificationPreferencesScreen extends StatefulWidget {
+  const _SenderNotificationPreferencesScreen();
 
   @override
-  State<_SenderAccessibilitySettingsScreen> createState() =>
-      _SenderAccessibilitySettingsScreenState();
+  State<_SenderNotificationPreferencesScreen> createState() =>
+      _SenderNotificationPreferencesScreenState();
 }
 
-class _SenderAccessibilitySettingsScreenState
-    extends State<_SenderAccessibilitySettingsScreen> {
-  String _appearance = 'Follow System';
-  String _textSize = 'Default';
-  bool _highContrast = false;
-  bool _reduceMotion = false;
-  bool _screenReaderOptimisations = false;
+class _SenderNotificationPreferencesScreenState
+    extends State<_SenderNotificationPreferencesScreen> {
+  late final FirebaseSenderProfilePreferencesRepository _repository;
+  SenderProfilePreferences _preferences = const SenderProfilePreferences();
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = FirebaseSenderProfilePreferencesRepository();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final value = await _repository.load().timeout(
+        const Duration(seconds: 15),
+      );
+      if (mounted) {
+        setState(() {
+          _preferences = value;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Notification preferences could not be loaded.';
+        });
+      }
+    }
+  }
+
+  Future<void> _save(SenderProfilePreferences next) async {
+    if (_saving) return;
+    final previous = _preferences;
+    setState(() {
+      _preferences = next;
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final saved = await _repository
+          .save(next)
+          .timeout(const Duration(seconds: 15));
+      if (mounted) {
+        setState(() {
+          _preferences = saved;
+          _saving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _preferences = previous;
+          _saving = false;
+          _error = 'Notification preferences could not be saved.';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const _ProfileLoadingState();
+    final notifications = _preferences.notifications;
     return _SenderSettingsShell(
-      title: 'Accessibility',
-      subtitle: 'Tune the visual and motion experience for your needs.',
+      title: 'Notification preferences',
+      subtitle:
+          'These choices are saved to your account and apply after restart.',
       children: [
-        const _ProfileSectionTitle(title: 'Appearance'),
-        const SizedBox(height: 10),
-        _SettingsChoiceCard<String>(
-          value: _appearance,
-          options: const ['Follow System', 'Dark', 'Light'],
-          onChanged: (value) => setState(() {
-            _appearance = value;
-          }),
-        ),
-        const SizedBox(height: 20),
-        const _ProfileSectionTitle(title: 'Text Size'),
-        const SizedBox(height: 10),
-        _SettingsChoiceCard<String>(
-          value: _textSize,
-          options: const ['Small', 'Default', 'Large'],
-          onChanged: (value) => setState(() {
-            _textSize = value;
-          }),
-        ),
-        const SizedBox(height: 20),
+        if (_error case final error?) _ProfileMessage(message: error),
         _ProfileGlassCard(
           padding: EdgeInsets.zero,
           child: Column(
             children: [
               _SettingsSwitchRow(
-                icon: Icons.contrast_rounded,
-                title: 'High Contrast',
-                subtitle: _highContrast ? 'On' : 'Off',
-                value: _highContrast,
-                onChanged: (value) => setState(() {
-                  _highContrast = value;
-                }),
+                icon: Icons.local_shipping_outlined,
+                title: 'Delivery updates',
+                subtitle: 'Status changes and arrival alerts.',
+                value: notifications.deliveryUpdates,
+                onChanged: (value) => _save(
+                  _preferences.copyWith(
+                    notifications: notifications.copyWith(
+                      deliveryUpdates: value,
+                    ),
+                  ),
+                ),
               ),
               _SettingsSwitchRow(
-                icon: Icons.motion_photos_off_rounded,
-                title: 'Reduce Motion',
-                subtitle: _reduceMotion ? 'On' : 'Off',
-                value: _reduceMotion,
-                onChanged: (value) => setState(() {
-                  _reduceMotion = value;
-                }),
+                icon: Icons.security_outlined,
+                title: 'Account alerts',
+                subtitle: 'Security, payment and account notices.',
+                value: notifications.accountAlerts,
+                onChanged: (value) => _save(
+                  _preferences.copyWith(
+                    notifications: notifications.copyWith(accountAlerts: value),
+                  ),
+                ),
               ),
               _SettingsSwitchRow(
-                icon: Icons.record_voice_over_rounded,
-                title: 'Screen Reader Optimisations',
-                subtitle: _screenReaderOptimisations ? 'On' : 'Off',
-                value: _screenReaderOptimisations,
-                onChanged: (value) => setState(() {
-                  _screenReaderOptimisations = value;
-                }),
+                icon: Icons.campaign_outlined,
+                title: 'Product updates',
+                subtitle: 'Optional news and improvements from Circum.',
+                value: notifications.marketing,
+                onChanged: (value) => _save(
+                  _preferences.copyWith(
+                    notifications: notifications.copyWith(marketing: value),
+                  ),
+                ),
                 showDivider: false,
               ),
             ],
           ),
         ),
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.only(top: 14),
+            child: LinearProgressIndicator(),
+          ),
       ],
     );
   }
+}
+
+class _SenderAccountActivityScreen extends StatefulWidget {
+  const _SenderAccountActivityScreen();
+
+  @override
+  State<_SenderAccountActivityScreen> createState() =>
+      _SenderAccountActivityScreenState();
+}
+
+class _SenderAccountActivityScreenState
+    extends State<_SenderAccountActivityScreen> {
+  final _repository = SenderAccountDataRepository();
+  late Future<List<SenderAccountActivityEvent>> _activity;
+
+  @override
+  void initState() {
+    super.initState();
+    _activity = _repository.loadActivity();
+  }
+
+  @override
+  Widget build(BuildContext context) => _SenderSettingsShell(
+    title: 'Account activity',
+    subtitle:
+        'A record of profile, notification and security changes made on this account.',
+    children: [
+      FutureBuilder<List<SenderAccountActivityEvent>>(
+        future: _activity,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _ProfileLoadingState();
+          }
+          if (snapshot.hasError) {
+            return _ProfileMessage(
+              message:
+                  'Activity could not be loaded. Please go back and try again.',
+            );
+          }
+          final events = snapshot.data ?? const [];
+          if (events.isEmpty) {
+            return const _ProfileGlassCard(
+              child: _SettingsStaticRow(
+                icon: Icons.history_rounded,
+                title: 'No activity yet',
+                subtitle: 'New account and security actions will appear here.',
+              ),
+            );
+          }
+          return _ProfileGlassCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: events
+                  .map(
+                    (event) => _ProfileShortcut(
+                      icon: Icons.check_circle_outline_rounded,
+                      title: _friendlyActivityAction(event.action),
+                      subtitle:
+                          '${event.source}${event.createdAt == null ? '' : ' · ${event.createdAt!.toLocal()}'}',
+                      onTap: () {},
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+        },
+      ),
+    ],
+  );
+
+  static String _friendlyActivityAction(String value) => value
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .split(' ')
+      .where((word) => word.isNotEmpty)
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
+}
+
+class _SenderDataExportScreen extends StatefulWidget {
+  const _SenderDataExportScreen();
+
+  @override
+  State<_SenderDataExportScreen> createState() =>
+      _SenderDataExportScreenState();
+}
+
+class _SenderDataExportScreenState extends State<_SenderDataExportScreen> {
+  final _repository = SenderAccountDataRepository();
+  bool _busy = false;
+  String? _message;
+
+  Future<void> _export() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      final data = await _repository.exportData();
+      await _repository.shareExport(data).timeout(const Duration(seconds: 20));
+      if (mounted) {
+        setState(() => _message = 'Your export is ready to save or share.');
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _message = 'The export timed out. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Your data export could not be prepared. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _SenderSettingsShell(
+    title: 'Download my data',
+    subtitle:
+        'Circum prepares a portable export of your Sender profile, activity, notifications, deliveries and Gifts records.',
+    children: [
+      if (_message case final message?) _ProfileMessage(message: message),
+      _ProfileGlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'The export is generated from the authenticated account and shared through your device or browser. Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.',
+              style: TextStyle(color: _ProfileTokens.muted, height: 1.45),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _busy ? null : _export,
+              icon: _busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded),
+              label: Text(_busy ? 'Preparing export...' : 'Prepare export'),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _SenderSubmissionInfo {
@@ -2625,14 +3224,11 @@ class _SettingsActionRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool showDivider;
-
   const _SettingsActionRow({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.showDivider = true,
   });
 
   @override
@@ -2642,7 +3238,6 @@ class _SettingsActionRow extends StatelessWidget {
       title: title,
       subtitle: subtitle,
       onTap: onTap,
-      showDivider: showDivider,
     );
   }
 }
@@ -2873,12 +3468,6 @@ class _SettingsChoiceRow<T> extends StatelessWidget {
       ],
     );
   }
-}
-
-void _showPending(BuildContext context, String action) {
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('$action is being prepared.')));
 }
 
 class _ProfileShortcut extends StatelessWidget {
