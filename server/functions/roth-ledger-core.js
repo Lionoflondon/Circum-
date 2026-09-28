@@ -179,7 +179,30 @@ function walletTransactionView(record) {
   };
 }
 
-function paginateWalletTransactions(records, {pageSize = 20, pageOffset = 0} = {}) {
+function encodeWalletCursor({source, createdAtMillis, transactionId}) {
+  return Buffer.from(JSON.stringify({
+    source: `${source || ""}`,
+    createdAtMillis: Number(createdAtMillis || 0),
+    transactionId: `${transactionId || ""}`,
+  })).toString("base64url");
+}
+
+function decodeWalletCursor(token) {
+  if (!token) return null;
+  try {
+    const value = JSON.parse(Buffer.from(`${token}`, "base64url").toString("utf8"));
+    if (!value || !value.transactionId || !Number.isFinite(Number(value.createdAtMillis))) return null;
+    return {
+      source: `${value.source || ""}`,
+      createdAtMillis: Number(value.createdAtMillis),
+      transactionId: `${value.transactionId}`,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function paginateWalletTransactions(records, {pageSize = 20, pageOffset = 0, pageToken = null} = {}) {
   const safeSize = Math.min(50, Math.max(1, Number(pageSize || 20)));
   const safeOffset = Math.max(0, Number(pageOffset || 0));
   const sorted = [...records].sort((a, b) => {
@@ -188,11 +211,20 @@ function paginateWalletTransactions(records, {pageSize = 20, pageOffset = 0} = {
     if (aTime !== bTime) return bTime - aTime;
     return `${b.transactionId || b.id || ""}`.localeCompare(`${a.transactionId || a.id || ""}`);
   });
-  const page = sorted.slice(safeOffset, safeOffset + safeSize);
-  const nextOffset = safeOffset + page.length;
+  const cursor = decodeWalletCursor(pageToken);
+  const cursorIndex = cursor ? sorted.findIndex((record) =>
+    Number(record.createdAtMillis || 0) === cursor.createdAtMillis &&
+    `${record.transactionId || record.id || ""}` === cursor.transactionId) : -1;
+  const start = cursorIndex >= 0 ? cursorIndex + 1 : safeOffset;
+  const page = sorted.slice(start, start + safeSize);
+  const nextOffset = start + page.length;
   return {
     records: page,
-    nextPageToken: nextOffset < sorted.length ? `${nextOffset}` : null,
+    nextPageToken: nextOffset < sorted.length ? encodeWalletCursor({
+      source: cursor && cursor.source,
+      createdAtMillis: page[page.length - 1].createdAtMillis,
+      transactionId: page[page.length - 1].transactionId || page[page.length - 1].id,
+    }) : null,
   };
 }
 
@@ -256,4 +288,6 @@ module.exports = {
   senderWalletRecord,
   senderWalletProjectionRecord,
   walletTransactionView,
+  encodeWalletCursor,
+  decodeWalletCursor,
 };
