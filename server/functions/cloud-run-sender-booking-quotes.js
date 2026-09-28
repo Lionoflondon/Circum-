@@ -143,22 +143,14 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         try {
           decoded = await dependencies.verifyIdToken(idToken);
         } catch (failure) {
-          console.warn("sender_quote_auth_rejected", {
-            operation: name,
-            reason: "auth",
-            code: String(failure && failure.code || "unknown").slice(0, 80),
-          });
+          console.warn("sender_quote_auth_rejected", {operation: name, reason: "auth"});
           throw failure;
         }
         let app;
         try {
           app = await dependencies.verifyAppCheck(appCheckToken);
         } catch (failure) {
-          console.warn("sender_quote_auth_rejected", {
-            operation: name,
-            reason: "app-check",
-            code: String(failure && failure.code || "unknown").slice(0, 80),
-          });
+          console.warn("sender_quote_auth_rejected", {operation: name, reason: "app-check"});
           throw failure;
         }
         const uid = decoded && (decoded.uid || decoded.sub);
