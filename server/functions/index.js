@@ -449,6 +449,10 @@ exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateSenderProfile = senderAccount.updateSenderProfile;
 exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
+exports.updateSenderPreferences = senderAccount.updateSenderPreferences;
+exports.revokeSenderSessions = senderAccount.revokeSenderSessions;
+exports.getSenderAccountActivity = senderAccount.getSenderAccountActivity;
+exports.exportSenderData = senderAccount.exportSenderData;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =
   senderAccount.updateSenderNotificationState;
