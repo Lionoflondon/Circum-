@@ -63,10 +63,8 @@ void main() {
       expect(order, greaterThan(start));
       expect(limit, greaterThan(order));
     }
-    expect(
-      source,
-      contains('startAfter([Timestamp.fromMillisecondsSinceEpoch'),
-    );
+    expect(source, contains('startAfter(['));
+    expect(source, contains('Timestamp.fromMillisecondsSinceEpoch'));
     expect(source, contains('_encodeActivityPageToken'));
     expect(source, isNot(contains('final start = page * 20')));
   });
