@@ -9816,15 +9816,42 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _firebaseError = 'Confirming your payment with Stripe...';
     });
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallableFromUrl(
-        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
-      )
-          .call({
-        'checkoutSessionId': checkoutSessionId,
-        'paymentSessionId': paymentSessionId,
-      });
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final Map<String, dynamic> data;
+      Map<String, dynamic>? qaCapability;
+      try {
+        qaCapability = await WebsiteProductionPaymentApi.call(
+          'sender_qa',
+          'qaSpecialFlowFixture',
+          const {'action': 'sender_capability'},
+        ).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        qaCapability = null;
+      }
+      if (qaCapability?['enabled'] == true &&
+          '${qaCapability?['fixtureId'] ?? ''}'.isNotEmpty) {
+        data = await WebsiteProductionPaymentApi.call(
+          'sender_qa',
+          'qaSpecialFlowFixture',
+          {
+            'action': 'sender_finalize',
+            'fixtureId': qaCapability!['fixtureId'],
+            'checkoutSessionId': checkoutSessionId,
+            'paymentSessionId': paymentSessionId,
+          },
+        );
+      } else {
+        final result = await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        )
+            .httpsCallableFromUrl(
+          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
+        )
+            .call({
+          'checkoutSessionId': checkoutSessionId,
+          'paymentSessionId': paymentSessionId,
+        });
+        data = Map<String, dynamic>.from(result.data as Map);
+      }
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
         _listenToRequest(requestId);
@@ -12350,21 +12377,76 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'iris': _webCanonicalIrisPayload(),
         'deliveryTime': _webCanonicalDeliveryTimePayload(),
       };
-      final sessionResult = await functions
-          .httpsCallableFromUrl(
-        'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
-      )
-          .call({
-        'quoteId': quote['quoteId'],
-        'fallbackMethod': 'card',
-        'rothEnabled': _deliveryUseRoth,
-        'checkoutMode': 'web_checkout',
-        'requestId': id,
-        'idempotencyKey': id,
-        'returnUrl': 'https://circum-2797c.web.app/send',
-        'deliveryPayload': deliveryPayload,
-      });
-      final session = Map<String, dynamic>.from(sessionResult.data as Map);
+      Map<String, dynamic> session;
+      String? qaFixtureId;
+      try {
+        final capability = await WebsiteProductionPaymentApi.call(
+          'sender_qa',
+          'qaSpecialFlowFixture',
+          const {'action': 'sender_capability'},
+        ).timeout(const Duration(seconds: 8));
+        if (capability['enabled'] == true &&
+            '${capability['fixtureId'] ?? ''}'.isNotEmpty) {
+          qaFixtureId = '${capability['fixtureId']}';
+          final qaQuote = await WebsiteProductionPaymentApi.call(
+            'sender_qa',
+            'qaSpecialFlowFixture',
+            {'action': 'sender_quote', 'quoteId': quote['quoteId']},
+          );
+          final qaQuoteId = '${qaQuote['quoteId'] ?? ''}';
+          if (qaQuoteId.isEmpty) throw StateError('qa_quote_unavailable');
+          const qaRothEnabled = false;
+          final sessionResult = await WebsiteProductionPaymentApi.call(
+            'sender_qa',
+            'qaSpecialFlowFixture',
+            {
+              'action': 'sender_payment_session',
+              'fixtureId': qaFixtureId,
+              'quoteId': qaQuoteId,
+              'fallbackMethod': 'card',
+              'rothEnabled': qaRothEnabled,
+              'checkoutMode': 'web_checkout',
+              'requestId': id,
+              'idempotencyKey': id,
+              'deliveryPayload': deliveryPayload,
+            },
+          );
+          session = sessionResult;
+        } else {
+          final sessionResult = await functions
+              .httpsCallableFromUrl(
+            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+          )
+              .call({
+            'quoteId': quote['quoteId'],
+            'fallbackMethod': 'card',
+            'rothEnabled': _deliveryUseRoth,
+            'checkoutMode': 'web_checkout',
+            'requestId': id,
+            'idempotencyKey': id,
+            'returnUrl': 'https://circum-2797c.web.app/send',
+            'deliveryPayload': deliveryPayload,
+          });
+          session = Map<String, dynamic>.from(sessionResult.data as Map);
+        }
+      } catch (error) {
+        if (qaFixtureId != null) rethrow;
+        final sessionResult = await functions
+            .httpsCallableFromUrl(
+          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+        )
+            .call({
+          'quoteId': quote['quoteId'],
+          'fallbackMethod': 'card',
+          'rothEnabled': _deliveryUseRoth,
+          'checkoutMode': 'web_checkout',
+          'requestId': id,
+          'idempotencyKey': id,
+          'returnUrl': 'https://circum-2797c.web.app/send',
+          'deliveryPayload': deliveryPayload,
+        });
+        session = Map<String, dynamic>.from(sessionResult.data as Map);
+      }
       if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
         final paidDeliveryResult = await functions
             .httpsCallableFromUrl(
