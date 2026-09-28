@@ -10,6 +10,11 @@ void main() {
     expect(senderQueuedDraftIsStale(5, 5), isFalse);
     expect(senderQueuedDraftIsStale(5, 4), isFalse);
   });
+  test('a quote for another vehicle cannot complete the selected option', () {
+    expect(senderQuoteVehicleMismatch('motorbike', 'Car'), isTrue);
+    expect(senderQuoteVehicleMismatch('CAR', 'Car'), isFalse);
+    expect(senderQuoteVehicleMismatch(null, 'Car'), isFalse);
+  });
   test('legacy sanitized draft restores the selected vehicle upgrade', () {
     final restored = SenderBookingDraft.fromBackendDraft({
       'iris': {'recommendedVehicle': 'Car'},

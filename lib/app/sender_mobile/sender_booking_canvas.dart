@@ -1212,13 +1212,19 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _irisPhotoAnalysisId ?? '',
       business?.businessId ?? '',
     ].join('|');
-    if (!senderQuoteRequestNeeded(
-      lastRequestKey: _lastBackendQuoteKey,
-      requestKey: quoteKey,
-      quoteId: engine.senderQuoteId,
-      quoteTotal: engine.senderQuoteTotal,
-      quoteError: engine.senderQuoteError,
-    )) {
+    if (_lastBackendQuoteKey == quoteKey &&
+        engine.senderQuoteError.isNotEmpty) {
+      return;
+    }
+    if (!senderQuoteVehicleMismatch(
+            engine.senderQuoteVehicle, selectedVehicle) &&
+        !senderQuoteRequestNeeded(
+          lastRequestKey: _lastBackendQuoteKey,
+          requestKey: quoteKey,
+          quoteId: engine.senderQuoteId,
+          quoteTotal: engine.senderQuoteTotal,
+          quoteError: engine.senderQuoteError,
+        )) {
       return;
     }
     _lastBackendQuoteKey = quoteKey;
@@ -3482,6 +3488,8 @@ class _OptionsPanel extends StatelessWidget {
     final allowedVehicles = _allowedVehicleUpgrades(iris?.recommendedVehicle);
     final minimumVehicle = allowedVehicles.first;
     final selectedVehicle = _selectedVehicleFor(draft, iris);
+    final quoteMatchesVehicle =
+        !senderQuoteVehicleMismatch(engine.senderQuoteVehicle, selectedVehicle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3554,7 +3562,9 @@ class _OptionsPanel extends StatelessWidget {
                 _QuoteUnavailable(onRetry: () => _requestQuote(context, draft))
               else if (!routeReady)
                 const _RouteQuotePending()
-              else if (engine.isSenderQuoteLoading || quoteTotal == null)
+              else if (engine.isSenderQuoteLoading ||
+                  quoteTotal == null ||
+                  !quoteMatchesVehicle)
                 const _QuoteSkeleton()
               else
                 _BackendPricingBreakdown(engine: engine),
@@ -3564,8 +3574,10 @@ class _OptionsPanel extends StatelessWidget {
         const SizedBox(height: 14),
         _PrimaryButton(
           label: 'Continue to Review',
-          enabled:
-              routeReady && quoteTotal != null && !engine.isSenderQuoteLoading,
+          enabled: routeReady &&
+              quoteTotal != null &&
+              quoteMatchesVehicle &&
+              !engine.isSenderQuoteLoading,
           onTap: onContinue,
         ),
       ],

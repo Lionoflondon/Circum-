@@ -25,6 +25,11 @@ bool senderIrisMatchesRequest(
 bool senderQueuedDraftIsStale(int queuedBaseRevision, int serverRevision) =>
     serverRevision > queuedBaseRevision;
 
+bool senderQuoteVehicleMismatch(String? quotedVehicle, String selectedVehicle) {
+  final quoted = quotedVehicle?.trim().toLowerCase() ?? '';
+  return quoted.isNotEmpty && quoted != selectedVehicle.trim().toLowerCase();
+}
+
 String senderDeliveryTimingQuoteKey(SenderBookingDraft draft) => [
       draft.deliveryTimingType.name,
       draft.scheduledDate,
