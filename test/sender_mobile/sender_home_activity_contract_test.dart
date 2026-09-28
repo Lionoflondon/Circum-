@@ -91,7 +91,8 @@ void main() {
   test('home delivery actions watch and open the selected delivery', () {
     final source = File('lib/app/sender_mobile/sender_mobile_home.dart')
         .readAsStringSync();
-    expect(source, contains('WatchActiveDelivery(requestId: id)'));
+    expect(source, contains('SenderDeliveryDetailView(deliveryId: id)'));
+    expect(source, isNot(contains('WatchActiveDelivery(requestId: id)')));
     expect(source, contains('onTap: () => onOpenDelivery(order.id)'));
   });
 }
