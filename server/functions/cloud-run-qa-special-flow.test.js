@@ -96,6 +96,11 @@ test("Activity certification fixture is server-owned and side-effect suppressed"
   assert.match(source, /excludeFromAnalytics: true/);
   assert.match(source, /excludeFromCustomerNotifications: true/);
   assert.match(source, /activityNotificationsDeleted/);
+  assert.match(source, /activity_pagination_seed/);
+  assert.match(source, /wallet_notification_seed/);
+  assert.match(source, /chat_retry_probe/);
+  assert.match(source, /cancellation_quote_probe/);
+  assert.match(source, /topLevelDeleted/);
 });
 
 test("archived QA cycles can use a new bounded request without reusing an old fixture", () => {
