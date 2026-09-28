@@ -5,6 +5,16 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('legacy sanitized draft restores the selected vehicle upgrade', () {
+    final restored = SenderBookingDraft.fromBackendDraft({
+      'iris': {'recommendedVehicle': 'Car'},
+    });
+    expect(restored.selectedVehicle, 'Car');
+    final explicit = SenderBookingDraft.fromBackendDraft({
+      'iris': {'recommendedVehicle': 'Motorbike', 'selectedVehicle': 'Van'},
+    });
+    expect(explicit.selectedVehicle, 'Van');
+  });
   test('every scheduling input invalidates the prior quote key', () {
     const original = SenderBookingDraft();
     final key = senderDeliveryTimingQuoteKey(original);
@@ -23,8 +33,11 @@ void main() {
       distance: 4.8,
       senderQuoteId: 'quote-1',
       senderQuoteDistanceKm: 7.926,
+      senderQuoteVehicle: 'car',
     );
     expect(state.copyWith().senderQuoteDistanceKm, 7.926);
+    expect(state.copyWith().senderQuoteVehicle, 'car');
+    expect(state.copyWith(clearSenderQuoteId: true).senderQuoteVehicle, isNull);
     expect(
         state.copyWith(clearSenderQuoteId: true).senderQuoteDistanceKm, isNull);
   });

@@ -4771,9 +4771,12 @@ String _reviewIrisEstimate(SendPackageState engine, SenderBookingDraft draft) {
           (draft.weightLabel.trim().isEmpty
               ? 'Unavailable'
               : draft.weightLabel.trim());
-  final vehicle = draft.selectedVehicle.trim().isNotEmpty
-      ? draft.selectedVehicle.trim()
-      : _minimumVehicleLabel(result?.recommendedVehicle ?? draft.irisVehicle);
+  final vehicle = engine.senderQuoteVehicle?.isNotEmpty == true
+      ? _minimumVehicleLabel(engine.senderQuoteVehicle)
+      : draft.selectedVehicle.trim().isNotEmpty
+          ? draft.selectedVehicle.trim()
+          : _minimumVehicleLabel(
+              result?.recommendedVehicle ?? draft.irisVehicle);
   return 'Final weight $weight • $vehicle selected';
 }
 

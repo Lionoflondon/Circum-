@@ -1223,6 +1223,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           isSenderQuoteLoading: false,
           senderQuoteId: '${data['quoteId'] ?? ''}',
           senderQuoteDistanceKm: _numFrom(data['distanceMiles']) * 1.609344,
+          parcelWeightKg: _numFrom(data['weightKg']),
+          senderQuoteVehicle:
+              '${data['selectedVehicle'] ?? data['vehicleType'] ?? ''}',
           senderQuoteTotal: _numFrom(
             data['total'] ?? data['finalAmount'] ?? data['amountDue'],
           ),

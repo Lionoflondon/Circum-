@@ -604,7 +604,8 @@ class SenderBookingDraft {
       highValue: parcel['highValue'] == true,
       irisConfidence: '${iris['confidence'] ?? 'Medium'}',
       irisVehicle: '${iris['recommendedVehicle'] ?? 'Motorbike'}',
-      selectedVehicle: '${iris['selectedVehicle'] ?? ''}',
+      selectedVehicle:
+          '${iris['selectedVehicle'] ?? iris['recommendedVehicle'] ?? ''}',
       selectedOption: '${deliveryOptions['selectedOption'] ?? 'Standard'}',
       vanguard: deliveryOptions['vanguard'] == true,
       selectedPaymentMethod: fallback,
