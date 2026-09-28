@@ -104,6 +104,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  bool _restoringIrisForDraft = false;
 
   @override
   void initState() {
@@ -443,6 +444,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _description.text = restored.itemDescription;
     _weight.text = restored.weightLabel;
     setState(() => _draft = restored);
+    if ((restored.step == SenderBookingStep.options ||
+            restored.step == SenderBookingStep.review) &&
+        restored.itemName.trim().isNotEmpty) {
+      _restoringIrisForDraft = true;
+      context.read<SendPackageBloc>().add(
+            RequestCanonicalIrisEstimate(
+              itemName: restored.itemName,
+              quantity: senderQuantityFromItemName(restored.itemName),
+              description: restored.itemDescription,
+              declaredWeightText: restored.weightLabel,
+              fragile: restored.fragile,
+              highValue: restored.highValue,
+            ),
+          );
+    }
     if (restored.pickupLat != null &&
         restored.pickupLng != null &&
         restored.dropoffLat != null &&
@@ -624,6 +640,44 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       }
       return false;
     }
+    final queuedBaseRevision = _intFrom(decoded['baseRevision']);
+    try {
+      final server = await _callDraftFunction(
+        'loadSenderDraft',
+        const {},
+        _backendDraftRestoreTimeout,
+      );
+      final serverRevision = _intFrom(server['revision']);
+      if (server['exists'] == true &&
+          server['draft'] is Map &&
+          senderQueuedDraftIsStale(queuedBaseRevision, serverRevision)) {
+        final serverDraft = SenderBookingDraft.fromBackendDraft(
+          Map<String, dynamic>.from(server['draft'] as Map),
+        );
+        _draftRevision = serverRevision;
+        _draftId = '${server['draftId'] ?? ''}'.trim().isEmpty
+            ? null
+            : '${server['draftId']}';
+        await _clearQueuedLocalDraft();
+        _hydrateRestoredDraft(serverDraft);
+        if (mounted)
+          setState(() => _syncStatus = 'Updated from another device');
+        return true;
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'checking queued Sender draft revision',
+      );
+    } on TimeoutException catch (error, stackTrace) {
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'checking queued Sender draft revision',
+      );
+    }
+    _draftRevision = queuedBaseRevision;
     _hydrateRestoredDraft(restored);
     if (mounted) setState(() => _syncStatus = 'Sync needed');
     _queueDraftSave(restored);
@@ -1112,6 +1166,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
+    if (_restoringIrisForDraft &&
+        (engine.isIrisResolving ||
+            (engine.canonicalIrisResult == null &&
+                engine.irisErrorMessage.isEmpty))) {
+      return;
+    }
+    if (_restoringIrisForDraft &&
+        engine.canonicalIrisResult != null &&
+        !senderIrisAllowsContinuation(
+          engine.canonicalIrisResult!.complianceStatus,
+        )) {
+      _restoringIrisForDraft = false;
+      _setDraft(draft.copyWith(step: SenderBookingStep.parcel));
+      return;
+    }
     if (!_routeReadyForQuote(engine, draft)) return;
     final business = BusinessJourneyScope.maybeOf(context);
     final iris = engine.canonicalIrisResult;
@@ -1143,13 +1212,19 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _irisPhotoAnalysisId ?? '',
       business?.businessId ?? '',
     ].join('|');
-    if (!senderQuoteRequestNeeded(
-      lastRequestKey: _lastBackendQuoteKey,
-      requestKey: quoteKey,
-      quoteId: engine.senderQuoteId,
-      quoteTotal: engine.senderQuoteTotal,
-      quoteError: engine.senderQuoteError,
-    )) {
+    if (_lastBackendQuoteKey == quoteKey &&
+        engine.senderQuoteError.isNotEmpty) {
+      return;
+    }
+    if (!senderQuoteVehicleMismatch(
+            engine.senderQuoteVehicle, selectedVehicle) &&
+        !senderQuoteRequestNeeded(
+          lastRequestKey: _lastBackendQuoteKey,
+          requestKey: quoteKey,
+          quoteId: engine.senderQuoteId,
+          quoteTotal: engine.senderQuoteTotal,
+          quoteError: engine.senderQuoteError,
+        )) {
       return;
     }
     _lastBackendQuoteKey = quoteKey;
@@ -3413,6 +3488,8 @@ class _OptionsPanel extends StatelessWidget {
     final allowedVehicles = _allowedVehicleUpgrades(iris?.recommendedVehicle);
     final minimumVehicle = allowedVehicles.first;
     final selectedVehicle = _selectedVehicleFor(draft, iris);
+    final quoteMatchesVehicle =
+        !senderQuoteVehicleMismatch(engine.senderQuoteVehicle, selectedVehicle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3485,7 +3562,9 @@ class _OptionsPanel extends StatelessWidget {
                 _QuoteUnavailable(onRetry: () => _requestQuote(context, draft))
               else if (!routeReady)
                 const _RouteQuotePending()
-              else if (engine.isSenderQuoteLoading || quoteTotal == null)
+              else if (engine.isSenderQuoteLoading ||
+                  quoteTotal == null ||
+                  !quoteMatchesVehicle)
                 const _QuoteSkeleton()
               else
                 _BackendPricingBreakdown(engine: engine),
@@ -3495,8 +3574,10 @@ class _OptionsPanel extends StatelessWidget {
         const SizedBox(height: 14),
         _PrimaryButton(
           label: 'Continue to Review',
-          enabled:
-              routeReady && quoteTotal != null && !engine.isSenderQuoteLoading,
+          enabled: routeReady &&
+              quoteTotal != null &&
+              quoteMatchesVehicle &&
+              !engine.isSenderQuoteLoading,
           onTap: onContinue,
         ),
       ],

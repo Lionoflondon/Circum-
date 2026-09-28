@@ -1183,6 +1183,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (event.irisPhotoAnalysisId.trim().isNotEmpty)
           'irisPhotoAnalysisId': event.irisPhotoAnalysisId.trim(),
         'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
+        'selectedVehicle': event.selectedVehicle,
         'distanceMiles': distanceKm == null
             ? 0
             : DeliveryPricing.kilometresToMiles(distanceKm),

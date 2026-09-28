@@ -5,6 +5,33 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('server revision wins over a stale queued draft after reload', () {
+    expect(senderQueuedDraftIsStale(4, 5), isTrue);
+    expect(senderQueuedDraftIsStale(5, 5), isFalse);
+    expect(senderQueuedDraftIsStale(5, 4), isFalse);
+  });
+  test('a quote for another vehicle cannot complete the selected option', () {
+    expect(senderQuoteVehicleMismatch('motorbike', 'Car'), isTrue);
+    expect(senderQuoteVehicleMismatch('CAR', 'Car'), isFalse);
+    expect(senderQuoteVehicleMismatch(null, 'Car'), isFalse);
+    final canvas = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final options = canvas.substring(
+      canvas.indexOf('class _OptionsPanel'),
+      canvas.indexOf('class _PaymentPanel'),
+    );
+    expect(options, contains('!quoteMatchesVehicle)'));
+    expect(options, contains('quoteMatchesVehicle &&'));
+  });
+  test('quote transport sends the selected vehicle to the server', () {
+    final bloc = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+    final quoteHandler = bloc.substring(
+      bloc.indexOf('void _handleRequestSenderBookingQuote'),
+      bloc.indexOf('void _handleStartSenderPaymentSession'),
+    );
+    expect(quoteHandler, contains("'selectedVehicle': event.selectedVehicle"));
+  });
   test('legacy sanitized draft restores the selected vehicle upgrade', () {
     final restored = SenderBookingDraft.fromBackendDraft({
       'iris': {'recommendedVehicle': 'Car'},
