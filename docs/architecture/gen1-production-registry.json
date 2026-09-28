@@ -3716,7 +3716,9 @@
         "server/functions/cloud-run-sender-delivery-payments.test.js",
         "server/functions/core-payment-amount-security.test.js",
         "server/functions/payment-runtime-bindings.test.js",
+        "server/functions/qa-special-flow.js",
         "server/functions/sender-payment-app-check.test.js",
+        "server/functions/sender-qa-payment-bridge.test.js",
         "server/functions/sender-route-preview.test.js",
         "test/sender_mobile/sender_payment_closure_contract_test.dart",
         "test/sender_mobile/sender_payment_delivery_bounds_test.dart",
@@ -4588,9 +4590,11 @@
         "businessAccounts",
         "businessCheckoutReservations",
         "businessInvoices",
+        "deliveryRequests",
         "healthPlusPayments",
         "irisPhotoAnalyses",
-        "qaCheckoutProviderObjects"
+        "qaCheckoutProviderObjects",
+        "senderBookingQuotes"
       ],
       "externalProviders": [
         "Stripe"
@@ -7010,9 +7014,11 @@
         "businessAccounts",
         "businessCheckoutReservations",
         "businessInvoices",
+        "deliveryRequests",
         "healthPlusPayments",
         "irisPhotoAnalyses",
-        "qaCheckoutProviderObjects"
+        "qaCheckoutProviderObjects",
+        "senderBookingQuotes"
       ],
       "externalProviders": [
         "Stripe"

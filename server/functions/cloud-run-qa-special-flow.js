@@ -34,7 +34,7 @@ function writeJson(response, status, body) {
 }
 
 function firebaseToken(request) {
-  const value = request.headers["x-firebase-auth"];
+  const value = request.headers["x-firebase-auth"] || request.headers.authorization;
   const match = /^Bearer ([^\s]+)$/.exec(String(value || ""));
   return match && match[1];
 }
