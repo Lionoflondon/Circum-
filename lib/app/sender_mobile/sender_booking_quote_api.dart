@@ -25,19 +25,18 @@ Future<Map<String, dynamic>> callSenderBookingQuote(
   Duration timeout = const Duration(seconds: 30),
 }) async {
   final user = (auth ?? FirebaseAuth.instance).currentUser;
-  final idToken = await user?.getIdToken();
+  final idToken = await user?.getIdToken().timeout(timeout);
   if (idToken == null || idToken.isEmpty) {
     throw const SenderBookingQuoteApiException(
       'UNAUTHENTICATED',
       'Sign in to continue.',
     );
   }
-  // A cached browser token can outlive a Hosting deploy, App Check key
-  // rotation, or an interrupted reCAPTCHA exchange. Force a fresh token for
-  // this protected server-authoritative operation so a stale token can never
-  // leave Options retrying an already-invalid request.
-  final appCheckToken =
-      await (appCheck ?? FirebaseAppCheck.instance).getToken(true);
+  // Firebase refreshes expired tokens. Reuse a valid token so normal quote
+  // changes do not repeatedly trigger attestation or provider throttling.
+  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance)
+      .getToken()
+      .timeout(timeout);
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw const SenderBookingQuoteApiException(
       'UNAUTHENTICATED',
