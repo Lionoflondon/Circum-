@@ -99,7 +99,16 @@ function factory({db, env = process.env, stripe}) {
     return {fixtureId: fixture.id, quoteId, amountDue: quote.amountDue || quote.total, currency: quote.currency || "GBP", quote};
   }
   async function handle(data, context) {
-    const lists = config(env); const uid = authorize(context, lists);
+    const lists = config(env);
+    // Capability discovery is safe for any authenticated, App Check-attested
+    // Sender. It must return disabled for ordinary users so their normal Roth
+    // balance and live payment path remain available; every mutating QA action
+    // still goes through the strict allowlist authorization below.
+    if (data && data.action === "sender_capability" && context && context.auth && context.auth.uid && context.app &&
+        ![...lists.operators, ...lists.senders, ...lists.riders].includes(context.auth.uid)) {
+      return {enabled: false};
+    }
+    const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
     if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action)) fail("Unknown QA action.");
     if (data.action === "sender_capability") {
