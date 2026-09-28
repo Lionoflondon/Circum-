@@ -157,6 +157,44 @@ function senderDraftRef(db, uid) {
   return db.collection("senderBookingDrafts").doc(uid);
 }
 
+function qaMarker(qaContext) {
+  if (!qaContext) return {};
+  const fixtureId = text(qaContext.fixtureId);
+  if (!/^[a-f0-9]{64}$/.test(fixtureId) || qaContext.isSyntheticQa !== true) {
+    throw new functions.https.HttpsError("permission-denied", "QA payment scope is invalid.");
+  }
+  return {
+    isSyntheticQa: true,
+    qaPublic: true,
+    qaNamespace: "qaSpecialFlowFixtures",
+    qaFixtureId: fixtureId,
+    realDispatch: false,
+    suppressExternalSideEffects: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromAnalytics: true,
+    excludeFromCustomerNotifications: true,
+  };
+}
+
+function assertQaRecord(record, qaContext, name) {
+  if (!qaContext) return;
+  const marker = qaMarker(qaContext);
+  if (!record || record.isSyntheticQa !== true ||
+      record.qaFixtureId !== marker.qaFixtureId) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        `${name || "QA payment record"} is outside the QA fixture.`,
+    );
+  }
+}
+
+function qaStripeMetadata(marker) {
+  return Object.fromEntries(
+      Object.entries(marker).map(([key, value]) => [key, `${value}`]),
+  );
+}
+
 function cleanString(value, maxLength = 600) {
   return text(value).slice(0, Math.min(maxLength, MAX_STRING_LENGTH));
 }
@@ -1114,8 +1152,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   };
 }
 
-async function walletBalanceForSender(sender) {
-  const db = getFirestore();
+async function walletBalanceForSender(sender, dbOverride = null) {
+  const db = dbOverride || getFirestore();
   const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
   const [legacySnap, projectionSnap] = await Promise.all([
     walletRef.get(),
@@ -1143,8 +1181,8 @@ async function walletBalanceForSender(sender) {
   return money(balance);
 }
 
-async function ensureStripeCustomerForSender(stripe, sender) {
-  const db = getFirestore();
+async function ensureStripeCustomerForSender(stripe, sender, dbOverride = null) {
+  const db = dbOverride || getFirestore();
   const userRef = db.collection("users").doc(sender.uid);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() : {};
@@ -1305,22 +1343,26 @@ exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) =
   };
 }, {secrets: [senderDirectionsApiKey]});
 
-exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (data, context) => {
+async function createSenderPaymentSessionFor(stripe, data, context, options = {}) {
+  const db = options.db || getFirestore();
+  const qaContext = options.qaContext || null;
+  const marker = qaMarker(qaContext);
+  const stripeMarker = qaStripeMetadata(marker);
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
     throw new functions.https.HttpsError("invalid-argument", "A backend quote is required before payment.");
   }
-  const db = getFirestore();
   const quoteSnap = await db.collection("senderBookingQuotes").doc(quoteId).get();
   if (!quoteSnap.exists || quoteSnap.data().userId !== sender.uid) {
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  assertQaRecord(quote, qaContext, "Booking quote");
   await require("./legacy-payment-artifacts").rejectLegacySenderQuote({db, stripe, quote, quoteId, senderId: sender.uid});
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
-  const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
+  const rothBalance = rothEnabled ? await walletBalanceForSender(sender, db) : 0;
   const savedPaymentMethodId = text(data.paymentMethodId);
   const requestedFallbackInput = text(data.fallbackMethod);
   const checkoutMode = text(data.checkoutMode);
@@ -1352,6 +1394,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     if (existingSession.userId !== sender.uid || existingSession.quoteId !== quoteId) {
       throw new functions.https.HttpsError("permission-denied", "Payment session ownership mismatch.");
     }
+    assertQaRecord(existingSession, qaContext, "Payment session");
     if (existingSession.paymentStatus === "succeeded" || existingSession.status === "succeeded") {
       return {
         paymentSessionId: sessionRef.id,
@@ -1448,6 +1491,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     currency: "GBP",
     paymentSessionKey: requestedSessionKey,
     deliveryPayload,
+    ...marker,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -1485,7 +1529,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
         paymentSessionId: sessionRef.id,
         draftId: draftId || null,
         idempotencyKey,
-      });
+      }, {db, qaContext});
       await sessionRef.set({
         status: "succeeded",
         paymentStatus: "succeeded",
@@ -1551,7 +1595,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
   }
   let customerId;
   try {
-    customerId = await ensureStripeCustomerForSender(stripe, sender);
+    customerId = qaContext ? null : await ensureStripeCustomerForSender(stripe, sender, db);
   } catch (error) {
     throw new functions.https.HttpsError(
         text(error && error.code) === "rate_limit" ? "resource-exhausted" : "failed-precondition",
@@ -1563,12 +1607,16 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
   }
   if (webCheckout) {
-    const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
+    const requestId = qaContext ?
+      `qa_sender_${stableId(`${qaContext.fixtureId}:${quoteId}:${sessionRef.id}`)}` :
+      text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
     const draftId = text(data.draftId);
     const checkoutAttempt = existingSessionSnap.exists ?
       Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
       1;
-    const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
+    const idempotencyKey = qaContext ?
+      `qa_sender_checkout_${stableId(`${qaContext.fixtureId}:${quoteId}:${sessionRef.id}:${checkoutAttempt}`)}` :
+      stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
     const baseUrl = text(data.returnUrl) || "https://circum-2797c.web.app/send";
     const separator = baseUrl.includes("?") ? "&" : "?";
     let checkoutSession;
@@ -1577,7 +1625,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
         mode: "payment",
         payment_method_types: ["card"],
         client_reference_id: sender.uid,
-        customer: customerId,
+        ...(customerId ? {customer: customerId} : {}),
         line_items: [{
           quantity: 1,
           price_data: {
@@ -1604,6 +1652,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
             orderTotalGbp: `${split.orderTotalGbp}`,
             fallbackMethod: requestedFallback,
             billingSource: quote.businessMode === true ? "business_finance" : "sender_finance",
+            ...stripeMarker,
           },
         },
         metadata: {
@@ -1618,6 +1667,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
           remainingAmount: `${split.remainingGbp}`,
           orderTotalGbp: `${split.orderTotalGbp}`,
           returnUrl: baseUrl,
+          ...stripeMarker,
         },
       }, {idempotencyKey: `sender_checkout_${idempotencyKey}`});
     } catch (error) {
@@ -1732,7 +1782,12 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
   };
-}, {secrets: ["STRIPE_SECRET_KEY"]});
+}
+
+exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(
+    (data, context) => createSenderPaymentSessionFor(stripe, data, context),
+    {secrets: ["STRIPE_SECRET_KEY"]},
+);
 
 async function updateSenderPaymentIntentStatus(stripe, intent, eventId = "") {
   const metadata = intent.metadata || {};
@@ -1927,7 +1982,11 @@ function privateVanguardPinFields(vanguardFields) {
   };
 }
 
-async function createPaidDeliveryFromSession(stripe, sender, data) {
+async function createPaidDeliveryFromSession(stripe, sender, data, options = {}) {
+  const db = options.db || getFirestore();
+  const qaContext = options.qaContext || null;
+  const marker = qaMarker(qaContext);
+  const dispatchImpl = options.dispatch || dispatchDeliveryRequest;
   const quoteId = text(data.quoteId);
   const paymentSessionId = text(data.paymentSessionId);
   logSenderPaymentStage("delivery_creation_started", {
@@ -1939,7 +1998,6 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   if (!quoteId || !paymentSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "Confirmed payment and quote are required.");
   }
-  const db = getFirestore();
   const [quoteSnap, paymentSnap] = await Promise.all([
     db.collection("senderBookingQuotes").doc(quoteId).get(),
     db.collection("senderPaymentSessions").doc(paymentSessionId).get(),
@@ -1947,9 +2005,11 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   if (!quoteSnap.exists || quoteSnap.data().userId !== sender.uid) {
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
+  assertQaRecord(quoteSnap.data(), qaContext, "Booking quote");
   if (!paymentSnap.exists || paymentSnap.data().userId !== sender.uid) {
     throw new functions.https.HttpsError("not-found", "Payment session not found.");
   }
+  assertQaRecord(paymentSnap.data(), qaContext, "Payment session");
   let payment = paymentSnap.data();
   const rothOnlyPayment = payment.paymentMethod === "roth" &&
     Number(payment.remainingAmount || 0) <= 0 &&
@@ -1977,7 +2037,9 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     });
   }
   const draftId = text(data.draftId);
-  const idempotencyKey = text(data.idempotencyKey) ||
+  const idempotencyKey = qaContext ?
+    `qa_sender_delivery_${stableId(`${qaContext.fixtureId}:${quoteId}:${paymentSessionId}`)}` :
+    text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
   const idempotencyRef = db.collection("senderDeliveryIdempotency").doc(idempotencyKey);
   const replay = await idempotencyRef.get();
@@ -1999,7 +2061,9 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     throw new functions.https.HttpsError("failed-precondition", "This earlier payment requires parcel review before dispatch. Do not pay again.", {reason: "legacy_payment_reconciliation_required"});
   }
   assertDeliveryMatchesQuote(data, quote);
-  const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${draftId || quoteId}:${paymentSessionId}`)}`;
+  const requestId = qaContext ?
+    `qa_sender_${stableId(`${qaContext.fixtureId}:${quoteId}:${paymentSessionId}`)}` :
+    text(data.requestId) || `sender_${stableId(`${sender.uid}:${draftId || quoteId}:${paymentSessionId}`)}`;
   const deliveryRef = db.collection("deliveryRequests").doc(requestId);
   const rothAppliedAmount = money(payment.rothAppliedAmount || 0);
   const walletDebitRequired = rothAppliedAmount > 0 &&
@@ -2109,6 +2173,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     const riderAliases = riderDisplayAliases({quote, data, vanguardFields});
 
     transaction.set(deliveryRef, stripUndefined({
+      ...marker,
       requestId,
       deliveryId: requestId,
       role: "user",
@@ -2285,6 +2350,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       }, {merge: true});
     }
     transaction.set(db.collection("deliveryRequestsPrivate").doc(deliveryRef.id), {
+      ...marker,
       deliveryId: deliveryRef.id,
       requestId,
       senderId: sender.uid,
@@ -2296,6 +2362,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       ...(privateVanguardFields || {}),
     }, {merge: false});
     transaction.set(idempotencyRef, {
+      ...marker,
       idempotencyKey,
       requestId,
       deliveryId: deliveryRef.id,
@@ -2323,7 +2390,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   });
   let dispatchResult = null;
   try {
-    dispatchResult = await dispatchDeliveryRequest({
+    dispatchResult = qaContext ? {closestRiders: [], suppressed: true} : await dispatchImpl({
       db,
       requestId,
       uid: sender.uid,
@@ -2337,6 +2404,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       deliveryId: deliveryRef.id,
       matchedRiders: Array.isArray(dispatchResult.closestRiders) ?
         dispatchResult.closestRiders.length : 0,
+      suppressed: qaContext ? true : false,
     });
   } catch (error) {
     await db.collection("dispatchInspections").doc(deliveryRef.id).set({
@@ -2361,7 +2429,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     requestId,
     deliveryId: deliveryRef.id,
     idempotencyKey,
-    dispatchStatus: dispatchResult ? "attempted" : "failed",
+    dispatchStatus: qaContext ? "suppressed_qa" : dispatchResult ? "attempted" : "failed",
+    qaOnly: Boolean(qaContext),
   };
 }
 
@@ -2382,20 +2451,23 @@ exports.createSenderPaidDelivery = (stripe) => senderPaymentCallable(async (data
   }
 }, {secrets: ["STRIPE_SECRET_KEY"]});
 
-async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") {
+async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "", options = {}) {
+  const db = options.db || getFirestore();
+  const qaContext = options.qaContext || null;
   const metadata = sessionData.metadata || {};
   const paymentSessionId = text(metadata.paymentSessionId);
   const quoteId = text(metadata.quoteId);
   if (!paymentSessionId || !quoteId) {
     throw new Error("Sender checkout session metadata is incomplete.");
   }
-  const db = getFirestore();
   const sessionRef = db.collection("senderPaymentSessions").doc(paymentSessionId);
   const sessionSnap = await sessionRef.get();
   if (!sessionSnap.exists) {
     throw new Error("Sender payment session was not found.");
   }
   const payment = sessionSnap.data() || {};
+  assertQaRecord(payment, qaContext, "Payment session");
+  assertQaRecord((await db.collection("senderBookingQuotes").doc(quoteId).get()).data(), qaContext, "Booking quote");
   if (payment.quoteId !== quoteId || payment.checkoutSessionId !== sessionData.id) {
     throw new Error("Sender checkout session ownership mismatch.");
   }
@@ -2439,7 +2511,48 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
     paymentSessionId,
     draftId: payment.draftId || null,
     idempotencyKey: payment.idempotencyKey || metadata.idempotencyKey,
-  });
+  }, {db, qaContext});
+}
+
+async function cleanupQaSenderFixture(db, fixture) {
+  if (!fixture || fixture.isSyntheticQa !== true || !/^[a-f0-9]{64}$/.test(`${fixture.id || ""}`)) {
+    throw new functions.https.HttpsError("permission-denied", "QA fixture scope is invalid.");
+  }
+  const names = [
+    "senderBookingQuotes",
+    "senderPaymentSessions",
+    "senderPaymentRecords",
+    "senderDeliveryIdempotency",
+    "deliveryRequests",
+    "deliveryRequestsPrivate",
+    "dispatchInspections",
+  ];
+  let deleted = 0;
+  const sourceQuoteId = text(fixture.senderSourceQuoteId);
+  const sourceCreatedAt = fixture.senderSourceQuoteCreatedAt;
+  if (sourceQuoteId && sourceCreatedAt) {
+    const sourceRef = db.collection("senderBookingQuotes").doc(sourceQuoteId);
+    const sourceSnap = await sourceRef.get();
+    const source = sourceSnap.data() || {};
+    const sourceMillis = typeof sourceCreatedAt.toMillis === "function" ?
+      sourceCreatedAt.toMillis() : Number(sourceCreatedAt);
+    const currentMillis = source.createdAt && typeof source.createdAt.toMillis === "function" ?
+      source.createdAt.toMillis() : Number(source.createdAt);
+    if (sourceSnap.exists && source.userId === fixture.senderId &&
+        Number.isFinite(sourceMillis) && sourceMillis === currentMillis) {
+      await sourceRef.delete();
+      deleted += 1;
+    }
+  }
+  for (const name of names) {
+    const snapshot = await db.collection(name).where("qaFixtureId", "==", fixture.id).limit(400).get();
+    if (snapshot.empty) continue;
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    deleted += snapshot.size;
+  }
+  return {deleted};
 }
 
 exports.finalizeSenderWebCheckout = (stripe) => senderPaymentCallable(async (data, context) => {
@@ -2463,6 +2576,14 @@ exports.finalizeSenderWebCheckout = (stripe) => senderPaymentCallable(async (dat
 
 exports.handleSenderCheckoutSession = async (stripe, sessionData, eventId = null) => {
   return finalizeSenderCheckoutSession(stripe, sessionData, eventId || "");
+};
+
+exports._qa = {
+  createSenderPaymentSession: createSenderPaymentSessionFor,
+  finalizeSenderCheckoutSession,
+  createPaidDeliveryFromSession,
+  cleanupQaSenderFixture,
+  marker: qaMarker,
 };
 
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;

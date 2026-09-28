@@ -22,7 +22,11 @@ function providerForFixture({stripe, registry, fixtureId, secret, now = Date.now
   }
   async function create(params, options) {
     if (!options || !options.idempotencyKey || params.mode !== "payment" || params.discounts || params.subscription_data) reject("only one-off idempotent checkout is permitted");
-    if (!params.metadata || !["health_plus_payment", "business_invoice_payment"].includes(params.metadata.type)) reject("unsupported canonical flow");
+    if (!params.metadata || ![
+      "health_plus_payment",
+      "business_invoice_payment",
+      "sender_delivery_payment",
+    ].includes(params.metadata.type)) reject("unsupported canonical flow");
     const amount = (params.line_items || []).reduce((sum, item) => {
       const p = item.price_data;
       if (!p || p.currency !== "gbp" || !Number.isSafeInteger(p.unit_amount) || p.unit_amount <= 0 || !Number.isSafeInteger(item.quantity) || item.quantity < 1) reject("invalid minor units");
@@ -33,7 +37,16 @@ function providerForFixture({stripe, registry, fixtureId, secret, now = Date.now
     const key = `qa_special_${fixtureId}_${id}`;
     // Strip all routing metadata, including Health+'s feature fallback. No public
     // webhook can finalize this private fixture through a production collection.
-    const metadata = {type: ROUTING_TYPE, qaFixtureId: fixtureId, canonicalType: params.metadata.type};
+    const metadata = {
+      type: ROUTING_TYPE,
+      qaFixtureId: fixtureId,
+      canonicalType: params.metadata.type,
+      ...(params.metadata.paymentSessionId ? {paymentSessionId: params.metadata.paymentSessionId} : {}),
+      ...(params.metadata.quoteId ? {quoteId: params.metadata.quoteId} : {}),
+      ...(params.metadata.requestId ? {requestId: params.metadata.requestId} : {}),
+      ...(params.metadata.userId ? {userId: params.metadata.userId} : {}),
+      ...(params.metadata.userEmail ? {userEmail: params.metadata.userEmail} : {}),
+    };
     const safe = {...params, metadata, payment_intent_data: {metadata}, success_url: "https://example.invalid/qa", cancel_url: "https://example.invalid/qa"};
     delete safe.customer; delete safe.customer_email; delete safe.client_reference_id;
     const candidate = {id, key, amount, params: safe, createdAt: now(), binding: hash(JSON.stringify(safe))};
@@ -61,13 +74,41 @@ function providerForFixture({stripe, registry, fixtureId, secret, now = Date.now
     if (expired.status !== "expired" || expired.payment_status === "paid") reject("expiry unconfirmed");
     return expired;
   }
+  async function refundSenderCheckout(record, object) {
+    if (object.metadata.canonicalType !== "sender_delivery_payment" ||
+        typeof object.payment_intent !== "string") reject("unexpected captured QA checkout");
+    const intent = await stripe.paymentIntents.retrieve(object.payment_intent);
+    if (!intent || intent.livemode !== false || intent.currency !== "gbp" ||
+        intent.metadata.qaFixtureId !== fixtureId || intent.metadata.type !== ROUTING_TYPE) {
+      reject("foreign captured QA payment intent");
+    }
+    const prior = stripe.refunds && stripe.refunds.list ?
+      await stripe.refunds.list({payment_intent: intent.id, limit: 100}) : {data: []};
+    const refunded = (prior.data || [])
+        .filter((refund) => refund.status === "succeeded")
+        .reduce((sum, refund) => sum + Number(refund.amount || 0), 0);
+    if (refunded < Number(intent.amount_received || intent.amount || 0)) {
+      if (!stripe.refunds || !stripe.refunds.create) reject("QA refund capability unavailable");
+      await stripe.refunds.create({
+        payment_intent: intent.id,
+        amount: Number(intent.amount_received || intent.amount || 0) - refunded,
+        metadata: {isSyntheticQa: "true", qaFixtureId: fixtureId, purpose: "sender_checkout_cleanup"},
+      }, {idempotencyKey: `qa_sender_checkout_refund_${fixtureId}_${intent.id}`});
+    }
+    return {terminalStatus: "refunded", paymentIntentId: intent.id};
+  }
   async function cleanup() {
     const all = await registry.get();
     for (const snap of all.docs) {
       const record = snap.data();
       const object = record.providerId ? await retrieve(record.providerId) : await realize(record);
-      await expire(object.id);
-      await snap.ref.set({terminalStatus: "expired", cleanedAt: now()}, {merge: true});
+      if (object.payment_status === "paid" || object.status === "complete") {
+        const result = await refundSenderCheckout(record, object);
+        await snap.ref.set({...result, cleanedAt: now()}, {merge: true});
+      } else {
+        await expire(object.id);
+        await snap.ref.set({terminalStatus: "expired", cleanedAt: now()}, {merge: true});
+      }
     }
     return {expired: all.size};
   }
