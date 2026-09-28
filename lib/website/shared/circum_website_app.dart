@@ -11404,8 +11404,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         title: const Text('Cancel this booking?'),
         content: Text(
           'Cancellation fee: ${money(preview['cancellationFee'])}\n'
-          'Rider compensation: ${money(preview['riderCompensation'])}\n'
-          'Circum retained: ${money(preview['circumRetained'])}\n'
           'Card refund: ${money(preview['stripeRefund'])}\n'
           'Roth restored: ${money(preview['rothRestoration'])}\n'
           'Total returned value: ${money(preview['totalRefundValue'])}\n\n'

@@ -48,7 +48,7 @@ class CircumNotification {
       id: document.id,
       title: '${data['title'] ?? 'Circum update'}'.trim(),
       body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-      category: '${data['category'] ?? 'system'}'.trim().toLowerCase(),
+      category: _notificationCategory(data),
       read: data['read'] == true,
       archived: data['archived'] == true || data['deletedAt'] != null,
       destination: rawDestination is Map
@@ -64,6 +64,15 @@ class CircumNotification {
     'archived': archived,
     'deletedAt': archived ? true : null,
   });
+}
+
+String _notificationCategory(Map<String, dynamic> data) {
+  final category = '${data['category'] ?? ''}'.trim().toLowerCase();
+  if (category == 'payment' || category == 'payments') return 'wallet';
+  if (category.isNotEmpty) return category;
+  final type = '${data['type'] ?? ''}'.trim().toLowerCase();
+  if (type == 'payment' || type.startsWith('payment_')) return 'wallet';
+  return 'system';
 }
 
 class SenderNotificationsRepository {
@@ -142,12 +151,14 @@ class SenderNotificationsView extends StatefulWidget {
 
 class _SenderNotificationsViewState extends State<SenderNotificationsView> {
   late final SenderNotificationsRepository _repository;
+  late final Stream<List<CircumNotification>> _notifications;
   var _filter = 'All';
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? SenderNotificationsRepository();
+    _notifications = _repository.watchNotifications();
   }
 
   String _categoryForFilter(String label) => switch (label) {
@@ -157,96 +168,95 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
   };
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppTokens.background,
-    appBar: AppBar(
-      title: const Text('Notifications'),
-      actions: [
-        StreamBuilder<List<CircumNotification>>(
-          stream: _repository.watchNotifications(),
-          builder: (context, snapshot) {
-            final unread = (snapshot.data ?? const [])
-                .where((item) => !item.read)
-                .map((item) => item.id);
-            return TextButton(
-              onPressed: unread.isEmpty
-                  ? null
-                  : () => _repository.markAllRead(unread),
-              child: const Text('Mark all read'),
-            );
-          },
-        ),
-      ],
-    ),
-    body: StreamBuilder<List<CircumNotification>>(
-      stream: _repository.watchNotifications(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return AppEmptyState(
-            title: 'Notifications are unavailable',
-            body: 'Check your connection and try again.',
-            icon: Icons.notifications_off_outlined,
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final notifications = snapshot.data!;
-        final visible = _filter == 'All'
-            ? notifications
-            : notifications
-                  .where((item) => item.category == _categoryForFilter(_filter))
-                  .toList();
-        return Column(
-          children: [
-            SizedBox(
-              height: 52,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.space16,
-                ),
-                itemCount: _notificationFilters.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final label = _notificationFilters[index];
-                  return ChoiceChip(
-                    label: Text(label),
-                    selected: _filter == label,
-                    onSelected: (_) => setState(() => _filter = label),
-                  );
-                },
-              ),
-            ),
-            Expanded(
-              child: visible.isEmpty
-                  ? const AppEmptyState(
-                      title: 'No notifications yet',
-                      body:
-                          'Delivery, Wallet, Gifts and Health+ updates will appear here.',
-                      icon: Icons.notifications_none_rounded,
+  Widget build(BuildContext context) => StreamBuilder<List<CircumNotification>>(
+    stream: _notifications,
+    builder: (context, snapshot) {
+      final notifications = snapshot.data ?? const <CircumNotification>[];
+      final visible = _filter == 'All'
+          ? notifications
+          : notifications
+                .where((item) => item.category == _categoryForFilter(_filter))
+                .toList();
+      return Scaffold(
+        backgroundColor: AppTokens.background,
+        appBar: AppBar(
+          title: const Text('Notifications'),
+          actions: [
+            TextButton(
+              onPressed: notifications.any((item) => !item.read)
+                  ? () => _repository.markAllRead(
+                      notifications
+                          .where((item) => !item.read)
+                          .map((item) => item.id),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(AppTokens.space16),
-                      itemCount: visible.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => _NotificationCard(
-                        notification: visible[index],
-                        onOpen: () async {
-                          await _repository.markRead(visible[index].id);
-                          if (mounted) {
-                            widget.onOpenNotification?.call(visible[index]);
-                          }
-                        },
-                        onArchive: () => _repository.archive(visible[index].id),
-                        onDelete: () => _repository.delete(visible[index].id),
-                      ),
-                    ),
+                  : null,
+              child: const Text('Mark all read'),
             ),
           ],
-        );
-      },
-    ),
+        ),
+        body: snapshot.hasError
+            ? AppEmptyState(
+                title: 'Notifications are unavailable',
+                body: 'Check your connection and try again.',
+                icon: Icons.notifications_off_outlined,
+              )
+            : !snapshot.hasData
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  SizedBox(
+                    height: 52,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.space16,
+                      ),
+                      itemCount: _notificationFilters.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final label = _notificationFilters[index];
+                        return ChoiceChip(
+                          label: Text(label),
+                          selected: _filter == label,
+                          onSelected: (_) => setState(() => _filter = label),
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: visible.isEmpty
+                        ? const AppEmptyState(
+                            title: 'No notifications yet',
+                            body:
+                                'Delivery, Wallet, Gifts and Health+ updates will appear here.',
+                            icon: Icons.notifications_none_rounded,
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(AppTokens.space16),
+                            itemCount: visible.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) => _NotificationCard(
+                              notification: visible[index],
+                              onOpen: () async {
+                                await _repository.markRead(visible[index].id);
+                                if (mounted) {
+                                  widget.onOpenNotification?.call(
+                                    visible[index],
+                                  );
+                                }
+                              },
+                              onArchive: () =>
+                                  _repository.archive(visible[index].id),
+                              onDelete: () =>
+                                  _repository.delete(visible[index].id),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+      );
+    },
   );
 }
 

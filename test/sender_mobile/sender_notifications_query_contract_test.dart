@@ -25,5 +25,15 @@ void main() {
     expect(homeSource, isNot(contains('items.sort(')));
     expect(centreSource, contains('senderNotificationVisible'));
     expect(homeSource, contains('senderNotificationVisible'));
+    expect(
+      centreSource,
+      contains('late final Stream<List<CircumNotification>> _notifications'),
+    );
+    expect(centreSource, contains('stream: _notifications'));
+    expect(
+      centreSource,
+      isNot(contains('stream: _repository.watchNotifications()')),
+    );
+    expect(centreSource, contains("category == 'payments'"));
   });
 }
