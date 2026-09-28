@@ -56,3 +56,19 @@ test("Sender delivery payment wrapper rejects unknown and non-POST routes", asyn
     assert.equal((await fetch(`${url}/createSenderPaymentSession`)).status, 405);
   });
 });
+
+test("Sender delivery payment wrapper answers the hosted Web preflight", async () => {
+  await withServer(handlers(), async (url) => {
+    const response = await fetch(`${url}/getSenderPaymentMode`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://circum-app-2797c.web.app",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,x-firebase-appcheck,content-type",
+      },
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("access-control-allow-origin"), "https://circum-app-2797c.web.app");
+    assert.match(response.headers.get("access-control-allow-headers"), /Authorization/);
+  });
+});
