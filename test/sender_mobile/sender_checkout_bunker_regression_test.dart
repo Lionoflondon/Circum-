@@ -53,6 +53,19 @@ void main() {
     expect(canvas, contains('senderQuoteRequestNeeded('));
   });
 
+  test('quote failure stops automatic retries but changed inputs can quote', () {
+    for (final error in ['unauthenticated', 'unavailable', 'timeout']) {
+      expect(senderQuoteRequestNeeded(
+        lastRequestKey: 'route-a', requestKey: 'route-a',
+        quoteId: null, quoteTotal: null, quoteError: error,
+      ), isFalse);
+      expect(senderQuoteRequestNeeded(
+        lastRequestKey: 'route-a', requestKey: 'route-b',
+        quoteId: null, quoteTotal: null, quoteError: error,
+      ), isTrue);
+    }
+  });
+
   test('IRIS QA fault mode is web-only and allowlisted', () {
     expect(canvas, contains('_senderQaIrisFaultMode()'));
     expect(canvas, contains("Uri.base.queryParameters['irisFault']"));

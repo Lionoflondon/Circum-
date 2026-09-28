@@ -7,6 +7,9 @@ bool senderQuoteRequestNeeded({
   required double? quoteTotal,
   required String quoteError,
 }) {
+  // A failed request stays visible until the user retries or changes inputs.
+  // Rebuilding the page must not resubmit the same rejected request.
+  if (lastRequestKey == requestKey && quoteError.isNotEmpty) return false;
   final completedForKey = lastRequestKey == requestKey &&
       quoteError.isEmpty &&
       quoteId?.isNotEmpty == true &&
