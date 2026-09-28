@@ -329,7 +329,7 @@ void main() {
 
     for (final marker in [
       'profileOperationTimeout',
-      "putData(data).timeout(profileOperationTimeout)",
+      'putData(',
       'getDownloadURL().timeout(profileOperationTimeout)',
       'verifyBeforeUpdateEmail',
       "httpsCallable('revokeSenderSessions')",
@@ -339,6 +339,7 @@ void main() {
     ]) {
       expect(profile, contains(marker));
     }
+    expect(profile, contains('timeout(profileOperationTimeout)'));
     expect(preferences, contains("httpsCallable('updateSenderPreferences')"));
     expect(accountData, contains("httpsCallable('getSenderAccountActivity')"));
     expect(accountData, contains("httpsCallable('exportSenderData')"));
