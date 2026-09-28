@@ -26,8 +26,8 @@ void main() {
   });
 
   test('Sender Web QA calls use the authenticated QA Cloud Run boundary', () {
-    expect(paymentApi,
-        contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app'));
+    expect(
+        paymentApi, contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app'));
     expect(paymentApi, contains("'sender_qa'"));
     expect(paymentApi, contains("'X-Firebase-AppCheck': appCheckToken"));
     expect(paymentApi, contains("'Authorization': 'Bearer \$token'"));
