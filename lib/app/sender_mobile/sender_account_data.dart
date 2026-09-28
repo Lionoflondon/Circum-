@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:share_plus/share_plus.dart';
+
+import 'account_bootstrap_api.dart';
 
 class SenderAccountActivityEvent {
   final String action;
@@ -33,19 +34,14 @@ class SenderAccountActivityEvent {
 }
 
 class SenderAccountDataRepository {
-  final FirebaseFunctions functions;
-
-  SenderAccountDataRepository({FirebaseFunctions? functions})
-    : functions = functions ?? FirebaseFunctions.instance;
-
   Future<List<SenderAccountActivityEvent>> loadActivity() async {
-    final result = await functions
-        .httpsCallable('getSenderAccountActivity')
-        .call()
-        .timeout(const Duration(seconds: 15));
-    final data = result.data;
-    if (data is! Map || data['events'] is! List) return const [];
-    return (data['events'] as List)
+    final data = await callAccountBootstrap(
+      'getSenderAccountActivity',
+      const <String, dynamic>{},
+    ).timeout(const Duration(seconds: 15));
+    final events = data['events'];
+    if (events is! List) return const [];
+    return events
         .whereType<Map>()
         .map(
           (item) => SenderAccountActivityEvent.fromMap(
@@ -56,11 +52,10 @@ class SenderAccountDataRepository {
   }
 
   Future<Map<String, dynamic>> exportData() async {
-    final result = await functions
-        .httpsCallable('exportSenderData')
-        .call()
-        .timeout(const Duration(seconds: 30));
-    final data = result.data;
+    final data = await callAccountBootstrap(
+      'exportSenderData',
+      const <String, dynamic>{},
+    ).timeout(const Duration(seconds: 30));
     if (data is! Map) throw StateError('Export returned no data.');
     return Map<String, dynamic>.from(data);
   }

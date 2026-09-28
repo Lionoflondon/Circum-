@@ -81,7 +81,6 @@ const accountBootstrapCompat = require("./account-bootstrap-compat");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
-const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
@@ -162,8 +161,6 @@ exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.requestRiderCancellation = require("./rider-cancellation").requestRiderCancellation;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
-exports.ensureSenderAccount = accountBootstrapCompat.ensureSenderAccount;
-exports.updateRiderProfile = accountBootstrapCompat.updateRiderProfile;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.completeDelivery = require("./delivery-completion-reconciled").completeDelivery;
@@ -245,7 +242,6 @@ exports.finalizeIrisReferenceImage =
   adminIrisReferenceImages.finalizeIrisReferenceImage;
 exports.deleteIrisReferenceImage =
   adminIrisReferenceImages.deleteIrisReferenceImage;
-exports.closeCircumAccount = accountClosure.closeAccount;
 exports.createBusinessRothCheckout =
   businessPayments.createBusinessRothCheckout(stripe);
 exports.listBusinessRothTransactions =
@@ -447,22 +443,18 @@ exports.saveSenderCheckoutPreference =
 exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
 exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;
-exports.updateSenderProfile = senderAccount.updateSenderProfile;
-exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
-exports.updateSenderPreferences = senderAccount.updateSenderPreferences;
-exports.revokeSenderSessions = senderAccount.revokeSenderSessions;
-exports.getSenderAccountActivity = senderAccount.getSenderAccountActivity;
-exports.exportSenderData = senderAccount.exportSenderData;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =
   senderAccount.updateSenderNotificationState;
 exports.markSenderLegendCelebrationSeen =
   senderAccount.markSenderLegendCelebrationSeen;
 exports.recordWebsiteVisit = senderAccount.recordWebsiteVisit;
-exports.requestSenderEmailChange = senderAccount.requestSenderEmailChange;
 exports.updateSenderLocation = senderAccount.updateSenderLocation;
 exports.recordIrisLearningCandidate = senderAccount.recordIrisLearningCandidate;
 exports.recordIrisLearningOutlier = senderAccount.recordIrisLearningOutlier;
+// Rider compatibility remains on its existing owner; Sender Profile/account
+// operations are deliberately excluded from this Gen 1 bridge.
+exports.updateRiderProfile = accountBootstrapCompat.updateRiderProfile;
 exports.cleanupRiderDocumentChunks = riderAccount.cleanupRiderDocumentChunks;
 exports.ensurePublicRiderId = riderAccount.ensurePublicRiderId;
 exports.advanceRiderOnboarding = riderAccount.advanceRiderOnboarding;

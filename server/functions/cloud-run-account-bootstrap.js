@@ -7,12 +7,21 @@ const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const senderAccount = require("./sender-account");
 const riderAccount = require("./rider-account");
+const accountClosure = require("./account-closure");
 
 const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
-  ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
+  ensureSenderAccount: {handler: senderAccount.cloudRunSenderProfileHandlers.ensureSenderAccount, appCheckRequired: false},
+  updateSenderProfile: {handler: senderAccount.cloudRunSenderProfileHandlers.updateSenderProfile, appCheckRequired: true},
+  updateSenderProfilePhoto: {handler: senderAccount.cloudRunSenderProfileHandlers.updateSenderProfilePhoto, appCheckRequired: true},
+  updateSenderPreferences: {handler: senderAccount.cloudRunSenderProfileHandlers.updateSenderPreferences, appCheckRequired: true},
+  revokeSenderSessions: {handler: senderAccount.cloudRunSenderProfileHandlers.revokeSenderSessions, appCheckRequired: true},
+  getSenderAccountActivity: {handler: senderAccount.cloudRunSenderProfileHandlers.getSenderAccountActivity, appCheckRequired: true},
+  exportSenderData: {handler: senderAccount.cloudRunSenderProfileHandlers.exportSenderData, appCheckRequired: true},
+  requestSenderEmailChange: {handler: senderAccount.cloudRunSenderProfileHandlers.requestSenderEmailChange, appCheckRequired: true},
+  closeCircumAccount: {handler: {run: accountClosure.closeAccount}, appCheckRequired: true},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
   advanceRiderOnboarding: {handler: riderAccount.advanceRiderOnboarding, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
@@ -43,7 +52,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderProfile|updateSenderProfilePhoto|updateSenderPreferences|revokeSenderSessions|getSenderAccountActivity|exportSenderData|requestSenderEmailChange|closeCircumAccount|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 

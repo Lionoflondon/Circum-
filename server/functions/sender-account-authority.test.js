@@ -16,8 +16,9 @@ test("ensureSenderAccount emits lifecycle diagnostics around the transaction", (
   assert.match(source, /adminExists: adminSnap\.exists/);
 });
 
-test("ensureSenderAccount returns explicit outcomes without changing the callable", () => {
-  assert.match(source, /exports\.ensureSenderAccount = functions\.https\.onCall/);
+test("ensureSenderAccount returns explicit outcomes through the Cloud Run handler", () => {
+  assert.match(source, /async function ensureSenderAccountHandler/);
+  assert.match(source, /cloudRunSenderProfileHandlers/);
   assert.match(source, /action: "existing_sender_role_allowed"/);
   assert.match(source, /action: "blocked_conflicting_role"/);
   assert.match(source, /action: userSnap\.exists \? "merged_sender_role" : "created_sender_profile"/);
@@ -45,7 +46,7 @@ test("existing profiles require a pending grant regardless of legacy Sender role
 });
 
 test("Sender preferences are server-owned and validated", () => {
-  assert.match(source, /exports\.updateSenderPreferences = functions\.https\.onCall/);
+  assert.match(source, /async function updateSenderPreferencesHandler/);
   assert.match(source, /notificationPreferences/);
   assert.match(source, /Unsupported language preference/);
   assert.match(source, /Unsupported time format preference/);
@@ -53,14 +54,14 @@ test("Sender preferences are server-owned and validated", () => {
 });
 
 test("Sender session revocation reports Firebase global scope honestly", () => {
-  assert.match(source, /exports\.revokeSenderSessions = functions\.https\.onCall/);
+  assert.match(source, /async function revokeSenderSessionsHandler/);
   assert.match(source, /revokeRefreshTokens\(uid\)/);
   assert.match(source, /all_sessions_including_current/);
 });
 
 test("Sender activity and export read only sender-owned records", () => {
-  assert.match(source, /exports\.getSenderAccountActivity = functions\.https\.onCall/);
-  assert.match(source, /exports\.exportSenderData = functions\.https\.onCall/);
+  assert.match(source, /async function getSenderAccountActivityHandler/);
+  assert.match(source, /async function exportSenderDataHandler/);
   assert.match(source, /senderOwnedQuery\("senderProfileEvents", "uid", uid/);
   assert.match(source, /senderOwnedQuery\("notifications", "recipientId", uid/);
   assert.match(source, /senderOwnedQuery\("deliveryRequests", "userId", uid/);

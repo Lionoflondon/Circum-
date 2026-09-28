@@ -1,0 +1,70 @@
+name: Deploy Sender Profile Cloud Run
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-sender-profile-cloud-run:
+    name: Deploy exact Sender profile Cloud Run service
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - run: npm --prefix server/functions ci
+      - run: npm --prefix server/functions test
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
+      - name: Build the exact merged source image
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-account-bootstrap:${SOURCE_SHA}"
+          gcloud builds submit server/functions \
+            --project=circum-2797c \
+            --config=server/functions/cloudbuild.account-bootstrap.yaml \
+            --substitutions="_IMAGE=${image}"
+          echo "IMAGE=${image}" >> "$GITHUB_ENV"
+      - name: Deploy only circum-account-bootstrap
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gcloud run deploy circum-account-bootstrap \
+            --project=circum-2797c \
+            --region=us-central1 \
+            --platform=managed \
+            --image="$IMAGE" \
+            --update-env-vars="CIRCUM_SOURCE_SHA=${SOURCE_SHA}" \
+            --quiet
+      - name: Verify Cloud Run identity and traffic
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          service_yaml="$RUNNER_TEMP/circum-account-bootstrap.yaml"
+          gcloud run services describe circum-account-bootstrap \
+            --project=circum-2797c \
+            --region=us-central1 \
+            --format=yaml > "$service_yaml"
+          grep -q "latestReadyRevisionName:" "$service_yaml"
+          grep -q "percent: 100" "$service_yaml"
+          grep -q "CIRCUM_SOURCE_SHA: ${SOURCE_SHA}" "$service_yaml"
+          url="$(gcloud run services describe circum-account-bootstrap \
+            --project=circum-2797c \
+            --region=us-central1 \
+            --format='value(status.url)')"
+          health="$(curl --fail --silent --show-error "${url}/health")"
+          echo "$health"
+          echo "$health" | grep -q 'updateSenderPreferences'
+          echo "$health" | grep -q 'closeCircumAccount'

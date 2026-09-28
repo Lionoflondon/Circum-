@@ -22,6 +22,7 @@ import 'package:permission_handler/permission_handler.dart'
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../sender_mobile/sender_profile_authority.dart';
+import '../../sender_mobile/account_bootstrap_api.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -105,10 +106,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (username != null && username.trim().isNotEmpty)
         'username': username.trim(),
     };
-    await functions
-        .httpsCallable('updateSenderProfile')
-        .call(payload)
-        .timeout(_authOperationTimeout);
+    await callAccountBootstrap(
+      'updateSenderProfile',
+      payload,
+      auth: auth,
+    ).timeout(_authOperationTimeout);
   }
 
   Future<void> _updateSenderLocation(Position locationData) async {

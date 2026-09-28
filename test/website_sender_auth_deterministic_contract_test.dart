@@ -162,7 +162,8 @@ void main() {
 
     expect(authBloc, isNot(contains('void _handleDeleteAccount')));
     expect(accountClosure, contains('reauthenticateWithCredential'));
-    expect(accountClosure, contains("httpsCallable('closeCircumAccount')"));
+    expect(accountClosure,
+        contains("callAccountBootstrap(\n            'closeCircumAccount'"));
     expect(accountClosure, contains('deleteFirebaseIdentity: user.delete'));
     expect(accountClosure, contains('clearLocalSession: _clearLocalSession'));
     expect(accountClosure, contains('await _storage.deleteAll()'));
@@ -224,8 +225,8 @@ void main() {
         website.indexOf('Future<void> _signUpSender()'),
         website.indexOf('Future<void> _sendSenderPasswordReset()'));
     expect(signup.indexOf('_allowSenderUser(user)'),
-        lessThan(signup.indexOf("httpsCallable('updateSenderProfile')")));
-    expect(signup.indexOf("httpsCallable('updateSenderProfile')"),
+        lessThan(signup.indexOf('updateSenderProfile')));
+    expect(signup.indexOf('updateSenderProfile'),
         lessThan(signup.indexOf("httpsCallable('attachReferralCode')")));
     final access = website.substring(
         website.indexOf('Future<bool> _allowSenderUser('),
