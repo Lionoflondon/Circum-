@@ -15,6 +15,15 @@ void main() {
     expect(senderQuoteVehicleMismatch('CAR', 'Car'), isFalse);
     expect(senderQuoteVehicleMismatch(null, 'Car'), isFalse);
   });
+  test('quote transport sends the selected vehicle to the server', () {
+    final bloc = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+    final quoteHandler = bloc.substring(
+      bloc.indexOf('void _handleRequestSenderBookingQuote'),
+      bloc.indexOf('void _handleStartSenderPaymentSession'),
+    );
+    expect(quoteHandler, contains("'selectedVehicle': event.selectedVehicle"));
+  });
   test('legacy sanitized draft restores the selected vehicle upgrade', () {
     final restored = SenderBookingDraft.fromBackendDraft({
       'iris': {'recommendedVehicle': 'Car'},
