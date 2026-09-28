@@ -3,24 +3,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {_private} = require("./sender-booking");
 
-test("sender draft preserves validated route coordinates for reload", () => {
-  const input = {pickup: {coordinate: {lat: 51.5, lng: -0.14}}, dropoff: {coordinate: {lat: 51.52, lng: -0.08}}};
-  const saved = _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: input}).draft;
-  assert.deepEqual(saved.pickup.coordinate, input.pickup.coordinate);
-  assert.deepEqual(saved.dropoff.coordinate, input.dropoff.coordinate);
-  const restored = _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: saved}).draft;
-  assert.deepEqual(restored.pickup.coordinate, saved.pickup.coordinate);
-  assert.deepEqual(restored.dropoff.coordinate, saved.dropoff.coordinate);
-});
-
-test("sender draft rejects invalid coordinates and accepts legacy missing coordinates", () => {
-  for (const coordinate of [{lat: 91, lng: 0}, {lat: 0, lng: -181}, {lat: "bad", lng: 0}, {}]) {
-    assert.throws(() => _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: {pickup: {coordinate}}}), /coordinate is invalid/);
-  }
-  const saved = _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: {pickup: {address: "London"}}}).draft;
-  assert.equal(saved.pickup.coordinate, undefined);
-});
-
 test("sender draft sanitizer keeps only canonical draft fields", () => {
   const saved = _private.sanitizeSenderDraftPayload({
     schemaVersion: 1,

@@ -210,12 +210,6 @@ function routeCoordinate(value, name) {
   return {latitude, longitude};
 }
 
-function draftCoordinate(value, name) {
-  if (value == null) return {};
-  const {latitude, longitude} = routeCoordinate(value, name);
-  return {coordinate: {lat: latitude, lng: longitude}};
-}
-
 function decodeGooglePolyline(encoded) {
   const points = [];
   let index = 0;
@@ -476,13 +470,11 @@ function sanitizeSenderDraftPayload(raw) {
     step,
     pickup: {
       address: cleanString(pickup.address, 1000),
-      ...draftCoordinate(pickup.coordinate, "Pickup"),
       subAddress: cleanString(pickup.subAddress, 300),
       locality: cleanString(pickup.locality, 200),
     },
     dropoff: {
       address: cleanString(dropoff.address, 1000),
-      ...draftCoordinate(dropoff.coordinate, "Drop-off"),
       subAddress: cleanString(dropoff.subAddress, 300),
       locality: cleanString(dropoff.locality, 200),
     },
