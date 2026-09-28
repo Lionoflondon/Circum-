@@ -10,12 +10,17 @@ test("Sender QA payment actions stay on the private special-flow boundary", () =
   const qa = read("qa-special-flow.js");
   assert.match(qa, /sender_capability/);
   assert.match(qa, /sender_quote/);
+  assert.match(qa, /sender_roth_prepare/);
+  assert.match(qa, /sender_roth_balance/);
   assert.match(qa, /sender_payment_session/);
   assert.match(qa, /sender_finalize/);
   assert.match(qa, /senderBooking\.createSenderPaymentSession/);
   assert.match(qa, /senderBooking\.finalizeSenderCheckoutSession/);
   assert.match(qa, /qaContext/);
   assert.match(qa, /senderBooking\.cleanupQaSenderFixture/);
+  assert.match(qa, /qaRoth\.seed/);
+  assert.match(qa, /data\.action === "sender_capability"/);
+  assert.match(qa, /return \{enabled: false\}/);
 });
 
 test("Sender QA payment reuses canonical finalization and suppresses dispatch", () => {
