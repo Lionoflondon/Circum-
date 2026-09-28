@@ -33,6 +33,7 @@ import 'sender_draft_api.dart';
 import 'sender_finance.dart';
 import 'sender_manual_address_resolution.dart';
 import 'sender_saved_addresses.dart';
+import 'sender_schedule_picker.dart';
 import 'sender_tracking_screen.dart';
 
 Map<String, dynamic> _senderDeliveryTimePayload(SenderBookingDraft draft) => {
@@ -1128,6 +1129,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           '',
       (engine.distance ?? -1).toStringAsFixed(3),
       draft.selectedOption,
+      senderDeliveryTimingQuoteKey(draft),
       selectedVehicle,
       requiresVanguard,
       draft.itemName,
@@ -2111,6 +2113,14 @@ class _DeliveryTimePanel extends StatelessWidget {
           const SizedBox(height: 14),
           const _SectionLabel('Preferred date'),
           const SizedBox(height: 8),
+          SenderScheduleDatePicker(
+            value: draft.scheduledDate,
+            onChanged: (value) {
+              scheduledDate.text = value;
+              onDraft(draft.copyWith(scheduledDate: value));
+            },
+          ),
+          const SizedBox(height: 8),
           _ScheduleDateSelector(
             selectedDate: draft.scheduledDate,
             onSelected: (value) {
@@ -2146,38 +2156,37 @@ class _DeliveryTimePanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _TextInput(
-                    controller: customWindowStart,
-                    hint: 'Start HH:MM',
-                    keyboardType: TextInputType.datetime,
-                    errorText: customWindowStart.text.trim().isNotEmpty &&
-                            !RegExp(r'^\d{2}:\d{2}$')
-                                .hasMatch(customWindowStart.text.trim())
-                        ? 'Use HH:MM'
-                        : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowStart: value)),
+                  child: SenderScheduleTimePicker(
+                    label: 'Start time',
+                    value: draft.customWindowStart,
+                    onChanged: (value) {
+                      customWindowStart.text = value;
+                      onDraft(draft.copyWith(customWindowStart: value));
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _TextInput(
-                    controller: customWindowEnd,
-                    hint: 'End HH:MM',
-                    keyboardType: TextInputType.datetime,
-                    errorText: customWindowEnd.text.trim().isNotEmpty &&
-                            !isSenderCustomWindowValid(
-                              customWindowStart.text,
-                              customWindowEnd.text,
-                            )
-                        ? 'After start'
-                        : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowEnd: value)),
+                  child: SenderScheduleTimePicker(
+                    label: 'End time',
+                    value: draft.customWindowEnd,
+                    onChanged: (value) {
+                      customWindowEnd.text = value;
+                      onDraft(draft.copyWith(customWindowEnd: value));
+                    },
                   ),
                 ),
               ],
             ),
+            if (draft.customWindowEnd.isNotEmpty &&
+                !isSenderCustomWindowValid(
+                  draft.customWindowStart,
+                  draft.customWindowEnd,
+                ))
+              const Text(
+                'Choose an end time after the start time.',
+                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+              ),
           ],
         ],
         const SizedBox(height: 14),
@@ -5748,7 +5757,6 @@ class _TextInput extends StatelessWidget {
   final String hint;
   final TextInputType? keyboardType;
   final String? helperText;
-  final String? errorText;
   final ValueChanged<String> onChanged;
 
   const _TextInput({
@@ -5756,7 +5764,6 @@ class _TextInput extends StatelessWidget {
     required this.hint,
     this.keyboardType,
     this.helperText,
-    this.errorText,
     required this.onChanged,
   });
 
@@ -5772,8 +5779,6 @@ class _TextInput extends StatelessWidget {
         hintStyle: const TextStyle(color: _Tokens.muted),
         helperText: helperText,
         helperStyle: const TextStyle(color: _Tokens.muted, height: 1.25),
-        errorText: errorText,
-        errorStyle: const TextStyle(color: Color(0xFFFCA5A5), height: 1.25),
         filled: true,
         fillColor: const Color(0xAA1A2030),
         border: OutlineInputBorder(

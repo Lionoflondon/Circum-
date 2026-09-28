@@ -5,6 +5,19 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('every scheduling input invalidates the prior quote key', () {
+    const original = SenderBookingDraft();
+    final key = senderDeliveryTimingQuoteKey(original);
+    for (final changed in [
+      original.copyWith(deliveryTimingType: SenderDeliveryTimingType.scheduled),
+      original.copyWith(scheduledDate: '2026-09-29'),
+      original.copyWith(scheduledWindow: 'Morning'),
+      original.copyWith(customWindowStart: '10:00'),
+      original.copyWith(customWindowEnd: '12:00'),
+    ]) {
+      expect(senderDeliveryTimingQuoteKey(changed), isNot(key));
+    }
+  });
   test('authoritative quote distance clears with an invalidated quote', () {
     final state = SendPackageState(
       distance: 4.8,
