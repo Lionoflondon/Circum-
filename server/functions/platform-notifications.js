@@ -11,6 +11,20 @@ const giftEmailNotifications = require("./gift-email-notifications");
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
 const ESCALATION_THRESHOLDS_MS = [24 * 60 * 60 * 1000, 6 * 60 * 60 * 1000, 2 * 60 * 60 * 1000, 60 * 60 * 1000];
+const TRUSTED_QA_NAMESPACE = "qaSpecialFlowFixtures";
+
+function isTrustedSyntheticQaDelivery(delivery = {}) {
+  return delivery.isSyntheticQa === true &&
+    delivery.qaPublic === true &&
+    delivery.qaNamespace === TRUSTED_QA_NAMESPACE &&
+    /^[a-f0-9]{64}$/.test(text(delivery.qaFixtureId)) &&
+    delivery.realDispatch === false &&
+    delivery.suppressExternalSideEffects === true &&
+    delivery.excludeFromCustomerNotifications === true &&
+    delivery.excludeFromSettlement === true &&
+    delivery.excludeFromPayout === true &&
+    delivery.excludeFromAnalytics === true;
+}
 
 function timestampMillis(value) {
   if (!value) return 0;
@@ -351,10 +365,10 @@ function customerWaitingCharge(data) {
 
 async function handleDeliveryCreated(snapshot, options = {}) {
   const delivery = snapshot.data();
-  if (delivery.isSyntheticQa === true && delivery.qaPublic === true && delivery.suppressExternalSideEffects === true) return {skipped: "synthetic_qa"};
+  if (isTrustedSyntheticQaDelivery(delivery)) return {skipped: "synthetic_qa"};
   const ids = deliveryIds({...delivery, id: snapshot.id});
   const runEffect = options.effects && options.effects.run ? options.effects.run : async (_effectId, execute) => execute();
-  if (ids.senderId) await runEffect(`sender_notification:${ids.senderId}`, () => notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`}));
+  if (ids.senderId) await runEffect(`sender_notification:${ids.senderId}`, () => notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries", deliveryId: snapshot.id}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`}));
   const db = getFirestore();
   const riders = await onlineCandidateRiderRecords(db);
   const decisions = riders.map((record) => ({
@@ -419,7 +433,7 @@ async function handleDeliveryCreated(snapshot, options = {}) {
 async function processDeliveryCreatedOnce(snapshot, eventId, options = {}) {
   const deliveryId = text(snapshot && snapshot.id);
   if (!deliveryId) throw new Error("delivery_id_required");
-  if (snapshot.data()?.isSyntheticQa === true && snapshot.data()?.qaPublic === true && snapshot.data()?.suppressExternalSideEffects === true) return {skipped: "synthetic_qa"};
+  if (isTrustedSyntheticQaDelivery(snapshot.data())) return {skipped: "synthetic_qa"};
   const processor = options.processOnce || processOnce;
   const run = options.run || (async () => handleDeliveryCreated(snapshot));
   return processor({
@@ -445,7 +459,7 @@ exports.processDeliveryCreatedOnce = processDeliveryCreatedOnce;
 exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change) => {
   const before = change.before.data();
   const after = change.after.data();
-  if (after.isSyntheticQa === true && after.qaPublic === true && after.suppressExternalSideEffects === true) return;
+  if (isTrustedSyntheticQaDelivery(after)) return;
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
   const statusChanged = status && status !== oldStatus;
@@ -608,4 +622,5 @@ exports._private = {
   dispatchCandidateDecision,
   escalationStage,
   scheduledPickupMillis,
+  isTrustedSyntheticQaDelivery,
 };
