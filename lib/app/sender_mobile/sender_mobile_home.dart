@@ -43,6 +43,14 @@ const senderMobileHeroSubtitle =
 bool isValidSenderAuthEmail(String value) =>
     RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
 
+String _senderHomeFirstText(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  return '';
+}
+
 bool senderHomeNotificationIsRelevant(
   SenderHomeNotification notification,
   Iterable<SenderHomeOrder> recentOrders,
@@ -2265,7 +2273,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           read: data['read'] == true,
           type: '${data['type'] ?? ''}'.trim(),
           destination: destination,
-          bookingId: _firstText([
+          bookingId: _senderHomeFirstText([
             data['bookingId'],
             nested['bookingId'],
             destination['bookingId'],
