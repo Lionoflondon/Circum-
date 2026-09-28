@@ -808,8 +808,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final irisReady = _irisMatchesParcel(
         engine.canonicalIrisResult,
         engine.itemDescription,
+        engine.canonicalIrisRequestedWeight,
         _item.text,
         _description.text,
+        _weight.text,
       );
       if (engine.isIrisResolving) return;
       if (!irisReady) {
@@ -1814,8 +1816,10 @@ class _BookingPanel extends StatelessWidget {
           iris: _irisMatchesParcel(
             engine.canonicalIrisResult,
             engine.itemDescription,
+            engine.canonicalIrisRequestedWeight,
             item.text,
             description.text,
+            weight.text,
           )
               ? engine.canonicalIrisResult
               : null,
@@ -3293,10 +3297,16 @@ double? _nullableDouble(Object? value) {
   return double.tryParse('${value ?? ''}'.trim());
 }
 
-bool _irisMatchesParcel(dynamic iris, String? requestedDescription,
-    String itemName, String description) {
+bool _irisMatchesParcel(
+    dynamic iris,
+    String? requestedDescription,
+    String? requestedWeight,
+    String itemName,
+    String description,
+    String weight) {
   return iris != null &&
-      senderIrisMatchesRequest(requestedDescription, itemName, description);
+      senderIrisMatchesRequest(
+          requestedDescription, requestedWeight, itemName, description, weight);
 }
 
 String _irisEstimatedWeightDisplay(dynamic iris) {

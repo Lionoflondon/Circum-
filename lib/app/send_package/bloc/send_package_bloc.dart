@@ -994,6 +994,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         itemDescription:
             itemDescription.trim().isEmpty ? null : itemDescription,
+        canonicalIrisRequestedWeight: event.declaredWeightText,
         clearItemDescription: itemDescription.trim().isEmpty,
         isIrisResolving: true,
         irisErrorMessage: '',

@@ -5,16 +5,21 @@ bool senderIrisAllowsContinuation(String? complianceStatus) =>
 
 bool senderIrisMatchesRequest(
   String? requestedDescription,
+  String? requestedWeight,
   String itemName,
   String description,
+  String weight,
 ) {
-  if (requestedDescription == null || requestedDescription.trim().isEmpty) {
+  if (requestedDescription == null ||
+      requestedDescription.trim().isEmpty ||
+      requestedWeight == null) {
     return false;
   }
   final current = [itemName, description]
       .where((value) => value.trim().isNotEmpty)
       .join(' · ');
-  return requestedDescription.trim() == current.trim();
+  return requestedDescription.trim() == current.trim() &&
+      requestedWeight.trim() == weight.trim();
 }
 
 String senderDeliveryTimingQuoteKey(SenderBookingDraft draft) => [

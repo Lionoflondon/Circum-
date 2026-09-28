@@ -69,6 +69,7 @@ class SendPackageState {
   final IrisWeightLookupResult? irisResult;
   final CanonicalIrisResult? canonicalIrisResult;
   final String? itemDescription;
+  final String? canonicalIrisRequestedWeight;
   final bool isIrisResolving;
   final String irisErrorMessage;
   final String irisWeightReviewMessage;
@@ -139,6 +140,7 @@ class SendPackageState {
     this.irisResult,
     this.canonicalIrisResult,
     this.itemDescription,
+    this.canonicalIrisRequestedWeight,
     this.isIrisResolving = false,
     this.irisErrorMessage = '',
     this.irisWeightReviewMessage = '',
@@ -215,6 +217,7 @@ class SendPackageState {
     IrisWeightLookupResult? irisResult,
     CanonicalIrisResult? canonicalIrisResult,
     String? itemDescription,
+    String? canonicalIrisRequestedWeight,
     bool clearIrisResult = false,
     bool clearCanonicalIrisResult = false,
     bool clearItemDescription = false,
@@ -313,6 +316,8 @@ class SendPackageState {
           : canonicalIrisResult ?? this.canonicalIrisResult,
       itemDescription:
           clearItemDescription ? null : itemDescription ?? this.itemDescription,
+      canonicalIrisRequestedWeight:
+          canonicalIrisRequestedWeight ?? this.canonicalIrisRequestedWeight,
       isIrisResolving: isIrisResolving ?? this.isIrisResolving,
       irisErrorMessage: irisErrorMessage ?? this.irisErrorMessage,
       irisWeightReviewMessage:
