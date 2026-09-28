@@ -33,16 +33,6 @@ function addExpressCompatibility(req, res) {
   };
 }
 
-function applyCors(req, res) {
-  const origin = String(req.headers.origin || "");
-  if (origin === "https://circum-app-2797c.web.app") {
-    res.setHeader("access-control-allow-origin", origin);
-  }
-  res.setHeader("vary", "Origin");
-  res.setHeader("access-control-allow-headers", "Authorization, Content-Type, X-Firebase-AppCheck");
-  res.setHeader("access-control-allow-methods", "POST, OPTIONS");
-}
-
 function createSenderDeliveryPaymentsServer(handlers) {
   for (const name of Object.values(ROUTES)) {
     if (typeof handlers?.[name] !== "function") {
@@ -52,7 +42,6 @@ function createSenderDeliveryPaymentsServer(handlers) {
 
   return http.createServer((req, res) => {
     addExpressCompatibility(req, res);
-    applyCors(req, res);
     const path = new URL(req.url || "/", "http://localhost").pathname;
     if (path === "/healthz") {
       return res.status(200).send({
@@ -63,7 +52,6 @@ function createSenderDeliveryPaymentsServer(handlers) {
     }
     const handlerName = ROUTES[path];
     if (!handlerName) return res.status(404).send({error: "not_found"});
-    if (req.method === "OPTIONS") return res.status(204).send();
     if (req.method !== "POST") return res.status(405).send({error: "method_not_allowed"});
 
     const chunks = [];
