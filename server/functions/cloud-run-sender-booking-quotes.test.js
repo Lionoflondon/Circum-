@@ -87,13 +87,19 @@ test("rejects missing or invalid Auth and App Check before invoking quote", asyn
 });
 
 test("preserves callable envelope and verified identity", async () => {
-  const deps = dependencies();
+  const appCheckToken = `${"a".repeat(300)}.${"b".repeat(400)}.${"c".repeat(342)}`;
+  const deps = dependencies({
+    verifyAppCheck: async (token) => {
+      assert.equal(token, appCheckToken, "App Check credentials must reach the verifier intact");
+      return {appId: "circum"};
+    },
+  });
   await withServer(deps.factory, async (base) => {
     const response = await fetch(`${base}/createSenderBookingQuote`, {
       method: "POST",
       headers: {
         authorization: "Bearer auth",
-        "x-firebase-appcheck": "app",
+        "x-firebase-appcheck": appCheckToken,
         "content-type": "application/json",
         "x-circum-correlation-id": "qa-quote-1",
       },
