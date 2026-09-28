@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('sender notification streams use server ordering before limits', () {
-    final centreSource = File('lib/app/sender_mobile/sender_notifications.dart')
-        .readAsStringSync();
-    final homeSource = File('lib/app/sender_mobile/sender_mobile_home.dart')
-        .readAsStringSync();
+    final centreSource = File(
+      'lib/app/sender_mobile/sender_notifications.dart',
+    ).readAsStringSync();
+    final homeSource = File(
+      'lib/app/sender_mobile/sender_mobile_home.dart',
+    ).readAsStringSync();
 
     for (final source in [centreSource, homeSource]) {
       final recipient = source.indexOf(".where('recipientId', isEqualTo: uid)");
@@ -21,5 +23,7 @@ void main() {
 
     expect(centreSource, isNot(contains('results.sort(')));
     expect(homeSource, isNot(contains('items.sort(')));
+    expect(centreSource, contains('senderNotificationVisible'));
+    expect(homeSource, contains('senderNotificationVisible'));
   });
 }
