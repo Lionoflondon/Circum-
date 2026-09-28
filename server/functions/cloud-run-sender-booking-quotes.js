@@ -137,7 +137,7 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         if (!dependencies) dependencies = dependenciesFactory();
         const idToken = bearer(request);
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
-        const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
+        const appCheckToken = String(request.headers["x-firebase-appcheck"] || "").trim();
         if (!appCheckToken) throw callableError("unauthenticated", "Circum security verification is required.");
         let decoded;
         try {
@@ -150,7 +150,14 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         try {
           app = await dependencies.verifyAppCheck(appCheckToken);
         } catch (failure) {
-          console.warn("sender_quote_auth_rejected", {operation: name, reason: "app-check"});
+          const verifierCode = String(failure && failure.code || "unknown")
+            .replace(/[^a-zA-Z0-9/_-]/g, "")
+            .slice(0, 80);
+          console.warn("sender_quote_auth_rejected", {
+            operation: name,
+            reason: "app-check",
+            verifierCode,
+          });
           throw failure;
         }
         const uid = decoded && (decoded.uid || decoded.sub);
