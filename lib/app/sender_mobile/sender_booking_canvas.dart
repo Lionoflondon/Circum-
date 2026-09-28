@@ -196,6 +196,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _setDraft(SenderBookingDraft next) {
     setState(() => _draft = next);
     if (!_restoringDraft) _scheduleDraftSave(next);
+    if (!_restoringDraft && next.step == SenderBookingStep.options) {
+      _requestBackendQuote(next);
+    }
   }
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -827,7 +830,6 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return;
       }
       _setDraft(_draft.copyWith(step: SenderBookingStep.options));
-      _requestBackendQuote(_draft.copyWith(step: SenderBookingStep.options));
       return;
     }
     if (_draft.step == SenderBookingStep.iris) {
@@ -3444,7 +3446,6 @@ class _OptionsPanel extends StatelessWidget {
               irisVehicle: value,
             );
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         const SizedBox(height: 16),
@@ -3458,7 +3459,6 @@ class _OptionsPanel extends StatelessWidget {
           onSelected: (value) {
             final next = draft.copyWith(selectedOption: value);
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         const SizedBox(height: 16),
@@ -3478,7 +3478,6 @@ class _OptionsPanel extends StatelessWidget {
             if (includedVanguard) return;
             final next = draft.copyWith(vanguard: !draft.vanguard);
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         if (includedVanguard || draft.vanguard) ...[
