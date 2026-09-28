@@ -9,6 +9,26 @@ const {
 const fs = require("node:fs");
 const path = require("node:path");
 
+test("only immutable server-scoped QA provenance suppresses delivery side effects", () => {
+  const trusted = {
+    isSyntheticQa: true,
+    qaPublic: true,
+    qaNamespace: "qaSpecialFlowFixtures",
+    qaFixtureId: "a".repeat(64),
+    realDispatch: false,
+    suppressExternalSideEffects: true,
+    excludeFromCustomerNotifications: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromAnalytics: true,
+  };
+  assert.equal(_private.isTrustedSyntheticQaDelivery(trusted), true);
+  assert.equal(_private.isTrustedSyntheticQaDelivery({...trusted, qaNamespace: "client"}), false);
+  assert.equal(_private.isTrustedSyntheticQaDelivery({...trusted, qaFixtureId: "forged"}), false);
+  assert.equal(_private.isTrustedSyntheticQaDelivery({...trusted, excludeFromPayout: false}), false);
+  assert.equal(_private.isTrustedSyntheticQaDelivery({}), false);
+});
+
 test("Gifts in-app notification record is always created", () => {
   const record = giftNotificationRecord({
     userId: "sender-1",
