@@ -25,12 +25,14 @@ void main() {
     expect(web, isNot(contains('senderQaFixtureId')));
   });
 
-  test('Sender Web QA calls use the Firebase-authenticated QA boundary', () {
-    expect(paymentApi, contains('FirebaseFunctions.instance'));
-    expect(paymentApi, contains('httpsCallable'));
+  test('Sender Web QA calls use the authenticated QA Cloud Run boundary', () {
+    expect(
+        paymentApi, contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app'));
+    expect(paymentApi, contains("'sender_qa'"));
+    expect(paymentApi, contains("'X-Firebase-AppCheck': appCheckToken"));
+    expect(paymentApi, contains("'Authorization': 'Bearer \$token'"));
     expect(paymentApi, contains('FirebaseAppCheck.instance.getToken()'));
-    expect(paymentApi,
-        isNot(contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app')));
+    expect(paymentApi, isNot(contains('FirebaseFunctions.instance')));
   });
 
   test('Sender Web never falls back from a QA bridge failure to live Stripe',

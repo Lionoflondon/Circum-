@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,6 +20,7 @@ class WebsiteProductionPaymentApi {
     'sender_cancellation':
         'https://circum-sender-cancellation-requests-j2b7cicfwq-uc.a.run.app',
     'rider_payouts': 'https://circum-rider-payouts-j2b7cicfwq-uc.a.run.app',
+    'sender_qa': 'https://circum-qa-special-flow-j2b7cicfwq-uc.a.run.app',
   };
 
   static Future<Map<String, dynamic>> call(
@@ -29,32 +29,6 @@ class WebsiteProductionPaymentApi {
     Map<String, dynamic> data, {
     bool callable = true,
   }) async {
-    if (family == 'sender_qa') {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final appCheckToken = await FirebaseAppCheck.instance.getToken();
-      if (token == null || appCheckToken == null || appCheckToken.isEmpty) {
-        throw StateError('payment_auth_required');
-      }
-      try {
-        // The QA Cloud Run service remains private. The existing callable
-        // export is its Firebase-authenticated browser boundary and carries
-        // App Check enforcement plus the server-side QA allowlist.
-        final result = await FirebaseFunctions.instance
-            .httpsCallable(
-              route,
-              options: HttpsCallableOptions(
-                timeout: const Duration(seconds: 30),
-              ),
-            )
-            .call(data);
-        final value = result.data;
-        return value is Map
-            ? Map<String, dynamic>.from(value)
-            : <String, dynamic>{};
-      } on FirebaseFunctionsException catch (error) {
-        throw StateError(error.message ?? error.code);
-      }
-    }
     final origin = _origins[family];
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final appCheckToken = await FirebaseAppCheck.instance.getToken();
