@@ -233,7 +233,7 @@ void main() {
   });
 
   test(
-      'Sender IRIS requests timeout and stale matches require non-empty item text',
+      'Sender IRIS requests timeout and stale results require matching request details',
       () {
     final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
@@ -256,8 +256,8 @@ void main() {
     expect(matchStart, isNonNegative);
     expect(matchEnd, greaterThan(matchStart));
     final matcher = canvas.substring(matchStart, matchEnd);
-    expect(matcher, contains('final item = itemName.trim().toLowerCase();'));
-    expect(matcher, contains('item.isNotEmpty && actual.contains(item)'));
+    expect(matcher, contains('senderIrisMatchesRequest('));
+    expect(matcher, contains('requestedWeight'));
   });
 
   test('Sender async IRIS and quote refreshes clear stale booking state first',
