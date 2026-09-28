@@ -139,10 +139,20 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
         const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
         if (!appCheckToken) throw callableError("unauthenticated", "Circum security verification is required.");
-        const [decoded, app] = await Promise.all([
-          dependencies.verifyIdToken(idToken),
-          dependencies.verifyAppCheck(appCheckToken),
-        ]);
+        let decoded;
+        try {
+          decoded = await dependencies.verifyIdToken(idToken);
+        } catch (failure) {
+          console.warn("sender_quote_auth_rejected", {operation: name, reason: "auth"});
+          throw failure;
+        }
+        let app;
+        try {
+          app = await dependencies.verifyAppCheck(appCheckToken);
+        } catch (failure) {
+          console.warn("sender_quote_auth_rejected", {operation: name, reason: "app-check"});
+          throw failure;
+        }
         const uid = decoded && (decoded.uid || decoded.sub);
         if (!uid) throw callableError("unauthenticated", "Invalid authentication token.");
         if (!allowRequest(`${uid}:${name}`)) throw callableError("resource-exhausted", "Quote service is busy. Try again shortly.");
