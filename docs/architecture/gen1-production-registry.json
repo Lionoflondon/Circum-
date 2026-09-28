@@ -5526,6 +5526,7 @@
       "generation": "Gen 1",
       "productionPurpose": "rothLedger.getSenderWalletTransactions",
       "callers": [
+        "docs/SENDER_ACTIVITY_CANONICAL_MODEL.md",
         "lib/app/sender_mobile/sender_wallet.dart",
         "server/functions/sender-payment-app-check.test.js"
       ],
