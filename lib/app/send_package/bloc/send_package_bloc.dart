@@ -7,6 +7,7 @@ import 'package:circum/app/delivery/cancellation_contract.dart';
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_booking_quote_api.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/env/env.dart';
@@ -45,9 +46,6 @@ part 'send_package_state.dart';
 
 const _senderCallableTimeout = Duration(seconds: 30);
 const _senderRoutePreviewTimeout = Duration(seconds: 12);
-const _senderBookingQuotesUrl =
-    'https://circum-sender-booking-quotes-j2b7cicfwq-uc.a.run.app';
-
 void _logRecoverableSenderError(
   String context,
   Object error,
@@ -1107,15 +1105,22 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       'createSenderPaidDelivery',
       'finalizeSenderWebCheckout',
     };
-    const senderBookingQuoteRoutes = {'createSenderBookingQuote'};
     final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-    final callable = senderBookingQuoteRoutes.contains(name)
-        ? functions.httpsCallableFromUrl('$_senderBookingQuotesUrl/$name')
-        : senderDeliveryPaymentRoutes.contains(name)
-            ? functions.httpsCallableFromUrl(
-                'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/$name',
-              )
-            : functions.httpsCallable(name);
+    if (name == 'createSenderBookingQuote') {
+      try {
+        return await callSenderBookingQuote(payload);
+      } on SenderBookingQuoteApiException catch (error) {
+        throw FirebaseFunctionsException(
+          code: error.status.toLowerCase().replaceAll('_', '-'),
+          message: error.message,
+        );
+      }
+    }
+    final callable = senderDeliveryPaymentRoutes.contains(name)
+        ? functions.httpsCallableFromUrl(
+            'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/$name',
+          )
+        : functions.httpsCallable(name);
     final result = await callable.call(payload).timeout(_senderCallableTimeout);
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
