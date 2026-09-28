@@ -67,18 +67,41 @@ void main() {
     expect(destination, {'route': 'notifications'});
   });
 
+  test(
+    'delivery destinations open an owned Activity detail, never the booking canvas',
+    () {
+      final source = File(
+        'lib/app/sender_mobile/sender_notification_routing.dart',
+      ).readAsStringSync();
+      expect(source, contains('SenderDeliveryDetailView'));
+      expect(source, contains("destination['deliveryId']"));
+      expect(
+        source,
+        isNot(
+          contains(
+            "case 'tracking':\n      Navigator.of(context).push(\n        MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas())",
+          ),
+        ),
+      );
+    },
+  );
+
   test('Sender support opens the canonical backend conversation surface', () {
-    final supportView =
-        File('lib/app/support/view/support.dart').readAsStringSync();
-    final supportBloc =
-        File('lib/app/support/bloc/support_bloc.dart').readAsStringSync();
+    final supportView = File(
+      'lib/app/support/view/support.dart',
+    ).readAsStringSync();
+    final supportBloc = File(
+      'lib/app/support/bloc/support_bloc.dart',
+    ).readAsStringSync();
 
     expect(supportView, contains('RideChatPageView'));
     expect(supportView, contains('supportConversation: true'));
     expect(supportView, isNot(contains("import 'chat.dart'")));
     expect(supportView, isNot(contains('const ChatPageView')));
-    expect(supportBloc,
-        contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(
+      supportBloc,
+      contains("httpsCallable('getOrCreateSupportConversation')"),
+    );
     expect(supportBloc, isNot(contains('ChatsHelper')));
     expect(supportBloc, isNot(contains('storeChat')));
   });
@@ -90,8 +113,10 @@ void main() {
     expect(messaging, contains('_logRecoverablePushPayload'));
     expect(messaging, contains('Recoverable Sender push payload discarded'));
     expect(
-        messaging,
-        isNot(contains(
-            "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
+      messaging,
+      isNot(
+        contains("Map<String, dynamic> msg = jsonDecode(message.data['data'])"),
+      ),
+    );
   });
 }

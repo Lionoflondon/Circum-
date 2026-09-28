@@ -339,6 +339,36 @@
       ]
     },
     {
+      "collectionGroup": "deliveryRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "senderId", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "senderId", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "prescriptionPickups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "profileId", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "businessCheckoutReservations",
       "queryScope": "COLLECTION",
       "fields": [

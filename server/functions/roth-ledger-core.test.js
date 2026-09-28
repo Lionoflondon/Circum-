@@ -11,6 +11,7 @@ const {
   ledgerTransactionRecord,
   nextBalance,
   paginateWalletTransactions,
+  decodeWalletCursor,
   senderWalletProjectionRecord,
   senderWalletRecord,
   verifiedStripePaidGbpSession,
@@ -49,7 +50,17 @@ test("Wallet transaction view and pagination preserve newest-first ledger order"
   const page = paginateWalletTransactions(transactions, {pageSize: 1});
   assert.equal(page.records[0].transactionId, "new");
   assert.equal(page.records[0].direction, "debit");
-  assert.equal(page.nextPageToken, "1");
+  assert.deepEqual(decodeWalletCursor(page.nextPageToken), {
+    source: "",
+    createdAtMillis: 2,
+    transactionId: "new",
+  });
+  const secondPage = paginateWalletTransactions(transactions, {
+    pageSize: 1,
+    pageToken: page.nextPageToken,
+  });
+  assert.equal(secondPage.records[0].transactionId, "old");
+  assert.equal(secondPage.nextPageToken, null);
 });
 
 test("Roth credit cannot go negative unless reversal is explicit", () => {
@@ -180,10 +191,13 @@ test("verified Stripe paid GBP session rejects mismatched expected amount", () =
   assert.equal(verified.amountGBP, 5);
 });
 
-test("sender wallet history prefers canonical walletId query with bounded legacy fallback", () => {
+test("sender wallet history uses server cursor ordering with bounded legacy fallback", () => {
   const source = fs.readFileSync("roth-ledger.js", "utf8");
-  assert.match(source, /collection\("walletTransactions"\)\s*\.where\("walletId", "==", identity\.walletId\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
-  assert.match(source, /walletSnap\.empty \? await db\.collection\("walletTransactions"\)\s*\.where\("uid", "==", context\.auth\.uid\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
+  assert.match(source, /where\(field, "==", value\)/);
+  assert.match(source, /orderBy\("createdAt", "desc"\)/);
+  assert.match(source, /orderBy\(FieldPath\.documentId\(\), "desc"\)/);
+  assert.match(source, /startAfter\(Timestamp\.fromMillis\(cursor\.createdAtMillis\), cursor\.transactionId\)/);
+  assert.match(source, /if \(!cursor && snapshot\.empty\)/);
 });
 
 test("new Sender accounts receive an idempotent 5 Roth welcome ledger credit", () => {

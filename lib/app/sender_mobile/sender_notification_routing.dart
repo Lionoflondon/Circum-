@@ -2,17 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../send_package/view/ride_chats.dart';
 import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
+import 'sender_activity.dart';
 import 'sender_wallet.dart';
 
-typedef SenderNotificationOpenHandler = bool Function(
-  SenderNotificationOpenRequest request,
-);
+typedef SenderNotificationOpenHandler =
+    bool Function(SenderNotificationOpenRequest request);
 
 class SenderNotificationOpenRequest {
   final Map<String, dynamic> destination;
@@ -77,7 +78,8 @@ Map<String, dynamic> parseSenderNotificationDestination(
     parsedData['screen'],
     parsedData['destinationRoute'],
     _routeForNotificationType(
-        _firstText([payload['type'], parsedData['type']])),
+      _firstText([payload['type'], parsedData['type']]),
+    ),
   ]);
 
   final chatId = _firstText([
@@ -90,10 +92,7 @@ Map<String, dynamic> parseSenderNotificationDestination(
     payload['deliveryId'],
     parsedData['deliveryId'],
   ]);
-  final giftId = _firstText([
-    payload['giftId'],
-    parsedData['giftId'],
-  ]);
+  final giftId = _firstText([payload['giftId'], parsedData['giftId']]);
 
   return {
     if (route.isNotEmpty) 'route': route,
@@ -115,21 +114,23 @@ bool openSenderNotificationDestination(
       if (onOpenWallet != null) {
         onOpenWallet();
       } else {
-        Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => const SenderWalletView(),
-        ));
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const SenderWalletView()),
+        );
       }
       return true;
     case 'gift':
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => const GiftModeView(),
-        settings: const RouteSettings(name: GiftModeView.routeName),
-      ));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const GiftModeView(),
+          settings: const RouteSettings(name: GiftModeView.routeName),
+        ),
+      );
       return true;
     case 'health':
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const HealthPlusView()));
       return true;
     case 'business':
       Navigator.of(context).push(
@@ -138,14 +139,27 @@ bool openSenderNotificationDestination(
       return true;
     case 'conversation':
       final chatId = _firstText([destination['chatId']]);
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) =>
-            RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
-      ));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
+        ),
+      );
       return true;
     case 'tracking':
+      final deliveryId = _firstText([
+        destination['deliveryId'],
+        destination['bookingId'],
+        destination['requestId'],
+      ]);
+      if (deliveryId.isEmpty || FirebaseAuth.instance.currentUser == null) {
+        onOpenNotifications?.call();
+        return true;
+      }
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas()),
+        MaterialPageRoute<void>(
+          builder: (_) => SenderDeliveryDetailView(deliveryId: deliveryId),
+        ),
       );
       return true;
     case 'notifications':
@@ -179,15 +193,14 @@ String _firstText(Iterable<Object?> values) {
 }
 
 String _routeForNotificationType(String type) => switch (type) {
-      'payment' || 'wallet' => 'wallet',
-      'message' || 'chat_message' => 'conversation',
-      'connection' ||
-      'location-broadcast' ||
-      'delivery-completed' ||
-      'delivery' =>
-        'tracking',
-      'gift' || 'gifts' || 'gift_story_ready' => 'gift',
-      'health' || 'health_plus' => 'health',
-      'business' => 'business',
-      _ => 'notifications',
-    };
+  'payment' || 'wallet' => 'wallet',
+  'message' || 'chat_message' => 'conversation',
+  'connection' ||
+  'location-broadcast' ||
+  'delivery-completed' ||
+  'delivery' => 'tracking',
+  'gift' || 'gifts' || 'gift_story_ready' => 'gift',
+  'health' || 'health_plus' => 'health',
+  'business' => 'business',
+  _ => 'notifications',
+};
