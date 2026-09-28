@@ -8,6 +8,34 @@ const pickup = {lat: 51.5155, lng: -0.1419};
 const nearby = {lat: 51.51555, lng: -0.14185, clientRecordedAt: now};
 const farAway = {lat: 51.517, lng: -0.145, clientRecordedAt: now};
 
+test("customer cancellation quote excludes internal allocation economics", () => {
+  const quote = policy.customerCancellationQuote({
+    decision: {
+      canCancel: true,
+      feeAmount: 3,
+      riderCompensation: 2,
+      platformRetainedAmount: 1,
+      userFacingMessage: "A cancellation fee applies.",
+    },
+    breakdown: {
+      cancellationFee: 3,
+      riderCompensation: 2,
+      circumRetained: 1,
+      stripeRefund: 10,
+      rothRestoration: 7,
+      totalRefundValue: 17,
+      allocationPolicy: "stripe_first",
+    },
+  });
+  assert.equal(quote.cancellationFee, 3);
+  assert.equal(quote.stripeRefund, 10);
+  assert.equal(quote.rothRestoration, 7);
+  assert.equal(Object.hasOwn(quote, "riderCompensation"), false);
+  assert.equal(Object.hasOwn(quote, "circumRetained"), false);
+  assert.equal(Object.hasOwn(quote.decision, "riderCompensation"), false);
+  assert.equal(Object.hasOwn(quote.decision, "platformRetainedAmount"), false);
+});
+
 test("cancellation settlement applies fees to Stripe before Roth", () => {
   assert.deepEqual(policy.cancellationSettlement({
     grossDeliveryTotal: 20, stripePaid: 13, rothPaid: 7,

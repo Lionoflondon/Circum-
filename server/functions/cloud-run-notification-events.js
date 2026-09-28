@@ -12,6 +12,10 @@ const CLAIM_LEASE_MS = 5 * 60 * 1000;
 const handlers = {
   delivery_created: {
     eventType: "google.cloud.firestore.document.v1.created",
+    qualifies: ({after}) => {
+      const {isTrustedSyntheticQaDelivery} = require("./platform-notifications")._private;
+      return !isTrustedSyntheticQaDelivery(after);
+    },
     run: async ({db, deliveryId, after, effects}) => {
       const {handleDeliveryCreated} = require("./platform-notifications");
       return handleDeliveryCreated({id: deliveryId, data: () => after, ref: db.collection("deliveryRequests").doc(deliveryId)}, {effects});

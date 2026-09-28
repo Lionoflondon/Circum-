@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const test = require("node:test");
-const {destinationFor, pushMessageFor} = require("./communication-engine");
+const {destinationFor, notificationCategory, pushMessageFor} = require("./communication-engine");
 
 const source = fs.readFileSync("communication-engine.js", "utf8");
 const indexSource = fs.readFileSync("index.js", "utf8");
@@ -9,6 +9,23 @@ const notificationSources = [
   "communication-engine.js", "platform-notifications.js", "accept-ride-requests.js",
   "delivery-adjustments.js", "gift-story-automation.js",
 ].map((file) => fs.readFileSync(file, "utf8")).join("\n");
+
+test("Sender delivery notifications carry an authoritative delivery deep link", () => {
+  assert.deepEqual(destinationFor("delivery_created", {
+    bookingId: "request-1",
+    deliveryId: "delivery-1",
+  }), {
+    route: "tracking",
+    bookingId: "request-1",
+    deliveryId: "delivery-1",
+  });
+});
+
+test("payment notifications are classified and routed to Wallet", () => {
+  assert.equal(notificationCategory("payment_succeeded", "Payments"), "wallet");
+  assert.equal(notificationCategory("payment_failed"), "wallet");
+  assert.deepEqual(destinationFor("payment_succeeded", {}), {route: "wallet"});
+});
 
 test("Rider job pushes use the native job contract and attention configuration", () => {
   assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1"}), {
@@ -98,6 +115,17 @@ test("messages include backend-only diagnostic metadata", () => {
   assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /retryCount:\s*0/);
   assert.match(source, /notificationId:\s*null/);
+});
+
+test("message retries use a stable key and validate chat authority in one transaction", () => {
+  assert.match(source, /const idempotencyKey = clean\(data\.idempotencyKey\)/);
+  assert.match(source, /messageIdForIdempotency\(senderId, idempotencyKey\)/);
+  assert.match(source, /const chatSnapshot = await transaction\.get\(chatRef\)/);
+  assert.match(source, /const existingMessage = await transaction\.get\(messageRef\)/);
+  assert.match(source, /if \(existingMessage\.exists\)/);
+  assert.match(source, /if \(!canSend\(chat, senderId, admin\)\)/);
+  assert.match(source, /\.\.\.\(idempotencyKey \? \{idempotencyKey\} : \{\}\)/);
+  assert.match(source, /duplicate: true/);
 });
 
 test("legacy sendMessage delegates to canonical communication handler", () => {
