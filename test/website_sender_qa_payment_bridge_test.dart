@@ -23,13 +23,18 @@ void main() {
     expect(web, isNot(contains('senderQaFixtureId')));
   });
 
-  test('Sender Web QA calls use the private App Check payment transport', () {
-    expect(paymentApi, contains("'sender_qa':"));
-    expect(
-      paymentApi,
-      contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app'),
-    );
-    expect(paymentApi, contains('X-Firebase-AppCheck'));
-    expect(paymentApi, contains('Authorization'));
+  test('Sender Web QA calls use the Firebase-authenticated QA boundary', () {
+    expect(paymentApi, contains('FirebaseFunctions.instance'));
+    expect(paymentApi, contains('httpsCallable'));
+    expect(paymentApi, contains('FirebaseAppCheck.instance.getToken()'));
+    expect(paymentApi,
+        isNot(contains('circum-qa-special-flow-j2b7cicfwq-uc.a.run.app')));
+  });
+
+  test('Sender Web never falls back from a QA bridge failure to live Stripe',
+      () {
+    expect(web, contains('A failed QA capability check must fail closed'));
+    expect(web,
+        contains('Never retry this operation against the live payment owner'));
   });
 }

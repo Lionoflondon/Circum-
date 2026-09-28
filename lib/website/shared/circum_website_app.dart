@@ -9824,8 +9824,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'qaSpecialFlowFixture',
           const {'action': 'sender_capability'},
         ).timeout(const Duration(seconds: 8));
-      } catch (_) {
-        qaCapability = null;
+      } catch (error) {
+        // A failed QA capability check must fail closed. Falling through to
+        // the live owner here could send an allowlisted QA identity into the
+        // live Stripe path while the TEST bridge is unavailable.
+        rethrow;
       }
       if (qaCapability?['enabled'] == true &&
           '${qaCapability?['fixtureId'] ?? ''}'.isNotEmpty) {
@@ -10364,9 +10367,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           : verificationSent
               ? 'Account created. Check your inbox to verify your email before sending.'
               : 'Account created, but we could not send the verification email. Try again from your profile.';
-      final cleanReferralMessage = referralMessage.startsWith('Account created.')
-          ? referralMessage.substring('Account created.'.length).trim()
-          : referralMessage;
+      final cleanReferralMessage =
+          referralMessage.startsWith('Account created.')
+              ? referralMessage.substring('Account created.'.length).trim()
+              : referralMessage;
       final signupMessage = cleanReferralMessage.isEmpty
           ? accountMessage
           : '$accountMessage $cleanReferralMessage';
@@ -12430,22 +12434,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           session = Map<String, dynamic>.from(sessionResult.data as Map);
         }
       } catch (error) {
-        if (qaFixtureId != null) rethrow;
-        final sessionResult = await functions
-            .httpsCallableFromUrl(
-          'https://circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
-        )
-            .call({
-          'quoteId': quote['quoteId'],
-          'fallbackMethod': 'card',
-          'rothEnabled': _deliveryUseRoth,
-          'checkoutMode': 'web_checkout',
-          'requestId': id,
-          'idempotencyKey': id,
-          'returnUrl': 'https://circum-2797c.web.app/send',
-          'deliveryPayload': deliveryPayload,
-        });
-        session = Map<String, dynamic>.from(sessionResult.data as Map);
+        // Capability success with a QA fixture is a trusted routing decision.
+        // Never retry this operation against the live payment owner after a
+        // QA bridge error.
+        rethrow;
       }
       if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
         final paidDeliveryResult = await functions
