@@ -104,6 +104,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  bool _restoringIrisForDraft = false;
 
   @override
   void initState() {
@@ -443,6 +444,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _description.text = restored.itemDescription;
     _weight.text = restored.weightLabel;
     setState(() => _draft = restored);
+    if ((restored.step == SenderBookingStep.options ||
+            restored.step == SenderBookingStep.review) &&
+        restored.itemName.trim().isNotEmpty) {
+      _restoringIrisForDraft = true;
+      context.read<SendPackageBloc>().add(
+            RequestCanonicalIrisEstimate(
+              itemName: restored.itemName,
+              quantity: senderQuantityFromItemName(restored.itemName),
+              description: restored.itemDescription,
+              declaredWeightText: restored.weightLabel,
+              fragile: restored.fragile,
+              highValue: restored.highValue,
+            ),
+          );
+    }
     if (restored.pickupLat != null &&
         restored.pickupLng != null &&
         restored.dropoffLat != null &&
@@ -1150,6 +1166,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
+    if (_restoringIrisForDraft &&
+        (engine.isIrisResolving ||
+            (engine.canonicalIrisResult == null &&
+                engine.irisErrorMessage.isEmpty))) {
+      return;
+    }
+    if (_restoringIrisForDraft &&
+        engine.canonicalIrisResult != null &&
+        !senderIrisAllowsContinuation(
+          engine.canonicalIrisResult!.complianceStatus,
+        )) {
+      _restoringIrisForDraft = false;
+      _setDraft(draft.copyWith(step: SenderBookingStep.parcel));
+      return;
+    }
     if (!_routeReadyForQuote(engine, draft)) return;
     final business = BusinessJourneyScope.maybeOf(context);
     final iris = engine.canonicalIrisResult;
