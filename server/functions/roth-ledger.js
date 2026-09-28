@@ -3,7 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const crypto = require("node:crypto");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath, Timestamp} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {senderPaymentCallable} = require("./sender-app-check");
 const {
@@ -16,7 +16,8 @@ const {
   verifiedStripeRothPurchase,
   senderWalletProjectionRecord,
   walletTransactionView,
-  paginateWalletTransactions,
+  encodeWalletCursor,
+  decodeWalletCursor,
 } = require("./roth-ledger-core");
 const {
   canRedeemGiftCard,
@@ -554,33 +555,48 @@ exports.getSenderWallet = senderPaymentCallable(async (_data, context) => {
 exports.getSenderWalletTransactions = senderPaymentCallable(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
-  const walletSnap = await db.collection("walletTransactions")
-      .where("walletId", "==", identity.walletId)
-      .orderBy("createdAt", "desc")
-      .limit(100)
-      .get();
-  const legacyUidSnap = walletSnap.empty ? await db.collection("walletTransactions")
-      .where("uid", "==", context.auth.uid)
-      .orderBy("createdAt", "desc")
-      .limit(100)
-      .get() : {docs: []};
-  const seen = new Set();
-  const records = [...walletSnap.docs, ...legacyUidSnap.docs].filter((doc) => {
-    if (seen.has(doc.id)) return false;
-    seen.add(doc.id);
-    return true;
-  }).map((doc) => {
+  const pageSize = Math.min(50, Math.max(1, Number(data && data.pageSize || 20)));
+  const cursor = decodeWalletCursor(data && data.pageToken);
+  const source = cursor && cursor.source === "uid" ? "uid" : "walletId";
+  const load = async (field, value) => {
+    let query = db.collection("walletTransactions")
+        .where(field, "==", value)
+        .orderBy("createdAt", "desc")
+        .orderBy(FieldPath.documentId(), "desc")
+        .limit(pageSize);
+    if (cursor && cursor.source === field) {
+      query = query.startAfter(Timestamp.fromMillis(cursor.createdAtMillis), cursor.transactionId);
+    }
+    return query.get();
+  };
+  let selectedSource = source;
+  let snapshot = source === "uid" ? await load("uid", context.auth.uid) : await load("walletId", identity.walletId);
+  if (!cursor && snapshot.empty) {
+    selectedSource = "uid";
+    snapshot = await load("uid", context.auth.uid);
+  }
+  const records = snapshot.docs.map((doc) => {
     const value = walletTransactionView({...doc.data(), transactionId: doc.id});
     const createdAt = doc.data().createdAt;
-    return {...value, createdAtMillis: createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0};
+    return {
+      ...value,
+      createdAtMillis: createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0,
+      transactionId: doc.id,
+    };
   });
-  const page = paginateWalletTransactions(records, {
-    pageSize: data && data.pageSize,
-    pageOffset: Number(data && data.pageToken || 0),
-  });
+  const last = records[records.length - 1];
+  const page = {
+    records,
+    nextPageToken: records.length === pageSize && last ? encodeWalletCursor({
+      source: selectedSource,
+      createdAtMillis: last.createdAtMillis,
+      transactionId: last.transactionId,
+    }) : null,
+  };
   return {
     transactions: page.records.map(({createdAtMillis, ...record}) => record),
     nextPageToken: page.nextPageToken,
+    source: selectedSource,
   };
 });
 

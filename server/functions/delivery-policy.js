@@ -551,28 +551,11 @@ exports.previewSenderCancellation = senderPaymentCallable(async (data, context) 
     }
   });
   const {decision, breakdown} = preview;
+  const customerQuote = core.customerCancellationQuote({decision, breakdown});
   return {
     success: true,
-    decision,
-    cancellationFee: breakdown && breakdown.cancellationFee || decision.feeAmount,
-    feeAmount: decision.feeAmount,
-    amount: decision.feeAmount,
-    currency: "GBP",
-    backendReason: decision.userFacingMessage || decision.adminFacingReason || "",
-    reason: decision.cancellationType,
-    amountToChargeOrRefund: decision.feeApplies ? decision.feeAmount : 0,
-    riderCompensation: breakdown && breakdown.riderCompensation || decision.riderCompensation,
-    circumRetained: breakdown && breakdown.circumRetained || decision.platformRetainedAmount,
-    stripeRefund: breakdown && breakdown.stripeRefund || 0,
-    rothRestoration: breakdown && breakdown.rothRestoration || 0,
-    totalRefundValue: breakdown && breakdown.totalRefundValue || 0,
-    refundAmount: breakdown && breakdown.totalRefundValue || 0,
-    finalRefund: breakdown && breakdown.totalRefundValue || 0,
-    allocationPolicy: breakdown && breakdown.allocationPolicy || "stripe_first",
+    ...customerQuote,
     quoteToken: breakdown ? cancellationQuoteToken(deliveryId, breakdown) : null,
-    canCancel: decision.canCancel,
-    requiresAdminReview: decision.requiresAdminReview,
-    interventionAvailable: !decision.canCancel,
   };
 });
 
