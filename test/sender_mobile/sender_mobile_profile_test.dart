@@ -316,6 +316,37 @@ void main() {
     );
   });
 
+  test('Sender profile account controls are honest and bounded', () {
+    final profile = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+        .readAsStringSync();
+    final preferences =
+        File('lib/app/sender_mobile/sender_profile_preferences.dart')
+            .readAsStringSync();
+    final accountData = File('lib/app/sender_mobile/sender_account_data.dart')
+        .readAsStringSync();
+    final wallet =
+        File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
+
+    for (final marker in [
+      'profileOperationTimeout',
+      'putData(',
+      'getDownloadURL().timeout(',
+      'verifyBeforeUpdateEmail',
+      "httpsCallable('revokeSenderSessions')",
+      'Not enabled in this release. No fake setting is stored.',
+      'Not enabled in this build. Device biometrics never claim to protect sign-in.',
+      'SenderWalletInitialSection.paymentMethods',
+    ]) {
+      expect(profile, contains(marker));
+    }
+    expect(profile, contains('timeout(profileOperationTimeout)'));
+    expect(preferences, contains("httpsCallable('updateSenderPreferences')"));
+    expect(accountData, contains("httpsCallable('getSenderAccountActivity')"));
+    expect(accountData, contains("httpsCallable('exportSenderData')"));
+    expect(wallet, contains('enum SenderWalletInitialSection'));
+    expect(wallet, contains('_openManagePayments'));
+  });
+
   testWidgets('Sender profile survives 100 open and dispose cycles',
       (tester) async {
     final repository = _FakeProfileRepository(

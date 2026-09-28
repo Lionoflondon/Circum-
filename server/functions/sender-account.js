@@ -37,6 +37,68 @@ function normalizeNotificationIds(value) {
       .slice(0, 100);
 }
 
+function cleanBoolean(value, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function cleanSenderPreferences(data, existing = {}) {
+  const input = cleanMap(data);
+  const previous = cleanMap(existing.preferences);
+  const previousNotifications = cleanMap(
+      previous.notificationPreferences || existing.notificationPreferences,
+  );
+  const rawNotifications = cleanMap(input.notificationPreferences);
+  const language = cleanText(input.language || previous.language || "en", 32).toLowerCase();
+  const timeFormat = cleanText(input.timeFormat || previous.timeFormat || "automatic", 32).toLowerCase();
+  if (!new Set(["en", "device_default"]).has(language)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported language preference.");
+  }
+  if (!new Set(["automatic", "12_hour", "24_hour"]).has(timeFormat)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported time format preference.");
+  }
+  return {
+    language,
+    timeFormat,
+    notificationPreferences: {
+      deliveryUpdates: cleanBoolean(
+          rawNotifications.deliveryUpdates,
+          cleanBoolean(previousNotifications.deliveryUpdates, true),
+      ),
+      accountAlerts: cleanBoolean(
+          rawNotifications.accountAlerts,
+          cleanBoolean(previousNotifications.accountAlerts, true),
+      ),
+      marketing: cleanBoolean(
+          rawNotifications.marketing,
+          cleanBoolean(previousNotifications.marketing, false),
+      ),
+    },
+  };
+}
+
+function exportValue(value) {
+  if (value == null) return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value.toDate === "function") return value.toDate().toISOString();
+  if (value && typeof value.path === "string" && typeof value.id === "string") {
+    return value.path;
+  }
+  if (Array.isArray(value)) return value.slice(0, 200).map(exportValue);
+  if (typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).slice(0, 200).map(([key, item]) => [key, exportValue(item)]));
+  }
+  return value;
+}
+
+async function senderOwnedQuery(collection, field, uid, limit = 200) {
+  const snapshot = await getFirestore()
+      .collection(collection)
+      .where(field, "==", uid)
+      .limit(limit)
+      .get();
+  return snapshot.docs.map((doc) => ({id: doc.id, ...exportValue(doc.data() || {})}));
+}
+
 function senderProfileLog(event, payload = {}) {
   console.info(JSON.stringify({
     subsystem: "sender_profile",
@@ -163,7 +225,90 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
       starterRothAmount: starterRoth.amount,
       starterRothTransactionId: starterRoth.transactionId,
       welcomeEmailStatus: starterRoth.welcome && starterRoth.welcome.status,
-    } : {}),
+  } : {}),
+  };
+});
+
+exports.updateSenderPreferences = functions.https.onCall(async (data, context) => {
+  const uid = requireSender(context);
+  const db = getFirestore();
+  const ref = db.collection("users").doc(uid);
+  const existing = await ref.get();
+  const preferences = cleanSenderPreferences(data, existing.exists ? existing.data() || {} : {});
+  await ref.set({
+    preferences,
+    notificationPreferences: preferences.notificationPreferences,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await db.collection("senderProfileEvents").doc().set({
+    uid,
+    action: "sender_preferences_updated",
+    source: "updateSenderPreferences",
+    changedFields: ["preferences", "notificationPreferences"],
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {ok: true, preferences};
+});
+
+exports.revokeSenderSessions = functions.https.onCall(async (data, context) => {
+  const uid = requireSender(context);
+  const scope = cleanText(data && data.scope, 40);
+  if (scope !== "all_other_devices") {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Only all-other-device session revocation is supported.",
+    );
+  }
+  // Firebase Auth only exposes refresh-token revocation globally. The client
+  // signs out immediately as well, so the scope is honest: every session,
+  // including this one, must sign in again.
+  await require("firebase-admin/auth").getAuth().revokeRefreshTokens(uid);
+  await getFirestore().collection("senderProfileEvents").doc().set({
+    uid,
+    action: "sender_sessions_revoked",
+    source: "revokeSenderSessions",
+    scope: "all_sessions_including_current",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {ok: true, scope: "all_sessions_including_current"};
+});
+
+exports.getSenderAccountActivity = functions.https.onCall(async (_data, context) => {
+  const uid = requireSender(context);
+  const [profileEvents, notificationEvents, closures] = await Promise.all([
+    senderOwnedQuery("senderProfileEvents", "uid", uid, 100),
+    senderOwnedQuery("senderNotificationEvents", "uid", uid, 100),
+    senderOwnedQuery("accountClosureAudit", "uid", uid, 20),
+  ]);
+  const events = [...profileEvents, ...notificationEvents, ...closures]
+      .sort((left, right) => String(right.createdAt || right.closedAt || "")
+          .localeCompare(String(left.createdAt || left.closedAt || "")))
+      .slice(0, 200);
+  return {ok: true, events};
+});
+
+exports.exportSenderData = functions.https.onCall(async (_data, context) => {
+  const uid = requireSender(context);
+  const db = getFirestore();
+  const profile = await db.collection("users").doc(uid).get();
+  const [trustEvents, profileEvents, notificationEvents, deliveries, gifts] = await Promise.all([
+    senderOwnedQuery("senderTrustEvents", "userId", uid, 200),
+    senderOwnedQuery("senderProfileEvents", "uid", uid, 200),
+    senderOwnedQuery("notifications", "recipientId", uid, 200),
+    senderOwnedQuery("deliveryRequests", "userId", uid, 200),
+    senderOwnedQuery("giftRequests", "senderId", uid, 200),
+  ]);
+  return {
+    ok: true,
+    exportedAt: new Date().toISOString(),
+    userId: uid,
+    profile: exportValue(profile.exists ? profile.data() || {} : {}),
+    senderTrustEvents: trustEvents,
+    senderProfileEvents: profileEvents,
+    notifications: notificationEvents,
+    deliveries,
+    gifts,
+    retention: "Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.",
   };
 });
 

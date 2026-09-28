@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 279,
-  "gen1ExportCount": 277,
+  "sourceExportCount": 283,
+  "gen1ExportCount": 281,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -4607,6 +4607,41 @@
       "retirementStatus": "not-retired"
     },
     {
+      "functionName": "exportSenderData",
+      "sourceFile": "server/functions/sender-account.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "senderAccount.exportSenderData",
+      "callers": [
+        "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/sender-account-authority.test.js",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": false,
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "irisLearningCases",
+        "irisLearningOutliers",
+        "iris_learning_review_candidates",
+        "notifications",
+        "riderProfiles",
+        "senderNotificationEvents",
+        "senderProfileEvents",
+        "users",
+        "websiteVisitors"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
       "functionName": "finalizeDeliveryAdjustmentPayment",
       "sourceFile": "server/functions/delivery-adjustments.js",
       "triggerType": "callable",
@@ -5232,6 +5267,41 @@
       "externalProviders": [
         "Stripe"
       ],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "getSenderAccountActivity",
+      "sourceFile": "server/functions/sender-account.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "senderAccount.getSenderAccountActivity",
+      "callers": [
+        "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/sender-account-authority.test.js",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "criticality": "P0/P1-review-required",
+      "authRequired": true,
+      "appCheckRequired": false,
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "irisLearningCases",
+        "irisLearningOutliers",
+        "iris_learning_review_candidates",
+        "notifications",
+        "riderProfiles",
+        "senderNotificationEvents",
+        "senderProfileEvents",
+        "users",
+        "websiteVisitors"
+      ],
+      "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
@@ -8327,6 +8397,7 @@
       "generation": "Gen 1",
       "productionPurpose": "senderAccount.requestSenderEmailChange",
       "callers": [
+        "lib/app/sender_mobile/sender_mobile_profile.dart",
         "lib/website/shared/circum_website_app.dart"
       ],
       "criticality": "review-required",
@@ -8847,6 +8918,41 @@
         "recognitionCounters",
         "recognitionNumbers",
         "users"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "revokeSenderSessions",
+      "sourceFile": "server/functions/sender-account.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "senderAccount.revokeSenderSessions",
+      "callers": [
+        "lib/app/sender_mobile/sender_mobile_profile.dart",
+        "server/functions/sender-account-authority.test.js",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": false,
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "irisLearningCases",
+        "irisLearningOutliers",
+        "iris_learning_review_candidates",
+        "notifications",
+        "riderProfiles",
+        "senderNotificationEvents",
+        "senderProfileEvents",
+        "users",
+        "websiteVisitors"
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
@@ -10615,6 +10721,41 @@
         "server/functions/firestore-chat-notification-rules.test.js"
       ],
       "criticality": "P0/P1-review-required",
+      "authRequired": true,
+      "appCheckRequired": false,
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "irisLearningCases",
+        "irisLearningOutliers",
+        "iris_learning_review_candidates",
+        "notifications",
+        "riderProfiles",
+        "senderNotificationEvents",
+        "senderProfileEvents",
+        "users",
+        "websiteVisitors"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": true,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "updateSenderPreferences",
+      "sourceFile": "server/functions/sender-account.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "senderAccount.updateSenderPreferences",
+      "callers": [
+        "lib/app/sender_mobile/sender_profile_preferences.dart",
+        "server/functions/sender-account-authority.test.js",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": false,
       "secrets": [],
