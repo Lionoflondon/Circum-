@@ -24,8 +24,8 @@ async function seed({qa, fixture, uid, email}) {
       return {balance: Number(wallet.data().balance), idempotent: true};
     }
     const now = FieldValue.serverTimestamp();
-    tx.create(walletRef, {uid, userId: walletId, userEmail: walletId, normalizedEmail: walletId, balance: INITIAL_ROTH, rothCredit: INITIAL_ROTH, currency: "GBP", isFrozen: false, createdAt: now, updatedAt: now});
-    tx.create(projectionRef, {userId: uid, balance: INITIAL_ROTH, rothCredit: INITIAL_ROTH, currency: "ROTH", status: "active", version: 1, createdAt: now, updatedAt: now});
+    tx.create(walletRef, {uid, userId: walletId, userEmail: walletId, normalizedEmail: walletId, balance: INITIAL_ROTH, rothCredit: INITIAL_ROTH, currency: "GBP", isFrozen: false, isSyntheticQa: true, qaNamespace: "qaSpecialFlowFixtures", qaFixtureId: fixture.id, createdAt: now, updatedAt: now});
+    tx.create(projectionRef, {userId: uid, balance: INITIAL_ROTH, rothCredit: INITIAL_ROTH, currency: "ROTH", status: "active", version: 1, isSyntheticQa: true, qaNamespace: "qaSpecialFlowFixtures", qaFixtureId: fixture.id, createdAt: now, updatedAt: now});
     return {balance: INITIAL_ROTH, idempotent: false};
   });
 }

@@ -12,6 +12,7 @@ const business = require("./business-payments")._qaHandlers;
 const businessReservations = require("./business-checkout-reservations");
 const movement = require("./movement-ledger");
 const qaRoth = require("./qa-roth-certification");
+const {normalizeEmail} = require("./wallet-core");
 const irisQa = require("./qa-iris-certification");
 const senderBooking = require("./sender-booking")._qa;
 const ROOT = "qaSpecialFlowFixtures";
@@ -20,7 +21,7 @@ const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPay
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
-const senderActions = new Set(["sender_capability", "sender_quote", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
+const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -138,6 +139,22 @@ function factory({db, env = process.env, stripe}) {
       if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
       const qaContext = {fixtureId: fixture.id, isSyntheticQa: true};
       if (data.action === "sender_quote") return createSenderQuote(fixture, uid, data);
+      if (data.action === "sender_roth_prepare") {
+        const email = normalizeEmail(context.auth.token.email);
+        if (!email) fail("QA Sender email is required.", "permission-denied");
+        const qa = scopedDatabase(db, fixture, false, ROOT, COLLECTIONS);
+        return {...await qaRoth.seed({qa, fixture, uid, email}), qaOnly: true, fixtureId: fixture.id};
+      }
+      if (data.action === "sender_roth_balance") {
+        const email = normalizeEmail(context.auth.token.email);
+        if (!email) fail("QA Sender email is required.", "permission-denied");
+        const qa = scopedDatabase(db, fixture, false, ROOT, COLLECTIONS);
+        const wallet = (await qa.collection("wallets").doc(email).get()).data();
+        if (!wallet || wallet.uid !== uid || wallet.qaFixtureId !== fixture.id) {
+          fail("QA Roth fixture is not prepared.", "failed-precondition");
+        }
+        return {qaOnly: true, fixtureId: fixture.id, balance: Number(wallet.balance || 0), availableRoth: Number(wallet.balance || 0), currency: "ROTH"};
+      }
       if (data.action === "sender_payment_session") {
         const result = await senderBooking.createSenderPaymentSession(
             provider(fixture),
