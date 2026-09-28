@@ -13,12 +13,14 @@ const businessReservations = require("./business-checkout-reservations");
 const movement = require("./movement-ledger");
 const qaRoth = require("./qa-roth-certification");
 const irisQa = require("./qa-iris-certification");
+const senderBooking = require("./sender-booking")._qa;
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
 const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
+const senderActions = new Set(["sender_capability", "sender_quote", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -41,6 +43,7 @@ function factory({db, env = process.env, stripe}) {
     });
     if (fixture.lifecycleFixtureId) await lifecycle.handle({action: "cleanup", fixtureId: fixture.lifecycleFixtureId}, {auth: {uid: fixture.qaCreatedBy, token: {}}, app: {appId: "qa-cleanup"}});
     await qaPublic.cleanup({db, fixture});
+    const senderResult = await senderBooking.cleanupQaSenderFixture(db, fixture);
     const testStripe = provider(fixture);
     const result = await testStripe.cleanup();
     const qa = scopedDatabase(db, fixture, true, ROOT, COLLECTIONS);
@@ -50,15 +53,68 @@ function factory({db, env = process.env, stripe}) {
       await require("./business-checkout-reservations").terminate({db: qa, stripe: testStripe, reservation: snap.data()});
     }
     await ref.set({archived: true, cleanupResult: result, cleanedAt: Timestamp.now()}, {merge: true});
-    return {...result, ...paidResult};
+    return {...result, ...paidResult, sender: senderResult};
+  }
+  async function activeSenderFixture(uid) {
+    const snapshot = await db.collection(ROOT)
+        .where("senderId", "==", uid)
+        .where("archived", "==", false)
+        .limit(2)
+        .get();
+    const active = snapshot.docs
+        .map((doc) => ({id: doc.id, ...doc.data()}))
+        .find((fixture) => fixture.isSyntheticQa === true &&
+          !fixture.closing && fixture.expiresAt && fixture.expiresAt.toMillis() > Date.now());
+    return active || null;
+  }
+  function senderContext(uid, token = {}) {
+    return {auth: {uid, token}, app: {appId: "qa-sender-web"}};
+  }
+  async function createSenderQuote(fixture, uid, data) {
+    const sourceQuoteId = `${data.quoteId || ""}`.trim();
+    if (!sourceQuoteId || sourceQuoteId.length > 160) fail("A canonical Sender quote is required.", "invalid-argument");
+    const sourceRef = db.collection("senderBookingQuotes").doc(sourceQuoteId);
+    const sourceSnap = await sourceRef.get();
+    const source = sourceSnap.data();
+    if (!sourceSnap.exists || !source || source.userId !== uid) fail("Booking quote not found.", "not-found");
+    if (source.isSyntheticQa === true && source.qaFixtureId !== fixture.id) fail("Quote is outside the QA fixture.", "permission-denied");
+    if (!source.parcelAuthority) fail("This quote requires a fresh parcel safety check.");
+    const quoteId = `qa_sender_${fixture.id.slice(0, 24)}_${createHash("sha256").update(sourceQuoteId).digest("hex").slice(0, 24)}`;
+    const marker = {isSyntheticQa: true, qaNamespace: ROOT, qaFixtureId: fixture.id, qaImmutable: true, sourceQuoteId};
+    const ref = db.collection("senderBookingQuotes").doc(quoteId);
+    const existing = await ref.get();
+    if (existing.exists) {
+      const current = existing.data() || {};
+      if (current.userId !== uid || current.sourceQuoteId !== sourceQuoteId || current.qaFixtureId !== fixture.id) fail("QA quote binding changed.");
+    } else {
+      await ref.create({...source, ...marker, quoteId, userId: uid, createdAt: Timestamp.now()});
+    }
+    await db.collection(ROOT).doc(fixture.id).set({
+      senderQuoteId: quoteId,
+      senderSourceQuoteId: sourceQuoteId,
+      senderSourceQuoteCreatedAt: source.createdAt || null,
+    }, {merge: true});
+    const quote = (await ref.get()).data();
+    return {fixtureId: fixture.id, quoteId, amountDue: quote.amountDue || quote.total, currency: quote.currency || "GBP", quote};
   }
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action)) fail("Unknown QA action.");
+    if (data.action === "sender_capability") {
+      if (!lists.senders.includes(uid)) return {enabled: false};
+      const active = await activeSenderFixture(uid);
+      return active ? {enabled: true, fixtureId: active.id, qaOnly: true, paymentFamily: "sender_delivery"} : {enabled: false};
+    }
+    if (data.action === "sender_quote") {
+      if (!lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+      const fixture = await activeSenderFixture(uid);
+      if (!fixture) fail("No active QA Sender fixture is available.");
+      return createSenderQuote(fixture, uid, data);
+    }
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris"].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -78,6 +134,50 @@ function factory({db, env = process.env, stripe}) {
     }
     const fixture = (await ref.get()).data(); assertFixture(fixture, lists, uid, Date.now(), data.action === "cleanup");
     if (data.action === "cleanup") return cleanup(fixture);
+    if (senderActions.has(data.action)) {
+      if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
+      const qaContext = {fixtureId: fixture.id, isSyntheticQa: true};
+      if (data.action === "sender_quote") return createSenderQuote(fixture, uid, data);
+      if (data.action === "sender_payment_session") {
+        const result = await senderBooking.createSenderPaymentSession(
+            provider(fixture),
+            {...data, quoteId: `${data.quoteId || ""}`, checkoutMode: "web_checkout", returnUrl: "https://circum-2797c.web.app/send"},
+            senderContext(uid, context.auth.token),
+            {db, qaContext},
+        );
+        return {...result, qaOnly: true, fixtureId: fixture.id};
+      }
+      if (data.action === "sender_finalize") {
+        const paymentSessionId = `${data.paymentSessionId || ""}`;
+        const checkoutSessionId = `${data.checkoutSessionId || ""}`;
+        if (!paymentSessionId || !checkoutSessionId) fail("Confirmed QA checkout is required.", "invalid-argument");
+        const session = await provider(fixture).checkout.sessions.retrieve(checkoutSessionId);
+        if (`${session.metadata && session.metadata.paymentSessionId || ""}` !== paymentSessionId) {
+          fail("QA checkout does not match the payment session.", "permission-denied");
+        }
+        const result = await senderBooking.finalizeSenderCheckoutSession(
+            provider(fixture),
+            session,
+            `qa_${paymentSessionId}`,
+            {db, qaContext},
+        );
+        return {...result, qaOnly: true, fixtureId: fixture.id};
+      }
+      if (data.action === "sender_read") {
+        const deliveryId = `${data.deliveryId || ""}`;
+        const snapshot = await db.collection("deliveryRequests").doc(deliveryId).get();
+        if (!snapshot.exists || snapshot.data().qaFixtureId !== fixture.id || snapshot.data().isSyntheticQa !== true) fail("QA delivery not found.", "not-found");
+        return {qaOnly: true, fixtureId: fixture.id, delivery: {id: snapshot.id, ...snapshot.data()}};
+      }
+      if (data.action === "sender_cancel") {
+        const deliveryId = `${data.deliveryId || ""}`;
+        const ref = db.collection("deliveryRequests").doc(deliveryId);
+        const snapshot = await ref.get();
+        if (!snapshot.exists || snapshot.data().qaFixtureId !== fixture.id || snapshot.data().isSyntheticQa !== true) fail("QA delivery not found.", "not-found");
+        await ref.set({status: "cancelled", deliveryStatus: "cancelled", dispatchStatus: "suppressed_qa", cancellationReason: "qa_cleanup", updatedAt: Timestamp.now()}, {merge: true});
+        return {qaOnly: true, cancelled: true, deliveryId};
+      }
+    }
     if (data.action === "public_delivery") {
       if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
       return qaPublic.createPublicDelivery({db, fixture, actorUid: uid});

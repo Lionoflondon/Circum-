@@ -97,7 +97,7 @@ test("canonical payment authority calculates and records authoritative pricing",
 });
 
 test("Sender payment authority binds Roth to one valid external rail", () => {
-  const paymentSource = senderBookingSource.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);/)[0];
+  const paymentSource = senderBookingSource.match(/async function createSenderPaymentSessionFor[\s\S]*?\n\}\n\nexports\.createSenderPaymentSession/)[0];
   assert.match(senderBookingSource, /function normalizeSenderPaymentFallback/);
   assert.match(senderBookingSource, /if \(!stripeRequired\) return "roth";/);
   assert.match(senderBookingSource, /requested === "roth"/);
@@ -137,7 +137,7 @@ test("Sender clients do not hardcode Stripe runtime keys", () => {
 });
 
 test("Sender payment callable responses exclude Firestore sentinel fields", () => {
-  const paymentSource = senderBookingSource.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);/)[0];
+  const paymentSource = senderBookingSource.match(/async function createSenderPaymentSessionFor[\s\S]*?\n\}\n\nexports\.createSenderPaymentSession/)[0];
   assert.match(paymentSource, /const sessionBase = \{/);
   assert.doesNotMatch(paymentSource, /return \{\s*\.\.\.sessionBase/);
   assert.doesNotMatch(paymentSource, /return \{\s*\.\.\.existingSession/);
