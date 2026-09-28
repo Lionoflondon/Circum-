@@ -416,7 +416,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         restored.dropoffLng != null;
     final routeDependentStep =
         SenderBookingStep.values.indexOf(restored.step) >=
-            SenderBookingStep.values.indexOf(SenderBookingStep.parcel);
+            SenderBookingStep.values.indexOf(SenderBookingStep.recipient);
     if (routeDependentStep && !routeReady) {
       final hasPickupCoordinate =
           restored.pickupLat != null && restored.pickupLng != null;
