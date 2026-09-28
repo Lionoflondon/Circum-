@@ -91,6 +91,7 @@ test("Activity certification fixture is server-owned and side-effect suppressed"
   assert.match(source, /activity_insert/);
   assert.match(source, /activity_delete_reference/);
   assert.match(source, /qaActivityFixture: true/);
+  assert.match(source, /qaPublic: true/);
   assert.match(source, /excludeFromSettlement: true/);
   assert.match(source, /excludeFromPayout: true/);
   assert.match(source, /excludeFromAnalytics: true/);

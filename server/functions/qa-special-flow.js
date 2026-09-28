@@ -63,6 +63,7 @@ function activityDelivery(fixture, suffix, status, updatedAtMillis, extra = {}) 
     updatedAt: timestamp,
     isSyntheticQa: true,
     qaActivityFixture: true,
+    qaPublic: true,
     qaNamespace: ROOT,
     qaFixtureId: fixture.id,
     qaCreatedBy: fixture.qaCreatedBy,
