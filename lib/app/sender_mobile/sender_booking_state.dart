@@ -1,5 +1,16 @@
 import 'package:flutter/foundation.dart';
 
+bool senderIrisAllowsContinuation(String? complianceStatus) =>
+    complianceStatus == 'allowed';
+
+String senderDeliveryTimingQuoteKey(SenderBookingDraft draft) => [
+      draft.deliveryTimingType.name,
+      draft.scheduledDate,
+      draft.scheduledWindow,
+      draft.customWindowStart,
+      draft.customWindowEnd,
+    ].join('|');
+
 bool senderQuoteRequestNeeded({
   required String? lastRequestKey,
   required String requestKey,
@@ -593,7 +604,8 @@ class SenderBookingDraft {
       highValue: parcel['highValue'] == true,
       irisConfidence: '${iris['confidence'] ?? 'Medium'}',
       irisVehicle: '${iris['recommendedVehicle'] ?? 'Motorbike'}',
-      selectedVehicle: '${iris['selectedVehicle'] ?? ''}',
+      selectedVehicle:
+          '${iris['selectedVehicle'] ?? iris['recommendedVehicle'] ?? ''}',
       selectedOption: '${deliveryOptions['selectedOption'] ?? 'Standard'}',
       vanguard: deliveryOptions['vanguard'] == true,
       selectedPaymentMethod: fallback,

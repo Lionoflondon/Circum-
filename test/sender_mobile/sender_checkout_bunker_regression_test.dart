@@ -1,9 +1,59 @@
 import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('legacy sanitized draft restores the selected vehicle upgrade', () {
+    final restored = SenderBookingDraft.fromBackendDraft({
+      'iris': {'recommendedVehicle': 'Car'},
+    });
+    expect(restored.selectedVehicle, 'Car');
+    final explicit = SenderBookingDraft.fromBackendDraft({
+      'iris': {'recommendedVehicle': 'Motorbike', 'selectedVehicle': 'Van'},
+    });
+    expect(explicit.selectedVehicle, 'Van');
+  });
+  test('every scheduling input invalidates the prior quote key', () {
+    const original = SenderBookingDraft();
+    final key = senderDeliveryTimingQuoteKey(original);
+    for (final changed in [
+      original.copyWith(deliveryTimingType: SenderDeliveryTimingType.scheduled),
+      original.copyWith(scheduledDate: '2026-09-29'),
+      original.copyWith(scheduledWindow: 'Morning'),
+      original.copyWith(customWindowStart: '10:00'),
+      original.copyWith(customWindowEnd: '12:00'),
+    ]) {
+      expect(senderDeliveryTimingQuoteKey(changed), isNot(key));
+    }
+  });
+  test('authoritative quote distance clears with an invalidated quote', () {
+    final state = SendPackageState(
+      distance: 4.8,
+      senderQuoteId: 'quote-1',
+      senderQuoteDistanceKm: 7.926,
+      senderQuoteVehicle: 'car',
+    );
+    expect(state.copyWith().senderQuoteDistanceKm, 7.926);
+    expect(state.copyWith().senderQuoteVehicle, 'car');
+    expect(state.copyWith(clearSenderQuoteId: true).senderQuoteVehicle, isNull);
+    expect(
+        state.copyWith(clearSenderQuoteId: true).senderQuoteDistanceKm, isNull);
+  });
+  test('only an explicit allowed IRIS decision permits continuation', () {
+    expect(senderIrisAllowsContinuation('allowed'), isTrue);
+    for (final status in [
+      null,
+      '',
+      'prohibited',
+      'unsupported',
+      'referral_required',
+      'unknown'
+    ]) {
+      expect(senderIrisAllowsContinuation(status), isFalse);
+    }
+  });
   test('persisted route coordinates remain quote-ready after engine restore',
       () {
     const complete = SenderBookingDraft(
@@ -53,16 +103,27 @@ void main() {
     expect(canvas, contains('senderQuoteRequestNeeded('));
   });
 
-  test('quote failure stops automatic retries but changed inputs can quote', () {
+  test('quote failure stops automatic retries but changed inputs can quote',
+      () {
     for (final error in ['unauthenticated', 'unavailable', 'timeout']) {
-      expect(senderQuoteRequestNeeded(
-        lastRequestKey: 'route-a', requestKey: 'route-a',
-        quoteId: null, quoteTotal: null, quoteError: error,
-      ), isFalse);
-      expect(senderQuoteRequestNeeded(
-        lastRequestKey: 'route-a', requestKey: 'route-b',
-        quoteId: null, quoteTotal: null, quoteError: error,
-      ), isTrue);
+      expect(
+          senderQuoteRequestNeeded(
+            lastRequestKey: 'route-a',
+            requestKey: 'route-a',
+            quoteId: null,
+            quoteTotal: null,
+            quoteError: error,
+          ),
+          isFalse);
+      expect(
+          senderQuoteRequestNeeded(
+            lastRequestKey: 'route-a',
+            requestKey: 'route-b',
+            quoteId: null,
+            quoteTotal: null,
+            quoteError: error,
+          ),
+          isTrue);
     }
   });
 

@@ -33,6 +33,7 @@ import 'sender_draft_api.dart';
 import 'sender_finance.dart';
 import 'sender_manual_address_resolution.dart';
 import 'sender_saved_addresses.dart';
+import 'sender_schedule_picker.dart';
 import 'sender_tracking_screen.dart';
 
 Map<String, dynamic> _senderDeliveryTimePayload(SenderBookingDraft draft) => {
@@ -195,6 +196,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _setDraft(SenderBookingDraft next) {
     setState(() => _draft = next);
     if (!_restoringDraft) _scheduleDraftSave(next);
+    if (!_restoringDraft && next.step == SenderBookingStep.options) {
+      _requestBackendQuote(next);
+    }
   }
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -412,7 +416,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         restored.dropoffLng != null;
     final routeDependentStep =
         SenderBookingStep.values.indexOf(restored.step) >=
-            SenderBookingStep.values.indexOf(SenderBookingStep.parcel);
+            SenderBookingStep.values.indexOf(SenderBookingStep.recipient);
     if (routeDependentStep && !routeReady) {
       final hasPickupCoordinate =
           restored.pickupLat != null && restored.pickupLng != null;
@@ -820,8 +824,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             );
         return;
       }
+      if (!senderIrisAllowsContinuation(
+        engine.canonicalIrisResult?.complianceStatus,
+      )) {
+        return;
+      }
       _setDraft(_draft.copyWith(step: SenderBookingStep.options));
-      _requestBackendQuote(_draft.copyWith(step: SenderBookingStep.options));
       return;
     }
     if (_draft.step == SenderBookingStep.iris) {
@@ -1123,6 +1131,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           '',
       (engine.distance ?? -1).toStringAsFixed(3),
       draft.selectedOption,
+      senderDeliveryTimingQuoteKey(draft),
       selectedVehicle,
       requiresVanguard,
       draft.itemName,
@@ -2106,6 +2115,14 @@ class _DeliveryTimePanel extends StatelessWidget {
           const SizedBox(height: 14),
           const _SectionLabel('Preferred date'),
           const SizedBox(height: 8),
+          SenderScheduleDatePicker(
+            value: draft.scheduledDate,
+            onChanged: (value) {
+              scheduledDate.text = value;
+              onDraft(draft.copyWith(scheduledDate: value));
+            },
+          ),
+          const SizedBox(height: 8),
           _ScheduleDateSelector(
             selectedDate: draft.scheduledDate,
             onSelected: (value) {
@@ -2141,38 +2158,37 @@ class _DeliveryTimePanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _TextInput(
-                    controller: customWindowStart,
-                    hint: 'Start HH:MM',
-                    keyboardType: TextInputType.datetime,
-                    errorText: customWindowStart.text.trim().isNotEmpty &&
-                            !RegExp(r'^\d{2}:\d{2}$')
-                                .hasMatch(customWindowStart.text.trim())
-                        ? 'Use HH:MM'
-                        : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowStart: value)),
+                  child: SenderScheduleTimePicker(
+                    label: 'Start time',
+                    value: draft.customWindowStart,
+                    onChanged: (value) {
+                      customWindowStart.text = value;
+                      onDraft(draft.copyWith(customWindowStart: value));
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _TextInput(
-                    controller: customWindowEnd,
-                    hint: 'End HH:MM',
-                    keyboardType: TextInputType.datetime,
-                    errorText: customWindowEnd.text.trim().isNotEmpty &&
-                            !isSenderCustomWindowValid(
-                              customWindowStart.text,
-                              customWindowEnd.text,
-                            )
-                        ? 'After start'
-                        : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowEnd: value)),
+                  child: SenderScheduleTimePicker(
+                    label: 'End time',
+                    value: draft.customWindowEnd,
+                    onChanged: (value) {
+                      customWindowEnd.text = value;
+                      onDraft(draft.copyWith(customWindowEnd: value));
+                    },
                   ),
                 ),
               ],
             ),
+            if (draft.customWindowEnd.isNotEmpty &&
+                !isSenderCustomWindowValid(
+                  draft.customWindowStart,
+                  draft.customWindowEnd,
+                ))
+              const Text(
+                'Choose an end time after the start time.',
+                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+              ),
           ],
         ],
         const SizedBox(height: 14),
@@ -2381,6 +2397,8 @@ class _IrisInputCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasWeight = _irisEstimatedWeightDisplay(iris) != 'Unavailable';
+    final policyBlocked =
+        iris != null && !senderIrisAllowsContinuation(iris.complianceStatus);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -2431,7 +2449,14 @@ class _IrisInputCard extends StatelessWidget {
             estimatedWeightKg: photoEstimatedWeightKg,
             onRemove: onPhotoRemove,
           ),
-          if (hasWeight) ...[
+          if (policyBlocked) ...[
+            const SizedBox(height: 12),
+            _InfoNote(
+              text: iris.complianceMessage?.isNotEmpty == true
+                  ? iris.complianceMessage!
+                  : 'This item needs review before a delivery can continue.',
+            ),
+          ] else if (hasWeight) ...[
             const SizedBox(height: 12),
             _IrisInputResultCard(iris: iris),
           ],
@@ -2442,7 +2467,7 @@ class _IrisInputCard extends StatelessWidget {
                 : !hasWeight
                     ? 'Check weight with IRIS'
                     : 'Choose Delivery Options',
-            enabled: canContinue && !isIrisResolving,
+            enabled: canContinue && !isIrisResolving && !policyBlocked,
             onTap: onContinue,
           ),
           const SizedBox(height: 10),
@@ -3421,7 +3446,6 @@ class _OptionsPanel extends StatelessWidget {
               irisVehicle: value,
             );
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         const SizedBox(height: 16),
@@ -3435,7 +3459,6 @@ class _OptionsPanel extends StatelessWidget {
           onSelected: (value) {
             final next = draft.copyWith(selectedOption: value);
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         const SizedBox(height: 16),
@@ -3455,7 +3478,6 @@ class _OptionsPanel extends StatelessWidget {
             if (includedVanguard) return;
             final next = draft.copyWith(vanguard: !draft.vanguard);
             onDraft(next);
-            _requestQuote(context, next);
           },
         ),
         if (includedVanguard || draft.vanguard) ...[
@@ -4085,7 +4107,7 @@ class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
                 bottom: 14,
                 child: _ReviewEtaChip(
                   routeConfirmed: routeConfirmed,
-                  distanceKm: widget.engine.distance,
+                  distanceKm: widget.engine.senderQuoteDistanceKm,
                   speed: widget.selectedSpeed,
                 ),
               ),
@@ -4749,9 +4771,12 @@ String _reviewIrisEstimate(SendPackageState engine, SenderBookingDraft draft) {
           (draft.weightLabel.trim().isEmpty
               ? 'Unavailable'
               : draft.weightLabel.trim());
-  final vehicle = draft.selectedVehicle.trim().isNotEmpty
-      ? draft.selectedVehicle.trim()
-      : _minimumVehicleLabel(result?.recommendedVehicle ?? draft.irisVehicle);
+  final vehicle = engine.senderQuoteVehicle?.isNotEmpty == true
+      ? _minimumVehicleLabel(engine.senderQuoteVehicle)
+      : draft.selectedVehicle.trim().isNotEmpty
+          ? draft.selectedVehicle.trim()
+          : _minimumVehicleLabel(
+              result?.recommendedVehicle ?? draft.irisVehicle);
   return 'Final weight $weight • $vehicle selected';
 }
 
@@ -5734,7 +5759,6 @@ class _TextInput extends StatelessWidget {
   final String hint;
   final TextInputType? keyboardType;
   final String? helperText;
-  final String? errorText;
   final ValueChanged<String> onChanged;
 
   const _TextInput({
@@ -5742,7 +5766,6 @@ class _TextInput extends StatelessWidget {
     required this.hint,
     this.keyboardType,
     this.helperText,
-    this.errorText,
     required this.onChanged,
   });
 
@@ -5758,8 +5781,6 @@ class _TextInput extends StatelessWidget {
         hintStyle: const TextStyle(color: _Tokens.muted),
         helperText: helperText,
         helperStyle: const TextStyle(color: _Tokens.muted, height: 1.25),
-        errorText: errorText,
-        errorStyle: const TextStyle(color: Color(0xFFFCA5A5), height: 1.25),
         filled: true,
         fillColor: const Color(0xAA1A2030),
         border: OutlineInputBorder(
