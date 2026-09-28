@@ -42,6 +42,29 @@ const senderMobileHeroSubtitle =
     'From collection to delivery, every step protected by IRIS.';
 bool isValidSenderAuthEmail(String value) =>
     RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
+
+String _senderHomeFirstText(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  return '';
+}
+
+bool senderHomeNotificationIsRelevant(
+  SenderHomeNotification notification,
+  Iterable<SenderHomeOrder> recentOrders,
+) {
+  if (notification.archived) return false;
+  if (notification.type.trim().toLowerCase() != 'delivery_created' ||
+      notification.bookingId.isEmpty) {
+    return true;
+  }
+  return recentOrders.any((order) =>
+      order.id == notification.bookingId ||
+      order.bookingId == notification.bookingId);
+}
+
 const senderMobileDashboardServiceSubtitles = {
   'Health+': 'Trusted medical deliveries',
   'Business': 'Business deliveries',
@@ -212,7 +235,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         return _CanonicalSenderHome(
           repository: widget.homeRepository,
           onStartDelivery: () => _selectTab(1),
-          onOpenActivity: () => _selectTab(2),
+          onOpenDelivery: _openDeliveryFromHome,
           onOpenWallet: () => _selectTab(3),
           onOpenNotifications: _openNotificationCentre,
           onOpenHealth: () => Navigator.of(context).push(
@@ -263,6 +286,28 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     final index = next.clamp(0, senderMobileBottomNavigationLabels.length - 1);
     setState(() => _index = index);
     widget.onTabChanged?.call(index);
+  }
+
+  void _openDeliveryFromHome(String deliveryId) {
+    final id = deliveryId.trim();
+    if (id.isEmpty) {
+      _selectTab(2);
+      return;
+    }
+    try {
+      final bloc = _bookingBloc;
+      bloc.add(WatchActiveDelivery(requestId: id));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BlocProvider<SendPackageBloc>.value(
+            value: bloc,
+            child: const SenderBookingCanvas(),
+          ),
+        ),
+      );
+    } catch (_) {
+      _selectTab(2);
+    }
   }
 
   void _openInitialSenderRoute() {
@@ -1930,6 +1975,7 @@ class _AuthFinePrint extends StatelessWidget {
 
 class SenderHomeOrder {
   final String id;
+  final String bookingId;
   final String title;
   final String route;
   final String status;
@@ -1939,6 +1985,7 @@ class SenderHomeOrder {
 
   const SenderHomeOrder({
     required this.id,
+    this.bookingId = '',
     required this.title,
     required this.route,
     required this.status,
@@ -1979,6 +2026,7 @@ class SenderHomeOrder {
     ]);
     return SenderHomeOrder(
       id: id,
+      bookingId: _firstText([data['bookingId'], data['id'], id]),
       title: _firstText([
         parcel['itemName'],
         parcel['description'],
@@ -2041,6 +2089,8 @@ class SenderHomeNotification {
   final DateTime? createdAt;
   final String type;
   final Map<String, dynamic> destination;
+  final String bookingId;
+  final bool archived;
 
   const SenderHomeNotification({
     required this.id,
@@ -2049,6 +2099,8 @@ class SenderHomeNotification {
     required this.read,
     this.type = '',
     this.destination = const <String, dynamic>{},
+    this.bookingId = '',
+    this.archived = false,
     this.createdAt,
   });
 }
@@ -2179,6 +2231,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     return firestore
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
+        .orderBy('updatedAt', descending: true)
         .limit(20)
         .snapshots()
         .map((snapshot) {
@@ -2187,7 +2240,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           .toList();
       orders.sort((a, b) => (b.updatedAt ?? DateTime(1970))
           .compareTo(a.updatedAt ?? DateTime(1970)));
-      return orders.take(2).toList(growable: false);
+      return orders.take(3).toList(growable: false);
     });
   }
 
@@ -2210,18 +2263,26 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
             ? Map<String, dynamic>.from(data['data'] as Map)
             : const <String, dynamic>{};
         final rawDestination = data['destination'] ?? nested['destination'];
+        final destination = rawDestination is Map
+            ? Map<String, dynamic>.from(rawDestination)
+            : const <String, dynamic>{};
         return SenderHomeNotification(
           id: doc.id,
           title: '${data['title'] ?? 'Circum update'}'.trim(),
           body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
           read: data['read'] == true,
           type: '${data['type'] ?? ''}'.trim(),
-          destination: rawDestination is Map
-              ? Map<String, dynamic>.from(rawDestination)
-              : const <String, dynamic>{},
+          destination: destination,
+          bookingId: _senderHomeFirstText([
+            data['bookingId'],
+            nested['bookingId'],
+            destination['bookingId'],
+            destination['deliveryId'],
+          ]),
+          archived: data['archived'] == true || data['deletedAt'] != null,
           createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
         );
-      }).toList();
+      }).where((item) => !item.archived).toList(growable: false);
       return items;
     });
   }
@@ -2246,7 +2307,7 @@ class _CanonicalSenderHome extends StatefulWidget {
   final VoidCallback onOpenWallet;
   final VoidCallback onOpenHealth;
   final VoidCallback onOpenBusiness;
-  final VoidCallback onOpenActivity;
+  final ValueChanged<String> onOpenDelivery;
   final VoidCallback onOpenNotifications;
 
   const _CanonicalSenderHome({
@@ -2256,7 +2317,7 @@ class _CanonicalSenderHome extends StatefulWidget {
     required this.onOpenWallet,
     required this.onOpenHealth,
     required this.onOpenBusiness,
-    required this.onOpenActivity,
+    required this.onOpenDelivery,
     required this.onOpenNotifications,
   });
 
@@ -2345,12 +2406,16 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
     return 'there';
   }
 
+  bool _isRelevantHomeNotification(SenderHomeNotification item) =>
+      senderHomeNotificationIsRelevant(item, _qualifyingOrders);
+
   int get _unreadCount =>
-      _notifications?.where((item) => !item.read).length ?? 0;
+      _notifications?.where((item) => !item.archived && !item.read).length ?? 0;
 
   List<SenderHomeNotification> get _importantUnreadNotifications =>
       (_notifications ?? const [])
           .where((item) => !item.read)
+          .where(_isRelevantHomeNotification)
           .where((item) {
             final type = item.type.toLowerCase();
             return type.contains('delivery') ||
@@ -2420,7 +2485,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
     final heroTitle = activeDelivery != null
         ? activeDelivery.status
         : scheduledDraft != null
-            ? 'Continue ${scheduledDraft.title}'
+            ? 'Your scheduled delivery'
             : 'Send a parcel';
     final heroBody = activeDelivery != null
         ? activeDelivery.route
@@ -2430,7 +2495,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
     final heroButton = activeDelivery != null
         ? 'Track delivery'
         : scheduledDraft != null
-            ? 'Continue'
+            ? 'View delivery'
             : 'Send now';
     return SenderScrollablePageShell(
       key: const Key('sender-home-canonical-content'),
@@ -2462,16 +2527,16 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
           loading: _orders == null && _ordersError == null,
           activeDelivery: activeDelivery != null,
           onPrimaryTap: activeDelivery != null
-              ? widget.onOpenActivity
+              ? () => widget.onOpenDelivery(activeDelivery.id)
               : scheduledDraft != null
-                  ? widget.onStartDelivery
+                  ? () => widget.onOpenDelivery(scheduledDraft.id)
                   : widget.onStartDelivery,
         ),
         if (activeDelivery != null) ...[
           const SizedBox(height: 18),
           _RebuiltSenderActiveDeliveryCard(
             delivery: activeDelivery,
-            onTap: widget.onOpenActivity,
+            onTap: () => widget.onOpenDelivery(activeDelivery.id),
           ),
         ],
         const SizedBox(height: 38),
@@ -2513,7 +2578,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
           qualifyingOrders: _qualifyingOrders,
           error: _ordersError,
           onRetry: _load,
-          onOpenActivity: widget.onOpenActivity,
+          onOpenDelivery: widget.onOpenDelivery,
           onStartDelivery: widget.onStartDelivery,
         ),
         const SizedBox(height: 20),
@@ -3046,7 +3111,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
   final List<SenderHomeOrder> qualifyingOrders;
   final String? error;
   final VoidCallback onRetry;
-  final VoidCallback onOpenActivity;
+  final ValueChanged<String> onOpenDelivery;
   final VoidCallback onStartDelivery;
 
   const _RebuiltSenderRecentActivity({
@@ -3054,7 +3119,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
     required this.qualifyingOrders,
     required this.error,
     required this.onRetry,
-    required this.onOpenActivity,
+    required this.onOpenDelivery,
     required this.onStartDelivery,
   });
 
@@ -3087,7 +3152,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
     }
     if (qualifyingOrders.isEmpty) {
       return _RebuiltSenderPanel(
-        onTap: onOpenActivity,
+        onTap: onStartDelivery,
         padding: const EdgeInsets.all(24),
         child: Row(
           children: [
@@ -3122,7 +3187,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
                   ),
                   SizedBox(height: 5),
                   Text(
-                    'Your completed deliveries will appear here.',
+                    'Your recent deliveries will appear here.',
                     style: TextStyle(
                       color: Color(0xFFB8C6DD),
                       fontSize: 13,
@@ -3131,6 +3196,12 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              tooltip: 'Start a delivery',
+              onPressed: onStartDelivery,
+              icon: const Icon(Icons.add_rounded),
             ),
           ],
         ),
@@ -3141,7 +3212,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
       children: [
         for (final order in recent) ...[
           _RebuiltSenderPanel(
-            onTap: onOpenActivity,
+            onTap: () => onOpenDelivery(order.id),
             child: Row(
               children: [
                 const Icon(
