@@ -201,7 +201,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
         .orderBy('updatedAt', descending: true)
-        .orderBy(FieldPath.documentId(), descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(20)
         .snapshots()
         .map((snapshot) {
@@ -363,7 +363,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
   }) {
     var ordered = query
         .orderBy('updatedAt', descending: true)
-        .orderBy(FieldPath.documentId(), descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(_senderActivityPageSize);
     final at = (cursor?['at'] as num?)?.toInt();
     final id = '${cursor?['id'] ?? ''}'.trim();

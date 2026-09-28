@@ -8,7 +8,6 @@ import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../send_package/view/ride_chats.dart';
 import 'gift_mode_view.dart';
-import 'sender_booking_canvas.dart';
 import 'sender_activity.dart';
 import 'sender_wallet.dart';
 

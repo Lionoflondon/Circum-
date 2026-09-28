@@ -2201,7 +2201,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
         .orderBy('updatedAt', descending: true)
-        .orderBy(FieldPath.documentId(), descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(20)
         .snapshots()
         .map((snapshot) {
