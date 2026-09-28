@@ -32,8 +32,12 @@ Future<Map<String, dynamic>> callSenderBookingQuote(
       'Sign in to continue.',
     );
   }
+  // A cached browser token can outlive a Hosting deploy, App Check key
+  // rotation, or an interrupted reCAPTCHA exchange. Force a fresh token for
+  // this protected server-authoritative operation so a stale token can never
+  // leave Options retrying an already-invalid request.
   final appCheckToken =
-      await (appCheck ?? FirebaseAppCheck.instance).getToken();
+      await (appCheck ?? FirebaseAppCheck.instance).getToken(true);
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw const SenderBookingQuoteApiException(
       'UNAUTHENTICATED',
