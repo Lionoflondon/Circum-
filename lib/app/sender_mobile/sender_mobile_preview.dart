@@ -282,7 +282,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
           return Stack(
             children: [
               SenderAccessibilityHost(
-                repository: const _PreviewSenderAccessibilityRepository(),
+                repository: FirebaseSenderAccessibilityRepository(),
                 child: child ?? const SizedBox.shrink(),
               ),
               const SenderRuntimeHealthPanel(),
@@ -305,18 +305,6 @@ String? _initialSenderRouteName(Uri uri) {
     return GiftStoryView.routeName;
   }
   return null;
-}
-
-class _PreviewSenderAccessibilityRepository
-    implements SenderAccessibilityRepository {
-  const _PreviewSenderAccessibilityRepository();
-
-  @override
-  Future<void> save(SenderAccessibilitySettings settings) async {}
-
-  @override
-  Stream<SenderAccessibilitySettings> watch() =>
-      Stream.value(const SenderAccessibilitySettings());
 }
 
 class _SenderWebStartupLoading extends StatelessWidget {
