@@ -5373,7 +5373,6 @@
         "lib/app/send_package/bloc/send_package_bloc.dart",
         "lib/app/sender_mobile/gift_payment_view.dart",
         "server/functions/cloud-run-sender-delivery-payments.js",
-        "server/functions/cloud-run-sender-delivery-payments.test.js",
         "test/sender_mobile/sender_payment_closure_contract_test.dart",
         "test/sender_mobile/sender_payment_delivery_bounds_test.dart",
         "test/sender_mobile/sender_qa_payment_bridge_test.dart"
@@ -5392,8 +5391,7 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-sender-delivery-payments.js",
-        "cloud-run-sender-delivery-payments.test.js"
+        "cloud-run-sender-delivery-payments.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
