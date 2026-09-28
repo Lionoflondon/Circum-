@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 enum SenderReauthenticationProvider { emailPassword, google, apple }
@@ -62,15 +63,16 @@ class SenderAccountClosure {
     FlutterSecureStorage? storage,
     GoogleSignIn? googleSignIn,
     SenderAccountClosureSequence? sequence,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
-        _storage = storage ?? const FlutterSecureStorage(),
-        _googleSignIn = googleSignIn ?? GoogleSignIn(),
-        _sequence = sequence ?? const SenderAccountClosureSequence();
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
+       _storage = storage ?? const FlutterSecureStorage(),
+       _googleSignIn = googleSignIn ?? GoogleSignIn(),
+       _sequence = sequence ?? const SenderAccountClosureSequence();
 
   List<SenderReauthenticationProvider> get availableProviders {
-    final providers = _auth.currentUser?.providerData
+    final providers =
+        _auth.currentUser?.providerData
             .map((provider) => provider.providerId)
             .toSet() ??
         const <String>{};
@@ -149,12 +151,12 @@ class SenderAccountClosure {
           await user.getIdToken(true);
         },
         closeApplicationAccount: () async {
-          await _functions
-              .httpsCallable('closeCircumAccount')
-              .call(<String, String>{'accountType': 'sender'});
+          await _functions.httpsCallable('closeCircumAccount').call(
+            <String, String>{'accountType': 'sender'},
+          );
         },
         deleteFirebaseIdentity: user.delete,
-        clearLocalSession: _storage.deleteAll,
+        clearLocalSession: _clearLocalSession,
       );
     } on TimeoutException {
       throw const SenderAccountClosureException(
@@ -175,6 +177,17 @@ class SenderAccountClosure {
       );
     }
     return user;
+  }
+
+  Future<void> _clearLocalSession() async {
+    final uid = _auth.currentUser?.uid;
+    await _storage.deleteAll();
+    final preferences = await SharedPreferences.getInstance();
+    if (uid != null) {
+      await preferences.remove('senderProfileSnapshot:$uid');
+      await preferences.remove('senderWalletSnapshot:$uid');
+    }
+    await _auth.signOut();
   }
 
   static String _createNonce([int length = 32]) {
