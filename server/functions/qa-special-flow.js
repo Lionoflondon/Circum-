@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
 const functions = require("firebase-functions/v1");
+const {defineSecret} = require("firebase-functions/params");
 const {getFirestore, Timestamp, FieldValue} = require("firebase-admin/firestore");
 const {createHash} = require("node:crypto");
 const {config, authorize, assertFixture, scopedDatabase} = require("./qa-lifecycle")._test;
@@ -16,7 +17,7 @@ const {normalizeEmail} = require("./wallet-core");
 const irisQa = require("./qa-iris-certification");
 const senderBooking = require("./sender-booking")._qa;
 const ROOT = "qaSpecialFlowFixtures";
-const QA_STRIPE_SECRET = "CIRCUM_QA_STRIPE_SECRET_KEY";
+const QA_STRIPE_SECRET = defineSecret("CIRCUM_QA_STRIPE_SECRET_KEY");
 const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
