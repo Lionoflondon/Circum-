@@ -30,8 +30,9 @@ void main() {
   });
 
   test('Sender Web reads canonical delivery lifecycle fields', () {
-    final source =
-        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final source = File(
+      'lib/website/shared/circum_website_app.dart',
+    ).readAsStringSync();
 
     expect(source, contains('String _backendStatusFromDelivery'));
     expect(source, contains("data['deliveryStage']"));
@@ -41,8 +42,9 @@ void main() {
   });
 
   test('Sender Web represents the backend tracking phases', () {
-    final source =
-        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final source = File(
+      'lib/website/shared/circum_website_app.dart',
+    ).readAsStringSync();
     const labels = [
       'Finding a rider',
       'Rider assigned',
@@ -114,9 +116,7 @@ void main() {
 
   test('Sender mobile gates live lifecycle on backend proof fields', () {
     expect(
-      senderTrackingStateForBackendData({
-        'status': 'in_transit',
-      }),
+      senderTrackingStateForBackendData({'status': 'in_transit'}),
       SenderTrackingState.findingRider,
     );
     expect(
@@ -159,8 +159,9 @@ void main() {
     }
 
     expect(
-      senderTrackingContentFor(SenderTrackingState.riderArrivingAtDropoff)
-          .title,
+      senderTrackingContentFor(
+        SenderTrackingState.riderArrivingAtDropoff,
+      ).title,
       'Your Circum Rider is almost there',
     );
     expect(
@@ -174,8 +175,9 @@ void main() {
   });
 
   test('Sender Web exposes every delivery adjustment review state', () {
-    final source =
-        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final source = File(
+      'lib/website/shared/circum_website_app.dart',
+    ).readAsStringSync();
 
     for (final marker in [
       'awaiting_admin_review',
@@ -193,13 +195,15 @@ void main() {
 
   test('Sender mobile exposes receiver PIN only in active delivery stages', () {
     expect(
-      senderTrackingContentFor(SenderTrackingState.riderAssigned)
-          .showReceiverPin,
+      senderTrackingContentFor(
+        SenderTrackingState.riderAssigned,
+      ).showReceiverPin,
       isFalse,
     );
     expect(
-      senderTrackingContentFor(SenderTrackingState.pickupComplete)
-          .showReceiverPin,
+      senderTrackingContentFor(
+        SenderTrackingState.pickupComplete,
+      ).showReceiverPin,
       isTrue,
     );
     expect(
@@ -208,15 +212,29 @@ void main() {
     );
   });
 
-  test('Sender mobile active panel renders stage-specific tracking content',
-      () {
-    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
-        .readAsStringSync();
+  test(
+    'Sender mobile active panel renders stage-specific tracking content',
+    () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
 
-    expect(source, contains('senderTrackingContentFor'));
-    expect(source, contains('SenderTrackingState.findingRider'));
-    expect(source, contains('SenderTrackingState.riderArrivingAtDropoff'));
-    expect(source, contains('PINCard'));
+      expect(source, contains('senderTrackingContentFor'));
+      expect(source, contains('SenderTrackingState.findingRider'));
+      expect(source, contains('SenderTrackingState.riderArrivingAtDropoff'));
+      expect(source, contains('PINCard'));
+    },
+  );
+
+  test('customer cancellation quote never renders internal economics', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_tracking_screen.dart',
+    ).readAsStringSync();
+    expect(source, contains("label: 'Cancellation fee'"));
+    expect(source, contains("label: 'Card refund'"));
+    expect(source, contains("label: 'Roth restored'"));
+    expect(source, isNot(contains("label: 'Rider compensation'")));
+    expect(source, isNot(contains("label: 'Circum retained'")));
   });
 
   test('Sender tracking map adapter creates live Google map snapshot', () {
@@ -253,14 +271,15 @@ void main() {
   });
 
   test(
-      'Sender tracking map adapter falls back when coordinates are unavailable',
-      () {
-    final snapshot = SenderTrackingMapAdapter.snapshotFor(
-      SendPackageState(),
-      content: senderTrackingContentFor(SenderTrackingState.findingRider),
-      stateDelivered: false,
-    );
+    'Sender tracking map adapter falls back when coordinates are unavailable',
+    () {
+      final snapshot = SenderTrackingMapAdapter.snapshotFor(
+        SendPackageState(),
+        content: senderTrackingContentFor(SenderTrackingState.findingRider),
+        stateDelivered: false,
+      );
 
-    expect(snapshot, isNull);
-  });
+      expect(snapshot, isNull);
+    },
+  );
 }

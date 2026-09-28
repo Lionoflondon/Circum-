@@ -2559,13 +2559,6 @@ class _CancelDeliverySheet extends StatelessWidget {
           quote['refundAmount'] ??
           quote['refund'],
     );
-    final riderCompensation = _numberFrom(
-      quote['riderCompensation'] ??
-          (quote['decision'] is Map
-              ? (quote['decision'] as Map)['riderCompensation']
-              : null),
-    );
-    final circumRetained = _numberFrom(quote['circumRetained']);
     final stripeRefund = _numberFrom(quote['stripeRefund']);
     final rothRestoration = _numberFrom(quote['rothRestoration']);
     final currency = '${quote['currency'] ?? 'GBP'}';
@@ -2608,18 +2601,6 @@ class _CancelDeliverySheet extends StatelessWidget {
                 value: fee == null
                     ? 'Provided by Circum'
                     : _moneyText(fee, currency),
-              ),
-              _CancellationQuoteLine(
-                label: 'Rider compensation',
-                value: riderCompensation == null
-                    ? 'Calculated by Circum'
-                    : _moneyText(riderCompensation, currency),
-              ),
-              _CancellationQuoteLine(
-                label: 'Circum retained',
-                value: circumRetained == null
-                    ? 'Calculated by Circum'
-                    : _moneyText(circumRetained, currency),
               ),
               _CancellationQuoteLine(
                 label: 'Card refund',

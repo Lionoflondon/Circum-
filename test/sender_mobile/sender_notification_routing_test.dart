@@ -106,6 +106,15 @@ void main() {
     expect(supportBloc, isNot(contains('storeChat')));
   });
 
+  test('chat retry reuses one idempotency key after timeout', () {
+    final source = File(
+      'lib/app/send_package/view/ride_chats.dart',
+    ).readAsStringSync();
+    expect(source, contains('_pendingMessageIdempotencyKey'));
+    expect(source, contains("'idempotencyKey': idempotencyKey"));
+    expect(source, contains('Message timed out. Your text is preserved'));
+  });
+
   test('Sender push payload parsing is recoverable and diagnostic', () {
     final messaging = File('lib/messaging.dart').readAsStringSync();
 
