@@ -23,6 +23,7 @@ const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
 const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
+const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -30,6 +31,169 @@ function fixtureIdForRequest(uid, requestId) {
 function requiredFixtureId(value) {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) fail("A valid QA fixture ID is required.");
   return value;
+}
+
+function activityDeliveryId(fixtureId, suffix) {
+  return `qa_activity_${fixtureId.slice(0, 12)}_${suffix}`;
+}
+
+function activityMillis(fixture, offsetMinutes) {
+  const created = fixture.qaCreatedAt && typeof fixture.qaCreatedAt.toMillis === "function" ?
+    fixture.qaCreatedAt.toMillis() : Date.now();
+  return created - 30 * 60 * 1000 + offsetMinutes * 60 * 1000;
+}
+
+function activityDelivery(fixture, suffix, status, updatedAtMillis, extra = {}) {
+  const id = activityDeliveryId(fixture.id, suffix);
+  const timestamp = Timestamp.fromMillis(updatedAtMillis);
+  const marker = {
+    id,
+    requestId: id,
+    bookingId: id,
+    senderId: fixture.senderId,
+    userId: fixture.senderId,
+    status,
+    deliveryStatus: status,
+    deliveryStage: status,
+    paymentStatus: "unpaid",
+    pickupDetails: {locality: `QA Fixture Pickup ${suffix}`},
+    dropoffDetails: {locality: `QA Fixture Drop-off ${suffix}`},
+    parcel: {itemName: `QA Activity Parcel ${suffix}`},
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    isSyntheticQa: true,
+    qaActivityFixture: true,
+    qaNamespace: ROOT,
+    qaFixtureId: fixture.id,
+    qaCreatedBy: fixture.qaCreatedBy,
+    qaCreatedAt: fixture.qaCreatedAt,
+    qaImmutable: true,
+    realDispatch: false,
+    suppressExternalSideEffects: true,
+    excludeFromAnalytics: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromCustomerNotifications: true,
+  };
+  return {...marker, ...extra};
+}
+
+function activityExpectedOrder(records) {
+  return records
+      .filter((record) => !["in_transit"].includes(record.status))
+      .sort((left, right) => {
+        const byTime = right.updatedAt.toMillis() - left.updatedAt.toMillis();
+        return byTime || right.id.localeCompare(left.id);
+      })
+      .map((record) => record.id);
+}
+
+async function seedActivityFixture(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  if (current.activitySeed && Array.isArray(current.activitySeed.historyIds)) {
+    return current.activitySeed;
+  }
+  const statuses = [
+    "completed", "cancelled", "scheduled", "completed", "archived",
+    "completed", "cancelled", "completed", "scheduled", "completed",
+    "cancelled", "completed", "completed", "scheduled", "completed",
+    "cancelled", "completed", "completed", "scheduled", "completed",
+    "completed", "cancelled", "completed", "completed",
+  ];
+  const records = statuses.map((status, index) => {
+    const offset = index === 20 || index === 21 ? 12 : index + 1;
+    const extra = status === "scheduled" ? {
+      scheduledAt: Timestamp.fromMillis(activityMillis(fixture, 240)),
+      deliveryTime: {type: "scheduled", scheduledAt: Timestamp.fromMillis(activityMillis(fixture, 240))},
+    } : {};
+    return activityDelivery(fixture, `h${String(index + 1).padStart(2, "0")}`, status, activityMillis(fixture, offset), extra);
+  });
+  const live = activityDelivery(fixture, "live", "in_transit", activityMillis(fixture, 60));
+  const batch = db.batch();
+  // Reverse write order deliberately; authoritative updatedAt plus document ID
+  // ordering must determine the client result, never insertion order.
+  for (const record of [...records].reverse()) {
+    batch.create(db.collection("deliveryRequests").doc(record.id), record);
+  }
+  batch.create(db.collection("deliveryRequests").doc(live.id), live);
+  const notificationId = activityDeliveryId(fixture.id, "notification");
+  const missingNotificationId = activityDeliveryId(fixture.id, "missing_notification");
+  const notificationBase = {
+    recipientId: fixture.senderId,
+    title: "QA Activity delivery update",
+    body: "Synthetic QA activity notification.",
+    type: "delivery_created",
+    category: "deliveries",
+    read: false,
+    archived: false,
+    createdAt: Timestamp.fromMillis(activityMillis(fixture, 70)),
+    isSyntheticQa: true,
+    qaActivityFixture: true,
+    qaNamespace: ROOT,
+    qaFixtureId: fixture.id,
+    qaCreatedBy: fixture.qaCreatedBy,
+    qaImmutable: true,
+    suppressExternalSideEffects: true,
+    excludeFromCustomerNotifications: true,
+  };
+  batch.create(db.collection("notifications").doc(notificationId), {
+    ...notificationBase,
+    destination: {route: "tracking", deliveryId: records[0].id},
+    bookingId: records[0].id,
+  });
+  batch.create(db.collection("notifications").doc(missingNotificationId), {
+    ...notificationBase,
+    title: "QA Activity missing delivery update",
+    destination: {route: "tracking", deliveryId: records[4].id},
+    bookingId: records[4].id,
+    createdAt: Timestamp.fromMillis(activityMillis(fixture, 69)),
+  });
+  const seed = {
+    historyIds: activityExpectedOrder(records),
+    liveId: live.id,
+    scheduledId: records.find((record) => record.status === "scheduled").id,
+    completedId: records.find((record) => record.status === "completed").id,
+    cancelledId: records.find((record) => record.status === "cancelled").id,
+    deletedReferenceId: records[4].id,
+    notificationId,
+    missingNotificationId,
+    seededAt: Timestamp.now(),
+  };
+  batch.set(root, {activitySeed: seed}, {merge: true});
+  await batch.commit();
+  return seed;
+}
+
+async function insertActivityFixtureRecord(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  const seed = current.activitySeed;
+  if (!seed) fail("QA Activity fixture is not seeded.");
+  const id = activityDeliveryId(fixture.id, "late_insert");
+  const record = activityDelivery(fixture, "late_insert", "completed", activityMillis(fixture, 80));
+  const ref = db.collection("deliveryRequests").doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) await ref.create(record);
+  const historyIds = [id, ...seed.historyIds.filter((value) => value !== id)];
+  await root.set({activitySeed: {...seed, historyIds, insertedId: id}}, {merge: true});
+  return {...seed, historyIds, insertedId: id};
+}
+
+async function deleteActivityReference(db, fixture) {
+  const seed = (await db.collection(ROOT).doc(fixture.id).get()).data()?.activitySeed;
+  if (!seed?.deletedReferenceId) fail("QA Activity fixture reference is unavailable.");
+  const ref = db.collection("deliveryRequests").doc(seed.deletedReferenceId);
+  const snapshot = await ref.get();
+  if (snapshot.exists) {
+    const record = snapshot.data() || {};
+    if (record.qaFixtureId !== fixture.id || record.isSyntheticQa !== true || record.qaActivityFixture !== true) {
+      fail("QA Activity reference provenance is invalid.", "permission-denied");
+    }
+    await ref.delete();
+  }
+  await db.collection(ROOT).doc(fixture.id).set({activitySeed: {...seed, referenceDeleted: true}}, {merge: true});
+  return {deletedReferenceId: seed.deletedReferenceId, deleted: snapshot.exists};
 }
 function factory({db, env = process.env, stripe}) {
   const provider = (fixture) => providerForFixture({stripe, registry: db.collection(ROOT).doc(fixture.id).collection("qaCheckoutProviderObjects"), fixtureId: fixture.id, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
@@ -46,6 +210,12 @@ function factory({db, env = process.env, stripe}) {
     if (fixture.lifecycleFixtureId) await lifecycle.handle({action: "cleanup", fixtureId: fixture.lifecycleFixtureId}, {auth: {uid: fixture.qaCreatedBy, token: {}}, app: {appId: "qa-cleanup"}});
     await qaPublic.cleanup({db, fixture});
     const senderResult = await senderBooking.cleanupQaSenderFixture(db, fixture);
+    const activityNotifications = await db.collection("notifications").where("qaFixtureId", "==", fixture.id).limit(400).get();
+    if (!activityNotifications.empty) {
+      const notificationBatch = db.batch();
+      activityNotifications.docs.forEach((doc) => notificationBatch.delete(doc.ref));
+      await notificationBatch.commit();
+    }
     const testStripe = provider(fixture);
     const result = await testStripe.cleanup();
     const qa = scopedDatabase(db, fixture, true, ROOT, COLLECTIONS);
@@ -55,7 +225,7 @@ function factory({db, env = process.env, stripe}) {
       await require("./business-checkout-reservations").terminate({db: qa, stripe: testStripe, reservation: snap.data()});
     }
     await ref.set({archived: true, cleanupResult: result, cleanedAt: Timestamp.now()}, {merge: true});
-    return {...result, ...paidResult, sender: senderResult};
+    return {...result, ...paidResult, sender: senderResult, activityNotificationsDeleted: activityNotifications.size};
   }
   async function activeSenderFixture(uid) {
     const snapshot = await db.collection(ROOT)
@@ -111,7 +281,7 @@ function factory({db, env = process.env, stripe}) {
     }
     const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action) && !activityActions.has(data.action)) fail("Unknown QA action.");
     if (data.action === "sender_capability") {
       if (!lists.senders.includes(uid)) return {enabled: false};
       const active = await activeSenderFixture(uid);
@@ -125,7 +295,7 @@ function factory({db, env = process.env, stripe}) {
     }
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions, ...activityActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -145,6 +315,12 @@ function factory({db, env = process.env, stripe}) {
     }
     const fixture = (await ref.get()).data(); assertFixture(fixture, lists, uid, Date.now(), data.action === "cleanup");
     if (data.action === "cleanup") return cleanup(fixture);
+    if (activityActions.has(data.action)) {
+      if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
+      if (data.action === "activity_seed") return {...await seedActivityFixture(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      if (data.action === "activity_insert") return {...await insertActivityFixtureRecord(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      return {...await deleteActivityReference(db, fixture), fixtureId: fixture.id, qaOnly: true};
+    }
     if (senderActions.has(data.action)) {
       if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
       const qaContext = {fixtureId: fixture.id, isSyntheticQa: true};

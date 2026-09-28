@@ -4593,6 +4593,7 @@
         "deliveryRequests",
         "healthPlusPayments",
         "irisPhotoAnalyses",
+        "notifications",
         "qaCheckoutProviderObjects",
         "senderBookingQuotes",
         "wallets"
@@ -7092,6 +7093,7 @@
         "deliveryRequests",
         "healthPlusPayments",
         "irisPhotoAnalyses",
+        "notifications",
         "qaCheckoutProviderObjects",
         "senderBookingQuotes",
         "wallets"

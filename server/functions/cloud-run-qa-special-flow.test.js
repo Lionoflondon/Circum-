@@ -85,6 +85,19 @@ test("fixture ownership stays with the approved Sender participant", () => {
   assert.match(source, /"verify_receiver_pin"/);
 });
 
+test("Activity certification fixture is server-owned and side-effect suppressed", () => {
+  const source = fs.readFileSync(require.resolve("./qa-special-flow"), "utf8");
+  assert.match(source, /activity_seed/);
+  assert.match(source, /activity_insert/);
+  assert.match(source, /activity_delete_reference/);
+  assert.match(source, /qaActivityFixture: true/);
+  assert.match(source, /excludeFromSettlement: true/);
+  assert.match(source, /excludeFromPayout: true/);
+  assert.match(source, /excludeFromAnalytics: true/);
+  assert.match(source, /excludeFromCustomerNotifications: true/);
+  assert.match(source, /activityNotificationsDeleted/);
+});
+
 test("archived QA cycles can use a new bounded request without reusing an old fixture", () => {
   const first = fixtureIdForRequest("qa-operator", "lifecycle_first");
   assert.equal(first, fixtureIdForRequest("qa-operator", "lifecycle_first"));
