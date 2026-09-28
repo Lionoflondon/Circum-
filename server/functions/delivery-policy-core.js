@@ -479,6 +479,35 @@ function financialAction(input = {}) {
   };
 }
 
+function customerCancellationQuote({decision = {}, breakdown = null} = {}) {
+  const safeDecision = {...decision};
+  delete safeDecision.riderCompensation;
+  delete safeDecision.platformRetainedAmount;
+  const fee = breakdown && breakdown.cancellationFee != null ?
+    breakdown.cancellationFee : decision.feeAmount;
+  const stripeRefund = breakdown && breakdown.stripeRefund || 0;
+  const rothRestoration = breakdown && breakdown.rothRestoration || 0;
+  const totalRefundValue = breakdown && breakdown.totalRefundValue || 0;
+  return {
+    decision: safeDecision,
+    cancellationFee: fee,
+    feeAmount: decision.feeAmount,
+    amount: decision.feeAmount,
+    currency: "GBP",
+    backendReason: decision.userFacingMessage || "",
+    reason: decision.userFacingMessage || "Cancellation terms apply.",
+    stripeRefund,
+    rothRestoration,
+    totalRefundValue,
+    refundAmount: totalRefundValue,
+    finalRefund: totalRefundValue,
+    allocationPolicy: breakdown && breakdown.allocationPolicy || "stripe_first",
+    canCancel: decision.canCancel,
+    requiresAdminReview: decision.requiresAdminReview,
+    interventionAvailable: !decision.canCancel,
+  };
+}
+
 function fraudSignals(input = {}) {
   const stats = input.stats || {};
   const signals = [];
@@ -549,6 +578,7 @@ function auditEvent(type, input, now, extra = {}) {
 
 module.exports = {
   cancellationSettlement,
+  customerCancellationQuote,
   DEFAULT_POLICY,
   ACTIVE_PRE_COLLECTION,
   ARRIVED_PICKUP,

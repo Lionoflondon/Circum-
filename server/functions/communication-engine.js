@@ -66,7 +66,8 @@ function destinationFor(type, data = {}) {
   if (chatId || type === "chat_message" || type === "admin_message") {
     return {route: "conversation", chatId, bookingId};
   }
-  if (type.startsWith("wallet_") || type.startsWith("roth_") || type.startsWith("referral_")) {
+  if (type === "payment" || type.startsWith("payment_") ||
+      type.startsWith("wallet_") || type.startsWith("roth_") || type.startsWith("referral_")) {
     return {route: "wallet"};
   }
   if (type.startsWith("gift_") || giftId) return {route: "gift", giftId};
@@ -237,12 +238,14 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
 
 function notificationCategory(type, requestedCategory) {
   const requested = clean(requestedCategory).toLowerCase();
+  if (requested === "payment" || requested === "payments") return "wallet";
   if (notificationCategories.has(requested)) return requested;
   const normalized = clean(type).toLowerCase();
   if (normalized.startsWith("delivery_") || normalized === "new_delivery") return "deliveries";
   if (normalized.startsWith("gift_")) return "gifts";
   if (normalized.startsWith("health_")) return "health";
-  if (normalized.startsWith("wallet_") || normalized.startsWith("roth_") || normalized.startsWith("referral_")) return "wallet";
+  if (normalized === "payment" || normalized.startsWith("payment_") ||
+      normalized.startsWith("wallet_") || normalized.startsWith("roth_") || normalized.startsWith("referral_")) return "wallet";
   if (normalized.startsWith("business_")) return "business";
   return "system";
 }
@@ -325,12 +328,17 @@ function canSend(chat, senderId, admin) {
   return Array.isArray(chat.participants) && chat.participants.includes(senderId);
 }
 
+function messageIdForIdempotency(senderId, idempotencyKey) {
+  return `message_${Buffer.from(`${senderId}:${idempotencyKey}`).toString("base64url")}`;
+}
+
 async function sendMessage(data, context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
+  const idempotencyKey = clean(data.idempotencyKey);
   if (!chatId || !message) {
     throw new functions.https.HttpsError("invalid-argument", "A conversation and message are required.");
   }
@@ -338,32 +346,39 @@ async function sendMessage(data, context) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported message type.");
   }
   if (message.length > 2000) throw new functions.https.HttpsError("invalid-argument", "Messages are limited to 2000 characters.");
+  if (idempotencyKey.length > 200) throw new functions.https.HttpsError("invalid-argument", "Message retry key is too long.");
 
   const db = getFirestore();
   const chatRef = db.collection("chats").doc(chatId);
-  const chatSnapshot = await chatRef.get();
-  if (!chatSnapshot.exists) throw new functions.https.HttpsError("not-found", "Conversation is unavailable.");
-  const chat = chatSnapshot.data();
-  if (!allowedConversationTypes.has(clean(chat.conversationType || "sender_rider"))) {
-    throw new functions.https.HttpsError("failed-precondition", "Conversation type is unavailable.");
-  }
-  if (!canSend(chat, senderId, isAdmin(context))) {
-    throw new functions.https.HttpsError("permission-denied", chat.readOnly === true ? "This conversation is read-only." : "You are not part of this conversation.");
-  }
-  if (messageType === "location" && !clean(chat.deliveryId || chat.bookingId)) {
-    throw new functions.https.HttpsError("failed-precondition", "Location sharing is only available for deliveries.");
-  }
-
-  const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
-  const messageRef = chatRef.collection("messages").doc();
-  const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
-  const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
-  const senderName = await participantDisplayName(senderId, senderRole, context);
-  await db.runTransaction(async (transaction) => {
+  const messageId = idempotencyKey ? messageIdForIdempotency(senderId, idempotencyKey) : null;
+  const messageRef = messageId ? chatRef.collection("messages").doc(messageId) : chatRef.collection("messages").doc();
+  const senderName = await participantDisplayName(senderId, isAdmin(context) ? "admin" : "sender", context);
+  const result = await db.runTransaction(async (transaction) => {
+    const chatSnapshot = await transaction.get(chatRef);
+    const existingMessage = await transaction.get(messageRef);
+    if (!chatSnapshot.exists) throw new functions.https.HttpsError("not-found", "Conversation is unavailable.");
+    const chat = chatSnapshot.data() || {};
+    const admin = isAdmin(context);
+    if (!allowedConversationTypes.has(clean(chat.conversationType || "sender_rider"))) {
+      throw new functions.https.HttpsError("failed-precondition", "Conversation type is unavailable.");
+    }
+    if (!canSend(chat, senderId, admin)) {
+      throw new functions.https.HttpsError("permission-denied", chat.readOnly === true ? "This conversation is read-only." : "You are not part of this conversation.");
+    }
+    if (messageType === "location" && !clean(chat.deliveryId || chat.bookingId)) {
+      throw new functions.https.HttpsError("failed-precondition", "Location sharing is only available for deliveries.");
+    }
+    if (existingMessage.exists) {
+      return {messageId: messageRef.id, duplicate: true};
+    }
+    const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
+    const correlationId = clean(data.correlationId) || (idempotencyKey ? `${chatId}:${idempotencyKey}` : `${chatId}_${messageRef.id}`);
+    const senderRole = admin ? "admin" : recipientRoleFor(chat, senderId);
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
       correlationId,
+      ...(idempotencyKey ? {idempotencyKey} : {}),
       senderId,
       senderName,
       senderDisplayName: senderName,
@@ -392,12 +407,13 @@ async function sendMessage(data, context) {
       transaction.set(db.collection("supportTickets").doc(ticketId), {
         lastMessage: message,
         lastMessageAt: FieldValue.serverTimestamp(),
-        adminUnreadCount: isAdmin(context) ? 0 : FieldValue.increment(1),
+        adminUnreadCount: admin ? 0 : FieldValue.increment(1),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     }
+    return {messageId: messageRef.id, duplicate: false};
   });
-  return {ok: true, chatId, messageId: messageRef.id};
+  return {ok: true, chatId, ...result};
 }
 
 async function setConversationTyping(data, context) {
@@ -809,6 +825,7 @@ async function markConversationRead(data, context) {
 exports.emitNotification = emitNotification;
 exports.pushMessageFor = pushMessageFor;
 exports.destinationFor = destinationFor;
+exports.notificationCategory = notificationCategory;
 exports.pushMessageFor = pushMessageFor;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
