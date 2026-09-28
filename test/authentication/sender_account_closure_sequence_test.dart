@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:circum/app/authentication/sender_account_closure.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -84,5 +85,15 @@ void main() {
     );
 
     expect(backendCalled, isFalse);
+  });
+
+  test('closure source clears authenticated and cached local session state',
+      () {
+    final source = File('lib/app/authentication/sender_account_closure.dart')
+        .readAsStringSync();
+
+    expect(source, contains('senderProfileSnapshot:'));
+    expect(source, contains('senderWalletSnapshot:'));
+    expect(source, contains('auth.signOut'));
   });
 }

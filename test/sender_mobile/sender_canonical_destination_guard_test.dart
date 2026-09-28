@@ -431,7 +431,7 @@ void main() {
       '_SenderClosedSubmissionScreen',
       '_SenderSecuritySettingsScreen',
       '_SenderLanguageSettingsScreen',
-      '_SenderAccessibilitySettingsScreen',
+      'SenderAccessibilityView',
       '_SenderLegalDocumentScreen',
       'SenderReferralScreen',
     ]) {

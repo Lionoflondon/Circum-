@@ -65,8 +65,10 @@ void main() {
     expect(signUp, contains('_sendSenderVerificationEmail'));
     expect(signUp, contains('Account created. Check your inbox'));
     expect(signUp, contains('showSnackBar'));
-    expect(website, contains('onResendVerification: _resendSenderVerificationEmail'));
-    expect(website, contains('onConfirmVerification: _confirmSenderEmailVerification'));
+    expect(website,
+        contains('onResendVerification: _resendSenderVerificationEmail'));
+    expect(website,
+        contains('onConfirmVerification: _confirmSenderEmailVerification'));
   });
 
   test('Sender web payment sheet uses the legal company display name', () {
@@ -78,12 +80,12 @@ void main() {
     );
   });
 
-  test('Sender AuthBloc requires canonical account bootstrap before entry',
-      () {
+  test('Sender AuthBloc requires canonical account bootstrap before entry', () {
     expect(authBloc, contains('_authOperationTimeout'));
     expect(authBloc, contains('_hydrateSenderSession'));
     expect(authBloc, contains('_hydrateSenderSessionRequired'));
-    expect(authBloc, contains("FirebaseAuthException(code: 'profile-bootstrap-failed')"));
+    expect(authBloc,
+        contains("FirebaseAuthException(code: 'profile-bootstrap-failed')"));
     expect(authBloc, contains('SenderProfileDiagnosticCode.permissionDenied'));
     expect(authBloc, contains("FirebaseAuthException(code: 'wrong-surface')"));
     expect(authBloc, contains('_updateSenderProfileRecoverably'));
@@ -162,7 +164,9 @@ void main() {
     expect(accountClosure, contains('reauthenticateWithCredential'));
     expect(accountClosure, contains("httpsCallable('closeCircumAccount')"));
     expect(accountClosure, contains('deleteFirebaseIdentity: user.delete'));
-    expect(accountClosure, contains('clearLocalSession: _storage.deleteAll'));
+    expect(accountClosure, contains('clearLocalSession: _clearLocalSession'));
+    expect(accountClosure, contains('await _storage.deleteAll()'));
+    expect(accountClosure, contains('await _auth.signOut()'));
     expect(accountClosure, contains('getIdToken(true)'));
     expect(accountClosure, contains('rawNonce: rawNonce'));
     expect(profile, contains('SenderAccountClosure'));
