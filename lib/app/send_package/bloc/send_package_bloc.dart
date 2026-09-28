@@ -1222,6 +1222,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         state.copyWith(
           isSenderQuoteLoading: false,
           senderQuoteId: '${data['quoteId'] ?? ''}',
+          senderQuoteDistanceKm: _numFrom(data['distanceMiles']) * 1.609344,
           senderQuoteTotal: _numFrom(
             data['total'] ?? data['finalAmount'] ?? data['amountDue'],
           ),

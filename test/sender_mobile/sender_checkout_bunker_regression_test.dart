@@ -1,9 +1,20 @@
 import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('authoritative quote distance clears with an invalidated quote', () {
+    final state = SendPackageState(
+      distance: 4.8,
+      senderQuoteId: 'quote-1',
+      senderQuoteDistanceKm: 7.926,
+    );
+    expect(state.copyWith().senderQuoteDistanceKm, 7.926);
+    expect(
+        state.copyWith(clearSenderQuoteId: true).senderQuoteDistanceKm, isNull);
+  });
   test('only an explicit allowed IRIS decision permits continuation', () {
     expect(senderIrisAllowsContinuation('allowed'), isTrue);
     for (final status in [

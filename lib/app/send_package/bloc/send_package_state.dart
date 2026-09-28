@@ -76,6 +76,7 @@ class SendPackageState {
   final String senderQuoteError;
   final String? senderQuoteId;
   final double? senderQuoteTotal;
+  final double? senderQuoteDistanceKm;
   final String? senderQuoteSpeed;
   final List<Map<String, dynamic>> senderQuoteLineItems;
   final List<Map<String, dynamic>> senderQuoteSpeedOptions;
@@ -144,6 +145,7 @@ class SendPackageState {
     this.senderQuoteError = '',
     this.senderQuoteId,
     this.senderQuoteTotal,
+    this.senderQuoteDistanceKm,
     this.senderQuoteSpeed,
     this.senderQuoteLineItems = const [],
     this.senderQuoteSpeedOptions = const [],
@@ -221,6 +223,7 @@ class SendPackageState {
     String? senderQuoteError,
     String? senderQuoteId,
     double? senderQuoteTotal,
+    double? senderQuoteDistanceKm,
     String? senderQuoteSpeed,
     List<Map<String, dynamic>>? senderQuoteLineItems,
     List<Map<String, dynamic>>? senderQuoteSpeedOptions,
@@ -318,6 +321,9 @@ class SendPackageState {
       senderQuoteTotal: clearSenderQuoteTotal
           ? null
           : senderQuoteTotal ?? this.senderQuoteTotal,
+      senderQuoteDistanceKm: clearSenderQuoteId
+          ? null
+          : senderQuoteDistanceKm ?? this.senderQuoteDistanceKm,
       senderQuoteSpeed: clearSenderQuoteSpeed
           ? null
           : senderQuoteSpeed ?? this.senderQuoteSpeed,

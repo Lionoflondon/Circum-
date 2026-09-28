@@ -4099,7 +4099,7 @@ class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
                 bottom: 14,
                 child: _ReviewEtaChip(
                   routeConfirmed: routeConfirmed,
-                  distanceKm: widget.engine.distance,
+                  distanceKm: widget.engine.senderQuoteDistanceKm,
                   speed: widget.selectedSpeed,
                 ),
               ),
