@@ -4615,6 +4615,7 @@
       "productionPurpose": "senderAccount.exportSenderData",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -5282,6 +5283,7 @@
       "productionPurpose": "senderAccount.getSenderAccountActivity",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -8936,6 +8938,7 @@
       "productionPurpose": "senderAccount.revokeSenderSessions",
       "callers": [
         "lib/app/sender_mobile/sender_mobile_profile.dart",
+        "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -10753,6 +10756,7 @@
       "productionPurpose": "senderAccount.updateSenderPreferences",
       "callers": [
         "lib/app/sender_mobile/sender_profile_preferences.dart",
+        "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
