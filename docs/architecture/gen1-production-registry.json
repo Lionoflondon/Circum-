@@ -4594,7 +4594,8 @@
         "healthPlusPayments",
         "irisPhotoAnalyses",
         "qaCheckoutProviderObjects",
-        "senderBookingQuotes"
+        "senderBookingQuotes",
+        "wallets"
       ],
       "externalProviders": [
         "Stripe"
@@ -7019,7 +7020,8 @@
         "healthPlusPayments",
         "irisPhotoAnalyses",
         "qaCheckoutProviderObjects",
-        "senderBookingQuotes"
+        "senderBookingQuotes",
+        "wallets"
       ],
       "externalProviders": [
         "Stripe"
