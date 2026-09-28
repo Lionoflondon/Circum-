@@ -164,6 +164,17 @@ void _setActivityCursorFromDocument(
   };
 }
 
+int _compareActivityItemsDescending(
+  SenderActivityItem left,
+  SenderActivityItem right,
+) {
+  final leftMillis = left.occurredAt?.millisecondsSinceEpoch ?? 0;
+  final rightMillis = right.occurredAt?.millisecondsSinceEpoch ?? 0;
+  final byTime = rightMillis.compareTo(leftMillis);
+  if (byTime != 0) return byTime;
+  return right.id.compareTo(left.id);
+}
+
 abstract class SenderActivityRepository {
   Stream<List<SenderActivityItem>> watchActive();
   Future<SenderActivityPage> history({String? pageToken});
@@ -209,11 +220,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
               .map((doc) => _delivery(doc.id, doc.data()))
               .where((item) => item.active)
               .toList();
-          items.sort(
-            (a, b) => (b.occurredAt ?? DateTime(1970)).compareTo(
-              a.occurredAt ?? DateTime(1970),
-            ),
-          );
+      items.sort(_compareActivityItemsDescending);
           return items;
         });
   }
@@ -288,11 +295,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       ...health.map((doc) => _health(doc.id, doc.data())),
       ...wallet.transactions.map(_roth),
     ]..removeWhere((item) => item.active);
-    merged.sort(
-      (a, b) => (b.occurredAt ?? DateTime(1970)).compareTo(
-        a.occurredAt ?? DateTime(1970),
-      ),
-    );
+    merged.sort(_compareActivityItemsDescending);
     final items = merged.take(_senderActivityPageSize).toList();
     final nextCursors = Map<String, dynamic>.from(cursors);
     final selectedSources = <String>{};

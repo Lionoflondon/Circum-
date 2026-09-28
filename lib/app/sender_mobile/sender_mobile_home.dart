@@ -295,20 +295,11 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       _selectTab(2);
       return;
     }
-    try {
-      final bloc = _bookingBloc;
-      bloc.add(WatchActiveDelivery(requestId: id));
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => BlocProvider<SendPackageBloc>.value(
-            value: bloc,
-            child: const SenderBookingCanvas(),
-          ),
-        ),
-      );
-    } catch (_) {
-      _selectTab(2);
-    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SenderDeliveryDetailView(deliveryId: id),
+      ),
+    );
   }
 
   void _openInitialSenderRoute() {
