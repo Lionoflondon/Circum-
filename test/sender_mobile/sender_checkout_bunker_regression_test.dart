@@ -14,6 +14,14 @@ void main() {
     expect(senderQuoteVehicleMismatch('motorbike', 'Car'), isTrue);
     expect(senderQuoteVehicleMismatch('CAR', 'Car'), isFalse);
     expect(senderQuoteVehicleMismatch(null, 'Car'), isFalse);
+    final canvas = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final options = canvas.substring(
+      canvas.indexOf('class _OptionsPanel'),
+      canvas.indexOf('class _PaymentPanel'),
+    );
+    expect(options, contains('!quoteMatchesVehicle)'));
+    expect(options, contains('quoteMatchesVehicle &&'));
   });
   test('quote transport sends the selected vehicle to the server', () {
     final bloc = File('lib/app/send_package/bloc/send_package_bloc.dart')
