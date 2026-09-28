@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+bool senderIrisAllowsContinuation(String? complianceStatus) =>
+    complianceStatus == 'allowed';
+
 bool senderQuoteRequestNeeded({
   required String? lastRequestKey,
   required String requestKey,

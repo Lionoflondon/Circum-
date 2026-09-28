@@ -820,6 +820,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             );
         return;
       }
+      if (!senderIrisAllowsContinuation(
+        engine.canonicalIrisResult?.complianceStatus,
+      )) {
+        return;
+      }
       _setDraft(_draft.copyWith(step: SenderBookingStep.options));
       _requestBackendQuote(_draft.copyWith(step: SenderBookingStep.options));
       return;
@@ -2381,6 +2386,8 @@ class _IrisInputCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasWeight = _irisEstimatedWeightDisplay(iris) != 'Unavailable';
+    final policyBlocked =
+        iris != null && !senderIrisAllowsContinuation(iris.complianceStatus);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -2431,7 +2438,14 @@ class _IrisInputCard extends StatelessWidget {
             estimatedWeightKg: photoEstimatedWeightKg,
             onRemove: onPhotoRemove,
           ),
-          if (hasWeight) ...[
+          if (policyBlocked) ...[
+            const SizedBox(height: 12),
+            _InfoNote(
+              text: iris.complianceMessage?.isNotEmpty == true
+                  ? iris.complianceMessage!
+                  : 'This item needs review before a delivery can continue.',
+            ),
+          ] else if (hasWeight) ...[
             const SizedBox(height: 12),
             _IrisInputResultCard(iris: iris),
           ],
@@ -2442,7 +2456,7 @@ class _IrisInputCard extends StatelessWidget {
                 : !hasWeight
                     ? 'Check weight with IRIS'
                     : 'Choose Delivery Options',
-            enabled: canContinue && !isIrisResolving,
+            enabled: canContinue && !isIrisResolving && !policyBlocked,
             onTap: onContinue,
           ),
           const SizedBox(height: 10),

@@ -4,6 +4,19 @@ import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('only an explicit allowed IRIS decision permits continuation', () {
+    expect(senderIrisAllowsContinuation('allowed'), isTrue);
+    for (final status in [
+      null,
+      '',
+      'prohibited',
+      'unsupported',
+      'referral_required',
+      'unknown'
+    ]) {
+      expect(senderIrisAllowsContinuation(status), isFalse);
+    }
+  });
   test('persisted route coordinates remain quote-ready after engine restore',
       () {
     const complete = SenderBookingDraft(
@@ -53,16 +66,27 @@ void main() {
     expect(canvas, contains('senderQuoteRequestNeeded('));
   });
 
-  test('quote failure stops automatic retries but changed inputs can quote', () {
+  test('quote failure stops automatic retries but changed inputs can quote',
+      () {
     for (final error in ['unauthenticated', 'unavailable', 'timeout']) {
-      expect(senderQuoteRequestNeeded(
-        lastRequestKey: 'route-a', requestKey: 'route-a',
-        quoteId: null, quoteTotal: null, quoteError: error,
-      ), isFalse);
-      expect(senderQuoteRequestNeeded(
-        lastRequestKey: 'route-a', requestKey: 'route-b',
-        quoteId: null, quoteTotal: null, quoteError: error,
-      ), isTrue);
+      expect(
+          senderQuoteRequestNeeded(
+            lastRequestKey: 'route-a',
+            requestKey: 'route-a',
+            quoteId: null,
+            quoteTotal: null,
+            quoteError: error,
+          ),
+          isFalse);
+      expect(
+          senderQuoteRequestNeeded(
+            lastRequestKey: 'route-a',
+            requestKey: 'route-b',
+            quoteId: null,
+            quoteTotal: null,
+            quoteError: error,
+          ),
+          isTrue);
     }
   });
 
