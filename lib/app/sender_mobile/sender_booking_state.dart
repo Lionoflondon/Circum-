@@ -22,6 +22,9 @@ bool senderIrisMatchesRequest(
       requestedWeight.trim() == weight.trim();
 }
 
+bool senderQueuedDraftIsStale(int queuedBaseRevision, int serverRevision) =>
+    serverRevision > queuedBaseRevision;
+
 String senderDeliveryTimingQuoteKey(SenderBookingDraft draft) => [
       draft.deliveryTimingType.name,
       draft.scheduledDate,

@@ -5,6 +5,11 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('server revision wins over a stale queued draft after reload', () {
+    expect(senderQueuedDraftIsStale(4, 5), isTrue);
+    expect(senderQueuedDraftIsStale(5, 5), isFalse);
+    expect(senderQueuedDraftIsStale(5, 4), isFalse);
+  });
   test('legacy sanitized draft restores the selected vehicle upgrade', () {
     final restored = SenderBookingDraft.fromBackendDraft({
       'iris': {'recommendedVehicle': 'Car'},

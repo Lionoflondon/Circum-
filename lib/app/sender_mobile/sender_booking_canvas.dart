@@ -624,6 +624,44 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       }
       return false;
     }
+    final queuedBaseRevision = _intFrom(decoded['baseRevision']);
+    try {
+      final server = await _callDraftFunction(
+        'loadSenderDraft',
+        const {},
+        _backendDraftRestoreTimeout,
+      );
+      final serverRevision = _intFrom(server['revision']);
+      if (server['exists'] == true &&
+          server['draft'] is Map &&
+          senderQueuedDraftIsStale(queuedBaseRevision, serverRevision)) {
+        final serverDraft = SenderBookingDraft.fromBackendDraft(
+          Map<String, dynamic>.from(server['draft'] as Map),
+        );
+        _draftRevision = serverRevision;
+        _draftId = '${server['draftId'] ?? ''}'.trim().isEmpty
+            ? null
+            : '${server['draftId']}';
+        await _clearQueuedLocalDraft();
+        _hydrateRestoredDraft(serverDraft);
+        if (mounted)
+          setState(() => _syncStatus = 'Updated from another device');
+        return true;
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'checking queued Sender draft revision',
+      );
+    } on TimeoutException catch (error, stackTrace) {
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'checking queued Sender draft revision',
+      );
+    }
+    _draftRevision = queuedBaseRevision;
     _hydrateRestoredDraft(restored);
     if (mounted) setState(() => _syncStatus = 'Sync needed');
     _queueDraftSave(restored);
