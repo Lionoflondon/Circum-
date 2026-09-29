@@ -1,10 +1,11 @@
 # QA special-flow Cloud Run certification surface
 
-`circum-qa-special-flow` is a private Node 22 certification transport for the
+`circum-qa-special-flow` is a Node 22 certification transport for the
 existing `qa-special-flow.js` fixture handlers. It is not a customer product
 owner and does not replace healthy production payment services.
 
-The service requires Cloud Run IAM invocation plus a Firebase ID token in the
+The browser-facing edge permits Cloud Run invocation so the deployed Sender Web
+can reach it, but every callable request still requires a Firebase ID token in the
 `X-Firebase-Auth` header and a valid Firebase App Check token. The allowlist is
 derived at runtime from the private `CIRCUM_QA_CERTIFICATION_CREDENTIALS`
 secret; ordinary Firebase users cannot select QA mode or become a fixture
@@ -39,7 +40,8 @@ newer projection; terminal deliveries reject updates. This adapter verifies the
 shared policy, while direct public `updateDeliveryLiveLocation` transport still
 needs its own runtime probe.
 
-The live service currently permits external ingress but has no public
-unauthenticated invoker binding; Cloud Run IAM still rejects unauthenticated
-requests before the Firebase Auth and App Check gates. The existing managed QA exports remain
-untouched; no broad Functions deployment is part of this surface.
+The live service permits external ingress only for this browser edge; unauthenticated
+or invalid-App-Check requests are rejected by the transport, and ordinary users
+are rejected by the canonical QA allowlist. CORS is limited to the approved Sender
+Web origins. The existing managed QA exports remain untouched; no broad Functions
+deployment is part of this surface.
