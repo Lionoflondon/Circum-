@@ -5505,6 +5505,8 @@
       "generation": "Gen 1",
       "productionPurpose": "rothLedger.getSenderWallet",
       "callers": [
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/sender-payment-app-check.test.js"
       ],
@@ -5528,8 +5530,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -5888,6 +5893,8 @@
       "callers": [
         "lib/app/sender_mobile/sender_finance.dart",
         "lib/app/sender_mobile/sender_wallet.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/sender-payment-app-check.test.js"
       ],
@@ -5907,8 +5914,11 @@
       ],
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
