@@ -115,12 +115,9 @@ void main() {
     expect(wallet, contains('operation.timeout(_walletOperationTimeout)'));
     expect(
       wallet,
-      contains(RegExp(r'\.call\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
+      contains('loadSenderWalletViaCloudRun'),
     );
-    expect(
-      wallet,
-      contains(RegExp(r'\.get\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
-    );
+    expect(wallet, isNot(contains("httpsCallable('initialiseSenderWallet')")));
     expect(
         wallet, contains("profile?.data['senderWalletOnboardingCompleted']"));
     expect(wallet, isNot(contains('_wallet ??= const SenderWalletData')));
