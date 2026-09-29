@@ -62,8 +62,12 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
       },
     },
     refunds: {
-      async list() { return {data: []}; },
-      async create(params) { return {id: "re_test_sender", status: "succeeded", ...params}; },
+      async list() {
+ return {data: []};
+},
+      async create(params) {
+ return {id: "re_test_sender", status: "succeeded", ...params};
+},
     },
   };
   const env = {
