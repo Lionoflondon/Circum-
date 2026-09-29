@@ -65,6 +65,7 @@ function activityDelivery(fixture, suffix, status, updatedAtMillis, extra = {}) 
     updatedAt: timestamp,
     isSyntheticQa: true,
     qaActivityFixture: true,
+    qaPublic: true,
     qaNamespace: ROOT,
     qaFixtureId: fixture.id,
     qaCreatedBy: fixture.qaCreatedBy,
@@ -637,4 +638,4 @@ function instance() {
 }
 exports.callable = () => functions.runWith({enforceAppCheck: true, timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET, "GOOGLE_MAPS_DIRECTIONS_API_KEY"]}).https.onCall((data, context) => instance().handle(data, context));
 exports.scheduled = () => functions.runWith({timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET]}).pubsub.schedule("every 10 minutes").onRun(() => instance().expire());
-exports._test = {factory, fixtureIdForRequest, requiredFixtureId};
+exports._test = {factory, fixtureIdForRequest, requiredFixtureId, activityDelivery};
