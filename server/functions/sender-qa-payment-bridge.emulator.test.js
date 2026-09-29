@@ -107,7 +107,10 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
   assert.equal(qaQuote.amountDue, 10);
   await assert.rejects(require("./sender-booking")._qa.createSenderPaymentSession(
       stripe, {quoteId: qaQuote.quoteId}, sender, {db},
-  ), /QA payment requires its isolated provider/);
+  ), /QA Sender identities must use the isolated certification payment route/);
+  await assert.rejects(require("./sender-booking")._qa.createSenderPaymentSession(
+      stripe, {quoteId: "canonical_sender_quote"}, sender, {db},
+  ), /QA Sender identities must use the isolated certification payment route/);
   const deliveryPayload = {
     requestId: "sender_qa_request",
     pickup: {address: "QA pickup", coordinates: {lat: 51.5007, lng: -0.1246}},
@@ -186,4 +189,8 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
   assert.equal((await db.collection("deliveryRequests").where("qaFixtureId", "==", fixtureId).get()).size, 0);
   assert.equal((await db.collection("senderPaymentSessions").where("qaFixtureId", "==", fixtureId).get()).size, 0);
   assert.equal((await db.collection("qaSpecialFlowFixtures").doc(fixtureId).get()).data().archived, true);
+  await assert.rejects(require("./sender-booking")._qa.createSenderPaymentSession(
+      stripe, {quoteId: "canonical_sender_quote"}, sender, {db},
+  ), /QA Sender identities must use the isolated certification payment route/);
+  await assert.doesNotReject(require("./sender-booking")._test.assertProductionPaymentSender(db, "ordinary_sender"));
 });
