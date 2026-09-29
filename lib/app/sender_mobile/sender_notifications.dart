@@ -287,7 +287,7 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text(
-                                          'Opened. Read status will sync when you reconnect.',
+                                          'Opened. Read status could not be opened right now; it will sync when you reconnect.',
                                         ),
                                       ),
                                     );
