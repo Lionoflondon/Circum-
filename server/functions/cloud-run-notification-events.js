@@ -37,6 +37,14 @@ const handlers = {
       return handleGiftDeliveryCompleted({before: {id: deliveryId, data: () => before, ref}, after: {id: deliveryId, data: () => after, ref}}, {params: {deliveryId}}, {source: "cloud_run", db});
     },
   },
+  sender_notifications: {
+    eventTypes: new Set([
+      "google.cloud.firestore.document.v1.created",
+      "google.cloud.firestore.document.v1.updated",
+    ]),
+    resolveTarget: senderNotificationTarget,
+    run: dispatchSenderNotification,
+  },
 };
 
 function json(res, status, body) {
@@ -50,6 +58,94 @@ function eventCollection(kind) {
     return FIXTURE_COLLECTION;
   }
   return "deliveryRequests";
+}
+
+function documentPathFromName(name) {
+  return String(name || "").split("/documents/")[1] || String(name || "").replace(/^documents\//, "");
+}
+
+function senderNotificationTarget(name, eventType = "") {
+  const path = documentPathFromName(name);
+  const segments = path.split("/");
+  const created = eventType === "google.cloud.firestore.document.v1.created";
+  const updated = eventType === "google.cloud.firestore.document.v1.updated";
+  if (segments.length === 2 && segments[0] === "deliveryRequests" && updated) {
+    return {kind: "delivery_updated", id: path};
+  }
+  if (segments.length === 4 && segments[0] === "chats" && segments[2] === "messages" && created) {
+    return {kind: "chat_message", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "giftRequests" && (created || updated)) {
+    return {kind: created ? "gift_request_created" : "gift_request_updated", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "giftCampaignParticipants" && updated) {
+    return {kind: "gift_campaign_participant_updated", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "storyNotifications" && updated) {
+    return {kind: "story_notification_updated", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "supportTickets" && created) {
+    return {kind: "support_ticket_created", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "disputes" && created) {
+    return {kind: "dispute_created", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "riderProfiles" && updated) {
+    return {kind: "rider_profile_updated", id: path};
+  }
+  if (segments.length === 2 && segments[0] === "payoutRequests" && updated) {
+    return {kind: "payout_updated", id: path};
+  }
+  return null;
+}
+
+function eventSnapshot(id, data) {
+  return {id, data: () => data || {}};
+}
+
+async function dispatchSenderNotification({before, after, documentPath, eventType}) {
+  const target = senderNotificationTarget(documentPath, eventType);
+  if (!target) throw Object.assign(new Error("unsupported_sender_notification_target"), {statusCode: 400});
+  const platformNotifications = require("./platform-notifications");
+  const snapshot = eventSnapshot(target.id.split("/").pop(), after);
+  const change = {
+    before: eventSnapshot(snapshot.id, before),
+    after: snapshot,
+  };
+  const params = {params: {}};
+  const parts = target.id.split("/");
+  if (target.kind === "chat_message") {
+    params.params = {chatId: parts[1], messageId: parts[3]};
+    return platformNotifications.onChatMessageCreated.run(snapshot, params);
+  }
+  if (target.kind === "delivery_updated") return platformNotifications.onDeliveryUpdated.run(change, params);
+  if (target.kind === "gift_request_created") {
+    params.params.giftId = parts[1];
+    return platformNotifications.onGiftRequestCreated.run(snapshot, params);
+  }
+  if (target.kind === "gift_request_updated") {
+    params.params.giftId = parts[1];
+    return platformNotifications.onGiftRequestUpdated.run(change, params);
+  }
+  if (target.kind === "gift_campaign_participant_updated") {
+    params.params.participantId = parts[1];
+    return platformNotifications.onGiftCampaignParticipantUpdated.run(change, params);
+  }
+  if (target.kind === "support_ticket_created") return platformNotifications.onSupportTicketCreated.run(snapshot, params);
+  if (target.kind === "dispute_created") return platformNotifications.onDisputeCreated.run(snapshot, params);
+  if (target.kind === "rider_profile_updated") {
+    params.params.riderId = parts[1];
+    return platformNotifications.onRiderProfileUpdated.run(change, params);
+  }
+  if (target.kind === "payout_updated") {
+    params.params.requestId = parts[1];
+    return platformNotifications.onPayoutUpdated.run(change, params);
+  }
+  if (target.kind === "story_notification_updated") {
+    const giftStoryAutomation = require("./gift-story-automation");
+    return giftStoryAutomation.onStoryNotificationWrite.run(change, params);
+  }
+  throw Object.assign(new Error("unsupported_sender_notification_kind"), {statusCode: 400});
 }
 
 function deliveryIdFromName(name, collection = "deliveryRequests") {
@@ -152,7 +248,7 @@ function decodeEventarcPayload(body) {
   }
 }
 
-async function processOnce({db, kind, eventId, deliveryId, before, after, run, waitForBusyMs = 30000}) {
+async function processOnce({db, kind, eventId, deliveryId, before, after, run, documentPath = "", eventType = "", waitForBusyMs = 30000}) {
   const ref = db.collection("eventHandlerClaims").doc(claimId(kind, deliveryId));
   const lease = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -204,7 +300,7 @@ async function processOnce({db, kind, eventId, deliveryId, before, after, run, w
     },
   };
   try {
-    await run({db, deliveryId, before, after, effects});
+    await run({db, deliveryId, before, after, effects, documentPath, eventType, eventId});
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const current = snap.exists ? snap.data() || {} : {};
@@ -238,7 +334,8 @@ function createServer(options = {}) {
   return http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") return json(res, definition ? 200 : 500, {status: definition ? "ok" : "misconfigured", handler: kind || "unset", sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (!definition || req.url !== "/" || req.method !== "POST") return json(res, 404, {error: "not_found"});
-    if (String(req.headers["ce-type"] || "") !== definition.eventType) return json(res, 400, {error: "invalid_event_type"});
+    const eventType = String(req.headers["ce-type"] || "");
+    if (definition.eventTypes ? !definition.eventTypes.has(eventType) : eventType !== definition.eventType) return json(res, 400, {error: "invalid_event_type"});
     const eventId = String(req.headers["ce-id"] || "").trim();
     if (!eventId || eventId.length > 256) return json(res, 400, {error: "invalid_event_id"});
     let size = 0; const chunks = [];
@@ -249,13 +346,15 @@ function createServer(options = {}) {
       if (size > MAX_BODY_BYTES) return json(res, 413, {error: "request_too_large"});
       try {
         const decoded = decodeEventarcPayload(Buffer.concat(chunks));
-        const deliveryId = deliveryIdFromName(decoded.documentName || req.headers["ce-subject"], eventCollection(kind));
+        const documentPath = decoded.documentName || req.headers["ce-subject"];
+        const target = definition.resolveTarget ? definition.resolveTarget(documentPath, eventType) : null;
+        const deliveryId = target ? target.id : deliveryIdFromName(documentPath, eventCollection(kind));
         if (!deliveryId) return json(res, 400, {error: "invalid_document"});
         if (definition.qualifies && !definition.qualifies(decoded)) return json(res, 200, {ok: true, status: "ignored"});
         if (!db) db = dbFactory();
         const eventDb = kind === "gift_delivery_completed" && eventCollection(kind) === FIXTURE_COLLECTION ?
           fixtureDb(db, deliveryId) : db;
-        const result = await once({db: eventDb, kind, eventId, deliveryId, before: decoded.before, after: decoded.after, run: definition.run});
+        const result = await once({db: eventDb, kind, eventId, deliveryId, before: decoded.before, after: decoded.after, run: definition.run, documentPath, eventType});
         return json(res, 200, {ok: true, ...result});
       } catch (error) {
         console.error("notification_event_failed", {handler: kind, eventId, reason: error && error.message || "unknown"});
@@ -274,4 +373,7 @@ module.exports = {
   processOnce,
   claimId,
   handlers,
+  documentPathFromName,
+  senderNotificationTarget,
+  dispatchSenderNotification,
 };
