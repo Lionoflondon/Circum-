@@ -1685,7 +1685,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
                 'checkoutSessionId': event.checkoutSessionId,
                 'paymentSessionId': event.paymentSessionId,
               },
-            );
+          );
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.trim().isEmpty) {
         throw StateError('payment_confirmation_missing_booking');
