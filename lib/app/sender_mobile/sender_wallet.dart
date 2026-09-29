@@ -1075,6 +1075,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               onRedeem: _redeemRothCard,
               onAddCard: _addPaymentMethod,
               onManagePayments: _openManagePayments,
+              onSupport: _openSupport,
             ),
             const SizedBox(height: 22),
             const _WalletSectionTitle('Recent Activity'),
@@ -1476,12 +1477,16 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                         onChanged: _savePreference,
                       ),
                       const SizedBox(height: 18),
-                      const _WalletSectionTitle('Split Payment'),
+                      const _WalletSectionTitle('How payment is applied'),
                       const SizedBox(height: 10),
-                      _SplitPaymentPreview(
-                        preference: _profile!.preference,
-                        profile: _profile!,
-                        wallet: widget.wallet,
+                      const _WalletGlass(
+                        child: Text(
+                          'At checkout, Circum uses your selected preference and the live total. Roth is applied only when the service is eligible; any remaining amount is charged to the selected payment method. Wallet does not estimate a checkout total here.',
+                          style: TextStyle(
+                            color: _WalletColors.muted,
+                            height: 1.45,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 18),
                       _BusinessPaymentProfileCard(
@@ -3443,11 +3448,13 @@ class _WalletActionGrid extends StatelessWidget {
   final VoidCallback onRedeem;
   final VoidCallback onAddCard;
   final VoidCallback onManagePayments;
+  final VoidCallback onSupport;
 
   const _WalletActionGrid({
     required this.onRedeem,
     required this.onAddCard,
     required this.onManagePayments,
+    required this.onSupport,
   });
 
   @override
@@ -3478,6 +3485,13 @@ class _WalletActionGrid extends StatelessWidget {
               title: 'Manage Payments',
               detail: 'Cards and checkout.',
               onTap: onManagePayments,
+            ),
+            const SizedBox(height: 12),
+            _WalletActionCard(
+              icon: Icons.support_agent_outlined,
+              title: 'Wallet Support',
+              detail: 'Get help with Roth or payments.',
+              onTap: onSupport,
             ),
           ],
         ),
@@ -3895,122 +3909,6 @@ class _PaymentPriorityOption extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SplitPaymentPreview extends StatelessWidget {
-  final SenderCheckoutPreference preference;
-  final SenderPaymentProfile profile;
-  final SenderWalletData wallet;
-
-  const _SplitPaymentPreview({
-    required this.preference,
-    required this.profile,
-    required this.wallet,
-  });
-
-  String _paymentLabel(BuildContext context) {
-    final effectivePreference = senderEffectiveCheckoutPreference(
-      preference,
-      profile,
-      Theme.of(context).platform,
-    );
-    return switch (effectivePreference) {
-      SenderCheckoutPreference.applePayFirst => 'Apple Pay',
-      SenderCheckoutPreference.googlePayFirst => 'Google Pay',
-      SenderCheckoutPreference.defaultCard => 'Saved Card',
-      SenderCheckoutPreference.askEveryCheckout => 'Choose at checkout',
-      _ => profile.methods.isNotEmpty ? 'Saved Card' : 'Payment Method',
-    };
-  }
-
-  bool get _usesRoth =>
-      preference == SenderCheckoutPreference.rothFirst ||
-      preference == SenderCheckoutPreference.rothThenCard;
-
-  @override
-  Widget build(BuildContext context) {
-    const total = 58.50;
-    final paymentLabel = _paymentLabel(context);
-    final rothAmount = _usesRoth ? wallet.balance.clamp(0, 40.0) : 0.0;
-    final remaining = (total - rothAmount).clamp(0, total);
-    return _WalletGlass(
-      child: Semantics(
-        label:
-            'Split payment visual example. Delivery total £58.50. ${_usesRoth ? 'Roth ${rothAmount.toStringAsFixed(2)}. $paymentLabel £${remaining.toStringAsFixed(2)}.' : '$paymentLabel £58.50.'}',
-        child: Column(
-          children: [
-            _PaymentBreakdownRow(label: 'Delivery Total', value: '£58.50'),
-            const _PaymentBreakdownArrow(),
-            if (_usesRoth) ...[
-              _PaymentBreakdownRow(
-                label: 'Roth',
-                value: '−${rothAmount.toStringAsFixed(2)} Roth',
-                accent: _WalletColors.lightBlue,
-              ),
-              const _PaymentBreakdownArrow(),
-            ],
-            _PaymentBreakdownRow(
-              label: paymentLabel,
-              value: '£${remaining.toStringAsFixed(2)}',
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Remaining charged automatically',
-              style: TextStyle(
-                color: _WalletColors.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentBreakdownRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? accent;
-
-  const _PaymentBreakdownRow({
-    required this.label,
-    required this.value,
-    this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: accent ?? Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      );
-}
-
-class _PaymentBreakdownArrow extends StatelessWidget {
-  const _PaymentBreakdownArrow();
-
-  @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 7),
-        child: Icon(Icons.south_rounded, size: 18, color: _WalletColors.muted),
-      );
 }
 
 class _BusinessPaymentProfileCard extends StatelessWidget {

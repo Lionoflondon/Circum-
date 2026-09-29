@@ -54,6 +54,9 @@ void main() {
     expect(source, contains('mergeSenderWalletTransactions'));
     expect(source, contains('Action needed'));
     expect(source, contains('Unknown status'));
+    expect(source, contains("title: 'Wallet Support'"));
+    expect(source, isNot(contains('_SplitPaymentPreview')));
+    expect(source, isNot(contains('£58.50')));
     expect(source, isNot(contains('Preparing link')));
     expect(source, isNot(contains('Your referral link is still loading.')));
   });
