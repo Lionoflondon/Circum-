@@ -18,7 +18,7 @@ const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   updateSenderNotificationState: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: true},
-  getSenderWallet: {handler: {run: rothLedger.readSenderWallet}, appCheckRequired: true},
+  getSenderWallet: {handler: {run: (_data, context) => rothLedger.readSenderWallet(context)}, appCheckRequired: true},
   getSenderWalletTransactions: {handler: {run: rothLedger.readSenderWalletTransactions}, appCheckRequired: true},
   listSenderPaymentMethods: {handler: null, appCheckRequired: true},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},

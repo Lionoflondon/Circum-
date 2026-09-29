@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {once} = require("node:events");
+const fs = require("node:fs");
 const {createServer, routeName} = require("./cloud-run-account-bootstrap");
 
 async function withServer(dependenciesFactory, run) {
@@ -222,6 +223,11 @@ test("Sender Wallet balance and payment-method routes require App Check", async 
       assert.deepEqual(await response.json(), {result: {ok: true, name: route}});
     }
   });
+});
+
+test("Sender Wallet balance adapter passes callable context to the reader", () => {
+  const source = fs.readFileSync(require.resolve("./cloud-run-account-bootstrap"), "utf8");
+  assert.match(source, /getSenderWallet: \{handler: \{run: \(_data, context\) => rothLedger\.readSenderWallet\(context\)\}/);
 });
 
 test("account routes map conflicts to a safe 409", async () => {
