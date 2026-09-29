@@ -24,7 +24,7 @@ const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
 const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
-const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference", "activity_pagination_seed"]);
+const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference", "activity_pagination_seed", "activity_pagination_insert", "activity_page_fault"]);
 const certificationActions = new Set(["wallet_notification_seed", "chat_retry_probe", "cancellation_quote_probe"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
@@ -203,11 +203,11 @@ async function seedActivityPagination(db, fixture) {
   const root = db.collection(ROOT).doc(fixture.id);
   const current = (await root.get()).data() || {};
   if (current.activityPaginationSeed) return current.activityPaginationSeed;
-  const records = Array.from({length: 101}, (_, index) => activityDelivery(
+  const records = Array.from({length: 121}, (_, index) => activityDelivery(
       fixture,
       `p${String(index + 1).padStart(3, "0")}`,
       index % 3 === 0 ? "cancelled" : "completed",
-      activityMillis(fixture, index + 1),
+      activityMillis(fixture, index === 60 || index === 61 ? 500 : index + 1),
       {qaActivityPagination: true},
   ));
   let batch = db.batch(); let writes = 0;
@@ -218,16 +218,60 @@ async function seedActivityPagination(db, fixture) {
     }
   }
   if (writes) await batch.commit();
+  const equalTimestampIds = records
+      .filter((record) => record.updatedAt.toMillis() === activityMillis(fixture, 500))
+      .map((record) => record.id)
+      .sort((left, right) => right.localeCompare(left));
+  const expectedOrder = activityExpectedOrder(records);
+  const pageSize = 20;
   const result = {
     count: records.length,
-    oldestId: records[0].id,
-    newestId: records[records.length - 1].id,
-    firstPageExpectedId: records[records.length - 1].id,
-    secondPageExpectedId: records[records.length - 21].id,
+    pageSize,
+    pageCount: Math.ceil(expectedOrder.length / pageSize),
+    expectedOrder,
+    expectedPages: Array.from({length: Math.ceil(expectedOrder.length / pageSize)}, (_, index) =>
+      expectedOrder.slice(index * pageSize, (index + 1) * pageSize)),
+    equalTimestampIds,
+    oldestId: expectedOrder[expectedOrder.length - 1],
+    newestId: expectedOrder[0],
+    firstPageExpectedId: expectedOrder[0],
+    secondPageExpectedId: expectedOrder[pageSize],
     seededAt: Timestamp.now(),
   };
   await root.set({activityPaginationSeed: result}, {merge: true});
   return result;
+}
+
+async function insertActivityPaginationRecord(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  const seed = current.activityPaginationSeed;
+  if (!seed) fail("QA Activity pagination fixture is not seeded.");
+  const id = activityDeliveryId(fixture.id, "late_insert");
+  const record = activityDelivery(fixture, "late_insert", "completed", activityMillis(fixture, 180), {qaActivityPagination: true});
+  const ref = db.collection("deliveryRequests").doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) await ref.create(record);
+  const expectedOrder = [id, ...seed.expectedOrder.filter((value) => value !== id)];
+  const result = {
+    ...seed,
+    count: expectedOrder.length,
+    pageCount: Math.ceil(expectedOrder.length / seed.pageSize),
+    expectedOrder,
+    expectedPages: Array.from({length: Math.ceil(expectedOrder.length / seed.pageSize)}, (_, index) =>
+      expectedOrder.slice(index * seed.pageSize, (index + 1) * seed.pageSize)),
+    insertedId: id,
+  };
+  await root.set({activityPaginationSeed: result}, {merge: true});
+  return result;
+}
+
+function activityPageFault(data) {
+  const mode = `${data?.mode || ""}`.trim();
+  if (!["unavailable", "rate_limit", "internal"].includes(mode)) fail("Unsupported Activity QA fault mode.", "invalid-argument");
+  if (mode === "unavailable") fail("QA Activity page fault requested.", "unavailable");
+  if (mode === "rate_limit") fail("QA Activity page fault requested.", "resource-exhausted");
+  fail("QA Activity page fault requested.", "internal");
 }
 
 async function seedWalletNotification(db, fixture) {
@@ -448,6 +492,8 @@ function factory({db, env = process.env, stripe}) {
       if (data.action === "activity_seed") return {...await seedActivityFixture(db, fixture), fixtureId: fixture.id, qaOnly: true};
       if (data.action === "activity_insert") return {...await insertActivityFixtureRecord(db, fixture), fixtureId: fixture.id, qaOnly: true};
       if (data.action === "activity_pagination_seed") return {...await seedActivityPagination(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      if (data.action === "activity_pagination_insert") return {...await insertActivityPaginationRecord(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      if (data.action === "activity_page_fault") return activityPageFault(data);
       return {...await deleteActivityReference(db, fixture), fixtureId: fixture.id, qaOnly: true};
     }
     if (certificationActions.has(data.action)) {
