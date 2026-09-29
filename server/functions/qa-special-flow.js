@@ -25,7 +25,7 @@ const fail = (message, code = "failed-precondition") => {
 };
 const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
 const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference", "activity_pagination_seed", "activity_pagination_insert", "activity_page_fault"]);
-const certificationActions = new Set(["wallet_notification_seed", "chat_retry_probe", "cancellation_quote_probe"]);
+const certificationActions = new Set(["wallet_notification_seed", "referral_seed", "chat_retry_probe", "cancellation_quote_probe"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -308,6 +308,50 @@ async function seedWalletNotification(db, fixture) {
   return {notificationId: id, category: "wallet", type: "wallet_payment", destinationRoute: "wallet", qaOnly: true};
 }
 
+async function seedReferralFixture(db, fixture) {
+  const referredUserId = activityDeliveryId(fixture.id, "referral_referred");
+  const referralId = referredUserId;
+  const ref = db.collection("referrals").doc(referralId);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    await ref.create({
+      referrerUserId: fixture.senderId,
+      inviterUserId: fixture.senderId,
+      referredUserId,
+      referredEmail: `${referredUserId}@qa.invalid`,
+      referrerEmail: "sender@example.invalid",
+      referralCode: `QA${fixture.id.slice(0, 10).toUpperCase()}`,
+      status: "roth_awarded",
+      rewardStatus: "roth_awarded",
+      rewardAmount: 5,
+      rewardCurrency: "ROTH",
+      rewardSource: "Referral",
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      isSyntheticQa: true,
+      qaReferralFixture: true,
+      qaNamespace: ROOT,
+      qaFixtureId: fixture.id,
+      qaCreatedBy: fixture.qaCreatedBy,
+      qaCreatedAt: fixture.qaCreatedAt,
+      qaImmutable: true,
+      suppressExternalSideEffects: true,
+      excludeFromAnalytics: true,
+      excludeFromSettlement: true,
+      excludeFromPayout: true,
+      excludeFromCustomerNotifications: true,
+    });
+  }
+  return {
+    referralId,
+    referralCode: `QA${fixture.id.slice(0, 10).toUpperCase()}`,
+    status: "roth_awarded",
+    rewardAmount: 5,
+    rewardCurrency: "ROTH",
+    qaOnly: true,
+  };
+}
+
 async function chatRetryProbe(db, fixture) {
   const deliveryId = activityDeliveryId(fixture.id, "chat");
   const chatRef = db.collection("chats").doc(deliveryId);
@@ -360,7 +404,7 @@ async function cancellationQuoteProbe(db, fixture) {
 }
 
 async function deleteTopLevelQaRecords(db, fixtureId) {
-  const collections = ["deliveryRequests", "chats", "notifications", "walletTransactions"];
+  const collections = ["deliveryRequests", "chats", "notifications", "walletTransactions", "referrals"];
   const deleted = {};
   for (const collection of collections) {
     const snapshot = await db.collection(collection).where("qaFixtureId", "==", fixtureId).limit(400).get();
@@ -503,6 +547,7 @@ function factory({db, env = process.env, stripe}) {
     }
     if (certificationActions.has(data.action)) {
       if (data.action === "wallet_notification_seed") return seedWalletNotification(db, fixture);
+      if (data.action === "referral_seed") return seedReferralFixture(db, fixture);
       if (data.action === "chat_retry_probe") return chatRetryProbe(db, fixture);
       return cancellationQuoteProbe(db, fixture);
     }
