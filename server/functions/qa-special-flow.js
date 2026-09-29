@@ -137,8 +137,7 @@ async function seedActivityFixture(db, fixture) {
     qaFixtureId: fixture.id,
     qaCreatedBy: fixture.qaCreatedBy,
     qaImmutable: true,
-    suppressExternalSideEffects: true,
-    excludeFromCustomerNotifications: true,
+      suppressExternalSideEffects: true,
   };
   batch.create(db.collection("notifications").doc(notificationId), {
     ...notificationBase,
