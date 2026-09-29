@@ -552,7 +552,7 @@ exports.getSenderWallet = senderPaymentCallable(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
-exports.getSenderWalletTransactions = senderPaymentCallable(async (data, context) => {
+async function readSenderWalletTransactions(data, context) {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
   const pageSize = Math.min(50, Math.max(1, Number(data && data.pageSize || 20)));
@@ -598,7 +598,10 @@ exports.getSenderWalletTransactions = senderPaymentCallable(async (data, context
     nextPageToken: page.nextPageToken,
     source: selectedSource,
   };
-});
+}
+
+exports.readSenderWalletTransactions = readSenderWalletTransactions;
+exports.getSenderWalletTransactions = senderPaymentCallable(readSenderWalletTransactions);
 
 exports.completeSenderWalletOnboarding = senderPaymentCallable(async (_data, context) => {
   await requireSenderIdentity(context);

@@ -378,18 +378,22 @@
         "lib/app/sender_mobile/account_bootstrap_api.dart",
         "lib/app/sender_mobile/sender_mobile_home.dart",
         "lib/app/sender_mobile/sender_notifications.dart",
+        "lib/app/sender_mobile/sender_wallet.dart",
+        "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
         "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "lib/website/shared/sender_notification_visibility.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/roth-ledger.js",
         "server/functions/sender-notification-state.js",
         "server/functions/sender-notification-state.test.js",
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart",
         "test/sender_account_bootstrap_api_test.dart",
         "test/sender_mobile/sender_notification_cloud_run_contract_test.dart",
         "test/website_account_bootstrap_api_test.dart"
       ],
-      "reason": "Sender notification state is one reviewed cutover across the established account Cloud Run authority and its Sender Web/native callers; no unrelated product or backend route is included."
+      "reason": "Sender notification state and the read-only Wallet ledger are one reviewed cutover across the established account Cloud Run authority and their Sender callers; no unrelated product or backend route is included."
     }
   ],
   "blockedPrefixes": [
