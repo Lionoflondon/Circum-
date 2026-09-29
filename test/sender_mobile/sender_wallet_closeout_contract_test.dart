@@ -66,7 +66,7 @@ void main() {
     final details = source.substring(detailsStart, detailsEnd);
     expect(details, contains('Available to Circum Support'));
     expect(details, isNot(contains('Reference ID')));
-    expect(details, isNot(contains('transaction.referenceId')));
-    expect(details, isNot(contains('transaction.id')));
+    expect(details, isNot(contains("_DetailRow(label: 'Reference ID'")));
+    expect(details, isNot(contains("_DetailRow(label: 'Transaction ID'")));
   });
 }
