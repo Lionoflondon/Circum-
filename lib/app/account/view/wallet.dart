@@ -6,7 +6,7 @@ import '../../sender_mobile/sender_wallet.dart';
 ///
 /// Wallet authority and presentation live in the Sender Wallet surface. The
 /// legacy route delegates there so it cannot expose a stale, non-interactive
-/// placeholder or a second balance/payment implementation.
+/// secondary or competing balance/payment implementation.
 class WalletView extends StatelessWidget {
   const WalletView({super.key});
 
