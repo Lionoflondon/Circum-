@@ -71,4 +71,67 @@ void main() {
       ),
     );
   });
+
+  test('fresh Wallet balance uses the authenticated account Cloud Run owner',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {
+            'balance': 12.5,
+            'currency': 'ROTH',
+            'status': 'active',
+            'updatedAt': '2026-09-29T09:00:00.000Z',
+          },
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeSenderWalletOperationViaCloudRun(
+      operation: 'getSenderWallet',
+      fallbackMessage: 'balance unavailable',
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result['balance'], 12.5);
+    expect(captured.url.path, '/getSenderWallet');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+  });
+
+  test(
+      'payment-method list uses the same protected owner and preserves the empty state',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {
+            'customerId': null,
+            'defaultPaymentMethodId': null,
+            'preference': 'ask_every_checkout',
+            'paymentMethods': const [],
+          },
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeSenderWalletOperationViaCloudRun(
+      operation: 'listSenderPaymentMethods',
+      fallbackMessage: 'payment methods unavailable',
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result['paymentMethods'], isEmpty);
+    expect(captured.url.path, '/listSenderPaymentMethods');
+  });
 }

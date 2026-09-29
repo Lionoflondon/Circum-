@@ -5505,10 +5505,12 @@
       "generation": "Gen 1",
       "productionPurpose": "rothLedger.getSenderWallet",
       "callers": [
+        "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
-        "server/functions/sender-payment-app-check.test.js"
+        "server/functions/sender-payment-app-check.test.js",
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5780,7 +5782,6 @@
       "generation": "Gen 1",
       "productionPurpose": "rothLedger.initialiseSenderWallet",
       "callers": [
-        "lib/app/sender_mobile/sender_wallet.dart",
         "server/functions/firestore-starter-roth-rules.test.js",
         "server/functions/roth-ledger-core.test.js",
         "server/functions/sender-payment-app-check.test.js"
@@ -5892,11 +5893,12 @@
       "productionPurpose": "senderFinance.listSenderPaymentMethods(stripe)",
       "callers": [
         "lib/app/sender_mobile/sender_finance.dart",
-        "lib/app/sender_mobile/sender_wallet.dart",
+        "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/payment-runtime-bindings.test.js",
-        "server/functions/sender-payment-app-check.test.js"
+        "server/functions/sender-payment-app-check.test.js",
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
