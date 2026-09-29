@@ -74,6 +74,8 @@ class SenderScrollablePageShell extends StatelessWidget {
   final SenderPagePaddingBuilder? paddingBuilder;
   final double maxWidth;
   final Key? scrollKey;
+  final VoidCallback? onScrollNearEnd;
+  final double scrollEndThreshold;
 
   const SenderScrollablePageShell({
     super.key,
@@ -82,6 +84,8 @@ class SenderScrollablePageShell extends StatelessWidget {
     this.paddingBuilder,
     this.maxWidth = SenderPrimaryPageShell.maxContentWidth,
     this.scrollKey,
+    this.onScrollNearEnd,
+    this.scrollEndThreshold = 480,
   });
 
   @override
@@ -104,15 +108,27 @@ class SenderScrollablePageShell extends StatelessWidget {
                 child: SizedBox(
                   width: contentWidth,
                   height: contentHeight,
-                  child: ListView(
-                    key: scrollKey,
-                    padding: EdgeInsets.zero,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: children,
-                      ),
-                    ],
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (onScrollNearEnd != null &&
+                          notification.depth == 0 &&
+                          notification.metrics.axis == Axis.vertical &&
+                          notification.metrics.extentAfter <=
+                              scrollEndThreshold) {
+                        onScrollNearEnd!();
+                      }
+                      return false;
+                    },
+                    child: ListView(
+                      key: scrollKey,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: children,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

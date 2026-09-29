@@ -235,16 +235,26 @@ async function seedWalletNotification(db, fixture) {
   const ref = db.collection("notifications").doc(id);
   const existing = await ref.get();
   if (!existing.exists) {
+    const now = Timestamp.now();
     await ref.create({
+      schemaVersion: 1,
       recipientId: fixture.senderId,
       title: "QA Wallet payment received",
       body: "Synthetic QA wallet payment for certification.",
       type: "wallet_payment",
       category: "wallet",
+      family: "wallet",
+      product: "wallet",
+      source: "wallet",
       read: false,
       archived: false,
-      createdAt: Timestamp.now(),
+      suppressed: false,
+      createdAt: now,
+      timestamp: now,
+      expiresAt: Timestamp.fromMillis(now.toMillis() + 3600000),
+      route: "wallet",
       destination: {route: "wallet"},
+      data: {category: "wallet", type: "wallet_payment", destination: {route: "wallet"}},
       walletTransactionId: id,
       isSyntheticQa: true,
       qaWalletNotification: true,

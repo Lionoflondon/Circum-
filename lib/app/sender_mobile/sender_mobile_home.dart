@@ -2078,6 +2078,7 @@ class SenderHomeNotification {
   final String title;
   final String body;
   final bool read;
+  final String category;
   final DateTime? createdAt;
   final String type;
   final Map<String, dynamic> destination;
@@ -2089,6 +2090,7 @@ class SenderHomeNotification {
     required this.title,
     required this.body,
     required this.read,
+    this.category = 'system',
     this.type = '',
     this.destination = const <String, dynamic>{},
     this.bookingId = '',
@@ -2247,35 +2249,44 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .limit(50)
         .snapshots()
         .map((snapshot) {
+      traceSenderNotificationStage(
+        'home_firestore_query',
+        count: snapshot.docs.length,
+        qaWalletCount: snapshot.docs
+            .where((doc) => doc.data()['qaWalletNotification'] == true)
+            .length,
+      );
       final items = snapshot.docs.where((doc) {
         return senderNotificationVisible(doc.data());
       }).map((doc) {
         final data = doc.data();
-        final rawDate = data['createdAt'];
+        final projection = projectSenderNotification(data);
         final nested = data['data'] is Map
             ? Map<String, dynamic>.from(data['data'] as Map)
-            : const <String, dynamic>{};
-        final rawDestination = data['destination'] ?? nested['destination'];
-        final destination = rawDestination is Map
-            ? Map<String, dynamic>.from(rawDestination)
             : const <String, dynamic>{};
         return SenderHomeNotification(
           id: doc.id,
           title: '${data['title'] ?? 'Circum update'}'.trim(),
           body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-          read: data['read'] == true,
-          type: '${data['type'] ?? ''}'.trim(),
-          destination: destination,
+          read: projection.read,
+          category: projection.category,
+          type: projection.type,
+          destination: projection.destination,
           bookingId: _senderHomeFirstText([
             data['bookingId'],
             nested['bookingId'],
-            destination['bookingId'],
-            destination['deliveryId'],
+            projection.destination['bookingId'],
+            projection.destination['deliveryId'],
           ]),
-          archived: data['archived'] == true || data['deletedAt'] != null,
-          createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
+          archived: projection.archived,
+          createdAt: projection.createdAt,
         );
-      }).where((item) => !item.archived).toList(growable: false);
+      }).toList(growable: false);
+      traceSenderNotificationStage(
+        'home_visibility_sort_page_window',
+        count: items.length,
+        qaWalletCount: items.where((item) => item.category == 'wallet').length,
+      );
       return items;
     });
   }

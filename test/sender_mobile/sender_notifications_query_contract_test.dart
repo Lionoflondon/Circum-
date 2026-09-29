@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:circum/app/sender_mobile/sender_notification_visibility.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -34,6 +35,51 @@ void main() {
       centreSource,
       isNot(contains('stream: _repository.watchNotifications()')),
     );
-    expect(centreSource, contains("category == 'payments'"));
+    expect(centreSource, contains('projectSenderNotification'));
+    expect(homeSource, contains('projectSenderNotification'));
   });
+
+  test('canonical wallet payment remains visible and routes to Wallet', () {
+    final projection = projectSenderNotification({
+      'schemaVersion': 1,
+      'recipientId': 'qa-sender',
+      'type': 'wallet_payment',
+      'category': 'payments',
+      'family': 'wallet',
+      'product': 'wallet',
+      'source': 'wallet',
+      'read': true,
+      'archived': false,
+      'suppressed': false,
+      'createdAt': DateTime(2026, 9, 29, 12),
+      'expiresAt': DateTime(2026, 9, 29, 13),
+      'destination': {'route': 'wallet'},
+    }, now: DateTime(2026, 9, 29, 12, 30));
+
+    expect(projection.category, 'wallet');
+    expect(projection.route, 'wallet');
+    expect(projection.visible, isTrue);
+    expect(projection.read, isTrue);
+  });
+
+  test(
+    'unknown notification types degrade safely and state flags govern visibility',
+    () {
+      final unknown = projectSenderNotification({
+        'type': 'future_type',
+        'createdAt': DateTime(2026, 9, 29),
+      });
+      expect(unknown.category, 'system');
+      expect(unknown.route, 'notifications');
+      expect(unknown.visible, isTrue);
+      expect(
+        projectSenderNotification({
+          'type': 'wallet_payment',
+          'read': true,
+          'suppressed': true,
+        }).visible,
+        isFalse,
+      );
+    },
+  );
 }

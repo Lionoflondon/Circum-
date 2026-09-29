@@ -20,6 +20,7 @@ class CircumNotification {
   final String id;
   final String title;
   final String body;
+  final String type;
   final String category;
   final bool read;
   final bool archived;
@@ -30,6 +31,7 @@ class CircumNotification {
     required this.id,
     required this.title,
     required this.body,
+    this.type = '',
     required this.category,
     required this.read,
     required this.archived,
@@ -41,38 +43,21 @@ class CircumNotification {
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
-    final rawDestination =
-        data['destination'] ??
-        (data['data'] is Map ? (data['data'] as Map)['destination'] : null);
+    final projection = projectSenderNotification(data);
     return CircumNotification(
       id: document.id,
       title: '${data['title'] ?? 'Circum update'}'.trim(),
       body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-      category: _notificationCategory(data),
-      read: data['read'] == true,
-      archived: data['archived'] == true || data['deletedAt'] != null,
-      destination: rawDestination is Map
-          ? Map<String, dynamic>.from(rawDestination)
-          : const <String, dynamic>{},
-      createdAt: data['createdAt'] is Timestamp
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
+      type: projection.type,
+      category: projection.category,
+      read: projection.read,
+      archived: projection.archived,
+      destination: projection.destination,
+      createdAt: projection.createdAt,
     );
   }
 
-  bool get visible => senderNotificationVisible({
-    'archived': archived,
-    'deletedAt': archived ? true : null,
-  });
-}
-
-String _notificationCategory(Map<String, dynamic> data) {
-  final category = '${data['category'] ?? ''}'.trim().toLowerCase();
-  if (category == 'payment' || category == 'payments') return 'wallet';
-  if (category.isNotEmpty) return category;
-  final type = '${data['type'] ?? ''}'.trim().toLowerCase();
-  if (type == 'payment' || type.startsWith('payment_')) return 'wallet';
-  return 'system';
+  bool get visible => !archived;
 }
 
 class SenderNotificationsRepository {
@@ -98,10 +83,34 @@ class SenderNotificationsRepository {
         .limit(100)
         .snapshots()
         .map((snapshot) {
+          traceSenderNotificationStage(
+            'firestore_query',
+            count: snapshot.docs.length,
+            qaWalletCount: snapshot.docs
+                .where((doc) => doc.data()['qaWalletNotification'] == true)
+                .length,
+          );
+          final decoded = snapshot.docs
+              .map(CircumNotification.fromDocument)
+              .toList(growable: false);
+          traceSenderNotificationStage(
+            'repository_decode_taxonomy',
+            count: decoded.length,
+            qaWalletCount: decoded
+                .where((item) => item.category == 'wallet')
+                .length,
+          );
           final results = snapshot.docs
               .where((doc) => senderNotificationVisible(doc.data()))
               .map(CircumNotification.fromDocument)
               .toList();
+          traceSenderNotificationStage(
+            'visibility_sort_page_window',
+            count: results.length,
+            qaWalletCount: results
+                .where((item) => item.category == 'wallet')
+                .length,
+          );
           return results;
         });
   }
@@ -161,11 +170,8 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
     _notifications = _repository.watchNotifications();
   }
 
-  String _categoryForFilter(String label) => switch (label) {
-    'Health+' => 'health',
-    'Deliveries' => 'deliveries',
-    _ => label.toLowerCase(),
-  };
+  String _categoryForFilter(String label) =>
+      senderNotificationFilterCategory(label);
 
   @override
   Widget build(BuildContext context) => StreamBuilder<List<CircumNotification>>(
@@ -177,6 +183,14 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
           : notifications
                 .where((item) => item.category == _categoryForFilter(_filter))
                 .toList();
+      traceSenderNotificationStage(
+        'filter_${_filter.toLowerCase()}',
+        count: visible.length,
+        qaWalletCount: visible
+            .where((item) => item.category == 'wallet')
+            .length,
+        category: _filter,
+      );
       return Scaffold(
         backgroundColor: AppTokens.background,
         appBar: AppBar(
@@ -239,7 +253,30 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                             itemBuilder: (context, index) => _NotificationCard(
                               notification: visible[index],
                               onOpen: () async {
-                                await _repository.markRead(visible[index].id);
+                                try {
+                                  await _repository.markRead(visible[index].id);
+                                } catch (error) {
+                                  // State mutation is ancillary to routing.
+                                  // Preserve the destination if its separate
+                                  // owner is temporarily unavailable.
+                                  debugPrint(
+                                    'sender_notification_state_unavailable '
+                                    'action=mark_read error=${error.runtimeType}',
+                                  );
+                                }
+                                traceSenderNotificationStage(
+                                  'widget_render_route',
+                                  count: 1,
+                                  qaWalletCount:
+                                      visible[index].category == 'wallet'
+                                      ? 1
+                                      : 0,
+                                  route: visible[index].destination['route']
+                                      is String
+                                      ? visible[index].destination['route']
+                                          as String
+                                      : null,
+                                );
                                 if (mounted) {
                                   widget.onOpenNotification?.call(
                                     visible[index],
