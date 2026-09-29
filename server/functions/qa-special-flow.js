@@ -254,7 +254,7 @@ async function insertActivityPaginationRecord(db, fixture) {
   const seed = current.activityPaginationSeed;
   if (!seed) fail("QA Activity pagination fixture is not seeded.");
   const id = activityDeliveryId(fixture.id, "late_insert");
-  const record = activityDelivery(fixture, "late_insert", "completed", activityMillis(fixture, 180), {qaActivityPagination: true});
+  const record = activityDelivery(fixture, "late_insert", "completed", activityMillis(fixture, 501), {qaActivityPagination: true});
   const ref = db.collection("deliveryRequests").doc(id);
   const existing = await ref.get();
   if (!existing.exists) await ref.create(record);
