@@ -917,7 +917,6 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         ),
       );
 
-  // ignore: unused_element
   void _openSupport() => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const _WalletSupportScreen(),

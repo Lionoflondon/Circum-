@@ -74,4 +74,35 @@ void main() {
     expect(details, isNot(contains("_DetailRow(label: 'Reference ID'")));
     expect(details, isNot(contains("_DetailRow(label: 'Transaction ID'")));
   });
+
+  test('Wallet launch actions have concrete handlers and destinations', () {
+    final source =
+        File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
+    for (final label in [
+      'Redeem Roth',
+      'Add Card',
+      'Manage Payments',
+      'Wallet Support',
+      'View all activity',
+      'Copy Code',
+      'Share Link',
+      'Copy Link',
+      'Set as default',
+      'Remove card',
+    ]) {
+      expect(source, contains(label), reason: 'missing Wallet action: $label');
+    }
+    for (final route in [
+      '/sender-mobile/wallet/activity',
+      '/sender-mobile/wallet/payments',
+      '/sender-mobile/wallet/earn',
+      '/sender-mobile/wallet/support',
+    ]) {
+      expect(source, contains(route), reason: 'missing Wallet route: $route');
+    }
+    expect(source, contains('createSetupIntent'));
+    expect(source, contains('setDefaultPaymentMethod'));
+    expect(source, contains('detachPaymentMethod'));
+    expect(source, contains('initialError: _activityError'));
+  });
 }
