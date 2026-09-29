@@ -55,6 +55,70 @@ function paymentMethodView(paymentMethod, defaultPaymentMethodId) {
   };
 }
 
+function paymentMethodsResponse({customerId = null, defaultPaymentMethodId = null, preference = "ask_every_checkout", methods = []} = {}) {
+  return {
+    customerId,
+    defaultPaymentMethodId,
+    preference,
+    paymentMethods: methods.map((item) => paymentMethodView(item, defaultPaymentMethodId)),
+    walletCompatible: true,
+    applePaySupported: true,
+    googlePaySupported: true,
+  };
+}
+
+async function readSenderPaymentMethodsForContext(stripe, context, db = getFirestore()) {
+  const sender = requireSender(context);
+  const [userSnap, preferenceSnap] = await Promise.all([
+    db.collection("users").doc(sender.uid).get(),
+    db.collection("users").doc(sender.uid).collection("finance").doc("checkoutPreferences").get(),
+  ]);
+  const user = userSnap.exists ? userSnap.data() || {} : {};
+  const preference = preferenceSnap.exists ?
+    preferenceSnap.data().preference || "ask_every_checkout" : "ask_every_checkout";
+  const customerId = `${user.stripeCustomerId || user.customerId || ""}`.trim();
+  if (!customerId) return paymentMethodsResponse({preference});
+
+  let customer;
+  try {
+    customer = await stripe.customers.retrieve(customerId);
+  } catch (error) {
+    if (error && error.code === "resource_missing") return paymentMethodsResponse({preference});
+    if (error && ["api_connection_error", "api_error", "timeout", "rate_limit"].includes(error.code)) {
+      throw new functions.https.HttpsError(
+          error.code === "rate_limit" ? "resource-exhausted" : "unavailable",
+          "Payment methods are temporarily unavailable.",
+      );
+    }
+    throw error;
+  }
+  if (!customer || customer.deleted === true) return paymentMethodsResponse({preference});
+  const defaultPaymentMethodId = customer.invoice_settings &&
+    customer.invoice_settings.default_payment_method || null;
+  let methods;
+  try {
+    methods = await stripe.paymentMethods.list({customer: customerId, type: "card"});
+  } catch (error) {
+    if (error && ["api_connection_error", "api_error", "timeout", "rate_limit"].includes(error.code)) {
+      throw new functions.https.HttpsError(
+          error.code === "rate_limit" ? "resource-exhausted" : "unavailable",
+          "Payment methods are temporarily unavailable.",
+      );
+    }
+    throw error;
+  }
+  return paymentMethodsResponse({
+    customerId,
+    defaultPaymentMethodId,
+    preference,
+    methods: Array.isArray(methods && methods.data) ? methods.data : [],
+  });
+}
+
+function readSenderPaymentMethods(stripe, db = getFirestore()) {
+  return (_data, context) => readSenderPaymentMethodsForContext(stripe, context, db);
+}
+
 exports.listSenderPaymentMethods = (stripe) => senderPaymentCallable(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
@@ -180,5 +244,11 @@ exports.saveSenderCheckoutPreference = senderPaymentCallable(async (data, contex
   }, {merge: true});
   return {preference};
 });
+
+exports.readSenderPaymentMethods = readSenderPaymentMethods;
+exports._private = {
+  paymentMethodsResponse,
+  readSenderPaymentMethodsForContext,
+};
 
 exports.ensureStripeCustomer = ensureStripeCustomer;

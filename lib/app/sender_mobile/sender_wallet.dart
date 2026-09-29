@@ -194,6 +194,9 @@ List<SenderWalletTransaction> mergeSenderWalletTransactions(
 DateTime? _walletDateTime(Object? value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true);
+  }
   if (value is String) return DateTime.tryParse(value);
   return null;
 }
@@ -330,31 +333,14 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderWalletData> initialise() async {
-    final user = _user;
-    try {
-      await functions
-          .httpsCallable('initialiseSenderWallet')
-          .call()
-          .timeout(_firebaseReadTimeout);
-    } catch (error) {
-      debugPrint('Sender Wallet service initialization unavailable: $error');
+    if (auth.currentUser == null) {
+      throw StateError('Sign in to access your Wallet.');
     }
-    final walletSnapshot = await firestore
-        .collection('senderWallets')
-        .doc(user.uid)
-        .get()
-        .timeout(_firebaseReadTimeout);
-    final wallet = walletSnapshot.data() ?? const <String, dynamic>{};
-    var profile = const <String, dynamic>{};
-    try {
-      profile = (await profileAuthority.load('wallet.initialise.profile')).data;
-    } catch (error) {
-      debugPrint('Sender Wallet profile flag unavailable: $error');
-    }
-    return SenderWalletData.fromMap(
-      wallet,
-      onboardingCompleted: profile['senderWalletOnboardingCompleted'] == true,
+    final data = await loadSenderWalletViaCloudRun(auth: auth).timeout(
+      _firebaseReadTimeout,
     );
+    return SenderWalletData.fromMap(data,
+        onboardingCompleted: data['onboardingCompleted'] == true);
   }
 
   @override
@@ -435,10 +421,9 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderPaymentMethodsData> paymentMethods() async {
-    final result =
-        await functions.httpsCallable('listSenderPaymentMethods').call();
+    final result = await loadSenderPaymentMethodsViaCloudRun(auth: auth);
     return SenderPaymentMethodsData.fromMap(
-      Map<String, dynamic>.from(result.data as Map),
+      Map<String, dynamic>.from(result),
     );
   }
 
@@ -665,7 +650,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       }
       await _subscription?.cancel();
       _subscription = _repository.watch().listen((value) {
-        if (!mounted) return;
+        if (!mounted || !_acceptWalletUpdate(value)) return;
         setState(() {
           _wallet = value;
           _showingCachedWallet = false;
@@ -717,6 +702,14 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     debugPrint(
       'wallet_telemetry event=$event durationMs=$elapsed cached=$_showingCachedWallet error=${error == null ? '' : error.runtimeType}',
     );
+  }
+
+  bool _acceptWalletUpdate(SenderWalletData value) {
+    final current = _wallet;
+    final currentAt = current?.updatedAt;
+    final incomingAt = value.updatedAt;
+    if (currentAt == null || incomingAt == null) return true;
+    return !incomingAt.isBefore(currentAt);
   }
 
   Future<void> _refreshPaymentMethods() async {
