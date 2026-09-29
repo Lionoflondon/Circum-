@@ -236,6 +236,6 @@ void main() {
         website.indexOf('Future<void> _loadSenderRothBalance()'),
         website.indexOf('Future<void> _showLegendCelebration('));
     expect(balance.indexOf('_allowSenderUser(user)'),
-        lessThan(balance.indexOf("httpsCallable('getSenderRothBalance')")));
+        lessThan(balance.indexOf("callAccountBootstrap('getSenderWallet'")));
   });
 }

@@ -117,7 +117,7 @@ test("Sender Health+ UI does not write authoritative Health+ records directly", 
 test("Website Health+ UI does not write authoritative Health+ records directly", () => {
   assert.match(websiteSource, /httpsCallable\('createHealthPlusBooking'\)/);
   assert.match(websiteSource, /httpsCallable\('updateSenderHealthPlusBooking'\)/);
-  assert.match(websiteSource, /httpsCallable\('getSenderRothBalance'\)/);
+  assert.match(websiteSource, /callAccountBootstrap\(\s*'getSenderWallet'/);
   assert.match(websiteSource, /'useRoth': _healthUseRoth/);
   assert.match(websiteSource, /updateHealthPlusPickupStatus/);
   assert.doesNotMatch(websiteSource, /collection\('healthPlusProfiles'\)/);
