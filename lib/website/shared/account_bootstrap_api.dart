@@ -30,9 +30,14 @@ Future<Map<String, dynamic>> callAccountBootstrap(
     'submitRiderApplication',
   };
   const senderAppCheckOperations = {'updateSenderNotificationState'};
+  const senderWalletReadOperations = {
+    'getSenderWallet',
+    'listSenderPaymentMethods',
+  };
   if (operation != 'ensureSenderAccount' &&
       !riderOperations.contains(operation) &&
-      !senderAppCheckOperations.contains(operation)) {
+      !senderAppCheckOperations.contains(operation) &&
+      !senderWalletReadOperations.contains(operation)) {
     throw ArgumentError.value(operation, 'operation', 'Unsupported operation');
   }
   final user = (auth ?? FirebaseAuth.instance).currentUser;
@@ -45,7 +50,8 @@ Future<Map<String, dynamic>> callAccountBootstrap(
   }
   String? appCheckToken;
   if (riderOperations.contains(operation) ||
-      senderAppCheckOperations.contains(operation)) {
+      senderAppCheckOperations.contains(operation) ||
+      senderWalletReadOperations.contains(operation)) {
     appCheckToken = await (appCheck ?? FirebaseAppCheck.instance).getToken();
     if (appCheckToken == null || appCheckToken.isEmpty) {
       throw const AccountBootstrapException(

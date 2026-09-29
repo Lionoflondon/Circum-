@@ -10119,11 +10119,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         });
         return;
       }
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('getSenderRothBalance')
-          .call<Map<String, dynamic>>()
+      final result = await callAccountBootstrap('getSenderWallet', const {})
           .timeout(_senderAuthOperationTimeout);
-      final data = Map<String, dynamic>.from(result.data);
+      final data = Map<String, dynamic>.from(result);
       if (!mounted) return;
       setState(() {
         _healthRothBalance = (data['availableRoth'] as num?)?.toDouble() ??

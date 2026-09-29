@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
+import 'sender_wallet_cloud_run_api.dart';
+
 enum SenderCheckoutPreference {
   applePayFirst,
   googlePayFirst,
@@ -320,10 +322,8 @@ class FirebaseSenderPaymentProfileRepository
 
   @override
   Future<SenderPaymentProfile> paymentMethods() async {
-    final result =
-        await functions.httpsCallable('listSenderPaymentMethods').call();
-    return SenderPaymentProfile.fromMap(
-        Map<String, dynamic>.from(result.data as Map));
+    final result = await loadSenderPaymentMethodsViaCloudRun();
+    return SenderPaymentProfile.fromMap(result);
   }
 
   @override
