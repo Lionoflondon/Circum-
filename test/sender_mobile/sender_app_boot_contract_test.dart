@@ -159,7 +159,7 @@ void main() {
         File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
 
     expect(wallet, contains("status: '\${map['status'] ?? 'unknown'}'"));
-    expect(wallet, contains("return 'Status unavailable';"));
+    expect(wallet, contains("return 'Unknown status';"));
   });
 
   test('Sender wallet shell does not nest vertical scroll views', () {
