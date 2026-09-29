@@ -61,8 +61,8 @@ void main() {
   });
 
   test('Sender App Check startup cannot block the authenticated shell', () {
-    final source =
-        File('lib/app/sender_mobile/sender_mobile_preview.dart').readAsStringSync();
+    final source = File('lib/app/sender_mobile/sender_mobile_preview.dart')
+        .readAsStringSync();
     expect(
       source,
       contains(
@@ -129,7 +129,37 @@ void main() {
     expect(wallet, contains('_scheduleWalletRetry'));
     expect(wallet,
         isNot(contains('if (wallet == null || profile == null) return;')));
-    expect(wallet, isNot(contains('controller.addError')));
+    expect(wallet,
+        contains('if (!controller.isClosed) controller.addError(error)'));
+  });
+
+  test(
+      'Sender wallet preserves fresh state and surfaces partial refresh failures',
+      () {
+    final wallet =
+        File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
+
+    expect(wallet,
+        contains('if (_wallet != null && !_showingCachedWallet) return;'));
+    expect(wallet, contains('await Future.wait<void>'));
+    expect(
+        wallet, contains('could not be refreshed. Pull to refresh or retry.'));
+    expect(
+      wallet,
+      isNot(contains(
+          '.timeout(_walletOperationTimeout, onTimeout: (sink) => sink.close())')),
+    );
+    expect(wallet,
+        contains('Live wallet updates are unavailable. Pull to refresh.'));
+    expect(wallet, contains("? 'Unavailable'"));
+  });
+
+  test('Sender wallet does not present unknown ledger status as completed', () {
+    final wallet =
+        File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
+
+    expect(wallet, contains("status: '\${map['status'] ?? 'unknown'}'"));
+    expect(wallet, contains("return 'Unknown status';"));
   });
 
   test('Sender wallet shell does not nest vertical scroll views', () {
