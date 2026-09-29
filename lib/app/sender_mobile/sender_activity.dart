@@ -656,6 +656,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   String _query = '';
   String? _nextPage;
   String? _error;
+  String? _loadMoreError;
   bool _loading = true;
   bool _loadingMore = false;
   bool _activeLoaded = false;
@@ -746,7 +747,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
 
   Future<void> _loadMore() async {
     if (_nextPage == null || _loadingMore) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
     try {
       final page = await _repository.history(pageToken: _nextPage);
       if (mounted) {
@@ -766,9 +770,20 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           );
         });
       }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadMoreError =
+              'More activity could not load. Check your connection and retry.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
+  }
+
+  void _loadMoreWhenNearEnd() {
+    if (_nextPage != null && !_loadingMore) unawaited(_loadMore());
   }
 
   List<SenderActivityItem> get _visible {
@@ -807,6 +822,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     );
     return SenderScrollablePageShell(
       paddingBuilder: (_) => const EdgeInsets.fromLTRB(20, 18, 20, 30),
+      onScrollNearEnd: _loadMoreWhenNearEnd,
       children: [
         Text(
           'Activity',
@@ -877,7 +893,24 @@ class _SenderActivityViewState extends State<SenderActivityView> {
             )
           else
             ActivityTimeline(groups: _grouped(_visible)),
-          if (_nextPage != null)
+          if (_nextPage != null && _loadMoreError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                children: [
+                  Text(
+                    _loadMoreError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: _ActivityColors.muted),
+                  ),
+                  TextButton(
+                    onPressed: _loadingMore ? null : _loadMore,
+                    child: const Text('Retry loading activity'),
+                  ),
+                ],
+              ),
+            )
+          else if (_nextPage != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: TextButton(

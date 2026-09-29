@@ -80,6 +80,34 @@ void main() {
     expect(source, contains('merged.sort(_compareActivityItemsDescending);'));
   });
 
+  test(
+    'Sender Activity requests the next page at the real scroll boundary',
+    () {
+      final source = File(
+        'lib/app/sender_mobile/sender_activity.dart',
+      ).readAsStringSync();
+      final shell = File(
+        'lib/app/sender_mobile/sender_page_shell.dart',
+      ).readAsStringSync();
+      expect(source, contains('onScrollNearEnd: _loadMoreWhenNearEnd'));
+      expect(source, contains('void _loadMoreWhenNearEnd()'));
+      expect(source, contains('_loadingMore'));
+      expect(shell, contains('notification.metrics.extentAfter'));
+      expect(shell, contains('onScrollNearEnd!();'));
+    },
+  );
+
+  test('Sender Activity pagination failure is safe and retryable', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_activity.dart',
+    ).readAsStringSync();
+    expect(source, contains('_loadMoreError'));
+    expect(source, contains('More activity could not load'));
+    expect(source, contains('Retry loading activity'));
+    expect(source, contains('catch (_)'));
+    expect(source, isNot(contains("_loadMoreError = '\$error'")));
+  });
+
   test('Sender Activity has warm-session cache and performance telemetry', () {
     final source = File(
       'lib/app/sender_mobile/sender_activity.dart',
