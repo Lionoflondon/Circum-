@@ -5,7 +5,9 @@ const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
+const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const senderAccount = require("./sender-account");
+const senderFinance = require("./sender-finance");
 const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
 const rothLedger = require("./roth-ledger");
@@ -16,7 +18,9 @@ const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   updateSenderNotificationState: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: true},
+  getSenderWallet: {handler: {run: rothLedger.readSenderWallet}, appCheckRequired: true},
   getSenderWalletTransactions: {handler: {run: rothLedger.readSenderWalletTransactions}, appCheckRequired: true},
+  listSenderPaymentMethods: {handler: null, appCheckRequired: true},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
   advanceRiderOnboarding: {handler: riderAccount.advanceRiderOnboarding, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
@@ -30,6 +34,7 @@ const STATUS = {
   "failed-precondition": "FAILED_PRECONDITION",
   "resource-exhausted": "RESOURCE_EXHAUSTED",
   unavailable: "UNAVAILABLE",
+  "deadline-exceeded": "DEADLINE_EXCEEDED",
   "not-found": "NOT_FOUND",
   internal: "INTERNAL",
 };
@@ -49,7 +54,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|getSenderWalletTransactions|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -68,10 +73,18 @@ function createRateLimiter(options = {}) {
 
 function productionDependencies() {
   if (!getApps().length) initializeApp();
+  const runtimeConfig = resolveStripeRuntimeConfig({});
+  const stripe = require("stripe")(runtimeConfig.secretKey, {timeout: 8000, maxNetworkRetries: 1});
   return {
     verifyIdToken: (token) => getAuth().verifyIdToken(token, true),
     verifyAppCheck: (token) => getAppCheck().verifyToken(token),
-    operations: OPERATIONS,
+    operations: {
+      ...OPERATIONS,
+      listSenderPaymentMethods: {
+        handler: {run: senderFinance.readSenderPaymentMethods(stripe)},
+        appCheckRequired: true,
+      },
+    },
   };
 }
 
@@ -113,6 +126,8 @@ function createServer(options = {}) {
       if (size <= MAX_BODY_BYTES) chunks.push(chunk);
     });
     request.on("end", async () => {
+      const startedAt = Date.now();
+      const correlationId = clean(request.headers["x-circum-correlation-id"], 160) || "none";
       if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}});
       try {
         if (!dependencies) dependencies = dependenciesFactory();
@@ -144,12 +159,17 @@ function createServer(options = {}) {
         }
         const context = {auth: {uid, token: decoded}, app, rawRequest: request};
         const result = await operation.handler.run(payload.data, context);
+        console.info("account_bootstrap_success", {
+          operation: name,
+          correlationId,
+          durationMs: Date.now() - startedAt,
+        });
         return writeJson(response, 200, {result});
       } catch (error) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") ? "failed-precondition" : rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
-        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "not-found" ? 404 : code === "already-exists" ? 409 : code === "resource-exhausted" ? 429 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : code === "unavailable" ? 503 : 500;
-        if (status >= 500) console.error("account_bootstrap_failed", {operation: name, reason: code});
+        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "not-found" ? 404 : code === "already-exists" ? 409 : code === "resource-exhausted" ? 429 : code === "deadline-exceeded" ? 504 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : code === "unavailable" ? 503 : 500;
+        if (status >= 500) console.error("account_bootstrap_failed", {operation: name, correlationId, reason: code});
         const message = {
           "already-exists": "The request conflicts with the current state.",
           "invalid-argument": "The request is invalid.",
@@ -158,6 +178,7 @@ function createServer(options = {}) {
           "failed-precondition": "Security verification is required.",
           "resource-exhausted": "Too many account requests. Try again shortly.",
           unavailable: "The account service is temporarily unavailable.",
+          "deadline-exceeded": "The account service took too long to respond.",
           "not-found": "The requested resource was not found.",
         }[code] || "Account request failed.";
         return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message}});

@@ -34,7 +34,9 @@ function dependencies(overrides = {}) {
       operations: {
         ensureSenderAccount: handler("ensureSenderAccount"),
         updateSenderNotificationState: handler("updateSenderNotificationState"),
+        getSenderWallet: handler("getSenderWallet"),
         getSenderWalletTransactions: handler("getSenderWalletTransactions"),
+        listSenderPaymentMethods: handler("listSenderPaymentMethods"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         advanceRiderOnboarding: handler("advanceRiderOnboarding"),
         updateRiderProfile: handler("updateRiderProfile"),
@@ -48,7 +50,9 @@ function dependencies(overrides = {}) {
 test("routes only the supported account operations", () => {
   assert.equal(routeName("/ensureSenderAccount"), "ensureSenderAccount");
   assert.equal(routeName("/v1/callable/updateSenderNotificationState"), "updateSenderNotificationState");
+  assert.equal(routeName("/getSenderWallet"), "getSenderWallet");
   assert.equal(routeName("/getSenderWalletTransactions"), "getSenderWalletTransactions");
+  assert.equal(routeName("/v1/callable/listSenderPaymentMethods"), "listSenderPaymentMethods");
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
   assert.equal(routeName("/advanceRiderOnboarding"), "advanceRiderOnboarding");
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
@@ -194,6 +198,29 @@ test("Sender wallet transactions require App Check and preserve the callable env
     assert.deepEqual(await response.json(), {result: {ok: true, name: "getSenderWalletTransactions"}});
     assert.equal(deps.calls.at(-1).context.auth.uid, "user-1");
     assert.equal(deps.calls.at(-1).context.app.appId, "circum");
+  });
+});
+
+test("Sender Wallet balance and payment-method routes require App Check", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    for (const route of ["getSenderWallet", "listSenderPaymentMethods"]) {
+      const missing = await fetch(`${base}/${route}`, {
+        method: "POST",
+        headers: {authorization: "Bearer auth", "content-type": "application/json"},
+        body: JSON.stringify({data: {}}),
+      });
+      assert.equal(missing.status, 400);
+      assert.equal((await missing.json()).error.status, "FAILED_PRECONDITION");
+
+      const response = await fetch(`${base}/${route}`, {
+        method: "POST",
+        headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+        body: JSON.stringify({data: {}}),
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {result: {ok: true, name: route}});
+    }
   });
 });
 
