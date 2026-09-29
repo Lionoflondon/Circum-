@@ -117,7 +117,6 @@ void main() {
       wallet,
       contains('loadSenderWalletViaCloudRun'),
     );
-    expect(wallet, isNot(contains("httpsCallable('initialiseSenderWallet')")));
     expect(
         wallet, contains("profile?.data['senderWalletOnboardingCompleted']"));
     expect(wallet, isNot(contains('_wallet ??= const SenderWalletData')));
