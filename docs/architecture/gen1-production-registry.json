@@ -5541,8 +5541,11 @@
       "productionPurpose": "rothLedger.getSenderWalletTransactions",
       "callers": [
         "docs/SENDER_ACTIVITY_CANONICAL_MODEL.md",
-        "lib/app/sender_mobile/sender_wallet.dart",
-        "server/functions/sender-payment-app-check.test.js"
+        "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/sender-payment-app-check.test.js",
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5564,8 +5567,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

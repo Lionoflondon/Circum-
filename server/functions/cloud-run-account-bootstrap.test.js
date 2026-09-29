@@ -34,6 +34,7 @@ function dependencies(overrides = {}) {
       operations: {
         ensureSenderAccount: handler("ensureSenderAccount"),
         updateSenderNotificationState: handler("updateSenderNotificationState"),
+        getSenderWalletTransactions: handler("getSenderWalletTransactions"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         advanceRiderOnboarding: handler("advanceRiderOnboarding"),
         updateRiderProfile: handler("updateRiderProfile"),
@@ -47,6 +48,7 @@ function dependencies(overrides = {}) {
 test("routes only the supported account operations", () => {
   assert.equal(routeName("/ensureSenderAccount"), "ensureSenderAccount");
   assert.equal(routeName("/v1/callable/updateSenderNotificationState"), "updateSenderNotificationState");
+  assert.equal(routeName("/getSenderWalletTransactions"), "getSenderWalletTransactions");
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
   assert.equal(routeName("/advanceRiderOnboarding"), "advanceRiderOnboarding");
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
@@ -169,6 +171,29 @@ test("Sender notification state maps not-found to a safe 404", async () => {
     });
     assert.equal(response.status, 404);
     assert.equal((await response.json()).error.status, "NOT_FOUND");
+  });
+});
+
+test("Sender wallet transactions require App Check and preserve the callable envelope", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const missing = await fetch(`${base}/getSenderWalletTransactions`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "content-type": "application/json"},
+      body: JSON.stringify({data: {pageSize: 20, pageToken: null}}),
+    });
+    assert.equal(missing.status, 400);
+    assert.equal((await missing.json()).error.status, "FAILED_PRECONDITION");
+
+    const response = await fetch(`${base}/v1/callable/getSenderWalletTransactions`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {pageSize: 20, pageToken: null}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true, name: "getSenderWalletTransactions"}});
+    assert.equal(deps.calls.at(-1).context.auth.uid, "user-1");
+    assert.equal(deps.calls.at(-1).context.app.appId, "circum");
   });
 });
 

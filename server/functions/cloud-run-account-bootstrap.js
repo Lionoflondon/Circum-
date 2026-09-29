@@ -8,6 +8,7 @@ const {getAuth} = require("firebase-admin/auth");
 const senderAccount = require("./sender-account");
 const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
+const rothLedger = require("./roth-ledger");
 
 const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
@@ -15,6 +16,7 @@ const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   updateSenderNotificationState: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: true},
+  getSenderWalletTransactions: {handler: {run: rothLedger.readSenderWalletTransactions}, appCheckRequired: true},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
   advanceRiderOnboarding: {handler: riderAccount.advanceRiderOnboarding, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
@@ -47,7 +49,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|getSenderWalletTransactions|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 

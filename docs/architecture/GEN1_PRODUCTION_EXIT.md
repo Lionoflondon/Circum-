@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 283
 - Gen 1 exports: 281
 - Files importing Firebase Functions v1: 67
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 83
-- MIGRATE TO CLOUD RUN: 156
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 84
+- MIGRATE TO CLOUD RUN: 155
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -152,7 +152,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | getSenderRothBalance | server/functions/sender-booking.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/health_plus/view/health_plus.dart<br>lib/app/send_package/bloc/send_package_bloc.dart<br>lib/app/sender_mobile/gift_journey_draft.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/firestore-sender-bootstrap-rules.test.js<br>server/functions/health-plus-checkout-security.test.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js<br>test/website_sender_auth_deterministic_contract_test.dart |
 | getSenderRoutePreview | server/functions/sender-booking.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/send_package/bloc/send_package_bloc.dart<br>scripts/validate_sender_mobile_artifacts.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-route-preview.test.js<br>test/security/circum_app_check_contract_test.dart<br>test/sender_mobile/sender_payment_closure_contract_test.dart |
 | getSenderWallet | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/firestore-starter-roth-rules.test.js<br>server/functions/sender-payment-app-check.test.js |
-| getSenderWalletTransactions | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/SENDER_ACTIVITY_CANONICAL_MODEL.md<br>lib/app/sender_mobile/sender_wallet.dart<br>server/functions/sender-payment-app-check.test.js |
+| getSenderWalletTransactions | server/functions/roth-ledger.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_ACTIVITY_CANONICAL_MODEL.md<br>lib/app/sender_mobile/sender_wallet_cloud_run_api.dart<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/sender-payment-app-check.test.js<br>test/sender_mobile/sender_wallet_cloud_run_contract_test.dart |
 | giftStoryLanding | server/functions/gift-story-automation.js | Gen 1 | http | MIGRATE TO CLOUD RUN | server/functions/gift-story-automation.test.js |
 | goOffline | server/functions/rider-presence.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>server/functions/founder-review-fixture.test.js<br>server/functions/rider-presence-core.test.js<br>server/functions/stale-delivery-authority.test.js |
 | goOnline | server/functions/rider-presence.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | scripts/scoped_functions_deploy_list.test.js<br>server/functions/cloud-run-rider-delivery-authority.js<br>server/functions/cloud-run-rider-delivery-authority.test.js<br>server/functions/founder-review-fixture.test.js<br>server/functions/rider-onboarding-flow.emulator.test.js<br>server/functions/rider-online-intent.emulator.test.js<br>server/functions/rider-presence-core.test.js |

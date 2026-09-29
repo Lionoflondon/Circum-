@@ -20,6 +20,7 @@ import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
+import 'sender_wallet_cloud_run_api.dart';
 
 const _senderWalletSheetInitTimeout = Duration(seconds: 20);
 const _senderWalletSheetPresentTimeout = Duration(seconds: 90);
@@ -413,10 +414,11 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderWalletPage> transactions({String? pageToken}) async {
-    final result = await functions
-        .httpsCallable('getSenderWalletTransactions')
-        .call({'pageSize': 20, 'pageToken': pageToken});
-    final data = Map<String, dynamic>.from(result.data as Map);
+    final data = await loadSenderWalletTransactionsViaCloudRun(
+      auth: auth,
+      pageToken: pageToken,
+      pageSize: 20,
+    );
     final records = (data['transactions'] as List? ?? const [])
         .map(
           (item) => SenderWalletTransaction.fromMap(
