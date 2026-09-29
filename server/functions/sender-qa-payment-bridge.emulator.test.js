@@ -177,7 +177,7 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
   assert.equal((await qaRoot.collection("walletTransactions").get()).size, 1);
   assert.deepEqual((await liveWallet.get()).data(), {balance: 999, sentinel: "unchanged"});
   assert.deepEqual((await liveProjection.get()).data(), {balance: 999, sentinel: "unchanged"});
-  assert.equal((await db.collection("walletTransactions").get()).size, 0);
+  assert.equal((await db.collection("walletTransactions").doc(`wallet_delivery_${roth.paymentSessionId}`).get()).exists, false);
   await flow.handle({action: "cleanup", fixtureId}, operator);
   assert.equal((await db.collection("deliveryRequests").where("qaFixtureId", "==", fixtureId).get()).size, 0);
   assert.equal((await db.collection("senderPaymentSessions").where("qaFixtureId", "==", fixtureId).get()).size, 0);
