@@ -384,6 +384,56 @@
       "owner": "circum-delivery-created-events"
     },
     {
+      "name": "onDeliveryUpdated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onChatMessageCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onGiftRequestCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onGiftRequestUpdated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onGiftCampaignParticipantUpdated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onStoryNotificationWrite",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onSupportTicketCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onDisputeCreated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onRiderProfileUpdated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
+      "name": "onPayoutUpdated",
+      "category": "CLOUD_RUN_SUPERSEDED",
+      "owner": "circum-sender-notification-events"
+    },
+    {
       "name": "onGiftDeliveryCompleted",
       "category": "CLOUD_RUN_SUPERSEDED",
       "owner": "circum-gift-completed-events"
