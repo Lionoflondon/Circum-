@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -14,6 +15,79 @@ class SenderAccountBootstrapException implements Exception {
 
   @override
   String toString() => message;
+}
+
+Future<Map<String, dynamic>> updateSenderNotificationStateViaCloudRun({
+  required String action,
+  required Iterable<String> notificationIds,
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+}) async {
+  final user = (auth ?? FirebaseAuth.instance).currentUser;
+  final idToken = await user?.getIdToken();
+  if (idToken == null || idToken.isEmpty) {
+    throw const SenderAccountBootstrapException(
+      'UNAUTHENTICATED',
+      'Sign in to continue.',
+    );
+  }
+  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance).getToken();
+  if (appCheckToken == null || appCheckToken.isEmpty) {
+    throw const SenderAccountBootstrapException(
+      'FAILED_PRECONDITION',
+      'Circum security verification is required.',
+    );
+  }
+  return invokeSenderNotificationState(
+    action: action,
+    notificationIds: notificationIds,
+    idToken: idToken,
+    appCheckToken: appCheckToken,
+    client: client,
+  );
+}
+
+Future<Map<String, dynamic>> invokeSenderNotificationState({
+  required String action,
+  required Iterable<String> notificationIds,
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) async {
+  final ownsClient = client == null;
+  final transport = client ?? http.Client();
+  try {
+    final response = await transport
+        .post(
+          Uri.parse(
+            '$senderAccountBootstrapServiceUrl/updateSenderNotificationState',
+          ),
+          headers: {
+            'content-type': 'application/json',
+            'authorization': 'Bearer $idToken',
+            'x-firebase-appcheck': appCheckToken,
+          },
+          body: jsonEncode({
+            'data': {
+              'action': action,
+              'notificationIds': notificationIds.toList(growable: false),
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
+    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final error = payload['error'] as Map?;
+      throw SenderAccountBootstrapException(
+        '${error?['status'] ?? 'INTERNAL'}',
+        '${error?['message'] ?? 'Account request failed.'}',
+      );
+    }
+    return Map<String, dynamic>.from(payload['result'] as Map);
+  } finally {
+    if (ownsClient) transport.close();
+  }
 }
 
 Future<Map<String, dynamic>> ensureSenderAccountViaCloudRun({
@@ -63,4 +137,3 @@ Future<Map<String, dynamic>> invokeSenderAccountBootstrap({
     if (ownsClient) transport.close();
   }
 }
-

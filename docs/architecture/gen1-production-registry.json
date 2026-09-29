@@ -10738,10 +10738,17 @@
       "generation": "Gen 1",
       "productionPurpose": "senderAccount.updateSenderNotificationState",
       "callers": [
-        "lib/app/sender_mobile/sender_mobile_home.dart",
-        "lib/app/sender_mobile/sender_notifications.dart",
+        "lib/app/sender_mobile/account_bootstrap_api.dart",
+        "lib/website/shared/account_bootstrap_api.dart",
         "lib/website/shared/circum_website_app.dart",
-        "server/functions/firestore-chat-notification-rules.test.js"
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/firestore-chat-notification-rules.test.js",
+        "server/functions/sender-notification-state.js",
+        "server/functions/sender-notification-state.test.js",
+        "test/sender_account_bootstrap_api_test.dart",
+        "test/sender_mobile/sender_notification_cloud_run_contract_test.dart",
+        "test/website_account_bootstrap_api_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -10762,8 +10769,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

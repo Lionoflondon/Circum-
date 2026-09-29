@@ -26,6 +26,7 @@ import 'gift_mode_view.dart';
 import 'gift_story_view.dart';
 import 'sender_accessibility.dart';
 import 'sender_activity.dart';
+import 'account_bootstrap_api.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
 import 'sender_identity.dart';
@@ -2286,10 +2287,10 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     final cleanIds =
         ids.map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
     if (cleanIds.isEmpty) return;
-    await functions.httpsCallable('updateSenderNotificationState').call({
-      'action': 'mark_read',
-      'notificationIds': cleanIds,
-    });
+    await updateSenderNotificationStateViaCloudRun(
+      action: 'mark_read',
+      notificationIds: cleanIds,
+    );
   }
 }
 

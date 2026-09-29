@@ -28,6 +28,7 @@ import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
+import 'sender_notification_visibility.dart';
 import 'package:circum/website/shared/account_bootstrap_api.dart';
 import 'package:circum/website/shared/rider_delivery_authority_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
@@ -115,6 +116,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     _initialRoute.senderEntry,
   );
   final _newsletterKey = GlobalKey();
+  final _senderPortalKey = GlobalKey<_CustomerPortalState>();
   String _newsletterSource = 'homepage';
 
   @override
@@ -281,7 +283,14 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               duration: const Duration(milliseconds: 260),
               child: _surfaceStage(colors),
             ),
-            _PlatformNotificationCenter(colors: colors, mode: _mode),
+            _PlatformNotificationCenter(
+              colors: colors,
+              mode: _mode,
+              onOpenSenderNotification: (destination) async {
+                await _senderPortalKey.currentState
+                    ?.openNotificationDestination(destination);
+              },
+            ),
             _CompanyLiveChatButton(colors: colors),
             if (kIsWeb && _optionalAnalyticsConsent == null)
               _CookieConsentBanner(
@@ -302,6 +311,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           key: const ValueKey(circumSenderWebIdentity),
           colors: colors,
           child: _CustomerPortal(
+            key: _senderPortalKey,
             darkMode: _darkMode,
             colors: colors,
             initialStep: _senderInitialStep,
@@ -451,11 +461,42 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 }
 
+Map<String, dynamic> _websiteNotificationDestination(
+  Map<String, dynamic> data,
+) {
+  final nested = data['data'] is Map
+      ? Map<String, dynamic>.from(data['data'] as Map)
+      : const <String, dynamic>{};
+  final rawDestination = data['destination'] ?? nested['destination'];
+  final destination = rawDestination is Map
+      ? Map<String, dynamic>.from(rawDestination)
+      : <String, dynamic>{};
+  final deliveryId =
+      '${destination['deliveryId'] ?? destination['bookingId'] ?? nested['deliveryId'] ?? data['deliveryId'] ?? data['bookingId'] ?? ''}'
+          .trim();
+  final type = '${data['type'] ?? nested['type'] ?? ''}'.trim().toLowerCase();
+  final route = '${destination['route'] ?? ''}'.trim().toLowerCase();
+  return {
+    ...destination,
+    if (route.isNotEmpty) 'route': route,
+    if (route.isEmpty && deliveryId.isNotEmpty) 'route': 'tracking',
+    if (deliveryId.isNotEmpty) 'deliveryId': deliveryId,
+    if (route.isEmpty && deliveryId.isEmpty && type.contains('delivery'))
+      'route': 'tracking',
+  };
+}
+
 class _PlatformNotificationCenter extends StatefulWidget {
   final _CircumColors colors;
   final _WebAppMode mode;
+  final Future<void> Function(Map<String, dynamic> destination)?
+      onOpenSenderNotification;
 
-  const _PlatformNotificationCenter({required this.colors, required this.mode});
+  const _PlatformNotificationCenter({
+    required this.colors,
+    required this.mode,
+    this.onOpenSenderNotification,
+  });
 
   @override
   State<_PlatformNotificationCenter> createState() =>
@@ -503,7 +544,13 @@ class _PlatformNotificationCenterState
         FirebaseFirestore.instance.collection('notifications').limit(80);
     query = query.where('recipientId', isEqualTo: user.uid);
     _subscription = query.snapshots().listen((snapshot) {
-      final docs = snapshot.docs.toList(growable: false)
+      final docs = snapshot.docs
+          .where(
+            (doc) =>
+                widget.mode != _WebAppMode.sender ||
+                senderNotificationVisible(doc.data()),
+          )
+          .toList(growable: false)
         ..sort((a, b) {
           final left = a.data()['createdAt'];
           final right = b.data()['createdAt'];
@@ -536,28 +583,63 @@ class _PlatformNotificationCenterState
     QueryDocumentSnapshot<Map<String, dynamic>> item,
   ) async {
     if (item.data()['read'] == true) return;
+    if (widget.mode == _WebAppMode.sender) {
+      await callAccountBootstrap(
+        'updateSenderNotificationState',
+        {'notificationId': item.id, 'action': 'mark_read'},
+      );
+      return;
+    }
     await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(
-      widget.mode == _WebAppMode.rider
-          ? 'updateRiderNotificationState'
-          : 'updateSenderNotificationState',
-    )
+        .httpsCallable('updateRiderNotificationState')
         .call({'notificationId': item.id, 'action': 'mark_read'});
   }
 
   Future<void> _markAllRead() async {
     final unread = _items.where((item) => item.data()['read'] != true).toList();
     if (unread.isEmpty) return;
+    if (widget.mode == _WebAppMode.sender) {
+      await callAccountBootstrap(
+        'updateSenderNotificationState',
+        {
+          'notificationIds': unread.map((item) => item.id).toList(),
+          'action': 'mark_read',
+        },
+      );
+      return;
+    }
     await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(
-      widget.mode == _WebAppMode.rider
-          ? 'updateRiderNotificationState'
-          : 'updateSenderNotificationState',
-    )
+        .httpsCallable('updateRiderNotificationState')
         .call({
       'notificationIds': unread.map((item) => item.id).toList(),
       'action': 'mark_read',
     });
+  }
+
+  Future<void> _openNotification(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) async {
+    try {
+      await _markRead(item).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This notification could not be opened. Try again shortly.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _open = false);
+    if (widget.mode == _WebAppMode.sender) {
+      final destination = _websiteNotificationDestination(item.data());
+      if (destination['route'] == 'tracking') {
+        await widget.onOpenSenderNotification?.call(destination);
+      }
+    }
   }
 
   @override
@@ -664,7 +746,7 @@ class _PlatformNotificationCenterState
                               final data = item.data();
                               final isUnread = data['read'] != true;
                               return InkWell(
-                                onTap: () => _markRead(item),
+                                onTap: () => _openNotification(item),
                                 borderRadius: BorderRadius.circular(14),
                                 child: Container(
                                   padding: const EdgeInsets.all(13),
@@ -8463,6 +8545,7 @@ class _CustomerPortal extends StatefulWidget {
   final VoidCallback onToggleTheme;
 
   const _CustomerPortal({
+    super.key,
     required this.darkMode,
     required this.colors,
     required this.initialStep,
@@ -8696,6 +8779,33 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _healthMessage =
           'Health+ payment was cancelled. You can continue checkout when ready.';
     }
+  }
+
+  Future<bool> openNotificationDestination(
+    Map<String, dynamic> destination,
+  ) async {
+    final route = '${destination['route'] ?? ''}'.trim().toLowerCase();
+    final deliveryId =
+        '${destination['deliveryId'] ?? destination['bookingId'] ?? ''}'.trim();
+    if (route != 'tracking' || deliveryId.isEmpty) return false;
+    SenderDeliveryRecord? delivery;
+    for (final candidate in _senderDeliveries) {
+      if (candidate.requestId == deliveryId ||
+          candidate.trackingReference == deliveryId) {
+        delivery = candidate;
+        break;
+      }
+    }
+    if (!mounted) return false;
+    setState(() {
+      _step = _SenderStep.profile;
+      _senderProfileTab = 1;
+      _selectedSenderDelivery = delivery;
+      _senderProfileMessage = delivery == null
+          ? 'This delivery is no longer available. You can review Activity for the latest history.'
+          : null;
+    });
+    return true;
   }
 
   @override
