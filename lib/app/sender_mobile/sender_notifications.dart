@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'design_system/sender_design_system.dart';
-import 'sender_notification_visibility.dart';
+import 'sender_notification_taxonomy.dart';
 
 const _notificationFilters = <String>[
   'All',
@@ -48,7 +48,7 @@ class CircumNotification {
       id: document.id,
       title: '${data['title'] ?? 'Circum update'}'.trim(),
       body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-      category: _notificationCategory(data),
+      category: senderNotificationCategoryKey(data),
       read: data['read'] == true,
       archived: data['archived'] == true || data['deletedAt'] != null,
       destination: rawDestination is Map
@@ -60,19 +60,23 @@ class CircumNotification {
     );
   }
 
-  bool get visible => senderNotificationVisible({
-    'archived': archived,
-    'deletedAt': archived ? true : null,
-  });
 }
 
-String _notificationCategory(Map<String, dynamic> data) {
-  final category = '${data['category'] ?? ''}'.trim().toLowerCase();
-  if (category == 'payment' || category == 'payments') return 'wallet';
-  if (category.isNotEmpty) return category;
-  final type = '${data['type'] ?? ''}'.trim().toLowerCase();
-  if (type == 'payment' || type.startsWith('payment_')) return 'wallet';
-  return 'system';
+bool senderNotificationMatchesFilter(
+  String filter,
+  CircumNotification notification,
+) {
+  if (filter == 'All') return true;
+  final category = notification.category;
+  final expected = switch (filter) {
+    'Health+' => 'health',
+    'Deliveries' => 'deliveries',
+    _ => filter.toLowerCase(),
+  };
+  if (expected == 'wallet') {
+    return category == 'wallet' || category == 'payments';
+  }
+  return category == expected;
 }
 
 class SenderNotificationsRepository {
@@ -95,11 +99,17 @@ class SenderNotificationsRepository {
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
           final results = snapshot.docs
-              .where((doc) => senderNotificationVisible(doc.data()))
+              .where(
+                (doc) => senderNotificationVisible(
+                  doc.data(),
+                  recipientId: uid,
+                ),
+              )
               .map(CircumNotification.fromDocument)
               .toList();
           return results;
@@ -161,12 +171,6 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
     _notifications = _repository.watchNotifications();
   }
 
-  String _categoryForFilter(String label) => switch (label) {
-    'Health+' => 'health',
-    'Deliveries' => 'deliveries',
-    _ => label.toLowerCase(),
-  };
-
   @override
   Widget build(BuildContext context) => StreamBuilder<List<CircumNotification>>(
     stream: _notifications,
@@ -175,7 +179,9 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
       final visible = _filter == 'All'
           ? notifications
           : notifications
-                .where((item) => item.category == _categoryForFilter(_filter))
+                .where(
+                  (item) => senderNotificationMatchesFilter(_filter, item),
+                )
                 .toList();
       return Scaffold(
         backgroundColor: AppTokens.background,

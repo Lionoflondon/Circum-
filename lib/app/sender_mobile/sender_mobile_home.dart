@@ -2244,11 +2244,12 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(50)
         .snapshots()
         .map((snapshot) {
       final items = snapshot.docs.where((doc) {
-        return senderNotificationVisible(doc.data());
+        return senderNotificationVisible(doc.data(), recipientId: uid);
       }).map((doc) {
         final data = doc.data();
         final rawDate = data['createdAt'];
@@ -2327,7 +2328,6 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   SenderHomeSummary? _summary;
   List<SenderHomeOrder>? _orders;
   List<SenderHomeNotification>? _notifications;
-  String? _summaryError;
   String? _ordersError;
   String? _notificationsError;
   Set<String>? _knownNotificationIds;
@@ -2342,14 +2342,13 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
 
   void _load() {
     setState(() {
-      _summaryError = null;
       _ordersError = null;
       _notificationsError = null;
     });
     _repository.loadSummary().then((summary) {
       if (mounted) setState(() => _summary = summary);
     }).catchError((Object error) {
-      if (mounted) setState(() => _summaryError = '$error');
+      debugPrint('Sender Home summary unavailable: $error');
     });
     _ordersSubscription?.cancel();
     _ordersSubscription = _repository.watchRecentOrders().listen((orders) {

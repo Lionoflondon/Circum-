@@ -116,6 +116,14 @@ class SenderActivityPage {
 
 const _senderActivityPageSize = 20;
 
+// `updatedAt` is the canonical server-owned Activity clock. The model keeps
+// legacy records readable when that field is absent, but Firestore queries
+// always order by the canonical field before applying a page limit.
+DateTime? senderActivityTimestamp(Map<String, dynamic> data) =>
+    _date(data['updatedAt']) ??
+    _date(data['activityAt']) ??
+    _date(data['createdAt']);
+
 Map<String, dynamic> _decodeActivityPageToken(String? token) {
   if (token == null || token.isEmpty) return <String, dynamic>{};
   try {
@@ -149,19 +157,6 @@ void _setActivityCursor(
   final occurredAt = item.occurredAt;
   if (occurredAt == null) return;
   cursors[source] = {'at': occurredAt.millisecondsSinceEpoch, 'id': item.id};
-}
-
-void _setActivityCursorFromDocument(
-  Map<String, dynamic> cursors,
-  String source,
-  QueryDocumentSnapshot<Map<String, dynamic>> document,
-) {
-  final occurredAt = _date(document.data()['updatedAt']);
-  if (occurredAt == null) return;
-  cursors[source] = {
-    'at': occurredAt.millisecondsSinceEpoch,
-    'id': document.id,
-  };
 }
 
 int _compareActivityItemsDescending(
@@ -298,7 +293,6 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     merged.sort(_compareActivityItemsDescending);
     final items = merged.take(_senderActivityPageSize).toList();
     final nextCursors = Map<String, dynamic>.from(cursors);
-    final selectedSources = <String>{};
     for (final item in items) {
       final source = switch (item.type) {
         SenderActivityType.gift => 'gifts',
@@ -306,21 +300,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         SenderActivityType.roth => 'wallet',
         _ => 'deliveries',
       };
-      selectedSources.add(source);
       _setActivityCursor(nextCursors, source, item);
-    }
-    if (!selectedSources.contains('deliveries') && deliveries.docs.isNotEmpty) {
-      _setActivityCursorFromDocument(
-        nextCursors,
-        'deliveries',
-        deliveries.docs.last,
-      );
-    }
-    if (!selectedSources.contains('gifts') && gifts.isNotEmpty) {
-      _setActivityCursorFromDocument(nextCursors, 'gifts', gifts.last);
-    }
-    if (!selectedSources.contains('health') && health.isNotEmpty) {
-      _setActivityCursorFromDocument(nextCursors, 'health', health.last);
     }
     final walletCursor = _activityCursor(nextCursors, 'wallet');
     if (walletCursor != null) {
@@ -333,8 +313,6 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           }),
         ),
       );
-    } else if (wallet.nextPageToken != null) {
-      nextCursors['walletToken'] = wallet.nextPageToken;
     }
     final hasMore =
         merged.length > items.length ||
@@ -531,7 +509,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       amount: _number(
         data['paidAmount'] ?? data['price'] ?? data['totalAmount'],
       ),
-      occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+      occurredAt: senderActivityTimestamp(data),
       active: senderActivityIsLiveDeliveryStatus(normalized),
       riderId: _riderId(data),
       riderPhotoUrl: _first([
@@ -600,7 +578,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         amount: _number(data['grossGiftBudget'] ?? data['budget']),
         rothAmount: _number(data['rothApplied']),
         rothDirection: 'debit',
-        occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+        occurredAt: senderActivityTimestamp(data),
       );
 
   SenderActivityItem _health(String id, Map<String, dynamic> data) =>
@@ -614,7 +592,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           data['deliveryAddress'],
         ]),
         amount: _number(data['price'] ?? data['amount']),
-        occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+        occurredAt: senderActivityTimestamp(data),
       );
 
   SenderActivityItem _roth(SenderWalletTransaction item) => SenderActivityItem(
@@ -656,6 +634,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   String _query = '';
   String? _nextPage;
   String? _error;
+  String? _loadMoreError;
   bool _loading = true;
   bool _loadingMore = false;
   bool _activeLoaded = false;
@@ -721,6 +700,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     setState(() {
       _loading = !_hasCachedHistory && _history.isEmpty;
       _error = null;
+      _loadMoreError = null;
     });
     try {
       final page = await _repository.history();
@@ -746,7 +726,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
 
   Future<void> _loadMore() async {
     if (_nextPage == null || _loadingMore) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
     try {
       final page = await _repository.history(pageToken: _nextPage);
       if (mounted) {
@@ -765,6 +748,13 @@ class _SenderActivityViewState extends State<SenderActivityView> {
             _nextPage,
           );
         });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _loadMoreError =
+              'More activity is unavailable right now. Please retry.',
+        );
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -880,9 +870,25 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           if (_nextPage != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: _loadingMore ? null : _loadMore,
-                child: Text(_loadingMore ? 'Loading…' : 'Load more activity'),
+              child: Column(
+                children: [
+                  if (_loadMoreError != null)
+                    Text(
+                      _loadMoreError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  TextButton(
+                    onPressed: _loadingMore ? null : _loadMore,
+                    child: Text(
+                      _loadingMore
+                          ? 'Loading…'
+                          : _loadMoreError == null
+                              ? 'Load more activity'
+                              : 'Retry',
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
