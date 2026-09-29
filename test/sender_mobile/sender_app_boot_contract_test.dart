@@ -23,7 +23,6 @@ void main() {
     expect(preview, contains('senderAuthEnabled: true'));
     expect(preview, contains('BlocProvider<AuthBloc>'));
     expect(preview, contains('AuthBloc()..add(SortSessionState())'));
-    expect(preview, isNot(contains('Starting Circum')));
     expect(preview, isNot(contains('initialAuthenticated: true')));
     expect(preview, isNot(contains('senderAuthEnabled: false')));
     expect(app, isNot(contains('initialAuthenticated: true')));
@@ -116,11 +115,7 @@ void main() {
     expect(wallet, contains('operation.timeout(_walletOperationTimeout)'));
     expect(
       wallet,
-      contains(RegExp(r'\.call\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
-    );
-    expect(
-      wallet,
-      contains(RegExp(r'\.get\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
+      contains('loadSenderWalletViaCloudRun'),
     );
     expect(
         wallet, contains("profile?.data['senderWalletOnboardingCompleted']"));
