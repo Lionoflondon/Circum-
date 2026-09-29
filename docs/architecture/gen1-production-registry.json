@@ -5375,8 +5375,7 @@
         "server/functions/cloud-run-sender-delivery-payments.js",
         "server/functions/cloud-run-sender-delivery-payments.test.js",
         "test/sender_mobile/sender_payment_closure_contract_test.dart",
-        "test/sender_mobile/sender_payment_delivery_bounds_test.dart",
-        "test/sender_mobile/sender_qa_payment_bridge_test.dart"
+        "test/sender_mobile/sender_payment_delivery_bounds_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -7087,10 +7086,10 @@
       "triggerDefinition": {},
       "generation": "Gen 1",
       "productionPurpose": "qaSpecialFlow.callable()",
-      "callers": [
-        "docs/qa/private-special-flow-fixture.md",
-        "lib/app/send_package/bloc/send_package_bloc.dart",
-        "lib/website/shared/circum_website_app.dart",
+  "callers": [
+    "docs/qa/private-special-flow-fixture.md",
+    "lib/app/sender_mobile/sender_activity.dart",
+    "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-qa-special-flow.js",
         "server/functions/cloud-run-qa-special-flow.test.js"
       ],
