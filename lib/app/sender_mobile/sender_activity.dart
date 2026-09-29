@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../delivery/proof_of_delivery.dart';
@@ -209,13 +210,32 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final mode = _senderActivityQaFaultMode();
     final fixtureId = Uri.base.queryParameters['activityFixtureId']?.trim();
     if (mode == null || fixtureId == null || fixtureId.isEmpty) return;
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('qaSpecialFlowFixture')
-        .call({
-          'action': 'activity_page_fault',
-          'fixtureId': fixtureId,
-          'mode': mode,
-        });
+    final token = await auth.currentUser?.getIdToken();
+    final appCheckToken = await FirebaseAppCheck.instance.getToken();
+    if (token == null || appCheckToken == null || appCheckToken.isEmpty) {
+      throw StateError('qa_activity_auth_required');
+    }
+    final response = await http
+        .post(
+          Uri.parse(
+            'https://circum-qa-special-flow-j2b7cicfwq-uc.a.run.app/qaSpecialFlowFixture',
+          ),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'X-Firebase-AppCheck': appCheckToken,
+          },
+          body: jsonEncode({
+            'data': {
+              'action': 'activity_page_fault',
+              'fixtureId': fixtureId,
+              'mode': mode,
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    throw StateError('qa_activity_page_fault_requested');
   }
 
   SenderActivityItem itemFromDelivery(String id, Map<String, dynamic> data) =>
