@@ -84,11 +84,11 @@ class SenderWalletData {
   }
 
   Map<String, dynamic> toCacheMap() => {
-    'balance': balance,
-    'status': frozen ? 'frozen' : 'active',
-    'onboardingCompleted': onboardingCompleted,
-    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
-  };
+        'balance': balance,
+        'status': frozen ? 'frozen' : 'active',
+        'onboardingCompleted': onboardingCompleted,
+        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+      };
 }
 
 class SenderWalletTransaction {
@@ -133,7 +133,7 @@ class SenderWalletTransaction {
       id: '${map['transactionId'] ?? ''}',
       description: '${map['description'] ?? 'Roth activity'}',
       direction: '${map['direction'] ?? 'credit'}',
-      status: '${map['status'] ?? 'completed'}',
+      status: '${map['status'] ?? 'unknown'}',
       type: '${map['type'] ?? 'adjustment'}',
       paymentMethodLabel:
           '${map['paymentMethodLabel'] ?? metadata['paymentMethodLabel'] ?? metadata['paidWith'] ?? ''}',
@@ -148,20 +148,20 @@ class SenderWalletTransaction {
   }
 
   Map<String, dynamic> toCacheMap() => {
-    'transactionId': id,
-    'description': description,
-    'direction': direction,
-    'status': status,
-    'type': type,
-    'paymentMethodLabel': paymentMethodLabel,
-    'amount': amount,
-    'balanceAfter': balanceAfter,
-    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
-    if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
-    'referenceId': referenceId,
-    'createdBy': createdBy,
-    'source': source,
-  };
+        'transactionId': id,
+        'description': description,
+        'direction': direction,
+        'status': status,
+        'type': type,
+        'paymentMethodLabel': paymentMethodLabel,
+        'amount': amount,
+        'balanceAfter': balanceAfter,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        'referenceId': referenceId,
+        'createdBy': createdBy,
+        'source': source,
+      };
 }
 
 DateTime? _walletDateTime(Object? value) {
@@ -192,8 +192,8 @@ Future<SenderPaymentProfile> _withDeviceWalletSupport(
   var supported = false;
   try {
     supported = await Stripe.instance.isPlatformPaySupported().timeout(
-      const Duration(seconds: 4),
-    );
+          const Duration(seconds: 4),
+        );
   } catch (error) {
     debugPrint(
       'Sender Wallet device-pay readiness unavailable: ${error.runtimeType}',
@@ -219,13 +219,13 @@ class _CachedSenderWalletSnapshot {
   });
 
   Map<String, dynamic> toMap() => {
-    'wallet': wallet.toCacheMap(),
-    'transactions': transactions
-        .map((transaction) => transaction.toCacheMap())
-        .toList(),
-    if (nextPageToken != null) 'nextPageToken': nextPageToken,
-    'cachedAt': cachedAt.toIso8601String(),
-  };
+        'wallet': wallet.toCacheMap(),
+        'transactions': transactions
+            .map((transaction) => transaction.toCacheMap())
+            .toList(),
+        if (nextPageToken != null) 'nextPageToken': nextPageToken,
+        'cachedAt': cachedAt.toIso8601String(),
+      };
 
   static _CachedSenderWalletSnapshot? fromMap(Map<String, dynamic> data) {
     final walletData = data['wallet'];
@@ -286,14 +286,14 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  }) : auth = auth ?? FirebaseAuth.instance,
-       firestore = firestore ?? FirebaseFirestore.instance,
-       functions = functions ?? FirebaseFunctions.instance,
-       profileAuthority = SenderProfileAuthority(
-         auth: auth,
-         firestore: firestore,
-         functions: functions,
-       );
+  })  : auth = auth ?? FirebaseAuth.instance,
+        firestore = firestore ?? FirebaseFirestore.instance,
+        functions = functions ?? FirebaseFunctions.instance,
+        profileAuthority = SenderProfileAuthority(
+          auth: auth,
+          firestore: firestore,
+          functions: functions,
+        );
 
   User get _user {
     final user = auth.currentUser;
@@ -358,25 +358,25 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
           .doc(user.uid)
           .snapshots()
           .listen(
-            (snapshot) {
-              latestWallet = snapshot;
-              emitIfReady();
-            },
-            onError: (error) {
-              debugPrint('Sender Wallet live balance unavailable: $error');
-            },
-          );
-      profileSub = profileAuthority
-          .watch('wallet.watch.profile')
-          .listen(
-            (snapshot) {
-              latestProfile = snapshot;
-              emitIfReady();
-            },
-            onError: (error) {
-              debugPrint('Sender Wallet live profile flag unavailable: $error');
-            },
-          );
+        (snapshot) {
+          latestWallet = snapshot;
+          emitIfReady();
+        },
+        onError: (error) {
+          debugPrint('Sender Wallet live balance unavailable: $error');
+          if (!controller.isClosed) controller.addError(error);
+        },
+      );
+      profileSub = profileAuthority.watch('wallet.watch.profile').listen(
+        (snapshot) {
+          latestProfile = snapshot;
+          emitIfReady();
+        },
+        onError: (error) {
+          debugPrint('Sender Wallet live profile flag unavailable: $error');
+          if (!controller.isClosed) controller.addError(error);
+        },
+      );
     };
     controller.onCancel = () async {
       await walletSub?.cancel();
@@ -407,9 +407,8 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderPaymentMethodsData> paymentMethods() async {
-    final result = await functions
-        .httpsCallable('listSenderPaymentMethods')
-        .call();
+    final result =
+        await functions.httpsCallable('listSenderPaymentMethods').call();
     return SenderPaymentMethodsData.fromMap(
       Map<String, dynamic>.from(result.data as Map),
     );
@@ -417,9 +416,8 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderSetupIntentData> createSetupIntent() async {
-    final result = await functions
-        .httpsCallable('createSenderSetupIntent')
-        .call();
+    final result =
+        await functions.httpsCallable('createSenderSetupIntent').call();
     return SenderSetupIntentData.fromMap(
       Map<String, dynamic>.from(result.data as Map),
     );
@@ -520,6 +518,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         Map<String, dynamic>.from(decoded),
       );
       if (snapshot == null || !mounted) return;
+      // A slow cache read must never overwrite a fresh network result.
+      if (_wallet != null && !_showingCachedWallet) return;
       setState(() {
         _wallet = snapshot.wallet;
         _transactions
@@ -568,31 +568,49 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     try {
       final wallet = await withWalletTimeout(_repository.initialise());
       SenderWalletPage? page;
-      var methods = SenderPaymentMethodsData.empty();
-      try {
-        page = await withWalletTimeout(_repository.transactions());
-      } catch (error) {
-        debugPrint('Sender Wallet transactions unavailable: $error');
-      }
-      try {
-        methods = await _withDeviceWalletSupport(
-          await withWalletTimeout(_repository.paymentMethods()),
-        );
-      } catch (error) {
-        debugPrint('Sender Wallet payment methods unavailable: $error');
-      }
+      SenderPaymentMethodsData? methods;
+      Object? transactionsError;
+      Object? methodsError;
+      await Future.wait<void>([
+        () async {
+          try {
+            page = await withWalletTimeout(_repository.transactions());
+          } catch (error) {
+            transactionsError = error;
+            debugPrint('Sender Wallet transactions unavailable: $error');
+          }
+        }(),
+        () async {
+          try {
+            methods = await _withDeviceWalletSupport(
+              await withWalletTimeout(_repository.paymentMethods()),
+            );
+          } catch (error) {
+            methodsError = error;
+            debugPrint('Sender Wallet payment methods unavailable: $error');
+          }
+        }(),
+      ]);
       if (!mounted || generation != _loadGeneration) return;
+      final loadedPage = page;
+      final failedOptionalLoads = <String>[
+        if (transactionsError != null) 'activity',
+        if (methodsError != null) 'payment methods',
+      ];
       setState(() {
         _wallet = wallet;
-        _paymentMethods = methods;
-        if (page != null) {
+        if (methods != null) _paymentMethods = methods!;
+        if (loadedPage != null) {
           _transactions
             ..clear()
-            ..addAll(page.transactions);
-          _nextPage = page.nextPageToken;
+            ..addAll(loadedPage.transactions);
+          _nextPage = loadedPage.nextPageToken;
         }
         _refreshing = false;
         _showingCachedWallet = false;
+        _error = failedOptionalLoads.isEmpty
+            ? null
+            : 'Your Roth balance is current, but ${failedOptionalLoads.join(' and ')} could not be refreshed. Pull to refresh or retry.';
       });
       unawaited(_cacheSnapshot(wallet, _transactions, _nextPage));
       _walletTelemetry('fresh_load', startedAt);
@@ -604,17 +622,19 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         });
       }
       await _subscription?.cancel();
-      _subscription = _repository
-          .watch()
-          .timeout(_walletOperationTimeout, onTimeout: (sink) => sink.close())
-          .listen((value) {
-            if (!mounted) return;
-            setState(() {
-              _wallet = value;
-              _showingCachedWallet = false;
-            });
-            unawaited(_cacheSnapshot(value, _transactions, _nextPage));
-          }, onError: (_) {});
+      _subscription = _repository.watch().listen((value) {
+        if (!mounted) return;
+        setState(() {
+          _wallet = value;
+          _showingCachedWallet = false;
+        });
+        unawaited(_cacheSnapshot(value, _transactions, _nextPage));
+      }, onError: (_) {
+        if (!mounted || generation != _loadGeneration) return;
+        setState(() {
+          _error = 'Live wallet updates are unavailable. Pull to refresh.';
+        });
+      });
     } on TimeoutException {
       _walletTelemetry('timeout', startedAt);
       if (mounted && generation == _loadGeneration) {
@@ -669,8 +689,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     });
     try {
       final setup = await _repository.createSetupIntent().timeout(
-        _walletOperationTimeout,
-      );
+            _walletOperationTimeout,
+          );
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
@@ -694,8 +714,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           )
           .timeout(_senderWalletSheetInitTimeout);
       await Stripe.instance.presentPaymentSheet().timeout(
-        _senderWalletSheetPresentTimeout,
-      );
+            _senderWalletSheetPresentTimeout,
+          );
       await _refreshPaymentMethods();
       if (mounted) {
         _notice(context, 'Payment method added.');
@@ -800,8 +820,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     });
     try {
       final setup = await _repository.createSetupIntent().timeout(
-        _senderWalletActionTimeout,
-      );
+            _senderWalletActionTimeout,
+          );
       await _confirmNativeWalletSetup(type, setup);
       await _refreshPaymentMethods();
       if (mounted) _notice(context, '$title is ready for Circum checkout.');
@@ -824,30 +844,30 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   }
 
   void _openRothInformation() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => const _WalletInformationScreen(
-        title: 'Roth',
-        icon: Icons.account_balance_wallet_outlined,
-        body:
-            'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
-      ),
-    ),
-  );
+        MaterialPageRoute<void>(
+          builder: (_) => const _WalletInformationScreen(
+            title: 'Roth',
+            icon: Icons.account_balance_wallet_outlined,
+            body:
+                'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
+          ),
+        ),
+      );
 
   void _openEarnRoth() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => const SenderReferralScreen(),
-      settings: const RouteSettings(name: '/sender-mobile/wallet/earn'),
-    ),
-  );
+        MaterialPageRoute<void>(
+          builder: (_) => const SenderReferralScreen(),
+          settings: const RouteSettings(name: '/sender-mobile/wallet/earn'),
+        ),
+      );
 
   // ignore: unused_element
   void _openSupport() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => const _WalletSupportScreen(),
-      settings: const RouteSettings(name: '/sender-mobile/wallet/support'),
-    ),
-  );
+        MaterialPageRoute<void>(
+          builder: (_) => const _WalletSupportScreen(),
+          settings: const RouteSettings(name: '/sender-mobile/wallet/support'),
+        ),
+      );
 
   Future<void> _redeemRothCard() async {
     final controller = TextEditingController();
@@ -860,8 +880,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('redeemGiftCard')
-          .call({'code': code})
-          .timeout(_walletOperationTimeout);
+          .call({'code': code}).timeout(_walletOperationTimeout);
       await _load();
       if (mounted) _notice(context, 'Roth Card redeemed.');
     } on FirebaseFunctionsException catch (_) {
@@ -1144,8 +1163,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     try {
       final profile = await _withDeviceWalletSupport(
         await widget.repository.paymentMethods().timeout(
-          _senderWalletActionTimeout,
-        ),
+              _senderWalletActionTimeout,
+            ),
       );
       var businessAccount = false;
       try {
@@ -1183,8 +1202,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     setState(() => _busy = true);
     try {
       final setup = await widget.repository.createSetupIntent().timeout(
-        _senderWalletActionTimeout,
-      );
+            _senderWalletActionTimeout,
+          );
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
@@ -1208,8 +1227,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
           )
           .timeout(_senderWalletSheetInitTimeout);
       await Stripe.instance.presentPaymentSheet().timeout(
-        _senderWalletSheetPresentTimeout,
-      );
+            _senderWalletSheetPresentTimeout,
+          );
       await _load();
     } on StripeException catch (_) {
       if (mounted) {
@@ -1318,8 +1337,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     setState(() => _busy = true);
     try {
       final setup = await widget.repository.createSetupIntent().timeout(
-        _senderWalletActionTimeout,
-      );
+            _senderWalletActionTimeout,
+          );
       await _confirmNativeWalletSetup(type, setup);
       await _load();
       if (mounted) {
@@ -1356,69 +1375,70 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF07090F),
-    appBar: AppBar(
-      backgroundColor: Colors.transparent,
-      title: const Text('Manage Payments'),
-    ),
-    body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _error != null
-        ? _WalletMessage(
-            icon: Icons.error_outline,
-            title: 'Payments could not load',
-            body: 'Check your connection and try again.',
-            action: _load,
-          )
-        : ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-            children: [
-              _PaymentMethodsSection(
-                sectionTitle: 'Saved Cards',
-                data: _profile!,
-                wallet: widget.wallet,
-                busy: _busy,
-                premiumCards: true,
-                onAdd: _add,
-                onSetDefault: _setDefault,
-                onRemove: _remove,
-                onOpenMethod: _openMethod,
-                onOpenRoth: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const _WalletInformationScreen(
-                      title: 'Roth',
-                      icon: Icons.account_balance_wallet_outlined,
-                      body:
-                          'Roth can be used alone or with a card when an eligible purchase costs more than your available Roth.',
-                    ),
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Manage Payments'),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _WalletMessage(
+                    icon: Icons.error_outline,
+                    title: 'Payments could not load',
+                    body: 'Check your connection and try again.',
+                    action: _load,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+                    children: [
+                      _PaymentMethodsSection(
+                        sectionTitle: 'Saved Cards',
+                        data: _profile!,
+                        wallet: widget.wallet,
+                        busy: _busy,
+                        premiumCards: true,
+                        onAdd: _add,
+                        onSetDefault: _setDefault,
+                        onRemove: _remove,
+                        onOpenMethod: _openMethod,
+                        onOpenRoth: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const _WalletInformationScreen(
+                              title: 'Roth',
+                              icon: Icons.account_balance_wallet_outlined,
+                              body:
+                                  'Roth can be used alone or with a card when an eligible purchase costs more than your available Roth.',
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _CheckoutPreferenceSection(
+                        preference: _profile!.preference,
+                        profile: _profile!,
+                        busy: _busy,
+                        onChanged: _savePreference,
+                      ),
+                      const SizedBox(height: 18),
+                      const _WalletSectionTitle('Split Payment'),
+                      const SizedBox(height: 10),
+                      _SplitPaymentPreview(
+                        preference: _profile!.preference,
+                        profile: _profile!,
+                        wallet: widget.wallet,
+                      ),
+                      const SizedBox(height: 18),
+                      _BusinessPaymentProfileCard(
+                        connected: _businessAccount,
+                        onOpenBusiness: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const BusinessView()),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              _CheckoutPreferenceSection(
-                preference: _profile!.preference,
-                profile: _profile!,
-                busy: _busy,
-                onChanged: _savePreference,
-              ),
-              const SizedBox(height: 18),
-              const _WalletSectionTitle('Split Payment'),
-              const SizedBox(height: 10),
-              _SplitPaymentPreview(
-                preference: _profile!.preference,
-                profile: _profile!,
-                wallet: widget.wallet,
-              ),
-              const SizedBox(height: 18),
-              _BusinessPaymentProfileCard(
-                connected: _businessAccount,
-                onOpenBusiness: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const BusinessView()),
-                ),
-              ),
-            ],
-          ),
-  );
+      );
 }
 
 class SenderReferralScreen extends StatefulWidget {
@@ -1433,6 +1453,7 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
   String _link = '';
   List<Map<String, dynamic>> _referrals = const [];
   String? _error;
+  var _loading = true;
 
   @override
   void initState() {
@@ -1462,7 +1483,9 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
         _referrals = referrals.docs.map((doc) => doc.data()).toList();
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = _walletSafeError('$error'));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -1479,91 +1502,93 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
         backgroundColor: Colors.transparent,
         title: const Text('Earn Roth'),
       ),
-      body: _error != null
-          ? _WalletMessage(
-              icon: Icons.error_outline,
-              title: 'Referrals could not load',
-              body: 'Check your connection and try again.',
-              action: _load,
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-              children: [
-                const _WalletGlass(
-                  child: Text(
-                    'Earn 5 Roth when someone you invite completes their first successful Circum delivery.',
-                    style: TextStyle(color: Colors.white, height: 1.5),
-                  ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _WalletMessage(
+                  icon: Icons.error_outline,
+                  title: 'Referrals could not load',
+                  body: 'Check your connection and try again.',
+                  action: _load,
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+                  children: [
+                    const _WalletGlass(
+                      child: Text(
+                        'Earn 5 Roth when someone you invite completes their first successful Circum delivery.',
+                        style: TextStyle(color: Colors.white, height: 1.5),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _WalletGlass(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Referral Code',
+                            style: TextStyle(
+                              color: _WalletColors.muted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _code.isEmpty ? 'Loading…' : _code,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _WalletLink(
+                            icon: Icons.share_outlined,
+                            title: 'Share Link',
+                            detail: _link.isEmpty ? 'Preparing link' : _link,
+                            onTap: _link.isEmpty
+                                ? () => _SenderWalletViewState._notice(
+                                      context,
+                                      'Your referral link is still loading.',
+                                    )
+                                : () => Share.share(
+                                      'Join Circum with my referral link: $_link',
+                                    ),
+                          ),
+                          const Divider(color: _WalletColors.hairline),
+                          _WalletLink(
+                            icon: Icons.person_add_alt_1_outlined,
+                            title: 'Invite Friends',
+                            detail: 'Share your secure referral link',
+                            onTap: _link.isEmpty
+                                ? () => _SenderWalletViewState._notice(
+                                      context,
+                                      'Your referral link is still loading.',
+                                    )
+                                : () => Share.share(
+                                      'Join Circum with my referral link: $_link',
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _WalletGlass(
+                      child: Column(
+                        children: [
+                          _ReferralMetric('Pending Rewards', '$pending'),
+                          const Divider(color: _WalletColors.hairline),
+                          _ReferralMetric('Completed Rewards', '$completed'),
+                          const Divider(color: _WalletColors.hairline),
+                          _ReferralMetric(
+                            'Referral Status',
+                            _referrals.isEmpty ? 'Ready' : 'Active',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _WalletGlass(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Referral Code',
-                        style: TextStyle(
-                          color: _WalletColors.muted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _code.isEmpty ? 'Loading…' : _code,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _WalletLink(
-                        icon: Icons.share_outlined,
-                        title: 'Share Link',
-                        detail: _link.isEmpty ? 'Preparing link' : _link,
-                        onTap: _link.isEmpty
-                            ? () => _SenderWalletViewState._notice(
-                                context,
-                                'Your referral link is still loading.',
-                              )
-                            : () => Share.share(
-                                'Join Circum with my referral link: $_link',
-                              ),
-                      ),
-                      const Divider(color: _WalletColors.hairline),
-                      _WalletLink(
-                        icon: Icons.person_add_alt_1_outlined,
-                        title: 'Invite Friends',
-                        detail: 'Share your secure referral link',
-                        onTap: _link.isEmpty
-                            ? () => _SenderWalletViewState._notice(
-                                context,
-                                'Your referral link is still loading.',
-                              )
-                            : () => Share.share(
-                                'Join Circum with my referral link: $_link',
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _WalletGlass(
-                  child: Column(
-                    children: [
-                      _ReferralMetric('Pending Rewards', '$pending'),
-                      const Divider(color: _WalletColors.hairline),
-                      _ReferralMetric('Completed Rewards', '$completed'),
-                      const Divider(color: _WalletColors.hairline),
-                      _ReferralMetric(
-                        'Referral Status',
-                        _referrals.isEmpty ? 'Ready' : 'Active',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
     );
   }
 }
@@ -1575,25 +1600,25 @@ class _ReferralMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(color: _WalletColors.muted),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(color: _WalletColors.muted),
+              ),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 class _WalletInformationScreen extends StatelessWidget {
@@ -1609,27 +1634,27 @@ class _WalletInformationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF07090F),
-    appBar: AppBar(backgroundColor: Colors.transparent, title: Text(title)),
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        _WalletGlass(
-          child: Column(
-            children: [
-              Icon(icon, color: _WalletColors.lightBlue, size: 42),
-              const SizedBox(height: 16),
-              Text(
-                body,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, height: 1.5),
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(backgroundColor: Colors.transparent, title: Text(title)),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _WalletGlass(
+              child: Column(
+                children: [
+                  Icon(icon, color: _WalletColors.lightBlue, size: 42),
+                  const SizedBox(height: 16),
+                  Text(
+                    body,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, height: 1.5),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _WalletSupportScreen extends StatelessWidget {
@@ -1637,34 +1662,35 @@ class _WalletSupportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF07090F),
-    appBar: AppBar(
-      backgroundColor: Colors.transparent,
-      title: const Text('Wallet Support'),
-    ),
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        _WalletGlass(
-          child: _WalletLink(
-            icon: Icons.forum_outlined,
-            title: 'Contact Circum Support',
-            detail: 'Open an in-app conversation about payments or Roth',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const RideChatPageView(
-                  title: 'Circum Support',
-                  supportConversation: true,
-                  initialMessage: 'Hi, I need help with my wallet.',
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Wallet Support'),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _WalletGlass(
+              child: _WalletLink(
+                icon: Icons.forum_outlined,
+                title: 'Contact Circum Support',
+                detail: 'Open an in-app conversation about payments or Roth',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RideChatPageView(
+                      title: 'Circum Support',
+                      supportConversation: true,
+                      initialMessage: 'Hi, I need help with my wallet.',
+                    ),
+                    settings:
+                        RouteSettings(name: '/sender-mobile/support/wallet'),
+                  ),
                 ),
-                settings: RouteSettings(name: '/sender-mobile/support/wallet'),
               ),
             ),
-          ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _WalletActivityScreen extends StatefulWidget {
@@ -1721,48 +1747,48 @@ class _WalletActivityScreenState extends State<_WalletActivityScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF07090F),
-    appBar: AppBar(
-      backgroundColor: Colors.transparent,
-      title: const Text('Recent Activity'),
-    ),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-      children: [
-        _WalletGlass(
-          padding: EdgeInsets.zero,
-          child: _transactions.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(18),
-                  child: Text(
-                    'No activity yet.',
-                    style: TextStyle(color: _WalletColors.muted),
-                  ),
-                )
-              : Column(
-                  children: _transactions
-                      .map(
-                        (item) => InkWell(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  _TransactionDetailsScreen(transaction: item),
-                            ),
-                          ),
-                          child: _TransactionRow(item),
-                        ),
-                      )
-                      .toList(),
-                ),
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Recent Activity'),
         ),
-        if (_nextPage != null)
-          TextButton(
-            onPressed: _loading ? null : _loadMore,
-            child: Text(_loading ? 'Loading…' : 'Load more'),
-          ),
-      ],
-    ),
-  );
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+          children: [
+            _WalletGlass(
+              padding: EdgeInsets.zero,
+              child: _transactions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Text(
+                        'No activity yet.',
+                        style: TextStyle(color: _WalletColors.muted),
+                      ),
+                    )
+                  : Column(
+                      children: _transactions
+                          .map(
+                            (item) => InkWell(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => _TransactionDetailsScreen(
+                                      transaction: item),
+                                ),
+                              ),
+                              child: _TransactionRow(item),
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            if (_nextPage != null)
+              TextButton(
+                onPressed: _loading ? null : _loadMore,
+                child: Text(_loading ? 'Loading…' : 'Load more'),
+              ),
+          ],
+        ),
+      );
 }
 
 class _TransactionDetailsScreen extends StatelessWidget {
@@ -1837,52 +1863,50 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 110,
-          child: Text(
-            label,
-            style: const TextStyle(color: _WalletColors.muted),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text(
+                label,
+                style: const TextStyle(color: _WalletColors.muted),
+              ),
             ),
-          ),
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
   late final SenderWalletRepository _repository;
   SenderWalletData? _wallet;
   String? _error;
+  var _freshLoadCompleted = false;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderWalletRepository();
     _loadCachedSummary();
-    _repository
-        .initialise()
-        .timeout(const Duration(seconds: 10))
-        .then((value) {
-          if (mounted) setState(() => _wallet = value);
-          unawaited(_cacheSummary(value));
-        })
-        .catchError((_) {
-          if (mounted && _wallet == null) setState(() => _error = 'Offline');
-        });
+    _repository.initialise().timeout(const Duration(seconds: 10)).then((value) {
+      _freshLoadCompleted = true;
+      if (mounted) setState(() => _wallet = value);
+      unawaited(_cacheSummary(value));
+    }).catchError((_) {
+      if (mounted && _wallet == null) setState(() => _error = 'Offline');
+    });
   }
 
   Future<void> _loadCachedSummary() async {
@@ -1897,7 +1921,7 @@ class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
       final snapshot = _CachedSenderWalletSnapshot.fromMap(
         Map<String, dynamic>.from(decoded),
       );
-      if (snapshot == null || !mounted) return;
+      if (snapshot == null || !mounted || _freshLoadCompleted) return;
       setState(() => _wallet = snapshot.wallet);
     } catch (_) {}
   }
@@ -1925,51 +1949,51 @@ class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
 
   @override
   Widget build(BuildContext context) => _WalletGlass(
-    child: InkWell(
-      onTap: widget.onOpenWallet,
-      child: Row(
-        children: [
-          const Icon(
-            Icons.account_balance_wallet_outlined,
-            color: _WalletColors.lightBlue,
-            size: 28,
-          ),
-          const SizedBox(width: 13),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Roth balance',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
+        child: InkWell(
+          onTap: widget.onOpenWallet,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: _WalletColors.lightBlue,
+                size: 28,
+              ),
+              const SizedBox(width: 13),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Roth balance',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'View Wallet',
+                      style:
+                          TextStyle(color: _WalletColors.muted, fontSize: 12),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'View Wallet',
-                  style: TextStyle(color: _WalletColors.muted, fontSize: 12),
+              ),
+              Text(
+                _wallet == null
+                    ? (_error == null ? '…' : 'Unavailable')
+                    : '${_wallet!.balance.toStringAsFixed(_wallet!.balance % 1 == 0 ? 0 : 2)} Roth',
+                style: const TextStyle(
+                  color: _WalletColors.lightBlue,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Text(
-            _error ??
-                (_wallet == null
-                    ? '…'
-                    : '${_wallet!.balance.toStringAsFixed(_wallet!.balance % 1 == 0 ? 0 : 2)} Roth'),
-            style: const TextStyle(
-              color: _WalletColors.lightBlue,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _WalletMessage extends StatelessWidget {
@@ -1985,35 +2009,36 @@ class _WalletMessage extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: _WalletGlass(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: _WalletColors.lightBlue, size: 36),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: _WalletGlass(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: _WalletColors.lightBlue, size: 36),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  body,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(color: _WalletColors.muted, height: 1.45),
+                ),
+                const SizedBox(height: 18),
+                FilledButton(onPressed: action, child: const Text('Retry')),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: _WalletColors.muted, height: 1.45),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(onPressed: action, child: const Text('Retry')),
-          ],
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class _WalletNotice extends StatelessWidget {
@@ -2041,13 +2066,13 @@ class _WalletNotice extends StatelessWidget {
     final tone = _success
         ? AppTokens.success
         : _warning
-        ? AppTokens.warning
-        : _WalletColors.lightBlue;
+            ? AppTokens.warning
+            : _WalletColors.lightBlue;
     final icon = _success
         ? Icons.check_circle_outline_rounded
         : _warning
-        ? Icons.info_outline_rounded
-        : Icons.notifications_none_rounded;
+            ? Icons.info_outline_rounded
+            : Icons.notifications_none_rounded;
     return AppGlassContainer(
       radius: AppTokens.radius22,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -2056,7 +2081,7 @@ class _WalletNotice extends StatelessWidget {
       borderColor: tone.withValues(alpha: .36),
       highContrast:
           SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-          false,
+              false,
       child: Row(
         children: [
           Container(
@@ -2526,20 +2551,20 @@ class _PaymentMethodsSection extends StatelessWidget {
       SenderPaymentProfileOption option,
       int index, {
       bool premium = false,
-    }) => _PaymentProfileOptionRow(
-      option: option,
-      busy: busy,
-      premiumCard: premium,
-      showDefaultBadge:
-          option.isDefault ||
-          (index == 0 &&
-              (option.type == SenderPaymentProfileOptionType.applePay ||
-                  option.type == SenderPaymentProfileOptionType.googlePay)),
-      onAdd: onAdd,
-      onSetDefault: onSetDefault,
-      onRemove: onRemove,
-      onOpenMethod: onOpenMethod,
-    );
+    }) =>
+        _PaymentProfileOptionRow(
+          option: option,
+          busy: busy,
+          premiumCard: premium,
+          showDefaultBadge: option.isDefault ||
+              (index == 0 &&
+                  (option.type == SenderPaymentProfileOptionType.applePay ||
+                      option.type == SenderPaymentProfileOptionType.googlePay)),
+          onAdd: onAdd,
+          onSetDefault: onSetDefault,
+          onRemove: onRemove,
+          onOpenMethod: onOpenMethod,
+        );
 
     final standardRows = <Widget>[
       Padding(
@@ -2547,11 +2572,11 @@ class _PaymentMethodsSection extends StatelessWidget {
         child: _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
       ),
       ...options.asMap().entries.map(
-        (entry) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: optionRow(entry.value, entry.key),
-        ),
-      ),
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: optionRow(entry.value, entry.key),
+            ),
+          ),
       Padding(
         padding: const EdgeInsets.only(bottom: 2),
         child: optionRow(
@@ -2595,12 +2620,12 @@ class _PaymentMethodsSection extends StatelessWidget {
             child: Column(
               children: [
                 ...otherMethods.asMap().entries.expand(
-                  (entry) => [
-                    if (entry.key > 0)
-                      const Divider(color: _WalletColors.hairline),
-                    optionRow(entry.value, entry.key),
-                  ],
-                ),
+                      (entry) => [
+                        if (entry.key > 0)
+                          const Divider(color: _WalletColors.hairline),
+                        optionRow(entry.value, entry.key),
+                      ],
+                    ),
                 if (otherMethods.isNotEmpty)
                   const Divider(color: _WalletColors.hairline),
                 _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
@@ -2816,9 +2841,8 @@ class _WalletSheetActionTile extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: enabled
-                  ? accent
-                  : _WalletColors.muted.withValues(alpha: .62),
+              color:
+                  enabled ? accent : _WalletColors.muted.withValues(alpha: .62),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -2890,9 +2914,9 @@ class _PaymentProfileOptionRow extends StatelessWidget {
         detail: 'Manage securely',
         onTap: busy
             ? () => _SenderWalletViewState._notice(
-                context,
-                'Payment methods are updating.',
-              )
+                  context,
+                  'Payment methods are updating.',
+                )
             : onAdd,
       );
     }
@@ -2926,8 +2950,8 @@ class _PaymentProfileOptionRow extends StatelessWidget {
                 Text(
                   premiumCard
                       ? (method.brand.isEmpty
-                            ? 'Card'
-                            : _titleCase(method.brand))
+                          ? 'Card'
+                          : _titleCase(method.brand))
                       : method.title,
                   style: const TextStyle(
                     color: Colors.white,
@@ -3040,12 +3064,12 @@ class _RothPayWithRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _WalletLink(
-    icon: Icons.account_balance_wallet_outlined,
-    title: 'Roth',
-    detail:
-        '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} available',
-    onTap: onTap,
-  );
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'Roth',
+        detail:
+            '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} available',
+        onTap: onTap,
+      );
 }
 
 class _WalletPageShell extends StatelessWidget {
@@ -3491,61 +3515,61 @@ class _OfferRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(18),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 64),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _WalletColors.lightBlue.withValues(alpha: .13),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: const Icon(
-              Icons.local_offer_outlined,
-              color: _WalletColors.lightBlue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _WalletColors.lightBlue.withValues(alpha: .13),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  detail,
-                  style: const TextStyle(
-                    color: _WalletColors.muted,
-                    fontSize: 11,
-                  ),
+                child: const Icon(
+                  Icons.local_offer_outlined,
+                  color: _WalletColors.lightBlue,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      detail,
+                      style: const TextStyle(
+                        color: _WalletColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF0B1D48),
+                  minimumSize: const Size(78, 40),
+                ),
+                child: const Text('Invite'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: onTap,
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF0B1D48),
-              minimumSize: const Size(78, 40),
-            ),
-            child: const Text('Invite'),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _CheckoutPreferenceSection extends StatelessWidget {
@@ -3625,21 +3649,21 @@ class _PaymentPriorityOption extends StatelessWidget {
   });
 
   String get _label => switch (preference) {
-    SenderCheckoutPreference.askEveryCheckout => 'Ask every checkout',
-    SenderCheckoutPreference.rothFirst => 'Use Roth first',
-    SenderCheckoutPreference.rothThenCard => 'Use Roth then card',
-    SenderCheckoutPreference.applePayFirst => 'Use Apple Pay first',
-    SenderCheckoutPreference.googlePayFirst => 'Use Google Pay first',
-    SenderCheckoutPreference.defaultCard => 'Use saved card first',
-  };
+        SenderCheckoutPreference.askEveryCheckout => 'Ask every checkout',
+        SenderCheckoutPreference.rothFirst => 'Use Roth first',
+        SenderCheckoutPreference.rothThenCard => 'Use Roth then card',
+        SenderCheckoutPreference.applePayFirst => 'Use Apple Pay first',
+        SenderCheckoutPreference.googlePayFirst => 'Use Google Pay first',
+        SenderCheckoutPreference.defaultCard => 'Use saved card first',
+      };
 
   String? get _detail => switch (preference) {
-    SenderCheckoutPreference.rothThenCard =>
-      'Apply Roth, then charge the remainder automatically.',
-    SenderCheckoutPreference.askEveryCheckout =>
-      'Choose how to pay when you check out.',
-    _ => null,
-  };
+        SenderCheckoutPreference.rothThenCard =>
+          'Apply Roth, then charge the remainder automatically.',
+        SenderCheckoutPreference.askEveryCheckout =>
+          'Choose how to pay when you check out.',
+        _ => null,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -3678,9 +3702,8 @@ class _PaymentPriorityOption extends StatelessWidget {
                       _label,
                       style: TextStyle(
                         color: Colors.white,
-                        fontWeight: selected
-                            ? FontWeight.w800
-                            : FontWeight.w600,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
                       ),
                     ),
                     if (_detail != null) ...[
@@ -3790,25 +3813,25 @@ class _PaymentBreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-        ),
-      ),
-      Text(
-        value,
-        style: TextStyle(
-          color: accent ?? Colors.white,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    ],
-  );
+          Text(
+            value,
+            style: TextStyle(
+              color: accent ?? Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
 }
 
 class _PaymentBreakdownArrow extends StatelessWidget {
@@ -3816,9 +3839,9 @@ class _PaymentBreakdownArrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 7),
-    child: Icon(Icons.south_rounded, size: 18, color: _WalletColors.muted),
-  );
+        padding: EdgeInsets.symmetric(vertical: 7),
+        child: Icon(Icons.south_rounded, size: 18, color: _WalletColors.muted),
+      );
 }
 
 class _BusinessPaymentProfileCard extends StatelessWidget {
@@ -3832,62 +3855,65 @@ class _BusinessPaymentProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const _WalletSectionTitle('Business Payment Profile'),
-      const SizedBox(height: 10),
-      _WalletGlass(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _WalletSectionTitle('Business Payment Profile'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  connected ? Icons.verified_outlined : Icons.business_outlined,
-                  color: connected
-                      ? const Color(0xFF34D399)
-                      : _WalletColors.muted,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    connected
-                        ? 'Connected'
-                        : 'No Business payment profile connected.',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                Row(
+                  children: [
+                    Icon(
+                      connected
+                          ? Icons.verified_outlined
+                          : Icons.business_outlined,
+                      color: connected
+                          ? const Color(0xFF34D399)
+                          : _WalletColors.muted,
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        connected
+                            ? 'Connected'
+                            : 'No Business payment profile connected.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  connected
+                      ? 'Business Finance uses your approved payment profile during authorised Business checkouts.'
+                      : 'Create or join a Circum Business account to manage authorised Business payments.',
+                  style:
+                      const TextStyle(color: _WalletColors.muted, height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                TextButton.icon(
+                  onPressed: onOpenBusiness,
+                  icon: Icon(
+                    connected
+                        ? Icons.arrow_forward_rounded
+                        : Icons.add_business_outlined,
+                  ),
+                  label: Text(
+                    connected
+                        ? 'Manage Business Payments'
+                        : 'Create Business Account',
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              connected
-                  ? 'Business Finance uses your approved payment profile during authorised Business checkouts.'
-                  : 'Create or join a Circum Business account to manage authorised Business payments.',
-              style: const TextStyle(color: _WalletColors.muted, height: 1.45),
-            ),
-            const SizedBox(height: 14),
-            TextButton.icon(
-              onPressed: onOpenBusiness,
-              icon: Icon(
-                connected
-                    ? Icons.arrow_forward_rounded
-                    : Icons.add_business_outlined,
-              ),
-              label: Text(
-                connected
-                    ? 'Manage Business Payments'
-                    : 'Create Business Account',
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
+          ),
+        ],
+      );
 }
 
 class _WalletLink extends StatelessWidget {
@@ -3905,59 +3931,59 @@ class _WalletLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _WalletPaymentItem(
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 62),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: _WalletColors.lightBlue.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: _WalletColors.lightBlue, size: 21),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 62),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _WalletColors.lightBlue.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _WalletColors.muted,
-                        fontSize: 11,
-                      ),
+                    child: Icon(icon, color: _WalletColors.lightBlue, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _WalletColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const Icon(Icons.chevron_right, color: _WalletColors.muted),
+                ],
               ),
-              const Icon(Icons.chevron_right, color: _WalletColors.muted),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class _WalletSectionTitle extends StatelessWidget {
@@ -3965,13 +3991,13 @@ class _WalletSectionTitle extends StatelessWidget {
   const _WalletSectionTitle(this.value);
   @override
   Widget build(BuildContext context) => Text(
-    value,
-    style: const TextStyle(
-      color: Colors.white,
-      fontSize: 22,
-      fontWeight: FontWeight.w800,
-    ),
-  );
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+        ),
+      );
 }
 
 class _WalletGlass extends StatelessWidget {
@@ -3987,16 +4013,16 @@ class _WalletGlass extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-    padding: padding,
-    radius: AppTokens.radius24,
-    accent: AppTokens.primaryLight,
-    surfaceColor: surfaceColor,
-    borderColor: borderColor,
-    highContrast:
-        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-        false,
-    child: child,
-  );
+        padding: padding,
+        radius: AppTokens.radius24,
+        accent: AppTokens.primaryLight,
+        surfaceColor: surfaceColor,
+        borderColor: borderColor,
+        highContrast:
+            SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+                false,
+        child: child,
+      );
 }
 
 class _WalletColors {
@@ -4032,7 +4058,10 @@ String _walletStatusLabel(String value) {
   if (status == 'cancelled' || status == 'canceled' || status == 'reversed') {
     return 'Cancelled';
   }
-  return 'Completed';
+  if (status == 'completed' || status == 'succeeded' || status == 'success') {
+    return 'Completed';
+  }
+  return 'Status unavailable';
 }
 
 Color _walletStatusColor(String value) {
@@ -4040,6 +4069,7 @@ Color _walletStatusColor(String value) {
     'Pending' => const Color(0xFFFBBF24),
     'Failed' => const Color(0xFFEF4444),
     'Cancelled' => const Color(0xFF9CA3AF),
+    'Status unavailable' => const Color(0xFF9CA3AF),
     _ => const Color(0xFF34D399),
   };
 }
