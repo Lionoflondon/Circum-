@@ -127,6 +127,12 @@ test("Activity certification fixture is server-owned and side-effect suppressed"
   assert.match(source, /activityNotificationsDeleted/);
   assert.match(source, /activity_pagination_seed/);
   assert.match(source, /wallet_notification_seed/);
+  assert.match(source, /wallet_ledger_pagination_seed/);
+  assert.match(source, /qaWalletLedgerFixture: true/);
+  assert.match(source, /referral_seed/);
+  assert.match(source, /qaReferralFixture: true/);
+  assert.match(source, /wallet_security_seed/);
+  assert.match(source, /secondQaUid/);
   assert.match(source, /chat_retry_probe/);
   assert.match(source, /cancellation_quote_probe/);
   assert.match(source, /topLevelDeleted/);
