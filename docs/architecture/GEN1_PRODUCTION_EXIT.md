@@ -5,8 +5,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 283
 - Gen 1 exports: 281
 - Files importing Firebase Functions v1: 67
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 82
-- MIGRATE TO CLOUD RUN: 157
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 83
+- MIGRATE TO CLOUD RUN: 156
 - REPLACE WITH CLOUD RUN + EVENTARC: 28
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
@@ -290,7 +290,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | updateRiderPushToken | server/functions/rider-account.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/repo/token_callable_api.dart<br>lib/website/shared/circum_website_app.dart<br>lib/website/shared/token_callable_api.dart<br>server/functions/cloud-run-token-callables.js<br>server/functions/cloud-run-token-callables.test.js<br>test/website_token_callable_api_test.dart |
 | updateSenderHealthPlusBooking | server/functions/health-plus.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/health_plus/view/health_plus.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/firestore-health-plus-authority-rules.test.js<br>server/functions/health-plus-checkout-security.test.js |
 | updateSenderLocation | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/authentication/bloc/auth_bloc.dart |
-| updateSenderNotificationState | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_mobile_home.dart<br>lib/app/sender_mobile/sender_notifications.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/firestore-chat-notification-rules.test.js |
+| updateSenderNotificationState | server/functions/sender-account.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/account_bootstrap_api.dart<br>lib/website/shared/account_bootstrap_api.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/firestore-chat-notification-rules.test.js<br>server/functions/sender-notification-state.js<br>server/functions/sender-notification-state.test.js<br>test/sender_account_bootstrap_api_test.dart<br>test/sender_mobile/sender_notification_cloud_run_contract_test.dart<br>test/website_account_bootstrap_api_test.dart |
 | updateSenderPreferences | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_profile_preferences.dart<br>server/functions/production-functions-inventory.json<br>server/functions/sender-account-authority.test.js<br>test/sender_mobile/sender_mobile_profile_test.dart |
 | updateSenderProfile | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/authentication/bloc/auth_bloc.dart<br>lib/app/sender_mobile/sender_mobile_home.dart<br>lib/app/sender_mobile/sender_mobile_profile.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/firestore-sender-bootstrap-rules.test.js<br>server/functions/firestore-starter-roth-rules.test.js<br>test/website_sender_auth_deterministic_contract_test.dart<br>test/website_signup_referral_test.dart |
 | updateSenderProfilePhoto | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_mobile_profile.dart |

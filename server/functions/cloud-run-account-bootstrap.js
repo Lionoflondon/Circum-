@@ -6,6 +6,7 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const senderAccount = require("./sender-account");
+const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -13,18 +14,21 @@ const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
+  updateSenderNotificationState: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: true},
   verifyRiderAccountAccess: {handler: riderAccount.verifyRiderAccountAccess, appCheckRequired: true},
   advanceRiderOnboarding: {handler: riderAccount.advanceRiderOnboarding, appCheckRequired: true},
   updateRiderProfile: {handler: riderAccount.updateRiderProfile, appCheckRequired: true},
   submitRiderApplication: {handler: riderAccount.submitRiderApplication, appCheckRequired: true},
 });
 const STATUS = {
+  "already-exists": "ALREADY_EXISTS",
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
   "permission-denied": "PERMISSION_DENIED",
   "failed-precondition": "FAILED_PRECONDITION",
   "resource-exhausted": "RESOURCE_EXHAUSTED",
   unavailable: "UNAVAILABLE",
+  "not-found": "NOT_FOUND",
   internal: "INTERNAL",
 };
 
@@ -43,7 +47,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -133,7 +137,7 @@ function createServer(options = {}) {
       } catch (error) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
-        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "resource-exhausted" ? 429 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : code === "unavailable" ? 503 : 500;
+        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "not-found" ? 404 : code === "already-exists" ? 409 : code === "resource-exhausted" ? 429 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : code === "unavailable" ? 503 : 500;
         if (status >= 500) console.error("account_bootstrap_failed", {operation: name, reason: code});
         return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Account request failed." : error.message}});
       }

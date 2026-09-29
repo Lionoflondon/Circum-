@@ -73,6 +73,28 @@ void main() {
     expect(result, {'ok': true});
   });
 
+  test('Sender notification state is App Check protected and uses Cloud Run',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(jsonEncode({'result': {'ok': true}}), 200);
+    });
+
+    final result = await invokeAccountBootstrap(
+      'updateSenderNotificationState',
+      const {'notificationId': 'notification-1', 'action': 'archive'},
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result, {'ok': true});
+    expect(captured.url.path, '/updateSenderNotificationState');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+  });
+
   test('Rider application submission uses authenticated Cloud Run callable',
       () async {
     late http.Request captured;

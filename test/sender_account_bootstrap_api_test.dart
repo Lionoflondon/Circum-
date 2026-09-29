@@ -45,5 +45,32 @@ void main() {
       throwsA(isA<SenderAccountBootstrapException>()),
     );
   });
-}
 
+  test('Sender notification state uses the App Check protected Cloud Run route',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(jsonEncode({'result': {'ok': true}}), 200);
+    });
+
+    final result = await invokeSenderNotificationState(
+      action: 'mark_read',
+      notificationIds: const ['notification-1'],
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result['ok'], isTrue);
+    expect(captured.url.path, '/updateSenderNotificationState');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+    expect(jsonDecode(captured.body), {
+      'data': {
+        'action': 'mark_read',
+        'notificationIds': ['notification-1'],
+      },
+    });
+  });
+}

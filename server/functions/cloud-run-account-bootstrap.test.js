@@ -33,6 +33,7 @@ function dependencies(overrides = {}) {
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
         ensureSenderAccount: handler("ensureSenderAccount"),
+        updateSenderNotificationState: handler("updateSenderNotificationState"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         advanceRiderOnboarding: handler("advanceRiderOnboarding"),
         updateRiderProfile: handler("updateRiderProfile"),
@@ -45,6 +46,7 @@ function dependencies(overrides = {}) {
 
 test("routes only the supported account operations", () => {
   assert.equal(routeName("/ensureSenderAccount"), "ensureSenderAccount");
+  assert.equal(routeName("/v1/callable/updateSenderNotificationState"), "updateSenderNotificationState");
   assert.equal(routeName("/v1/callable/updateRiderProfile"), "updateRiderProfile");
   assert.equal(routeName("/advanceRiderOnboarding"), "advanceRiderOnboarding");
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
@@ -88,6 +90,79 @@ test("Rider operations require App Check", async () => {
     });
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error.status, "FAILED_PRECONDITION");
+  });
+});
+
+test("Sender notification state requires App Check and preserves the callable envelope", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const missing = await fetch(`${base}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "notification-1", action: "mark_read"}}),
+    });
+    assert.equal(missing.status, 400);
+    assert.equal((await missing.json()).error.status, "FAILED_PRECONDITION");
+
+    const response = await fetch(`${base}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "notification-1", action: "mark_read"}}),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {ok: true, name: "updateSenderNotificationState"}});
+    assert.equal(deps.calls.at(-1).context.app.appId, "circum");
+  });
+});
+
+test("Sender notification state maps not-found to a safe 404", async () => {
+  const deps = dependencies({
+    operations: {
+      ...dependencies().factory().operations,
+      updateSenderNotificationState: {
+        appCheckRequired: true,
+        handler: {
+          run: async () => {
+            throw Object.assign(new Error("hidden detail"), {code: "not-found"});
+          },
+        },
+      },
+    },
+  });
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "missing", action: "mark_read"}}),
+    });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error.status, "NOT_FOUND");
+  });
+});
+
+test("account routes map conflicts to a safe 409", async () => {
+  const base = dependencies();
+  const deps = dependencies({
+    operations: {
+      ...base.factory().operations,
+      updateSenderNotificationState: {
+        appCheckRequired: true,
+        handler: {
+          run: async () => {
+            throw Object.assign(new Error("hidden detail"), {code: "already-exists"});
+          },
+        },
+      },
+    },
+  });
+  await withServer(deps.factory, async (serverBase) => {
+    const response = await fetch(`${serverBase}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "notification-1", action: "mark_read"}}),
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error.status, "ALREADY_EXISTS");
   });
 });
 

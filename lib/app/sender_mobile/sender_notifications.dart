@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'account_bootstrap_api.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_notification_taxonomy.dart';
 
@@ -63,7 +63,6 @@ class CircumNotification {
   }
 
 }
-
 bool senderNotificationMatchesFilter(
   String filter,
   CircumNotification notification,
@@ -84,15 +83,12 @@ bool senderNotificationMatchesFilter(
 class SenderNotificationsRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
-  final FirebaseFunctions functions;
 
   SenderNotificationsRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    FirebaseFunctions? functions,
   }) : auth = auth ?? FirebaseAuth.instance,
-       firestore = firestore ?? FirebaseFirestore.instance,
-       functions = functions ?? FirebaseFunctions.instance;
+       firestore = firestore ?? FirebaseFirestore.instance;
 
   Stream<List<CircumNotification>> watchNotifications() {
     final uid = auth.currentUser?.uid;
@@ -149,10 +145,10 @@ class SenderNotificationsRepository {
         .where((id) => id.isNotEmpty)
         .toList();
     if (cleanIds.isEmpty) return;
-    await functions.httpsCallable('updateSenderNotificationState').call({
-      'action': action,
-      'notificationIds': cleanIds,
-    });
+    await updateSenderNotificationStateViaCloudRun(
+      action: action,
+      notificationIds: cleanIds,
+    );
   }
 }
 
@@ -271,7 +267,21 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                                     'route=${visible[index].destination['route'] ?? ''}',
                                   );
                                 }
-                                await _repository.markRead(visible[index].id);
+                                try {
+                                  await _repository
+                                      .markRead(visible[index].id)
+                                      .timeout(const Duration(seconds: 8));
+                                } catch (_) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'This notification could not be opened. Try again shortly.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
                                 if (mounted) {
                                   widget.onOpenNotification?.call(
                                     visible[index],
