@@ -28,6 +28,7 @@ import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
+import 'sender_notification_destination.dart';
 import 'sender_notification_visibility.dart';
 import 'package:circum/website/shared/account_bootstrap_api.dart';
 import 'package:circum/website/shared/rider_delivery_authority_api.dart';
@@ -316,6 +317,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             colors: colors,
             initialStep: _senderInitialStep,
             referralCode: _initialRoute.referralCode,
+            initialNotificationDestination:
+                _initialRoute.senderNotificationDestination,
             onBack: () => _openSurface(_WebAppMode.landing),
             onRoleSelected: _openRole,
             onGifts: () => _openSurface(_WebAppMode.gifts),
@@ -464,26 +467,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 Map<String, dynamic> _websiteNotificationDestination(
   Map<String, dynamic> data,
 ) {
-  final nested = data['data'] is Map
-      ? Map<String, dynamic>.from(data['data'] as Map)
-      : const <String, dynamic>{};
-  final rawDestination = data['destination'] ?? nested['destination'];
-  final destination = rawDestination is Map
-      ? Map<String, dynamic>.from(rawDestination)
-      : <String, dynamic>{};
-  final deliveryId =
-      '${destination['deliveryId'] ?? destination['bookingId'] ?? nested['deliveryId'] ?? data['deliveryId'] ?? data['bookingId'] ?? ''}'
-          .trim();
-  final type = '${data['type'] ?? nested['type'] ?? ''}'.trim().toLowerCase();
-  final route = '${destination['route'] ?? ''}'.trim().toLowerCase();
-  return {
-    ...destination,
-    if (route.isNotEmpty) 'route': route,
-    if (route.isEmpty && deliveryId.isNotEmpty) 'route': 'tracking',
-    if (deliveryId.isNotEmpty) 'deliveryId': deliveryId,
-    if (route.isEmpty && deliveryId.isEmpty && type.contains('delivery'))
-      'route': 'tracking',
-  };
+  return parseWebsiteSenderNotificationDestination(data);
 }
 
 class _PlatformNotificationCenter extends StatefulWidget {
@@ -622,23 +606,21 @@ class _PlatformNotificationCenterState
     try {
       await _markRead(item).timeout(const Duration(seconds: 8));
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'This notification could not be opened. Try again shortly.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Opened. Read status will sync when you reconnect.',
+            ),
           ),
-        ),
-      );
-      return;
+        );
+      }
     }
     if (!mounted) return;
     setState(() => _open = false);
     if (widget.mode == _WebAppMode.sender) {
       final destination = _websiteNotificationDestination(item.data());
-      if (destination['route'] == 'tracking') {
-        await widget.onOpenSenderNotification?.call(destination);
-      }
+      await widget.onOpenSenderNotification?.call(destination);
     }
   }
 
@@ -8539,6 +8521,7 @@ class _CustomerPortal extends StatefulWidget {
   final _CircumColors colors;
   final _SenderStep initialStep;
   final String? referralCode;
+  final Map<String, String>? initialNotificationDestination;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onGifts;
@@ -8550,6 +8533,7 @@ class _CustomerPortal extends StatefulWidget {
     required this.colors,
     required this.initialStep,
     required this.referralCode,
+    this.initialNotificationDestination,
     required this.onBack,
     required this.onRoleSelected,
     required this.onGifts,
@@ -8688,6 +8672,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
   bool _senderCheckoutReturnHandled = false;
+  bool _initialNotificationOpened = false;
   bool _roleChoiceConfirmed = false;
   bool _differentCollectionContact = false;
   bool _parcelPhotoBusy = false;
@@ -8785,9 +8770,56 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     Map<String, dynamic> destination,
   ) async {
     final route = '${destination['route'] ?? ''}'.trim().toLowerCase();
+    final chatId = '${destination['chatId'] ?? ''}'.trim();
     final deliveryId =
         '${destination['deliveryId'] ?? destination['bookingId'] ?? ''}'.trim();
-    if (route != 'tracking' || deliveryId.isEmpty) return false;
+    if (route == 'gift') {
+      widget.onGifts();
+      return true;
+    }
+    if (route == 'health') {
+      if (mounted) setState(() => _step = _SenderStep.healthPlus);
+      return true;
+    }
+    if (route == 'business') {
+      if (mounted) setState(() => _step = _SenderStep.business);
+      return true;
+    }
+    if (route == 'wallet' || route == 'profile' || route == 'activity') {
+      if (mounted) {
+        setState(() {
+          _step = _SenderStep.profile;
+          _senderProfileTab = route == 'wallet' ? 3 : 1;
+        });
+      }
+      return true;
+    }
+    if (route == 'conversation') {
+      final conversationId = chatId.isNotEmpty ? chatId : deliveryId;
+      if (conversationId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _step = _SenderStep.profile;
+            _senderProfileTab = 1;
+            _senderProfileMessage =
+                'This conversation is no longer available.';
+          });
+        }
+        return true;
+      }
+      if (!mounted) return false;
+      _activeRequestDocId = conversationId;
+      _listenToChat(conversationId);
+      setState(() {
+        _supportChat = false;
+        _chatOpen = true;
+      });
+      return true;
+    }
+    if (route != 'tracking' || deliveryId.isEmpty) {
+      if (mounted) setState(() => _step = _SenderStep.profile);
+      return true;
+    }
     SenderDeliveryRecord? delivery;
     for (final candidate in _senderDeliveries) {
       if (candidate.requestId == deliveryId ||
@@ -9858,6 +9890,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _loadSenderRothBalance();
       await _handleBusinessCheckoutReturn();
       await _handleSenderCheckoutReturn();
+      _openInitialNotificationDestination();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -9865,6 +9898,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderProfileMessage = 'We could not load your profile just now.';
       });
     }
+  }
+
+  void _openInitialNotificationDestination() {
+    final initial = widget.initialNotificationDestination;
+    if (_initialNotificationOpened || initial == null || !mounted) return;
+    _initialNotificationOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) openNotificationDestination(initial);
+    });
   }
 
   Future<void> _handleBusinessCheckoutReturn() async {

@@ -577,7 +577,10 @@ async function queueSenderStoryAppNotification(db, {giftId, userId, token, retry
     type: "gift_story_ready",
     title: "Your Gift Story is ready",
     body: "Your Circum Gift Story is ready.",
-    data: {category: "gifts", giftId, secureStoryUrl: url, route: "gift"},
+    // The authenticated Sender resolves the Story by giftId through the
+    // owner-checked callable. Never place the private Story token/URL in an
+    // in-app notification or push payload.
+    data: {category: "gifts", giftId, route: "gift", action: "story"},
     dedupeKey: `gift_story_ready:${giftId}:${uid}`,
     ...(db.fixtureMode ? {db, suppressPush: true} : {}),
   });
@@ -1006,6 +1009,10 @@ async function sendThankYouPush(giftId, gift, notificationId) {
   if (!senderId) return;
   const token = await deviceTokenAuthority.ownedProfileToken(senderId, "sender");
   if (!token) return;
+  const deepLink = communicationEngine.destinationFor(
+    "gift_story_thank_you",
+    {giftId, action: "story"},
+  );
   await getMessaging().send({
     token,
     notification: {
@@ -1016,7 +1023,9 @@ async function sendThankYouPush(giftId, gift, notificationId) {
       type: "gift_story_thank_you",
       notificationId,
       giftId,
-      route: "gift",
+      deepLinkVersion: `${deepLink.version}`,
+      route: deepLink.route,
+      deepLink: JSON.stringify(deepLink),
     },
   }).catch((error) => console.error("Gift Story thank-you push failed", error));
 }

@@ -9,7 +9,7 @@ void main() {
       'destination': {'route': 'wallet'},
     });
 
-    expect(destination, {'route': 'wallet'});
+    expect(destination, {'version': 1, 'route': 'wallet'});
   });
 
   test('decodes JSON destination from push data', () {
@@ -27,7 +27,11 @@ void main() {
       'data': '{"chatId":"delivery-2"}',
     });
 
-    expect(destination, {'route': 'conversation', 'chatId': 'delivery-2'});
+    expect(destination, {
+      'version': 1,
+      'route': 'conversation',
+      'chatId': 'delivery-2',
+    });
   });
 
   test('maps payment payloads to wallet route', () {
@@ -36,7 +40,7 @@ void main() {
       'data': '{"paymentStatus":"succeeded"}',
     });
 
-    expect(destination, {'route': 'wallet'});
+    expect(destination, {'version': 1, 'route': 'wallet'});
   });
 
   test(
@@ -57,18 +61,21 @@ void main() {
     },
   );
 
-  test('maps wallet payment payloads to Wallet and preserves transaction id',
-      () {
-    final destination = parseSenderNotificationDestination({
-      'type': 'wallet_payment',
-      'transactionId': 'wallet-tx-1',
-    });
+  test(
+    'maps wallet payment payloads to Wallet and preserves transaction id',
+    () {
+      final destination = parseSenderNotificationDestination({
+        'type': 'wallet_payment',
+        'transactionId': 'wallet-tx-1',
+      });
 
-    expect(destination, {
-      'route': 'wallet',
-      'transactionId': 'wallet-tx-1',
-    });
-  });
+      expect(destination, {
+        'version': 1,
+        'route': 'wallet',
+        'transactionId': 'wallet-tx-1',
+      });
+    },
+  );
 
   test('routes Gift Story ready notification to the referenced Gift', () {
     final destination = parseSenderNotificationDestination({
@@ -76,7 +83,7 @@ void main() {
       'giftId': 'gift-1',
     });
 
-    expect(destination, {'route': 'gift', 'giftId': 'gift-1'});
+    expect(destination, {'version': 1, 'route': 'gift', 'giftId': 'gift-1'});
   });
 
   test('foreground Gift Story handling uses a normal local notification', () {
@@ -95,7 +102,22 @@ void main() {
       'payload': 'not-json',
     });
 
-    expect(destination, {'route': 'notifications'});
+    expect(destination, {'version': 1, 'route': 'notifications'});
+  });
+
+  test('rejects arbitrary routes without creating a booking fallback', () {
+    expect(
+      parseSenderNotificationDestination({
+        'type': 'delivery_completed',
+        'route': 'https://example.invalid',
+        'deliveryId': 'delivery/other',
+      }),
+      {'version': 1, 'route': 'tracking'},
+    );
+    expect(parseSenderNotificationDestination({'type': 'delivery_completed'}), {
+      'version': 1,
+      'route': 'notifications',
+    });
   });
 
   test(

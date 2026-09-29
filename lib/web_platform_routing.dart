@@ -22,6 +22,7 @@ class CircumWebRouteResolution {
     this.senderEntry = CircumSenderEntry.dashboard,
     this.legacyRedirectPath,
     this.referralCode,
+    this.senderNotificationDestination,
   });
 
   final CircumWebSurface surface;
@@ -29,6 +30,7 @@ class CircumWebRouteResolution {
   final CircumSenderEntry senderEntry;
   final String? legacyRedirectPath;
   final String? referralCode;
+  final Map<String, String>? senderNotificationDestination;
 }
 
 const circumPublicWebIdentity = 'circum-public-web';
@@ -43,6 +45,29 @@ String normalizeCircumWebPath(String rawPath) {
     path = path.substring(0, path.length - 1);
   }
   return path;
+}
+
+String senderNotificationWebPath(Map<String, dynamic> destination) {
+  const routes = {
+    'tracking',
+    'conversation',
+    'wallet',
+    'gift',
+    'health',
+    'business',
+    'profile',
+    'activity',
+  };
+  final route = '${destination['route'] ?? ''}'.trim().toLowerCase();
+  if (!routes.contains(route)) return '/send';
+  final id =
+      '${destination['deliveryId'] ?? destination['chatId'] ?? destination['giftId'] ?? destination['healthPickupId'] ?? destination['businessId'] ?? ''}'
+          .trim();
+  if (id.isEmpty) return '/send/notifications/$route';
+  if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$').hasMatch(id)) {
+    return '/send';
+  }
+  return '/send/notifications/$route/${Uri.encodeComponent(id)}';
 }
 
 String _effectiveCircumWebPath(Uri uri) {
@@ -66,9 +91,11 @@ CircumWebRouteResolution resolveCircumWebRoute(
   }
 
   final path = _effectiveCircumWebPath(uri);
-  final segments = path
+  final rawSegments = path
       .split('/')
       .where((segment) => segment.trim().isNotEmpty)
+      .toList(growable: false);
+  final segments = rawSegments
       .map((segment) => segment.toLowerCase())
       .toList(growable: false);
   final first = segments.isEmpty ? '' : segments.first;
@@ -85,6 +112,9 @@ CircumWebRouteResolution resolveCircumWebRoute(
         surface: CircumWebSurface.sender,
         canonicalPath: path,
         senderEntry: _senderEntryFromPath(segments),
+        senderNotificationDestination: _senderNotificationDestinationFromPath(
+          rawSegments,
+        ),
       );
     case 'rider':
       return CircumWebRouteResolution(
@@ -145,9 +175,9 @@ CircumWebRouteResolution resolveCircumWebRoute(
         rawCode = '';
       }
       final normalized = rawCode.toUpperCase().replaceAll(
-            RegExp(r'[^A-Z0-9]'),
-            '',
-          );
+        RegExp(r'[^A-Z0-9]'),
+        '',
+      );
       final code = normalized.substring(0, normalized.length.clamp(0, 24));
       return CircumWebRouteResolution(
         surface: CircumWebSurface.sender,
@@ -160,6 +190,46 @@ CircumWebRouteResolution resolveCircumWebRoute(
         canonicalPath: '/',
       );
   }
+}
+
+Map<String, String>? _senderNotificationDestinationFromPath(
+  List<String> segments,
+) {
+  if (segments.length < 3 || segments[1] != 'notifications') return null;
+  const routes = {
+    'tracking',
+    'conversation',
+    'wallet',
+    'gift',
+    'health',
+    'business',
+    'profile',
+    'activity',
+  };
+  final route = segments[2].toLowerCase();
+  if (!routes.contains(route)) return null;
+  final destination = <String, String>{'version': '1', 'route': route};
+  if (segments.length > 3) {
+    late final String id;
+    try {
+      id = Uri.decodeComponent(segments[3]);
+    } on FormatException {
+      return null;
+    }
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$').hasMatch(id)) {
+      return null;
+    }
+    final key = switch (route) {
+      'tracking' => 'deliveryId',
+      'conversation' => 'chatId',
+      'gift' => 'giftId',
+      'health' => 'healthPickupId',
+      'business' => 'businessId',
+      _ => 'entityId',
+    };
+    destination[key] = id;
+  }
+  return destination;
 }
 
 CircumWebRouteResolution? _legacyQueryResolution(Uri uri) {

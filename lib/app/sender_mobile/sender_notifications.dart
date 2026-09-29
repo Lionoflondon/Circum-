@@ -42,6 +42,7 @@ class CircumNotification {
   ) {
     final data = document.data() ?? const <String, dynamic>{};
     final rawDestination =
+        data['deepLink'] ??
         data['destination'] ??
         (data['data'] is Map ? (data['data'] as Map)['destination'] : null);
     final createdAt = senderNotificationDate(
@@ -49,11 +50,15 @@ class CircumNotification {
     );
     return CircumNotification(
       id: document.id,
-      title: '${senderNotificationValue(data, 'title') ?? 'Circum update'}'.trim(),
-      body: '${senderNotificationValue(data, 'body') ?? senderNotificationValue(data, 'message') ?? ''}'.trim(),
+      title: '${senderNotificationValue(data, 'title') ?? 'Circum update'}'
+          .trim(),
+      body:
+          '${senderNotificationValue(data, 'body') ?? senderNotificationValue(data, 'message') ?? ''}'
+              .trim(),
       category: senderNotificationCategoryKey(data),
       read: senderNotificationValue(data, 'read') == true,
-      archived: senderNotificationValue(data, 'archived') == true ||
+      archived:
+          senderNotificationValue(data, 'archived') == true ||
           senderNotificationValue(data, 'deletedAt') != null,
       destination: rawDestination is Map
           ? Map<String, dynamic>.from(rawDestination)
@@ -61,8 +66,8 @@ class CircumNotification {
       createdAt: createdAt,
     );
   }
-
 }
+
 bool senderNotificationMatchesFilter(
   String filter,
   CircumNotification notification,
@@ -106,10 +111,8 @@ class SenderNotificationsRepository {
               .toList(growable: false);
           final visibleDocs = snapshot.docs
               .where(
-                (doc) => senderNotificationVisible(
-                  doc.data(),
-                  recipientId: uid,
-                ),
+                (doc) =>
+                    senderNotificationVisible(doc.data(), recipientId: uid),
               )
               .toList(growable: false);
           if (qaDocs.isNotEmpty) {
@@ -119,7 +122,9 @@ class SenderNotificationsRepository {
               'visibleIds=${visibleDocs.where((doc) => doc.id.startsWith('qa_activity_')).map((doc) => doc.id).join(',')}',
             );
           }
-          final results = visibleDocs.map(CircumNotification.fromDocument).toList();
+          final results = visibleDocs
+              .map(CircumNotification.fromDocument)
+              .toList();
           return results;
         });
   }
@@ -187,11 +192,11 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
       final visible = _filter == 'All'
           ? notifications
           : notifications
-                .where(
-                  (item) => senderNotificationMatchesFilter(_filter, item),
-                )
+                .where((item) => senderNotificationMatchesFilter(_filter, item))
                 .toList();
-      final qaVisible = visible.where((item) => item.id.startsWith('qa_activity_'));
+      final qaVisible = visible.where(
+        (item) => item.id.startsWith('qa_activity_'),
+      );
       if (qaVisible.isNotEmpty) {
         debugPrint(
           'Sender Notification QA trace stage=filter filter=$_filter '
@@ -260,7 +265,9 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                             itemBuilder: (context, index) => _NotificationCard(
                               notification: visible[index],
                               onOpen: () async {
-                                if (visible[index].id.startsWith('qa_activity_')) {
+                                if (visible[index].id.startsWith(
+                                  'qa_activity_',
+                                )) {
                                   debugPrint(
                                     'Sender Notification QA trace stage=cardOpen '
                                     'id=${visible[index].id} '
@@ -272,15 +279,19 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                                       .markRead(visible[index].id)
                                       .timeout(const Duration(seconds: 8));
                                 } catch (_) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'This notification could not be opened. Try again shortly.',
+                                  // Navigation is safe and useful even when a
+                                  // transient state-write fails. The backend
+                                  // update is idempotent and the stream will
+                                  // reconcile read/archive state on refresh.
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Opened. Read status could not be opened right now; it will sync when you reconnect.',
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                  return;
+                                    );
+                                  }
                                 }
                                 if (mounted) {
                                   widget.onOpenNotification?.call(

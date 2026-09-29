@@ -4,6 +4,10 @@ const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const deviceTokenAuthority = require("./device-token-authority");
+const {
+  canonicalDeepLink,
+  normalizeDeepLink,
+} = require("./notification-deep-links");
 
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
@@ -14,7 +18,7 @@ const allowedConversationTypes = new Set([
 ]);
 const allowedMessageTypes = new Set(["text", "system"]);
 const notificationCategories = new Set([
-  "deliveries", "wallet", "health", "gifts", "business", "system",
+  "deliveries", "wallet", "health", "gifts", "business", "chat", "system",
 ]);
 const supportTicketStatuses = new Set(["open", "assigned", "pending", "resolved", "closed"]);
 
@@ -56,25 +60,7 @@ function recipientRoleFor(chat, uid) {
 }
 
 function destinationFor(type, data = {}) {
-  const bookingId = clean(data.bookingId || data.deliveryId || data.requestId);
-  const deliveryId = clean(data.deliveryId || data.bookingId || data.requestId);
-  const giftId = clean(data.giftId);
-  const healthId = clean(data.healthPickupId || data.pickupId);
-  const businessId = clean(data.businessId);
-  const chatId = clean(data.chatId);
-  if (type === "new_delivery") return {route: "jobs", bookingId};
-  if (chatId || type === "chat_message" || type === "admin_message") {
-    return {route: "conversation", chatId, bookingId};
-  }
-  if (type === "payment" || type.startsWith("payment_") ||
-      type.startsWith("wallet_") || type.startsWith("roth_") || type.startsWith("referral_")) {
-    return {route: "wallet"};
-  }
-  if (type.startsWith("gift_") || giftId) return {route: "gift", giftId};
-  if (type.startsWith("health_") || healthId) return {route: "health", healthPickupId: healthId};
-  if (type.startsWith("business_") || businessId) return {route: "business", businessId};
-  if (bookingId) return {route: "tracking", bookingId, deliveryId};
-  return {route: "notifications"};
+  return canonicalDeepLink(type, data, data.recipientRole || "sender");
 }
 
 function pushMessageFor({token, payload, destination}) {
@@ -83,14 +69,21 @@ function pushMessageFor({token, payload, destination}) {
     type: riderJob ? "broadcast-request" : payload.type,
     notificationType: payload.type,
     notificationId: payload.notificationId,
+    deepLinkVersion: `${destination.version || 1}`,
     route: destination.route || "notifications",
     bookingId: clean(destination.bookingId),
-    deliveryId: clean(payload.data && payload.data.deliveryId || destination.bookingId),
-    requestId: clean(payload.data && payload.data.requestId || destination.bookingId),
+    deliveryId: clean(payload.data && payload.data.deliveryId || destination.deliveryId || destination.bookingId),
+    requestId: clean(payload.data && payload.data.requestId || destination.bookingId || destination.deliveryId),
     chatId: clean(destination.chatId),
     giftId: clean(destination.giftId),
     healthPickupId: clean(destination.healthPickupId),
     businessId: clean(destination.businessId),
+    invoiceId: clean(destination.invoiceId),
+    orderId: clean(destination.orderId),
+    transactionId: clean(destination.transactionId),
+    referralId: clean(destination.referralId),
+    ticketId: clean(destination.ticketId),
+    action: clean(destination.action),
   };
   if (riderJob) {
     data.data = JSON.stringify({
@@ -148,7 +141,11 @@ async function participantDisplayName(uid, role, context) {
 async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = "", retryExisting = false,
   db = getFirestore(), suppressPush = false}) {
   const safeData = redactContactFields(data);
-  const destination = destinationFor(type, safeData);
+  const destination = normalizeDeepLink(safeData.destination, {
+    type,
+    data: safeData,
+    recipientRole,
+  });
   const normalizedDedupeKey = clean(dedupeKey);
   const ref = normalizedDedupeKey ?
     db.collection("notifications").doc(`event_${Buffer.from(normalizedDedupeKey).toString("base64url")}`) :
@@ -166,6 +163,7 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     category: notificationCategory(type, data.category),
     data: {...safeData, destination},
     destination,
+    deepLink: destination,
     read: false,
     archived: false,
     deliveryStatus: "persisted",
@@ -247,6 +245,7 @@ function notificationCategory(type, requestedCategory) {
   if (normalized === "payment" || normalized.startsWith("payment_") ||
       normalized.startsWith("wallet_") || normalized.startsWith("roth_") || normalized.startsWith("referral_")) return "wallet";
   if (normalized.startsWith("business_")) return "business";
+  if (normalized === "chat_message" || normalized === "message") return "chat";
   return "system";
 }
 
