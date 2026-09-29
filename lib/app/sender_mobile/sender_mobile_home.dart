@@ -354,7 +354,10 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               openSenderNotificationDestination(
                 context,
                 notification.destination,
-                onOpenWallet: () => _selectTab(3),
+                onOpenWallet: () {
+                  Navigator.of(context).pop();
+                  _selectTab(3);
+                },
               );
             },
           ),

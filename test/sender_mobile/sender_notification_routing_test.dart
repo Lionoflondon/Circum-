@@ -39,6 +39,24 @@ void main() {
     expect(destination, {'route': 'wallet'});
   });
 
+  test(
+    'notification centre wallet opens close the centre before selecting Wallet',
+    () {
+      final source = File(
+        'lib/app/sender_mobile/sender_mobile_home.dart',
+      ).readAsStringSync();
+      final notificationCentre = source.substring(
+        source.indexOf('Future<void> _openNotificationCentre'),
+      );
+      expect(
+        notificationCentre,
+        contains(
+          'onOpenWallet: () {\n                  Navigator.of(context).pop();\n                  _selectTab(3);',
+        ),
+      );
+    },
+  );
+
   test('routes Gift Story ready notification to the referenced Gift', () {
     final destination = parseSenderNotificationDestination({
       'type': 'gift_story_ready',
