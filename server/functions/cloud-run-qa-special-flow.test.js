@@ -7,6 +7,21 @@ const fs = require("node:fs");
 const {createServer, allowlistFromCredentials, errorResponse, routeName} = require("./cloud-run-qa-special-flow");
 const {fixtureIdForRequest, requiredFixtureId} = require("./qa-special-flow")._test;
 
+test("actual Activity fixture records satisfy notification suppression and never claim payment or dispatch", () => {
+  const {activityDelivery} = require("./qa-special-flow")._test;
+  const {isTrustedSyntheticQaDelivery} = require("./platform-notifications")._private;
+  const fixture = {id: "a".repeat(64), senderId: "qa-sender", qaCreatedBy: "qa-operator"};
+  for (const status of ["completed", "in_transit"]) {
+    const record = activityDelivery(fixture, status, status, 1000);
+    assert.equal(isTrustedSyntheticQaDelivery(record), true);
+    assert.equal(isTrustedSyntheticQaDelivery({...record, qaPublic: undefined}), false);
+    assert.equal(record.senderId, fixture.senderId);
+    assert.equal(record.paymentStatus, "unpaid");
+    assert.equal(record.realDispatch, false);
+    assert.equal(record.riderId, undefined);
+  }
+});
+
 async function withServer(dependenciesFactory, run) {
   const server = createServer({dependenciesFactory});
   server.listen(0, "127.0.0.1");
