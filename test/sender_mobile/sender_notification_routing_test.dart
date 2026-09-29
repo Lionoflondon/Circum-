@@ -57,6 +57,19 @@ void main() {
     },
   );
 
+  test('maps wallet payment payloads to Wallet and preserves transaction id',
+      () {
+    final destination = parseSenderNotificationDestination({
+      'type': 'wallet_payment',
+      'transactionId': 'wallet-tx-1',
+    });
+
+    expect(destination, {
+      'route': 'wallet',
+      'transactionId': 'wallet-tx-1',
+    });
+  });
+
   test('routes Gift Story ready notification to the referenced Gift', () {
     final destination = parseSenderNotificationDestination({
       'type': 'gift_story_ready',

@@ -11,8 +11,8 @@ import 'gift_mode_view.dart';
 import 'sender_activity.dart';
 import 'sender_wallet.dart';
 
-typedef SenderNotificationOpenHandler =
-    bool Function(SenderNotificationOpenRequest request);
+typedef SenderNotificationOpenHandler = bool Function(
+    SenderNotificationOpenRequest request);
 
 class SenderNotificationOpenRequest {
   final Map<String, dynamic> destination;
@@ -92,12 +92,19 @@ Map<String, dynamic> parseSenderNotificationDestination(
     parsedData['deliveryId'],
   ]);
   final giftId = _firstText([payload['giftId'], parsedData['giftId']]);
+  final transactionId = _firstText([
+    payload['transactionId'],
+    payload['walletTransactionId'],
+    parsedData['transactionId'],
+    parsedData['walletTransactionId'],
+  ]);
 
   return {
     if (route.isNotEmpty) 'route': route,
     if (chatId.isNotEmpty) 'chatId': chatId,
     if (deliveryId.isNotEmpty) 'deliveryId': deliveryId,
     if (giftId.isNotEmpty) 'giftId': giftId,
+    if (transactionId.isNotEmpty) 'transactionId': transactionId,
   };
 }
 
@@ -191,15 +198,24 @@ String _firstText(Iterable<Object?> values) {
   return '';
 }
 
-String _routeForNotificationType(String type) => switch (type) {
-  'payment' || 'wallet' => 'wallet',
-  'message' || 'chat_message' => 'conversation',
-  'connection' ||
-  'location-broadcast' ||
-  'delivery-completed' ||
-  'delivery' => 'tracking',
-  'gift' || 'gifts' || 'gift_story_ready' => 'gift',
-  'health' || 'health_plus' => 'health',
-  'business' => 'business',
-  _ => 'notifications',
-};
+String _routeForNotificationType(String type) {
+  final normalized = type.trim().toLowerCase();
+  if (normalized == 'payment' ||
+      normalized == 'wallet' ||
+      normalized.startsWith('payment_') ||
+      normalized.startsWith('wallet_')) {
+    return 'wallet';
+  }
+  return switch (normalized) {
+    'message' || 'chat_message' => 'conversation',
+    'connection' ||
+    'location-broadcast' ||
+    'delivery-completed' ||
+    'delivery' =>
+      'tracking',
+    'gift' || 'gifts' || 'gift_story_ready' => 'gift',
+    'health' || 'health_plus' => 'health',
+    'business' => 'business',
+    _ => 'notifications',
+  };
+}
