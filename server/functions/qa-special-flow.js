@@ -254,7 +254,6 @@ async function seedWalletNotification(db, fixture) {
       qaCreatedAt: fixture.qaCreatedAt,
       qaImmutable: true,
       suppressExternalSideEffects: true,
-      excludeFromCustomerNotifications: true,
     });
   }
   return {notificationId: id, category: "wallet", type: "wallet_payment", destinationRoute: "wallet", qaOnly: true};
