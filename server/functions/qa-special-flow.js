@@ -137,8 +137,7 @@ async function seedActivityFixture(db, fixture) {
     qaFixtureId: fixture.id,
     qaCreatedBy: fixture.qaCreatedBy,
     qaImmutable: true,
-    suppressExternalSideEffects: true,
-    excludeFromCustomerNotifications: true,
+      suppressExternalSideEffects: true,
   };
   batch.create(db.collection("notifications").doc(notificationId), {
     ...notificationBase,
@@ -254,7 +253,6 @@ async function seedWalletNotification(db, fixture) {
       qaCreatedAt: fixture.qaCreatedAt,
       qaImmutable: true,
       suppressExternalSideEffects: true,
-      excludeFromCustomerNotifications: true,
     });
   }
   return {notificationId: id, category: "wallet", type: "wallet_payment", destinationRoute: "wallet", qaOnly: true};
