@@ -217,6 +217,66 @@ async function initialiseSenderWalletRecord(context) {
   return result;
 }
 
+function numericWalletValue(record, fields) {
+  for (const field of fields) {
+    const value = Number(record && record[field]);
+    if (Number.isFinite(value)) return roundWalletMoney(value);
+  }
+  return null;
+}
+
+function timestampMillis(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const millis = Number(value);
+  return Number.isFinite(millis) && millis > 0 ? millis : 0;
+}
+
+function timestampIso(value) {
+  const millis = timestampMillis(value);
+  return millis > 0 ? new Date(millis).toISOString() : null;
+}
+
+function senderWalletReadView({uid, projection = {}, legacy = {}, role = {}, profile = {}}) {
+  // Legacy wallet records remain the balance authority because every existing
+  // Roth movement updates that record transactionally. The sender projection
+  // and role document are compatibility fallbacks for new/partially migrated
+  // accounts and never cause a write from this read path.
+  const balance = numericWalletValue(legacy, ["balance", "rothCredit"]) ??
+    numericWalletValue(projection, ["balance", "rothCredit"]) ??
+    numericWalletValue(role, ["balance", "balanceRoth"]) ?? 0;
+  const updatedAt = [legacy.updatedAt, projection.updatedAt, role.updatedAt]
+      .sort((left, right) => timestampMillis(right) - timestampMillis(left))[0];
+  return {
+    userId: uid,
+    balance,
+    currency: "ROTH",
+    status: legacy.isFrozen === true || projection.status === "frozen" ? "frozen" : "active",
+    version: Number(projection.version || 0) || 1,
+    onboardingCompleted: profile.senderWalletOnboardingCompleted === true,
+    updatedAt: timestampIso(updatedAt),
+    source: "wallet",
+  };
+}
+
+async function readSenderWallet(context) {
+  const identity = await requireSenderIdentity(context);
+  const db = getFirestore();
+  const [projectionSnap, legacySnap, roleSnap, profileSnap] = await db.getAll(
+      db.collection("senderWallets").doc(context.auth.uid),
+      db.collection("wallets").doc(identity.walletId),
+      db.collection("users").doc(context.auth.uid).collection("wallets").doc("sender"),
+      db.collection("users").doc(context.auth.uid),
+  );
+  return senderWalletReadView({
+    uid: context.auth.uid,
+    projection: projectionSnap.exists ? projectionSnap.data() : {},
+    legacy: legacySnap.exists ? legacySnap.data() : {},
+    role: roleSnap.exists ? roleSnap.data() : {},
+    profile: profileSnap.exists ? profileSnap.data() : {},
+  });
+}
+
 async function recordRothMovement({
   db = getFirestore(),
   userId,
@@ -602,6 +662,13 @@ async function readSenderWalletTransactions(data, context) {
 
 exports.readSenderWalletTransactions = readSenderWalletTransactions;
 exports.getSenderWalletTransactions = senderPaymentCallable(readSenderWalletTransactions);
+exports.readSenderWallet = readSenderWallet;
+
+exports._private = {
+  ...(exports._private || {}),
+  numericWalletValue,
+  senderWalletReadView,
+};
 
 exports.completeSenderWalletOnboarding = senderPaymentCallable(async (_data, context) => {
   await requireSenderIdentity(context);

@@ -4,8 +4,12 @@ steps:
       - build
       - -f
       - Dockerfile.account-bootstrap
+      - --build-arg
+      - CIRCUM_SOURCE_SHA=${_CIRCUM_SOURCE_SHA}
       - -t
       - ${_IMAGE}
       - .
 images:
   - ${_IMAGE}
+substitutions:
+  _CIRCUM_SOURCE_SHA: unknown
