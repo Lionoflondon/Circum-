@@ -77,6 +77,19 @@ test("health is lazy and declares the TEST-only transport", async () => {
   });
 });
 
+test("CORS allows only approved Sender Web origins", async () => {
+  await withServer(() => ({
+    verifyIdToken: async () => ({uid: "qa-sender"}),
+    verifyAppCheck: async () => ({appId: "qa-web"}),
+    handler: async () => ({ok: true}),
+  }), async (base) => {
+    const approved = await fetch(`${base}/health`, {headers: {origin: "https://circum-app-2797c.web.app"}});
+    assert.equal(approved.headers.get("access-control-allow-origin"), "https://circum-app-2797c.web.app");
+    const rejected = await fetch(`${base}/health`, {headers: {origin: "https://example.invalid"}});
+    assert.equal(rejected.headers.get("access-control-allow-origin"), null);
+  });
+});
+
 test("route is limited to the QA callable", () => {
   assert.equal(routeName("/qaSpecialFlowFixture"), "qaSpecialFlowFixture");
   assert.equal(routeName("/v1/callable/qaSpecialFlowFixture"), "qaSpecialFlowFixture");

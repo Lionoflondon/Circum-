@@ -32,6 +32,7 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
           if (existing) return existing;
           const object = {
             id: `cs_test_sender_${++sequence}`,
+            url: `https://checkout.stripe.com/c/pay/cs_test_sender_${sequence}`,
             livemode: false,
             amount_total: params.line_items[0].price_data.unit_amount,
             currency: "gbp",
@@ -39,6 +40,8 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
             status: "open",
             metadata: params.metadata,
           };
+          assert.ok(params.success_url.startsWith("https://circum-app-2797c.web.app/?sender_payment=success&"));
+          assert.ok(params.cancel_url.startsWith("https://circum-app-2797c.web.app/?sender_payment=cancelled&"));
           objects.set(options.idempotencyKey, object);
           return object;
         },
@@ -51,6 +54,20 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
           return object;
         },
       },
+    },
+    paymentIntents: {
+      async retrieve(id) {
+        const checkout = [...objects.values()].find((object) => object.payment_intent === id);
+        return {id, livemode: false, currency: "gbp", amount_received: checkout.amount_total, metadata: checkout.metadata};
+      },
+    },
+    refunds: {
+      async list() {
+ return {data: []};
+},
+      async create(params) {
+ return {id: "re_test_sender", status: "succeeded", ...params};
+},
     },
   };
   const env = {
@@ -88,6 +105,9 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
   const qaQuote = await flow.handle({action: "sender_quote", quoteId: "canonical_sender_quote"}, sender);
   assert.equal(qaQuote.fixtureId, fixtureId);
   assert.equal(qaQuote.amountDue, 10);
+  await assert.rejects(require("./sender-booking")._qa.createSenderPaymentSession(
+      stripe, {quoteId: qaQuote.quoteId}, sender, {db},
+  ), /QA payment requires its isolated provider/);
   const deliveryPayload = {
     requestId: "sender_qa_request",
     pickup: {address: "QA pickup", coordinates: {lat: 51.5007, lng: -0.1246}},
@@ -135,6 +155,33 @@ test("Sender QA Web payment reuses canonical checkout/finalization and is idempo
   assert.equal(delivery.excludeFromSettlement, true);
   assert.equal(delivery.paymentStatus, "paid");
   assert.equal((await db.collection("deliveryRequests").where("qaFixtureId", "==", fixtureId).get()).size, 1);
+  // A TEST Roth payment must never read or debit the ordinary wallet, even
+  // when the same QA identity has a larger balance in that namespace.
+  const liveWallet = db.collection("wallets").doc("sender@example.invalid");
+  const liveProjection = db.collection("senderWallets").doc("qa_sender");
+  await liveWallet.set({balance: 999, sentinel: "unchanged"});
+  await liveProjection.set({balance: 999, sentinel: "unchanged"});
+  await flow.handle({action: "sender_roth_prepare", fixtureId}, sender);
+  await db.collection("senderBookingQuotes").doc("canonical_roth_quote").set({
+    ...(await db.collection("senderBookingQuotes").doc("canonical_sender_quote").get()).data(),
+    quoteId: "canonical_roth_quote",
+  });
+  const rothQuote = await flow.handle({action: "sender_quote", quoteId: "canonical_roth_quote"}, sender);
+  const rothArgs = {
+    action: "sender_payment_session", fixtureId, quoteId: rothQuote.quoteId,
+    rothEnabled: true, fallbackMethod: "card", checkoutMode: "web_checkout",
+    idempotencyKey: "qa_roth_sender", deliveryPayload,
+  };
+  const roth = await flow.handle(rothArgs, sender);
+  assert.equal(roth.paymentStatus, "succeeded");
+  assert.equal(roth.rothAppliedAmount, 10);
+  await flow.handle(rothArgs, sender);
+  const qaRoot = db.collection("qaSpecialFlowFixtures").doc(fixtureId);
+  assert.equal((await qaRoot.collection("wallets").doc("sender@example.invalid").get()).data().balance, 47);
+  assert.equal((await qaRoot.collection("walletTransactions").get()).size, 1);
+  assert.deepEqual((await liveWallet.get()).data(), {balance: 999, sentinel: "unchanged"});
+  assert.deepEqual((await liveProjection.get()).data(), {balance: 999, sentinel: "unchanged"});
+  assert.equal((await db.collection("walletTransactions").doc(`wallet_delivery_${roth.paymentSessionId}`).get()).exists, false);
   await flow.handle({action: "cleanup", fixtureId}, operator);
   assert.equal((await db.collection("deliveryRequests").where("qaFixtureId", "==", fixtureId).get()).size, 0);
   assert.equal((await db.collection("senderPaymentSessions").where("qaFixtureId", "==", fixtureId).get()).size, 0);

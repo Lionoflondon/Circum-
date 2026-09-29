@@ -9,6 +9,10 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ROUTE = "qaSpecialFlowFixture";
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  "https://circum-app-2797c.web.app",
+  "https://circum-app-2797c.firebaseapp.com",
+]);
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
@@ -22,14 +26,23 @@ function callableError(code, message) {
   return Object.assign(new Error(message), {code});
 }
 
-function writeJson(response, status, body) {
-  response.writeHead(status, {
+function allowedOrigins() {
+  const configured = String(process.env.CIRCUM_QA_ALLOWED_ORIGINS || "").split(",")
+      .map((origin) => origin.trim()).filter(Boolean);
+  return configured.length ? new Set(configured) : DEFAULT_ALLOWED_ORIGINS;
+}
+
+function writeJson(response, status, body, request) {
+  const origin = String(request?.headers?.origin || "").trim();
+  const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    "access-control-allow-origin": "*",
     "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck, X-Firebase-Auth",
     "access-control-allow-methods": "POST, OPTIONS",
-  });
+    "vary": "Origin",
+  };
+  if (allowedOrigins().has(origin)) headers["access-control-allow-origin"] = origin;
+  response.writeHead(status, headers);
   response.end(JSON.stringify(body));
 }
 
@@ -104,13 +117,13 @@ function createServer(options = {}) {
       return writeJson(response, 200, {
         status: "ok", runtime: "node22", service: "circum-qa-special-flow",
         source: process.env.CIRCUM_SOURCE_SHA || "unknown", stripeMode: "TEST",
-      });
+      }, request);
     }
-    if (request.method === "OPTIONS") return writeJson(response, 204, {});
-    if (!routeName(request.url)) return writeJson(response, 404, {error: {status: "NOT_FOUND", message: "Not found."}});
-    if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}});
+    if (request.method === "OPTIONS") return writeJson(response, 204, {}, request);
+    if (!routeName(request.url)) return writeJson(response, 404, {error: {status: "NOT_FOUND", message: "Not found."}}, request);
+    if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}}, request);
     if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
-      return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "JSON required."}});
+      return writeJson(response, 415, {error: {status: "INVALID_ARGUMENT", message: "JSON required."}}, request);
     }
     let size = 0;
     const chunks = [];
@@ -119,7 +132,7 @@ function createServer(options = {}) {
       if (size <= MAX_BODY_BYTES) chunks.push(chunk);
     });
     request.on("end", async () => {
-      if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}});
+      if (size > MAX_BODY_BYTES) return writeJson(response, 413, {error: {status: "INVALID_ARGUMENT", message: "Request too large."}}, request);
       let action = "unknown";
       try {
         if (!dependencies) dependencies = dependenciesFactory();
@@ -145,11 +158,11 @@ function createServer(options = {}) {
           rawRequest: {headers: {...request.headers, authorization: `Bearer ${firebaseIdToken}`}},
         });
         console.info(JSON.stringify({event: "qa_special_flow_completed", action, outcome: "success"}));
-        return writeJson(response, 200, {result});
+        return writeJson(response, 200, {result}, request);
       } catch (error) {
         const failure = errorResponse(error);
         console.info(JSON.stringify({event: "qa_special_flow_completed", action, outcome: "rejected", code: failure.code}));
-        return writeJson(response, failure.status, failure.payload);
+        return writeJson(response, failure.status, failure.payload, request);
       }
     });
   });
