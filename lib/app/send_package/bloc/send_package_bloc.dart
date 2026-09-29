@@ -1131,11 +1131,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   Future<Map<String, dynamic>?> _senderWebQaCapability() async {
     if (!kIsWeb) return null;
-    final capability = await ProductionPaymentApi.call(
-      'sender_qa',
-      'qaSpecialFlowFixture',
-      const {'action': 'sender_capability'},
-    ).timeout(const Duration(seconds: 8));
+    late final Map<String, dynamic> capability;
+    try {
+      capability = await ProductionPaymentApi.call(
+        'sender_qa',
+        'qaSpecialFlowFixture',
+        const {'action': 'sender_capability'},
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Ordinary senders can still reach the live authority if the optional QA
+      // probe is unavailable. The live backend independently rejects QA IDs.
+      return null;
+    }
     if (capability['enabled'] != true) return null;
     final fixtureId = '${capability['fixtureId'] ?? ''}'.trim();
     if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(fixtureId)) {

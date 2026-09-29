@@ -16,6 +16,9 @@ void main() {
     expect(bloc.indexOf('_senderWebQaCapability()'),
         lessThan(bloc.indexOf("_callableMap('getSenderPaymentMode'")));
     expect(bloc, contains("if (qaCapability == null)"));
+    expect(bloc, contains('Ordinary senders can still reach the live authority'));
+    expect(bloc, contains('QA IDs'));
+    expect(bloc, contains('} catch (_) {'));
     expect(bloc, isNot(contains('package:circum/website/')));
   });
 
