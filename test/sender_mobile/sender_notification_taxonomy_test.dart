@@ -40,18 +40,8 @@ void main() {
     expect(senderNotificationVisible(base, now: now, recipientId: 'sender-1'), isTrue);
     expect(senderNotificationVisible({...base, 'archived': true}, now: now, recipientId: 'sender-1'), isFalse);
     expect(senderNotificationVisible({...base, 'suppressed': true}, now: now, recipientId: 'sender-1'), isFalse);
-    expect(senderNotificationVisible({...base, 'excludeFromCustomerNotifications': true}, now: now, recipientId: 'sender-1'), isFalse);
     expect(senderNotificationVisible({...base, 'expiresAt': Timestamp.fromDate(now)}, now: now, recipientId: 'sender-1'), isFalse);
     expect(senderNotificationVisible(base, now: now, recipientId: 'sender-2'), isFalse);
-  });
-
-  test('nested legacy taxonomy preserves the canonical family', () {
-    expect(
-      senderNotificationCategory({
-        'data': {'type': 'wallet_payment', 'route': 'wallet'},
-      }),
-      SenderNotificationCategory.wallet,
-    );
   });
 
   test('known families survive aliases and unknown values fall back safely', () {

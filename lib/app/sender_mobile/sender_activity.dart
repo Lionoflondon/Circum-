@@ -124,32 +124,6 @@ DateTime? senderActivityTimestamp(Map<String, dynamic> data) =>
     _date(data['activityAt']) ??
     _date(data['createdAt']);
 
-void _traceQaActivityItems(String stage, Iterable<SenderActivityItem> items) {
-  final ids = items
-      .where((item) => item.id.startsWith('qa_activity_'))
-      .map((item) => item.id)
-      .toList(growable: false);
-  if (ids.isEmpty) return;
-  debugPrint(
-    'Sender Activity QA trace stage=$stage count=${ids.length} ids=${ids.join(',')}',
-  );
-}
-
-void _traceQaActivityDocuments(
-  String source,
-  Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
-) {
-  final ids = documents
-      .where((document) => document.data()['isSyntheticQa'] == true)
-      .map((document) => document.id)
-      .toList(growable: false);
-  if (ids.isEmpty) return;
-  debugPrint(
-    'Sender Activity QA trace stage=query source=$source '
-    'count=${ids.length} ids=${ids.join(',')}',
-  );
-}
-
 Map<String, dynamic> _decodeActivityPageToken(String? token) {
   if (token == null || token.isEmpty) return <String, dynamic>{};
   try {
@@ -282,12 +256,9 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     );
     final walletFuture = _optionalWalletTransactions(pageToken);
     final deliveries = await deliveriesFuture;
-    _traceQaActivityDocuments('deliveryRequests', deliveries.docs);
     final riderProfilesFuture = _riderProfiles(deliveries.docs);
     final gifts = await giftsFuture;
-    _traceQaActivityDocuments('giftRequests', gifts);
     final health = await healthFuture;
-    _traceQaActivityDocuments('prescriptionPickups', health);
     final wallet = await walletFuture;
     final riderProfiles = await riderProfilesFuture;
     final mergeStopwatch = Stopwatch()..start();
@@ -321,7 +292,6 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     ]..removeWhere((item) => item.active);
     merged.sort(_compareActivityItemsDescending);
     final items = merged.take(_senderActivityPageSize).toList();
-    _traceQaActivityItems('repositoryPage', items);
     final nextCursors = Map<String, dynamic>.from(cursors);
     for (final item in items) {
       final source = switch (item.type) {
@@ -688,7 +658,6 @@ class _SenderActivityViewState extends State<SenderActivityView> {
         _active = items;
         _activeLoaded = true;
       });
-      _traceQaActivityItems('initialRender', _history);
       if (movedToHistory) unawaited(_refreshHistory());
     }, onError: (_) {});
     _load();
@@ -751,7 +720,6 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           _error = '$error';
           _loading = false;
         });
-        _traceQaActivityItems('loadMoreRender', _history);
       }
     }
   }
@@ -2158,10 +2126,7 @@ class ActivityTimeline extends StatelessWidget {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: ActivityCard(
-                                key: ValueKey('${item.type.name}:${item.id}'),
-                                item: item,
-                              ),
+                              child: ActivityCard(item: item),
                             ),
                           ),
                         ],

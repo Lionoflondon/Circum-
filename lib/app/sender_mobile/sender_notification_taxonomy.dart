@@ -17,15 +17,12 @@ String senderNotificationCategoryLabel(SenderNotificationCategory category) =>
 SenderNotificationCategory senderNotificationCategory(
   Map<String, dynamic> data,
 ) {
-  final nested = data['data'] is Map
-      ? Map<String, dynamic>.from(data['data'] as Map)
-      : const <String, dynamic>{};
-  final category = _normalizedText(data['category'] ?? nested['category']);
-  final type = _normalizedText(data['type'] ?? nested['type']);
+  final category = _normalizedText(data['category']);
+  final type = _normalizedText(data['type']);
   final route = _normalizedText(
     data['destination'] is Map
         ? (data['destination'] as Map)['route']
-        : data['destinationRoute'] ?? nested['destinationRoute'] ?? nested['route'],
+        : data['destinationRoute'],
   );
   final value = category.isNotEmpty ? category : type;
 
@@ -82,7 +79,6 @@ bool senderNotificationVisible(
   if (data['archived'] == true ||
       data['dismissed'] == true ||
       data['suppressed'] == true ||
-      data['excludeFromCustomerNotifications'] == true ||
       data['deletedAt'] != null ||
       data['archivedAt'] != null ||
       data['dismissedAt'] != null ||

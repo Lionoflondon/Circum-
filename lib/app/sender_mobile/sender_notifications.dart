@@ -54,7 +54,9 @@ class CircumNotification {
       destination: rawDestination is Map
           ? Map<String, dynamic>.from(rawDestination)
           : const <String, dynamic>{},
-      createdAt: senderNotificationDate(data['createdAt']),
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -75,12 +77,6 @@ bool senderNotificationMatchesFilter(
     return category == 'wallet' || category == 'payments';
   }
   return category == expected;
-}
-
-String _notificationRoute(Map<String, dynamic> data) {
-  final destination = data['destination'];
-  if (destination is Map) return '${destination['route'] ?? ''}';
-  return '${data['destinationRoute'] ?? ''}';
 }
 
 class SenderNotificationsRepository {
@@ -107,32 +103,15 @@ class SenderNotificationsRepository {
         .limit(100)
         .snapshots()
         .map((snapshot) {
-          final results = <CircumNotification>[];
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            final visible = senderNotificationVisible(
-              data,
-              recipientId: uid,
-            );
-            if (data['isSyntheticQa'] == true) {
-              debugPrint(
-                'Sender Notification QA trace stage=visibility '
-                'id=${doc.id} firestore=1 predicate=$visible '
-                'category=${senderNotificationCategoryKey(data)} '
-                'type=${data['type'] ?? ''} '
-                'route=${_notificationRoute(data)} '
-                'archived=${data['archived'] == true} '
-                'read=${data['read'] == true}',
-              );
-            }
-            if (visible) results.add(CircumNotification.fromDocument(doc));
-          }
-          if (snapshot.docs.any((doc) => doc.data()['isSyntheticQa'] == true)) {
-            debugPrint(
-              'Sender Notification QA trace stage=queryFilter '
-              'queried=${snapshot.docs.length} visible=${results.length}',
-            );
-          }
+          final results = snapshot.docs
+              .where(
+                (doc) => senderNotificationVisible(
+                  doc.data(),
+                  recipientId: uid,
+                ),
+              )
+              .map(CircumNotification.fromDocument)
+              .toList();
           return results;
         });
   }
@@ -204,13 +183,6 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                   (item) => senderNotificationMatchesFilter(_filter, item),
                 )
                 .toList();
-      if (notifications.any((item) => item.id.startsWith('qa_activity_'))) {
-        debugPrint(
-          'Sender Notification QA trace stage=filter filter=$_filter '
-          'queried=${notifications.length} visible=${visible.length} '
-          'ids=${visible.map((item) => item.id).join(',')}',
-        );
-      }
       return Scaffold(
         backgroundColor: AppTokens.background,
         appBar: AppBar(
@@ -275,16 +247,6 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                               onOpen: () async {
                                 await _repository.markRead(visible[index].id);
                                 if (mounted) {
-                                  if (visible[index]
-                                      .id
-                                      .startsWith('qa_activity_')) {
-                                    debugPrint(
-                                      'Sender Notification QA trace '
-                                      'stage=cardOpen '
-                                      'id=${visible[index].id} '
-                                      'route=${visible[index].destination['route'] ?? ''}',
-                                    );
-                                  }
                                   widget.onOpenNotification?.call(
                                     visible[index],
                                   );
