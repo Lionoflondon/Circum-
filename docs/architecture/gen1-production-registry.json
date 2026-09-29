@@ -6209,8 +6209,11 @@
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onChatMessageCreated",
       "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
         "server/functions/firestore-chat-notification-rules.test.js",
-        "server/functions/platform-notifications.test.js"
+        "server/functions/platform-notifications.test.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": false,
@@ -6229,8 +6232,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6394,7 +6399,10 @@
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onDeliveryUpdated",
       "callers": [
-        "server/functions/arrival-authority.emulator.test.js"
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/arrival-authority.emulator.test.js",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": false,
@@ -6413,8 +6421,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6430,7 +6440,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onDisputeCreated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6448,8 +6462,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6465,7 +6481,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onGiftCampaignParticipantUpdated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6483,8 +6503,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6584,7 +6606,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onGiftRequestCreated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6602,8 +6628,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6619,7 +6647,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onGiftRequestUpdated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6637,8 +6669,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6829,7 +6863,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onPayoutUpdated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6847,8 +6885,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6864,7 +6904,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onRiderProfileUpdated",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -6882,8 +6926,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6899,7 +6945,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "giftStoryAutomation.onStoryNotificationWrite",
-      "callers": [],
+      "callers": [
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/production-functions-inventory.json"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": false,
@@ -6926,8 +6976,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6944,7 +6996,10 @@
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.onSupportTicketCreated",
       "callers": [
-        "server/functions/platform-notifications.test.js"
+        "docs/SENDER_NOTIFICATION_CLOUD_RUN.md",
+        "server/functions/cloud-run-notification-events.js",
+        "server/functions/platform-notifications.test.js",
+        "server/functions/production-functions-inventory.json"
       ],
       "criticality": "review-required",
       "authRequired": false,
@@ -6963,8 +7018,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "cloudRunReplacement": [
+        "cloud-run-notification-events.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {

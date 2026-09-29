@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const {once} = require("node:events");
 const {DocumentEventData} = require("./rider-policy-firestore-event");
 const {fixtureDb, isFixtureDeliveryId} = require("./gift-story-fixture-db");
-const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce, handlers} = require("./cloud-run-notification-events");
+const {createServer, decodeEventarcPayload, deliveryIdFromName, claimId, processOnce, handlers, senderNotificationTarget} = require("./cloud-run-notification-events");
 const {processDeliveryCreatedOnce} = require("./platform-notifications");
 
 const EVENT_TYPE = "google.cloud.firestore.document.v1.created";
@@ -36,6 +36,23 @@ function pubsubPushBody(payload) {
 test("extracts only deliveryRequests document ids", () => {
   assert.equal(deliveryIdFromName("projects/p/databases/(default)/documents/deliveryRequests/d1"), "d1");
   assert.equal(deliveryIdFromName("documents/users/u1"), null);
+});
+
+test("sender notification Cloud Run routing accepts only supported Firestore paths and event types", () => {
+  const created = "google.cloud.firestore.document.v1.created";
+  const updated = "google.cloud.firestore.document.v1.updated";
+  assert.deepEqual(senderNotificationTarget("documents/chats/c1/messages/m1", created), {kind: "chat_message", id: "chats/c1/messages/m1"});
+  assert.deepEqual(senderNotificationTarget("documents/giftRequests/g1", updated), {kind: "gift_request_updated", id: "giftRequests/g1"});
+  assert.deepEqual(senderNotificationTarget("documents/deliveryRequests/d1", updated), {kind: "delivery_updated", id: "deliveryRequests/d1"});
+  assert.deepEqual(senderNotificationTarget("documents/storyNotifications/s1", updated), {kind: "story_notification_updated", id: "storyNotifications/s1"});
+  assert.equal(senderNotificationTarget("documents/chats/c1/messages/m1", updated), null);
+  assert.equal(senderNotificationTarget("documents/users/u1", updated), null);
+});
+
+test("sender notification handler exposes a multi-event Cloud Run contract", () => {
+  assert.equal(handlers.sender_notifications.eventTypes.has("google.cloud.firestore.document.v1.created"), true);
+  assert.equal(handlers.sender_notifications.eventTypes.has("google.cloud.firestore.document.v1.updated"), true);
+  assert.equal(handlers.sender_notifications.resolveTarget("documents/supportTickets/t1", "google.cloud.firestore.document.v1.created").kind, "support_ticket_created");
 });
 
 test("trusted synthetic QA delivery events are ignored before claiming side effects", () => {

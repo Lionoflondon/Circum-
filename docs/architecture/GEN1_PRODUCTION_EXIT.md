@@ -5,9 +5,9 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 - Source exports: 283
 - Gen 1 exports: 281
 - Files importing Firebase Functions v1: 67
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 86
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 96
 - MIGRATE TO CLOUD RUN: 153
-- REPLACE WITH CLOUD RUN + EVENTARC: 28
+- REPLACE WITH CLOUD RUN + EVENTARC: 18
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 13
 - RETIRE — no legitimate production dependency: 3
 
@@ -169,27 +169,27 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | markRiderNoShow | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/delivery-cancellation.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js |
 | markSenderLegendCelebrationSeen | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | markStaleRiderPresenceOffline | server/functions/rider-presence.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | none found |
-| onChatMessageCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/firestore-chat-notification-rules.test.js<br>server/functions/platform-notifications.test.js |
+| onChatMessageCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/firestore-chat-notification-rules.test.js<br>server/functions/platform-notifications.test.js<br>server/functions/production-functions-inventory.json |
 | onDeliveryCompletedEvent | server/functions/delivery-completed-event.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md |
 | onDeliveryCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/production-functions-inventory.json |
 | onDeliveryLiveLocationWrite | server/functions/movement-timeline.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onDeliveryPresenceWrite | server/functions/rider-presence.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/rider-presence-core.test.js |
-| onDeliveryUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/arrival-authority.emulator.test.js |
-| onDisputeCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onGiftCampaignParticipantUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
+| onDeliveryUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/arrival-authority.emulator.test.js<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onDisputeCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onGiftCampaignParticipantUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
 | onGiftDeliveryCompleted | server/functions/gift-story-automation.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/GIFTS_EMAIL_FAILURE_CERTIFICATION.md<br>scripts/scoped_functions_deploy_list.test.js<br>server/functions/production-functions-inventory.json<br>server/functions/scoped_functions_deploy_list.test.js |
 | onGiftMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/production-functions-inventory.json |
-| onGiftRequestCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onGiftRequestUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
+| onGiftRequestCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onGiftRequestUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
 | onGiftRequestVoiceMediaDeleted | server/functions/gifts-payment.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/gift-voice-media.js<br>server/functions/gifts-payment-finalization-contract.test.js |
 | onHealthMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onHealthPaymentMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onHealthPlusPickupOperationalWrite | server/functions/health-plus-operations.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | onMovementTimelineWrite | server/functions/movement-timeline.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onPayoutUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onRiderProfileUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onStoryNotificationWrite | server/functions/gift-story-automation.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onSupportTicketCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/platform-notifications.test.js |
+| onPayoutUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onRiderProfileUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onStoryNotificationWrite | server/functions/gift-story-automation.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
+| onSupportTicketCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/platform-notifications.test.js<br>server/functions/production-functions-inventory.json |
 | previewSenderCancellation | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_tracking_screen.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/delivery-cancellation.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js<br>server/functions/payments-cancellation-contract.test.js<br>server/functions/rider-cancellation.emulator.test.js |
 | processHealthPlusReminders | server/functions/health-plus-operations.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js<br>server/functions/health-plus-operations.test.js<br>server/functions/production-functions-inventory.json |
 | qaLifecycleFixture | server/functions/qa-lifecycle.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/QA-LIFECYCLE.md |
