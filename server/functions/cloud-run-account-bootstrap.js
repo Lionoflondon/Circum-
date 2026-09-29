@@ -117,14 +117,23 @@ function createServer(options = {}) {
         const operation = dependencies.operations[name];
         const idToken = bearer(request);
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
-        const decoded = await dependencies.verifyIdToken(idToken);
+        let decoded;
+        try {
+          decoded = await dependencies.verifyIdToken(idToken);
+        } catch {
+          throw callableError("unauthenticated", "Sign in to continue.");
+        }
         const uid = decoded && (decoded.uid || decoded.sub);
         if (!uid) throw callableError("unauthenticated", "Invalid authentication token.");
         let app;
         if (operation.appCheckRequired) {
           const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
           if (!appCheckToken) throw callableError("failed-precondition", "Circum security verification is required.");
-          app = await dependencies.verifyAppCheck(appCheckToken);
+          try {
+            app = await dependencies.verifyAppCheck(appCheckToken);
+          } catch {
+            throw callableError("unauthenticated", "Sign in to continue.");
+          }
         }
         if (!allowRequest(`${uid}:${name}`)) throw callableError("resource-exhausted", "Too many account requests. Try again shortly.");
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
@@ -136,10 +145,20 @@ function createServer(options = {}) {
         return writeJson(response, 200, {result});
       } catch (error) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
-        const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
+        const code = rawCode.startsWith("app-check/") ? "failed-precondition" : rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
         const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "not-found" ? 404 : code === "already-exists" ? 409 : code === "resource-exhausted" ? 429 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : code === "unavailable" ? 503 : 500;
         if (status >= 500) console.error("account_bootstrap_failed", {operation: name, reason: code});
-        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Account request failed." : error.message}});
+        const message = {
+          "already-exists": "The request conflicts with the current state.",
+          "invalid-argument": "The request is invalid.",
+          unauthenticated: "Sign in to continue.",
+          "permission-denied": "You do not have access to this resource.",
+          "failed-precondition": "Security verification is required.",
+          "resource-exhausted": "Too many account requests. Try again shortly.",
+          unavailable: "The account service is temporarily unavailable.",
+          "not-found": "The requested resource was not found.",
+        }[code] || "Account request failed.";
+        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message}});
       }
     });
   });

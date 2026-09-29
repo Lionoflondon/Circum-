@@ -66,6 +66,38 @@ test("rejects unauthenticated callers", async () => {
   });
 });
 
+test("maps invalid Auth and App Check to safe messages", async () => {
+  const authDeps = dependencies({
+    verifyIdToken: async () => {
+      throw Object.assign(new Error("raw token decoder detail"), {code: "auth/invalid-id-token"});
+    },
+  });
+  await withServer(authDeps.factory, async (base) => {
+    const response = await fetch(`${base}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer invalid", "x-firebase-appcheck": "app", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "notification-1", action: "mark_read"}}),
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual((await response.json()).error, {status: "UNAUTHENTICATED", message: "Sign in to continue."});
+  });
+
+  const appCheckDeps = dependencies({
+    verifyAppCheck: async () => {
+      throw Object.assign(new Error("raw App Check detail"), {code: "app-check/invalid-token"});
+    },
+  });
+  await withServer(appCheckDeps.factory, async (base) => {
+    const response = await fetch(`${base}/updateSenderNotificationState`, {
+      method: "POST",
+      headers: {authorization: "Bearer auth", "x-firebase-appcheck": "invalid", "content-type": "application/json"},
+      body: JSON.stringify({data: {notificationId: "notification-1", action: "mark_read"}}),
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual((await response.json()).error, {status: "UNAUTHENTICATED", message: "Sign in to continue."});
+  });
+});
+
 test("preserves callable envelope and auth context", async () => {
   const deps = dependencies();
   await withServer(deps.factory, async (base) => {
