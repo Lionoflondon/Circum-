@@ -9,6 +9,7 @@ const {start: startLatency} = require("./latency-observability");
 const {requireDispatchablePresence, dispatchablePresenceDecision} = require("./rider-presence");
 const deviceTokenAuthority = require("./device-token-authority");
 const qaPublic = require("./qa-public-delivery");
+const {canonicalDeepLink} = require("./notification-deep-links");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -122,6 +123,7 @@ const notifySender = async (deliveryRequest, payload) => {
   const senderId = cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId);
   const token = await deviceTokenAuthority.ownedProfileToken(senderId, "sender");
   if (!token) return false;
+  const deepLink = canonicalDeepLink("connection", payload, "sender");
 
   await getMessaging().send({
     apns: {
@@ -135,6 +137,9 @@ const notifySender = async (deliveryRequest, payload) => {
       "type": "connection",
       "status": "accepted",
       "data": JSON.stringify(payload),
+      "deepLinkVersion": `${deepLink.version}`,
+      "route": deepLink.route,
+      "deepLink": JSON.stringify(deepLink),
     },
     token,
   });

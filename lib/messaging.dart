@@ -16,9 +16,11 @@ foregoundMessage() {
           sendPackageBloc.add(DeliveryAccepted(data: mapData));
 
           notifyUser(
-              title: 'Circum Rider on the way!',
-              body:
-                  '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
+            title: 'Circum Rider on the way!',
+            body:
+                '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.',
+            data: message.data,
+          );
         }
       }
     }
@@ -55,7 +57,11 @@ foregoundMessage() {
       sendPackageBloc.add(IncomingMessage(data: msg));
 
       await ChatsHelper().storeChat(msg);
-      notifyUser(title: 'New message', body: msg['message']);
+      notifyUser(
+        title: 'New message',
+        body: msg['message'],
+        data: message.data,
+      );
     }
 
     if (message.data['type'] == 'delivery-completed') {
@@ -66,7 +72,7 @@ foregoundMessage() {
       );
       if (mapData != null) {
         sendPackageBloc.add(DeliveryCompleted(data: mapData));
-        notifyUser(title: 'Delivery completed!', body: '');
+        notifyUser(title: 'Delivery completed!', body: '', data: message.data);
       }
     }
 
@@ -74,6 +80,7 @@ foregoundMessage() {
       notifyUser(
         title: message.notification?.title ?? 'Your Gift Story is ready',
         body: message.notification?.body ?? 'Your Circum Gift Story is ready.',
+        data: message.data,
       );
     }
   });
@@ -112,9 +119,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         sendPackageBloc.add(DeliveryAccepted(data: mapData));
 
         notifyUser(
-            title: 'Circum Rider on the way!',
-            body:
-                '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
+          title: 'Circum Rider on the way!',
+          body:
+              '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.',
+          data: message.data,
+        );
       }
     }
   }
@@ -130,7 +139,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
     await ChatsHelper().storeChat(msg);
 
-    notifyUser(title: 'New message', body: msg['message']);
+    notifyUser(title: 'New message', body: msg['message'], data: message.data);
   }
 
   if (message.data['type'] == 'payment') {
@@ -160,7 +169,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (mapData != null) {
       sendPackageBloc.add(DeliveryCompleted(data: mapData));
 
-      notifyUser(title: 'Delivery completed!', body: '');
+      notifyUser(title: 'Delivery completed!', body: '', data: message.data);
     }
   }
 
@@ -224,10 +233,15 @@ void _logRecoverablePushPayload({
   );
 }
 
-void notifyUser({required String title, required String body}) {
+void notifyUser({
+  required String title,
+  required String body,
+  Map<String, dynamic>? data,
+}) {
   _notificationService.showNotification(
     title: title,
     body: body,
+    payload: jsonEncode(data ?? const <String, dynamic>{}),
   );
   return;
 }

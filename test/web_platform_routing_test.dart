@@ -126,6 +126,30 @@ void main() {
       expect(profile.senderEntry, CircumSenderEntry.profile);
     });
 
+    test('Sender notification paths are allowlisted and survive direct load', () {
+      final route = resolveCircumWebRoute(
+        Uri.parse(
+          'https://circum-app-2797c.web.app/send/notifications/tracking/delivery-1',
+        ),
+        adminHostingTarget: false,
+        publicHostingHost: true,
+      );
+      expect(route.surface, CircumWebSurface.sender);
+      expect(route.senderNotificationDestination, {
+        'version': '1',
+        'route': 'tracking',
+        'deliveryId': 'delivery-1',
+      });
+      final unsafe = resolveCircumWebRoute(
+        Uri.parse(
+          'https://circum-app-2797c.web.app/send/notifications/tracking/javascript:alert(1)',
+        ),
+        adminHostingTarget: false,
+        publicHostingHost: true,
+      );
+      expect(unsafe.senderNotificationDestination, isNull);
+    });
+
     test('hash-style feature deep links select canonical entries', () {
       final health = resolveCircumWebRoute(
         Uri.parse('https://circumuk.com/#/send/health'),
@@ -293,34 +317,31 @@ void main() {
       expect(source, contains('Business sections'));
     });
 
-    test(
-      'Sender delivery payload leaves Rider offer display aliases to backend',
-      () {
-        final source = File(
-          'lib/website/shared/circum_website_app.dart',
-        ).readAsStringSync();
-        expect(source, isNot(contains("'riderEarning': driverPayout")));
-        expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
-        expect(
-          source,
-          contains(
-            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
-          ),
-        );
-        expect(
-          source,
-          contains(
-            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
-          ),
-        );
-        expect(
-          source,
-          contains(
-            'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
-          ),
-        );
-      },
-    );
+    test('Sender delivery payload leaves Rider offer display aliases to backend', () {
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
+      expect(source, isNot(contains("'riderEarning': driverPayout")));
+      expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
+      expect(
+        source,
+        contains(
+          'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaidDelivery',
+        ),
+      );
+      expect(
+        source,
+        contains(
+          'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/createSenderPaymentSession',
+        ),
+      );
+      expect(
+        source,
+        contains(
+          'circum-sender-delivery-payments-j2b7cicfwq-uc.a.run.app/finalizeSenderWebCheckout',
+        ),
+      );
+    });
 
     test('Vanguard copy avoids customer rider choice wording', () {
       final source = File(

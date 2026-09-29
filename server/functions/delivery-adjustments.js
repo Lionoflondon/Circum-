@@ -8,6 +8,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const {senderPaymentCallable} = require("./sender-app-check");
 const deviceTokenAuthority = require("./device-token-authority");
+const {canonicalDeepLink} = require("./notification-deep-links");
 let cachedStripe = null;
 
 function getStripeClient() {
@@ -36,10 +37,17 @@ async function notifyUser(userId, role, title, body, data) {
   if (!userId) return;
   const token = await deviceTokenAuthority.ownedProfileToken(userId, role);
   if (token) {
+    const type = `${data.type || "system"}`;
+    const deepLink = canonicalDeepLink(type, data, role);
     await getMessaging().send({
       token,
       notification: {title, body},
-      data: Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])),
+      data: {
+        ...Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])),
+        deepLinkVersion: `${deepLink.version}`,
+        route: deepLink.route,
+        deepLink: JSON.stringify(deepLink),
+      },
     }).catch((error) => console.error("Adjustment notification failed", error));
   }
 }

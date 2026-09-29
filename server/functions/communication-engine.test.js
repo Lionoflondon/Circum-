@@ -10,11 +10,12 @@ const notificationSources = [
   "delivery-adjustments.js", "gift-story-automation.js",
 ].map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
-test("Sender delivery notifications carry an authoritative delivery deep link", () => {
+test("Sender delivery notifications carry an authoritative v1 delivery deep link", () => {
   assert.deepEqual(destinationFor("delivery_created", {
     bookingId: "request-1",
     deliveryId: "delivery-1",
   }), {
+    version: 1,
     route: "tracking",
     bookingId: "request-1",
     deliveryId: "delivery-1",
@@ -24,11 +25,12 @@ test("Sender delivery notifications carry an authoritative delivery deep link", 
 test("payment notifications are classified and routed to Wallet", () => {
   assert.equal(notificationCategory("payment_succeeded", "Payments"), "wallet");
   assert.equal(notificationCategory("payment_failed"), "wallet");
-  assert.deepEqual(destinationFor("payment_succeeded", {}), {route: "wallet"});
+  assert.deepEqual(destinationFor("payment_succeeded", {}), {version: 1, route: "wallet"});
 });
 
 test("Rider job pushes use the native job contract and attention configuration", () => {
-  assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1"}), {
+  assert.deepEqual(destinationFor("new_delivery", {deliveryId: "delivery-1", recipientRole: "rider"}), {
+    version: 1,
     route: "jobs",
     bookingId: "delivery-1",
   });
@@ -72,6 +74,19 @@ test("Gift Story pushes remain normal and never inherit Rider urgency", () => {
   assert.equal(message.data.giftId, "gift-1");
   assert.equal("apns" in message, false);
   assert.equal("android" in message, false);
+});
+
+test("unsupported or unsafe destinations fail closed to Notification Centre", () => {
+  assert.deepEqual(destinationFor("system_announcement", {
+    route: "https://evil.example/redirect",
+    url: "javascript:alert(1)",
+  }), {version: 1, route: "notifications"});
+});
+
+test("legacy direct push publishers carry the canonical deep-link contract", () => {
+  assert.match(notificationSources, /deepLinkVersion/);
+  assert.match(notificationSources, /JSON\.stringify\(deepLink\)/);
+  assert.match(notificationSources, /canonicalDeepLink\("connection"/);
 });
 
 test("announcement recipients use JavaScript arrays correctly", () => {

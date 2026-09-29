@@ -1,30 +1,28 @@
-// lib/services/notification_service.dart
-import 'dart:ui';
-
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
-import '../utils/theme/theme.dart';
 
 class NotificationService {
-  Future<void> showNotification(
-      {required String title, required String body}) async {
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'notifications_updates',
-      'Notifications Updates',
-      channelDescription: 'Notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-    );
+          'circum_general',
+          'Notifications Updates',
+          channelDescription: 'Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+        );
 
     const DarwinNotificationDetails iOSPlatformChannelSpecifics =
         DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        );
 
     NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
@@ -39,6 +37,7 @@ class NotificationService {
       title,
       body,
       platformChannelSpecifics,
+      payload: payload,
     );
   }
 }

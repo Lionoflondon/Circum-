@@ -2260,7 +2260,11 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         final nested = data['data'] is Map
             ? Map<String, dynamic>.from(data['data'] as Map)
             : const <String, dynamic>{};
-        final rawDestination = data['destination'] ?? nested['destination'];
+        final rawDestination =
+            data['deepLink'] ??
+            data['destination'] ??
+            nested['deepLink'] ??
+            nested['destination'];
         final destination = rawDestination is Map
             ? Map<String, dynamic>.from(rawDestination)
             : const <String, dynamic>{};

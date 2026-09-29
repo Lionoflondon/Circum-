@@ -30,11 +30,11 @@ final NotificationService _notificationService = NotificationService();
 
 const AndroidNotificationChannel _senderNotificationChannel =
     AndroidNotificationChannel(
-  'circum_general',
-  'Circum updates',
-  description: 'Delivery, account, and service updates from Circum.',
-  importance: Importance.high,
-);
+      'circum_general',
+      'Circum updates',
+      description: 'Delivery, account, and service updates from Circum.',
+      importance: Importance.high,
+    );
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,10 +121,34 @@ Future<void> _configureNotifications() async {
     iOS: iOSSettings,
   );
 
-  await flutterLocalNotificationsPlugin.initialize(settings);
-  final android =
-      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+  await flutterLocalNotificationsPlugin.initialize(
+    settings,
+    onDidReceiveNotificationResponse: (response) {
+      final rawPayload = response.payload?.trim() ?? '';
+      if (rawPayload.isEmpty) return;
+      try {
+        final decoded = jsonDecode(rawPayload);
+        if (decoded is Map) {
+          SenderNotificationOpenBridge.instance.enqueue(
+            SenderNotificationOpenRequest.fromPushData(
+              Map<String, dynamic>.from(decoded),
+            ),
+          );
+        }
+      } catch (error, stackTrace) {
+        developer.log(
+          'Recoverable local notification payload discarded',
+          name: 'circum.sender.messaging',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    },
+  );
+  final android = flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await android?.createNotificationChannel(_senderNotificationChannel);
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
