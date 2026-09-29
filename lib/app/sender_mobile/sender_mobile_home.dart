@@ -2403,7 +2403,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
       authName = '';
     }
     if (authName.isNotEmpty) return authName.split(RegExp(r'\s+')).first;
-    return 'there';
+    return '';
   }
 
   bool _isRelevantHomeNotification(SenderHomeNotification item) =>
@@ -2636,18 +2636,20 @@ class _RebuiltSenderHomeHeader extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  firstName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 38,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
+                if (firstName.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    firstName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
