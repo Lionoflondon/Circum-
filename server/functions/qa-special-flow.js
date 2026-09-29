@@ -25,7 +25,10 @@ const fail = (message, code = "failed-precondition") => {
 };
 const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
 const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference", "activity_pagination_seed", "activity_pagination_insert", "activity_page_fault"]);
-const certificationActions = new Set(["wallet_notification_seed", "chat_retry_probe", "cancellation_quote_probe"]);
+const certificationActions = new Set([
+  "wallet_notification_seed", "wallet_ledger_pagination_seed", "referral_seed",
+  "wallet_security_seed", "chat_retry_probe", "cancellation_quote_probe",
+]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -308,6 +311,171 @@ async function seedWalletNotification(db, fixture) {
   return {notificationId: id, category: "wallet", type: "wallet_payment", destinationRoute: "wallet", qaOnly: true};
 }
 
+function walletLedgerId(fixture, suffix) {
+  return `qa_wallet_${fixture.id.slice(0, 12)}_${suffix}`;
+}
+
+function walletLedgerExpectedOrder(records) {
+  return records
+      .slice()
+      .sort((left, right) => {
+        const byTime = right.createdAt.toMillis() - left.createdAt.toMillis();
+        return byTime || right.id.localeCompare(left.id);
+      })
+      .map((record) => record.id);
+}
+
+function walletLedgerExpectedPages(expectedOrder, pageSize) {
+  return Array.from({length: Math.ceil(expectedOrder.length / pageSize)}, (_, index) => ({
+    page: index + 1,
+    ids: expectedOrder.slice(index * pageSize, (index + 1) * pageSize),
+  }));
+}
+
+function walletLedgerRecord(fixture, walletId, index, createdAtMillis) {
+  const id = walletLedgerId(fixture, `p${String(index + 1).padStart(3, "0")}`);
+  const direction = index % 5 === 0 ? "debit" : "credit";
+  const amount = direction === "debit" ? 2 : 1;
+  const balanceBefore = 100 + index;
+  const balanceAfter = balanceBefore + (direction === "debit" ? -amount : amount);
+  const timestamp = Timestamp.fromMillis(createdAtMillis);
+  return {
+    id,
+    uid: fixture.senderId,
+    userId: fixture.senderId,
+    walletId,
+    userEmail: walletId,
+    direction,
+    amount,
+    balanceBefore,
+    balanceAfter,
+    type: direction === "debit" ? "gift_payment_debit" : "promotional_reward",
+    description: `Synthetic QA Wallet ledger ${String(index + 1).padStart(2, "0")}`,
+    source: direction === "debit" ? "gift" : "referral",
+    status: "completed",
+    currency: "ROTH",
+    createdBy: "system",
+    createdAt: timestamp,
+    isSyntheticQa: true,
+    qaWalletLedgerFixture: true,
+    qaNamespace: ROOT,
+    qaFixtureId: fixture.id,
+    qaCreatedBy: fixture.qaCreatedBy,
+    qaCreatedAt: fixture.qaCreatedAt,
+    qaImmutable: true,
+    suppressExternalSideEffects: true,
+    excludeFromAnalytics: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromCustomerNotifications: true,
+  };
+}
+
+async function seedWalletLedgerPagination(db, fixture, email) {
+  const walletId = normalizeEmail(email);
+  if (!walletId) fail("QA Sender email is required.", "permission-denied");
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  if (current.walletLedgerPaginationSeed) return current.walletLedgerPaginationSeed;
+  const createdAtBase = activityMillis(fixture, 240);
+  const records = Array.from({length: 41}, (_, index) => walletLedgerRecord(
+      fixture,
+      walletId,
+      index,
+      createdAtBase - index * 60 * 1000,
+  ));
+  // Two records deliberately share a timestamp so the document ID tie-breaker
+  // is exercised by the real Cloud Run cursor query.
+  records[20].createdAt = Timestamp.fromMillis(createdAtBase - 20 * 60 * 1000);
+  records[21].createdAt = records[20].createdAt;
+  const expectedOrder = walletLedgerExpectedOrder(records);
+  const pageSize = 20;
+  const result = {
+    count: records.length,
+    pageSize,
+    pageCount: Math.ceil(expectedOrder.length / pageSize),
+    expectedOrder,
+    expectedPages: walletLedgerExpectedPages(expectedOrder, pageSize),
+    equalTimestampIds: records
+        .filter((record) => record.createdAt.toMillis() === records[20].createdAt.toMillis())
+        .map((record) => record.id)
+        .sort((left, right) => right.localeCompare(left)),
+    firstPageExpectedId: expectedOrder[0],
+    secondPageExpectedId: expectedOrder[pageSize],
+    walletId,
+    seededAt: Timestamp.now(),
+  };
+  const batch = db.batch();
+  records.forEach((record) => batch.create(db.collection("walletTransactions").doc(record.id), record));
+  batch.set(root, {walletLedgerPaginationSeed: result}, {merge: true});
+  await batch.commit();
+  return result;
+}
+
+async function seedReferralFixture(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  if (current.referralSeed) return current.referralSeed;
+  const prefix = fixture.id.slice(0, 12).toUpperCase();
+  const referralCode = `QA${prefix}`.slice(0, 20);
+  const statuses = ["ROTH_AWARDED", "REVIEW", "SIGNED_UP", "REJECTED"];
+  const records = statuses.map((status, index) => ({
+    id: `qa_referral_${fixture.id.slice(0, 12)}_${index + 1}`,
+    referrerUserId: fixture.senderId,
+    referredUserId: `qa_referred_${fixture.id.slice(0, 12)}_${index + 1}`,
+    referralCode,
+    status,
+    rewardStatus: status,
+    rewardAmount: status === "ROTH_AWARDED" ? 5 : status === "REJECTED" ? 0 : 5,
+    rewardCurrency: "ROTH",
+    rewardSource: "Referral",
+    createdAt: Timestamp.fromMillis(activityMillis(fixture, 100 + index)),
+    updatedAt: Timestamp.fromMillis(activityMillis(fixture, 100 + index)),
+    isSyntheticQa: true,
+    qaReferralFixture: true,
+    qaNamespace: ROOT,
+    qaFixtureId: fixture.id,
+    qaCreatedBy: fixture.qaCreatedBy,
+    qaCreatedAt: fixture.qaCreatedAt,
+    qaImmutable: true,
+    suppressExternalSideEffects: true,
+    excludeFromAnalytics: true,
+    excludeFromSettlement: true,
+    excludeFromPayout: true,
+    excludeFromCustomerNotifications: true,
+  }));
+  const batch = db.batch();
+  records.forEach(({id, ...record}) => batch.create(db.collection("referrals").doc(id), record));
+  const result = {
+    referralCode,
+    referralLink: `https://circumuk.com/join/${referralCode}`,
+    count: records.length,
+    earnedRoth: 5,
+    statuses,
+    referralIds: records.map((record) => record.id),
+    seededAt: Timestamp.now(),
+  };
+  batch.set(root, {referralSeed: result}, {merge: true});
+  await batch.commit();
+  return result;
+}
+
+async function seedWalletSecurity(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  if (current.walletSecuritySeed) return current.walletSecuritySeed;
+  const ledger = current.walletLedgerPaginationSeed;
+  const result = {
+    secondQaUid: fixture.riderId,
+    protectedOwnerUid: fixture.senderId,
+    protectedTransactionId: ledger && ledger.expectedOrder && ledger.expectedOrder[0] || null,
+    denialExpectation: "generic unavailable or empty Wallet result",
+    seededAt: Timestamp.now(),
+  };
+  await root.set({walletSecuritySeed: result}, {merge: true});
+  return result;
+}
+
 async function chatRetryProbe(db, fixture) {
   const deliveryId = activityDeliveryId(fixture.id, "chat");
   const chatRef = db.collection("chats").doc(deliveryId);
@@ -360,7 +528,7 @@ async function cancellationQuoteProbe(db, fixture) {
 }
 
 async function deleteTopLevelQaRecords(db, fixtureId) {
-  const collections = ["deliveryRequests", "chats", "notifications", "walletTransactions"];
+  const collections = ["deliveryRequests", "chats", "notifications", "walletTransactions", "referrals"];
   const deleted = {};
   for (const collection of collections) {
     const snapshot = await db.collection(collection).where("qaFixtureId", "==", fixtureId).limit(400).get();
@@ -503,6 +671,11 @@ function factory({db, env = process.env, stripe}) {
     }
     if (certificationActions.has(data.action)) {
       if (data.action === "wallet_notification_seed") return seedWalletNotification(db, fixture);
+      if (data.action === "wallet_ledger_pagination_seed") {
+        return {...await seedWalletLedgerPagination(db, fixture, context.auth.token.email), fixtureId: fixture.id, qaOnly: true};
+      }
+      if (data.action === "referral_seed") return {...await seedReferralFixture(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      if (data.action === "wallet_security_seed") return {...await seedWalletSecurity(db, fixture), fixtureId: fixture.id, qaOnly: true};
       if (data.action === "chat_retry_probe") return chatRetryProbe(db, fixture);
       return cancellationQuoteProbe(db, fixture);
     }
@@ -688,4 +861,12 @@ function instance() {
 }
 exports.callable = () => functions.runWith({enforceAppCheck: true, timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET, "GOOGLE_MAPS_DIRECTIONS_API_KEY"]}).https.onCall((data, context) => instance().handle(data, context));
 exports.scheduled = () => functions.runWith({timeoutSeconds: 180, secrets: [QA_STRIPE_SECRET]}).pubsub.schedule("every 10 minutes").onRun(() => instance().expire());
-exports._test = {factory, fixtureIdForRequest, requiredFixtureId, activityDelivery};
+exports._test = {
+  factory,
+  fixtureIdForRequest,
+  requiredFixtureId,
+  activityDelivery,
+  walletLedgerExpectedOrder,
+  walletLedgerExpectedPages,
+  walletLedgerRecord,
+};

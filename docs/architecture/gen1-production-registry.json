@@ -4602,7 +4602,9 @@
         "irisPhotoAnalyses",
         "notifications",
         "qaCheckoutProviderObjects",
+        "referrals",
         "senderBookingQuotes",
+        "walletTransactions",
         "wallets"
       ],
       "externalProviders": [
@@ -7190,7 +7192,9 @@
         "irisPhotoAnalyses",
         "notifications",
         "qaCheckoutProviderObjects",
+        "referrals",
         "senderBookingQuotes",
+        "walletTransactions",
         "wallets"
       ],
       "externalProviders": [
