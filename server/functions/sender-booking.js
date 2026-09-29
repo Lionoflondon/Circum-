@@ -194,6 +194,19 @@ function assertQaRecord(record, qaContext, name) {
   }
 }
 
+async function assertProductionPaymentSender(db, senderUid) {
+  const fixtures = await db.collection("qaSpecialFlowFixtures")
+      .where("senderId", "==", senderUid)
+      .limit(2)
+      .get();
+  if (fixtures.docs.some((doc) => doc.data()?.isSyntheticQa === true)) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "QA Sender identities must use the isolated certification payment route.",
+    );
+  }
+}
+
 function qaStripeMetadata(marker) {
   return Object.fromEntries(
       Object.entries(marker).map(([key, value]) => [key, `${value}`]),
@@ -1357,6 +1370,7 @@ async function createSenderPaymentSessionFor(stripe, data, context, options = {}
   const marker = qaMarker(qaContext);
   const stripeMarker = qaStripeMetadata(marker);
   const sender = requireSender(context);
+  if (!qaContext) await assertProductionPaymentSender(db, sender.uid);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
     throw new functions.https.HttpsError("invalid-argument", "A backend quote is required before payment.");
@@ -2596,6 +2610,8 @@ exports._qa = {
   cleanupQaSenderFixture,
   marker: qaMarker,
 };
+
+exports._test = {assertProductionPaymentSender};
 
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
 exports.handleSenderPaymentIntent = handleSenderPaymentIntent;
