@@ -7,6 +7,7 @@ import 'package:circum/app/delivery/cancellation_contract.dart';
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
+import 'package:circum/app/sender_mobile/sender_payment_outcome.dart';
 import 'package:circum/app/sender_mobile/sender_booking_quote_api.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
@@ -1422,7 +1423,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
-      final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      final requestId = confirmedSenderPaymentRequestId(data);
       if (requestId.isNotEmpty) {
         await _dispatchPaidDelivery(requestId, 'direct paid delivery');
         final prefs = await SharedPreferences.getInstance();
@@ -1599,6 +1600,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'paymentSessionId': event.paymentSessionId,
       });
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      if (requestId.trim().isEmpty) {
+        throw StateError('payment_confirmation_missing_booking');
+      }
       if (requestId.isNotEmpty) {
         await _dispatchPaidDelivery(requestId, 'finalized checkout');
         final prefs = await SharedPreferences.getInstance();
