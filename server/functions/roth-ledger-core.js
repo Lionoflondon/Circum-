@@ -160,9 +160,11 @@ function senderWalletProjectionRecord({
 function walletTransactionView(record) {
   const rawAmount = roundMoney(record.amount);
   const rawDirection = `${record.direction || (rawAmount < 0 ? "debit" : "credit")}`.toLowerCase();
+  const metadata = record.metadata && typeof record.metadata === "object" ? record.metadata : {};
+  const source = `${record.source || metadata.source || ""}`.trim().slice(0, 64);
+  const paymentMethodLabel = `${record.paymentMethodLabel || metadata.paymentMethodLabel || metadata.paidWith || ""}`.trim().slice(0, 64);
   return {
     transactionId: `${record.transactionId || record.id || ""}`,
-    userId: `${record.uid || record.userId || ""}`,
     walletType: "sender",
     direction: rawDirection === "debit" ? "debit" : "credit",
     type: `${record.type || "adjustment"}`,
@@ -171,11 +173,12 @@ function walletTransactionView(record) {
     balanceAfter: roundMoney(record.balanceAfter),
     description: `${record.description || record.reason || record.notes || record.type || "Roth activity"}`,
     relatedEntityId: record.relatedEntityId || record.referenceId || null,
-    idempotencyKey: record.idempotencyKey || record.transactionId || record.id || null,
-    createdBy: record.createdBy || record.issuedByAdminId || "system",
+    referenceType: record.referenceType || metadata.referenceType || null,
+    source,
+    paymentMethodLabel,
+    createdBy: record.createdBy === "system" ? "system" : "circum",
     createdAt: record.createdAt || null,
-    status: `${record.status || "completed"}`,
-    metadata: record.metadata || {},
+    status: `${record.status || "unknown"}`,
   };
 }
 
