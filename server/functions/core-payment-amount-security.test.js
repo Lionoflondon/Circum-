@@ -233,7 +233,8 @@ test("Sender web Checkout verifies Stripe and defers Roth debit until delivery c
   assert.match(senderBookingSource, /expectedAmountGBP: payment\.remainingAmount/);
   assert.match(senderBookingSource, /Number\(payment\.rothAppliedAmount \|\| 0\) > 0/);
   assert.match(senderBookingSource, /roth_debit_deferred_until_delivery_creation/);
-  assert.match(senderBookingSource, /const walletDebitRef = db\.collection\("walletTransactions"\)\.doc\(`wallet_delivery_\$\{paymentSessionId\}`\)/);
+  assert.match(senderBookingSource, /walletTransactions: walletDb\.collection\("walletTransactions"\)/);
+  assert.match(senderBookingSource, /const walletDebitRef = walletTransactions\.doc\(`wallet_delivery_\$\{paymentSessionId\}`\)/);
   assert.match(senderBookingSource, /transaction\.set\(walletDebitRef, \{/);
   assert.match(senderBookingSource, /transaction\.set\(deliveryRef, stripUndefined\(\{/);
   assert.match(senderBookingSource, /rothDebitStatus: "completed"/);
@@ -241,8 +242,9 @@ test("Sender web Checkout verifies Stripe and defers Roth debit until delivery c
 });
 
 test("Sender Roth payments resolve and debit canonical plus legacy wallet records", () => {
-  assert.match(senderBookingSource, /function walletRefsForSender\(db, sender\)/);
-  assert.match(senderBookingSource, /senderWalletRef: db\.collection\("senderWallets"\)\.doc\(sender\.uid\)/);
+  assert.match(senderBookingSource, /function walletRefsForSender\(db, sender, qaContext = null\)/);
+  assert.match(senderBookingSource, /const walletDb = qaContext \? db\.collection\("qaSpecialFlowFixtures"\)\.doc\(marker\.qaFixtureId\) : db/);
+  assert.match(senderBookingSource, /senderWalletRef: walletDb\.collection\("senderWallets"\)\.doc\(sender\.uid\)/);
   assert.match(senderBookingSource, /const \[legacySnap, projectionSnap\] = await Promise\.all\(\[/);
   assert.match(senderBookingSource, /projectionSnap\.exists \? projectionSnap\.data\(\) \|\| \{\} : \{\}/);
   assert.match(senderBookingSource, /Math\.max\(\.\.\.candidates\)/);
