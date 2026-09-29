@@ -151,7 +151,7 @@ void main() {
     );
     expect(wallet,
         contains('Live wallet updates are unavailable. Pull to refresh.'));
-    expect(wallet, contains("? (_error == null ? '…' : 'Unavailable')"));
+    expect(wallet, contains("? 'Unavailable'"));
   });
 
   test('Sender wallet does not present unknown ledger status as completed', () {
