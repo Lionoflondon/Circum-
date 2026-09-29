@@ -2540,7 +2540,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
             _RebuiltSenderServiceCard(
               title: 'Health+',
               status: '',
-              description: 'Book medical and healthcare deliveries.',
+              description: 'Book Medical and Healthcare Deliveries.',
               icon: Icons.medical_services_outlined,
               accent: _SenderTokens.health,
               onTap: widget.onOpenHealth,
@@ -2548,7 +2548,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
             _RebuiltSenderServiceCard(
               title: 'Business',
               status: '',
-              description: 'Manage deliveries and invoices.',
+              description: 'Manage Deliveries and Invoices.',
               icon: Icons.business_center_outlined,
               accent: _SenderTokens.business,
               onTap: widget.onOpenBusiness,
@@ -2556,7 +2556,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
             _RebuiltSenderServiceCard(
               title: 'Gifts',
               status: '',
-              description: 'Thoughtful gifting powered by Circum.',
+              description: 'Thoughtful Gifting Powered by Circum.',
               icon: Icons.card_giftcard_rounded,
               accent: _SenderTokens.gifts,
               onTap: widget.onOpenGifts,
@@ -4019,8 +4019,8 @@ class _YourCircumHub extends StatelessWidget {
               child: _ServiceCard(
                 title: 'Health+',
                 subtitle: _detail(
-                  'Book medical and healthcare deliveries.',
-                  'Book medical and healthcare deliveries.',
+                  'Book Medical and Healthcare Deliveries.',
+                  'Book Medical and Healthcare Deliveries.',
                 ),
                 icon: Icons.health_and_safety_rounded,
                 accent: _SenderTokens.health,
@@ -4032,8 +4032,8 @@ class _YourCircumHub extends StatelessWidget {
               child: _ServiceCard(
                 title: 'Business',
                 subtitle: _detail(
-                  'Manage deliveries and invoices.',
-                  'Manage deliveries and invoices.',
+                  'Manage Deliveries and Invoices.',
+                  'Manage Deliveries and Invoices.',
                 ),
                 icon: Icons.business_center_rounded,
                 accent: _SenderTokens.business,
@@ -4046,7 +4046,7 @@ class _YourCircumHub extends StatelessWidget {
                 title: 'Gifts',
                 subtitle: summary == null
                     ? 'Loading…'
-                    : 'Thoughtful gifting powered by Circum.',
+                    : 'Thoughtful Gifting Powered by Circum.',
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
                 onTap: onOpenGifts,
