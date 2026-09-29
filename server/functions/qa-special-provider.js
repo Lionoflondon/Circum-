@@ -48,6 +48,13 @@ function providerForFixture({stripe, registry, fixtureId, secret, now = Date.now
       ...(params.metadata.userEmail ? {userEmail: params.metadata.userEmail} : {}),
     };
     const safe = {...params, metadata, payment_intent_data: {metadata}, success_url: "https://example.invalid/qa", cancel_url: "https://example.invalid/qa"};
+    if (metadata.canonicalType === "sender_delivery_payment") {
+      if (!metadata.paymentSessionId) reject("missing Sender payment session");
+      const session = encodeURIComponent(metadata.paymentSessionId);
+      const origin = "https://circum-app-2797c.web.app/";
+      safe.success_url = `${origin}?sender_payment=success&paymentSessionId=${session}&checkoutSessionId={CHECKOUT_SESSION_ID}`;
+      safe.cancel_url = `${origin}?sender_payment=cancelled&paymentSessionId=${session}`;
+    }
     delete safe.customer; delete safe.customer_email; delete safe.client_reference_id;
     const candidate = {id, key, amount, params: safe, createdAt: now(), binding: hash(JSON.stringify(safe))};
     try {
