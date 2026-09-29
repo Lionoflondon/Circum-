@@ -91,6 +91,13 @@ function activityExpectedOrder(records) {
       .map((record) => record.id);
 }
 
+function activityExpectedPages(expectedOrder, pageSize) {
+  return Array.from({length: Math.ceil(expectedOrder.length / pageSize)}, (_, index) => ({
+    page: index + 1,
+    ids: expectedOrder.slice(index * pageSize, (index + 1) * pageSize),
+  }));
+}
+
 async function seedActivityFixture(db, fixture) {
   const root = db.collection(ROOT).doc(fixture.id);
   const current = (await root.get()).data() || {};
@@ -229,8 +236,7 @@ async function seedActivityPagination(db, fixture) {
     pageSize,
     pageCount: Math.ceil(expectedOrder.length / pageSize),
     expectedOrder,
-    expectedPages: Array.from({length: Math.ceil(expectedOrder.length / pageSize)}, (_, index) =>
-      expectedOrder.slice(index * pageSize, (index + 1) * pageSize)),
+    expectedPages: activityExpectedPages(expectedOrder, pageSize),
     equalTimestampIds,
     oldestId: expectedOrder[expectedOrder.length - 1],
     newestId: expectedOrder[0],
@@ -258,8 +264,7 @@ async function insertActivityPaginationRecord(db, fixture) {
     count: expectedOrder.length,
     pageCount: Math.ceil(expectedOrder.length / seed.pageSize),
     expectedOrder,
-    expectedPages: Array.from({length: Math.ceil(expectedOrder.length / seed.pageSize)}, (_, index) =>
-      expectedOrder.slice(index * seed.pageSize, (index + 1) * seed.pageSize)),
+    expectedPages: activityExpectedPages(expectedOrder, seed.pageSize),
     insertedId: id,
   };
   await root.set({activityPaginationSeed: result}, {merge: true});
