@@ -17,12 +17,13 @@ String senderNotificationCategoryLabel(SenderNotificationCategory category) =>
 SenderNotificationCategory senderNotificationCategory(
   Map<String, dynamic> data,
 ) {
-  final category = _normalizedText(data['category']);
-  final type = _normalizedText(data['type']);
+  final category = _normalizedText(senderNotificationValue(data, 'category'));
+  final type = _normalizedText(senderNotificationValue(data, 'type'));
+  final rawDestination = senderNotificationValue(data, 'destination');
   final route = _normalizedText(
-    data['destination'] is Map
-        ? (data['destination'] as Map)['route']
-        : data['destinationRoute'],
+    rawDestination is Map
+        ? rawDestination['route']
+        : senderNotificationValue(data, 'destinationRoute'),
   );
   final value = category.isNotEmpty ? category : type;
 
@@ -73,21 +74,31 @@ bool senderNotificationVisible(
   String? recipientId,
 }) {
   if (recipientId != null &&
-      '${data['recipientId'] ?? ''}'.trim() != recipientId.trim()) {
+      '${senderNotificationValue(data, 'recipientId') ?? ''}'.trim() !=
+          recipientId.trim()) {
     return false;
   }
-  if (data['archived'] == true ||
-      data['dismissed'] == true ||
-      data['suppressed'] == true ||
-      data['deletedAt'] != null ||
-      data['archivedAt'] != null ||
-      data['dismissedAt'] != null ||
-      data['suppressedAt'] != null) {
+  if (senderNotificationValue(data, 'archived') == true ||
+      senderNotificationValue(data, 'dismissed') == true ||
+      senderNotificationValue(data, 'suppressed') == true ||
+      senderNotificationValue(data, 'deletedAt') != null ||
+      senderNotificationValue(data, 'archivedAt') != null ||
+      senderNotificationValue(data, 'dismissedAt') != null ||
+      senderNotificationValue(data, 'suppressedAt') != null ||
+      senderNotificationValue(data, 'excludeFromCustomerNotifications') == true) {
     return false;
   }
-  final expiresAt = senderNotificationDate(data['expiresAt']);
+  final expiresAt = senderNotificationDate(
+    senderNotificationValue(data, 'expiresAt'),
+  );
   if (expiresAt == null) return true;
   return expiresAt.isAfter(now ?? DateTime.now());
+}
+
+Object? senderNotificationValue(Map<String, dynamic> data, String key) {
+  if (data.containsKey(key)) return data[key];
+  final nested = data['data'];
+  return nested is Map ? nested[key] : null;
 }
 
 DateTime? senderNotificationDate(Object? value) {

@@ -42,6 +42,14 @@ void main() {
     expect(senderNotificationVisible({...base, 'suppressed': true}, now: now, recipientId: 'sender-1'), isFalse);
     expect(senderNotificationVisible({...base, 'expiresAt': Timestamp.fromDate(now)}, now: now, recipientId: 'sender-1'), isFalse);
     expect(senderNotificationVisible(base, now: now, recipientId: 'sender-2'), isFalse);
+    expect(
+      senderNotificationVisible(
+        {...base, 'excludeFromCustomerNotifications': true},
+        now: now,
+        recipientId: 'sender-1',
+      ),
+      isFalse,
+    );
   });
 
   test('known families survive aliases and unknown values fall back safely', () {
@@ -51,5 +59,15 @@ void main() {
     expect(senderNotificationCategory({'type': 'gift_story_ready'}), SenderNotificationCategory.gifts);
     expect(senderNotificationCategory({'type': 'business_invoice_paid'}), SenderNotificationCategory.business);
     expect(senderNotificationCategory({'type': 'health_plus_ready'}), SenderNotificationCategory.health);
+    expect(
+      senderNotificationCategory({
+        'data': {
+          'category': 'wallet',
+          'type': 'wallet_payment',
+          'destination': {'route': 'wallet'},
+        },
+      }),
+      SenderNotificationCategory.wallet,
+    );
   });
 }

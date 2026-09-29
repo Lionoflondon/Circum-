@@ -19,4 +19,12 @@ void main() {
     expect(source, contains("'Load more activity'"));
     expect(source, contains("'Retry'"));
   });
+
+  test('Activity QA trace and fault hook are web-only and allowlisted server-side', () {
+    final source = File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
+    expect(source, contains("Uri.base.queryParameters['activityFault']"));
+    expect(source, contains("'activity_page_fault'"));
+    expect(source, contains('_traceQaActivityPage'));
+    expect(source, contains('Activity is temporarily unavailable. Please try again.'));
+  });
 }

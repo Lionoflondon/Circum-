@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -115,6 +117,13 @@ class SenderActivityPage {
 }
 
 const _senderActivityPageSize = 20;
+const _senderActivityQaFaultModes = {'unavailable', 'rate_limit', 'internal'};
+
+String? _senderActivityQaFaultMode() {
+  if (!kIsWeb) return null;
+  final mode = Uri.base.queryParameters['activityFault']?.trim().toLowerCase();
+  return _senderActivityQaFaultModes.contains(mode) ? mode : null;
+}
 
 // `updatedAt` is the canonical server-owned Activity clock. The model keeps
 // legacy records readable when that field is absent, but Firestore queries
@@ -196,6 +205,19 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return user?.uid;
   }
 
+  Future<void> _maybeInjectQaPageFault() async {
+    final mode = _senderActivityQaFaultMode();
+    final fixtureId = Uri.base.queryParameters['activityFixtureId']?.trim();
+    if (mode == null || fixtureId == null || fixtureId.isEmpty) return;
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('qaSpecialFlowFixture')
+        .call({
+          'action': 'activity_page_fault',
+          'fixtureId': fixtureId,
+          'mode': mode,
+        });
+  }
+
   SenderActivityItem itemFromDelivery(String id, Map<String, dynamic> data) =>
       _delivery(id, data);
 
@@ -222,6 +244,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
 
   @override
   Future<SenderActivityPage> history({String? pageToken}) async {
+    await _maybeInjectQaPageFault();
     final totalStopwatch = Stopwatch()..start();
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
@@ -292,6 +315,12 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     ]..removeWhere((item) => item.active);
     merged.sort(_compareActivityItemsDescending);
     final items = merged.take(_senderActivityPageSize).toList();
+    _traceQaActivityPage(
+      pageToken: pageToken,
+      sourceIds: deliveries.docs.map((doc) => doc.id).toList(growable: false),
+      renderedIds: items.map((item) => item.id).toList(growable: false),
+      nextPage: merged.length > items.length,
+    );
     final nextCursors = Map<String, dynamic>.from(cursors);
     for (final item in items) {
       final source = switch (item.type) {
@@ -335,6 +364,27 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return SenderActivityPage(
       items,
       hasMore ? _encodeActivityPageToken(nextCursors) : null,
+    );
+  }
+
+  void _traceQaActivityPage({
+    required String? pageToken,
+    required List<String> sourceIds,
+    required List<String> renderedIds,
+    required bool nextPage,
+  }) {
+    final ids = [...sourceIds, ...renderedIds];
+    if (!ids.any((id) => id.startsWith('qa_activity_'))) return;
+    final cursorId = _activityCursor(
+      _decodeActivityPageToken(pageToken),
+      'deliveries',
+    )?['id'];
+    debugPrint(
+      'Sender Activity QA trace stage=page '
+      'cursorId=${cursorId ?? 'initial'} '
+      'sourceIds=${sourceIds.where((id) => id.startsWith('qa_activity_')).join(',')} '
+      'renderedIds=${renderedIds.where((id) => id.startsWith('qa_activity_')).join(',')} '
+      'nextPage=$nextPage',
     );
   }
 
@@ -714,10 +764,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
         _nextPage = page.nextPageToken;
         _loading = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _error = '$error';
+          _error = 'Activity is temporarily unavailable. Please try again.';
           _loading = false;
         });
       }
@@ -2126,7 +2176,10 @@ class ActivityTimeline extends StatelessWidget {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: ActivityCard(item: item),
+                              child: ActivityCard(
+                                key: ValueKey('${item.type.name}:${item.id}'),
+                                item: item,
+                              ),
                             ),
                           ),
                         ],
