@@ -517,6 +517,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   final List<SenderWalletTransaction> _transactions = [];
   String? _nextPage;
   String? _error;
+  String? _activityError;
   bool _refreshing = false;
   bool _showingCachedWallet = false;
   bool _paymentActionLoading = false;
@@ -639,6 +640,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
             ..clear()
             ..addAll(loadedPage.transactions);
           _nextPage = loadedPage.nextPageToken;
+          _activityError = null;
+        } else if (transactionsError != null) {
+          _activityError =
+              'Activity could not be refreshed. Your existing history is still available.';
         }
         _refreshing = false;
         _showingCachedWallet = false;
@@ -1128,6 +1133,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
                       repository: _repository,
                       initialTransactions: List.of(_transactions),
                       initialPageToken: _nextPage,
+                      initialError: _activityError,
                     ),
                     settings: const RouteSettings(
                       name: '/sender-mobile/wallet/activity',
@@ -1778,11 +1784,13 @@ class _WalletActivityScreen extends StatefulWidget {
   final SenderWalletRepository repository;
   final List<SenderWalletTransaction> initialTransactions;
   final String? initialPageToken;
+  final String? initialError;
 
   const _WalletActivityScreen({
     required this.repository,
     required this.initialTransactions,
     required this.initialPageToken,
+    this.initialError,
   });
 
   @override
@@ -1800,6 +1808,7 @@ class _WalletActivityScreenState extends State<_WalletActivityScreen> {
     super.initState();
     _transactions = List.of(widget.initialTransactions);
     _nextPage = widget.initialPageToken;
+    _error = widget.initialError;
   }
 
   Future<void> _loadMore() async {

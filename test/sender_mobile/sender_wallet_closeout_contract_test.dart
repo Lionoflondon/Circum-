@@ -52,6 +52,8 @@ void main() {
     expect(source, contains('Clipboard.setData'));
     expect(source, contains('RefreshIndicator('));
     expect(source, contains('mergeSenderWalletTransactions'));
+    expect(source, contains('initialError: _activityError'));
+    expect(source, contains('Activity could not be refreshed.'));
     expect(source, contains('Action needed'));
     expect(source, contains('Unknown status'));
     expect(source, contains("title: 'Wallet Support'"));
