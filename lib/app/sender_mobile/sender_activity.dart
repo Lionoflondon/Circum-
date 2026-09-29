@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +17,6 @@ import 'sender_booking_canvas.dart';
 import 'sender_accessibility.dart';
 import 'sender_page_shell.dart';
 import 'sender_wallet.dart';
-import '../../website/shared/production_payment_api.dart';
 
 enum SenderActivityType { parcel, gift, health, business, roth }
 
@@ -209,17 +209,13 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final mode = _senderActivityQaFaultMode();
     final fixtureId = Uri.base.queryParameters['activityFixtureId']?.trim();
     if (mode == null || fixtureId == null || fixtureId.isEmpty) return;
-    // The QA service deliberately returns the requested fault. The UI
-    // converts it into the same safe retry state as a real page failure.
-    await WebsiteProductionPaymentApi.call(
-      'sender_qa',
-      'qaSpecialFlowFixture',
-      {
-        'action': 'activity_page_fault',
-        'fixtureId': fixtureId,
-        'mode': mode,
-      },
-    );
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('qaSpecialFlowFixture')
+        .call({
+          'action': 'activity_page_fault',
+          'fixtureId': fixtureId,
+          'mode': mode,
+        });
   }
 
   SenderActivityItem itemFromDelivery(String id, Map<String, dynamic> data) =>
