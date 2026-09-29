@@ -178,7 +178,12 @@ function qaMarker(qaContext) {
 }
 
 function assertQaRecord(record, qaContext, name) {
-  if (!qaContext) return;
+  if (!qaContext) {
+    if (record && (record.isSyntheticQa === true || record.qaFixtureId)) {
+      throw new functions.https.HttpsError("permission-denied", "QA payment requires its isolated provider.");
+    }
+    return;
+  }
   const marker = qaMarker(qaContext);
   if (!record || record.isSyntheticQa !== true ||
       record.qaFixtureId !== marker.qaFixtureId) {
@@ -955,12 +960,15 @@ function safeDeliveryCreationError(error) {
   };
 }
 
-function walletRefsForSender(db, sender) {
+function walletRefsForSender(db, sender, qaContext = null) {
+  const marker = qaMarker(qaContext);
+  const walletDb = qaContext ? db.collection("qaSpecialFlowFixtures").doc(marker.qaFixtureId) : db;
   const walletId = (sender.email || sender.uid).trim().toLowerCase();
   return {
     walletId,
-    walletRef: db.collection("wallets").doc(walletId),
-    senderWalletRef: db.collection("senderWallets").doc(sender.uid),
+    walletRef: walletDb.collection("wallets").doc(walletId),
+    senderWalletRef: walletDb.collection("senderWallets").doc(sender.uid),
+    walletTransactions: walletDb.collection("walletTransactions"),
   };
 }
 
@@ -1152,9 +1160,9 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   };
 }
 
-async function walletBalanceForSender(sender, dbOverride = null) {
+async function walletBalanceForSender(sender, dbOverride = null, qaContext = null) {
   const db = dbOverride || getFirestore();
-  const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
+  const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender, qaContext);
   const [legacySnap, projectionSnap] = await Promise.all([
     walletRef.get(),
     senderWalletRef.get(),
@@ -1362,7 +1370,7 @@ async function createSenderPaymentSessionFor(stripe, data, context, options = {}
   await require("./legacy-payment-artifacts").rejectLegacySenderQuote({db, stripe, quote, quoteId, senderId: sender.uid});
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
-  const rothBalance = rothEnabled ? await walletBalanceForSender(sender, db) : 0;
+  const rothBalance = rothEnabled ? await walletBalanceForSender(sender, db, qaContext) : 0;
   const savedPaymentMethodId = text(data.paymentMethodId);
   const requestedFallbackInput = text(data.fallbackMethod);
   const checkoutMode = text(data.checkoutMode);
@@ -2068,8 +2076,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data, options = {})
   const rothAppliedAmount = money(payment.rothAppliedAmount || 0);
   const walletDebitRequired = rothAppliedAmount > 0 &&
     payment.rothDebitStatus !== "completed";
-  const walletDebitRef = db.collection("walletTransactions").doc(`wallet_delivery_${paymentSessionId}`);
-  const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
+  const {walletId, walletRef, senderWalletRef, walletTransactions} = walletRefsForSender(db, sender, qaContext);
+  const walletDebitRef = walletTransactions.doc(`wallet_delivery_${paymentSessionId}`);
   const pickup = data.pickup || {};
   const dropoff = data.dropoff || {};
   const parcel = data.parcel || {};
@@ -2288,6 +2296,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data, options = {})
       const senderWallet = senderWalletSnap && senderWalletSnap.exists ?
         senderWalletSnap.data() || {} : {};
       transaction.set(walletRef, {
+        ...marker,
         userId: walletId,
         uid: sender.uid,
         userEmail: sender.email,
@@ -2300,6 +2309,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data, options = {})
         updatedAt: now,
       }, {merge: true});
       transaction.set(senderWalletRef, {
+        ...marker,
         userId: sender.uid,
         balance: walletBalanceAfter,
         rothCredit: walletBalanceAfter,
@@ -2311,6 +2321,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data, options = {})
         updatedAt: now,
       }, {merge: true});
       transaction.set(walletDebitRef, {
+        ...marker,
         id: walletDebitRef.id,
         userId: walletId,
         uid: sender.uid,
@@ -2589,6 +2600,7 @@ exports._qa = {
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
 exports.handleSenderPaymentIntent = handleSenderPaymentIntent;
 exports._private = {
+  walletRefsForSender,
   sanitizeSenderDraftPayload,
   draftExpired,
   draftInactive,

@@ -478,7 +478,7 @@ function factory({db, env = process.env, stripe}) {
       if (data.action === "sender_payment_session") {
         const result = await senderBooking.createSenderPaymentSession(
             provider(fixture),
-            {...data, quoteId: `${data.quoteId || ""}`, checkoutMode: "web_checkout", returnUrl: "https://circum-2797c.web.app/send"},
+            {...data, quoteId: `${data.quoteId || ""}`, checkoutMode: "web_checkout", returnUrl: "https://circum-app-2797c.web.app/"},
             senderContext(uid, context.auth.token),
             {db, qaContext},
         );
