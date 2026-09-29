@@ -5409,12 +5409,10 @@
         "lib/app/health_plus/view/health_plus.dart",
         "lib/app/send_package/bloc/send_package_bloc.dart",
         "lib/app/sender_mobile/gift_journey_draft.dart",
-        "lib/website/shared/circum_website_app.dart",
         "server/functions/firestore-sender-bootstrap-rules.test.js",
         "server/functions/health-plus-checkout-security.test.js",
         "server/functions/payment-runtime-bindings.test.js",
-        "server/functions/sender-payment-app-check.test.js",
-        "test/website_sender_auth_deterministic_contract_test.dart"
+        "server/functions/sender-payment-app-check.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5506,11 +5504,16 @@
       "productionPurpose": "rothLedger.getSenderWallet",
       "callers": [
         "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
+        "lib/website/shared/account_bootstrap_api.dart",
+        "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
+        "server/functions/health-plus-checkout-security.test.js",
         "server/functions/sender-payment-app-check.test.js",
-        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart",
+        "test/website_account_bootstrap_api_test.dart",
+        "test/website_sender_auth_deterministic_contract_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5892,8 +5895,8 @@
       "generation": "Gen 1",
       "productionPurpose": "senderFinance.listSenderPaymentMethods(stripe)",
       "callers": [
-        "lib/app/sender_mobile/sender_finance.dart",
         "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
+        "lib/website/shared/account_bootstrap_api.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/payment-runtime-bindings.test.js",

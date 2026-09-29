@@ -95,6 +95,26 @@ void main() {
     expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
   });
 
+  test('Sender Wallet reads use the App Check Cloud Run envelope', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(jsonEncode({'result': {'balance': 12.5}}), 200);
+    });
+
+    final result = await invokeAccountBootstrap(
+      'getSenderWallet',
+      const {},
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result, {'balance': 12.5});
+    expect(captured.url.path, '/getSenderWallet');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+  });
+
   test('Rider application submission uses authenticated Cloud Run callable',
       () async {
     late http.Request captured;
