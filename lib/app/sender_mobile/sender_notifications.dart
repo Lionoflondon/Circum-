@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'account_bootstrap_api.dart';
 import 'design_system/sender_design_system.dart';
-import 'sender_notification_visibility.dart';
+import 'sender_notification_taxonomy.dart';
 
 const _notificationFilters = <String>[
   'All',
@@ -44,35 +44,40 @@ class CircumNotification {
     final rawDestination =
         data['destination'] ??
         (data['data'] is Map ? (data['data'] as Map)['destination'] : null);
+    final createdAt = senderNotificationDate(
+      senderNotificationValue(data, 'createdAt'),
+    );
     return CircumNotification(
       id: document.id,
-      title: '${data['title'] ?? 'Circum update'}'.trim(),
-      body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-      category: _notificationCategory(data),
-      read: data['read'] == true,
-      archived: data['archived'] == true || data['deletedAt'] != null,
+      title: '${senderNotificationValue(data, 'title') ?? 'Circum update'}'.trim(),
+      body: '${senderNotificationValue(data, 'body') ?? senderNotificationValue(data, 'message') ?? ''}'.trim(),
+      category: senderNotificationCategoryKey(data),
+      read: senderNotificationValue(data, 'read') == true,
+      archived: senderNotificationValue(data, 'archived') == true ||
+          senderNotificationValue(data, 'deletedAt') != null,
       destination: rawDestination is Map
           ? Map<String, dynamic>.from(rawDestination)
           : const <String, dynamic>{},
-      createdAt: data['createdAt'] is Timestamp
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
+      createdAt: createdAt,
     );
   }
 
-  bool get visible => senderNotificationVisible({
-    'archived': archived,
-    'deletedAt': archived ? true : null,
-  });
 }
-
-String _notificationCategory(Map<String, dynamic> data) {
-  final category = '${data['category'] ?? ''}'.trim().toLowerCase();
-  if (category == 'payment' || category == 'payments') return 'wallet';
-  if (category.isNotEmpty) return category;
-  final type = '${data['type'] ?? ''}'.trim().toLowerCase();
-  if (type == 'payment' || type.startsWith('payment_')) return 'wallet';
-  return 'system';
+bool senderNotificationMatchesFilter(
+  String filter,
+  CircumNotification notification,
+) {
+  if (filter == 'All') return true;
+  final category = notification.category;
+  final expected = switch (filter) {
+    'Health+' => 'health',
+    'Deliveries' => 'deliveries',
+    _ => filter.toLowerCase(),
+  };
+  if (expected == 'wallet') {
+    return category == 'wallet' || category == 'payments';
+  }
+  return category == expected;
 }
 
 class SenderNotificationsRepository {
@@ -92,13 +97,29 @@ class SenderNotificationsRepository {
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
-          final results = snapshot.docs
-              .where((doc) => senderNotificationVisible(doc.data()))
-              .map(CircumNotification.fromDocument)
-              .toList();
+          final qaDocs = snapshot.docs
+              .where((doc) => doc.id.startsWith('qa_activity_'))
+              .toList(growable: false);
+          final visibleDocs = snapshot.docs
+              .where(
+                (doc) => senderNotificationVisible(
+                  doc.data(),
+                  recipientId: uid,
+                ),
+              )
+              .toList(growable: false);
+          if (qaDocs.isNotEmpty) {
+            debugPrint(
+              'Sender Notification QA trace stage=firestore '
+              'ids=${qaDocs.map((doc) => doc.id).join(',')} '
+              'visibleIds=${visibleDocs.where((doc) => doc.id.startsWith('qa_activity_')).map((doc) => doc.id).join(',')}',
+            );
+          }
+          final results = visibleDocs.map(CircumNotification.fromDocument).toList();
           return results;
         });
   }
@@ -158,12 +179,6 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
     _notifications = _repository.watchNotifications();
   }
 
-  String _categoryForFilter(String label) => switch (label) {
-    'Health+' => 'health',
-    'Deliveries' => 'deliveries',
-    _ => label.toLowerCase(),
-  };
-
   @override
   Widget build(BuildContext context) => StreamBuilder<List<CircumNotification>>(
     stream: _notifications,
@@ -172,8 +187,17 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
       final visible = _filter == 'All'
           ? notifications
           : notifications
-                .where((item) => item.category == _categoryForFilter(_filter))
+                .where(
+                  (item) => senderNotificationMatchesFilter(_filter, item),
+                )
                 .toList();
+      final qaVisible = visible.where((item) => item.id.startsWith('qa_activity_'));
+      if (qaVisible.isNotEmpty) {
+        debugPrint(
+          'Sender Notification QA trace stage=filter filter=$_filter '
+          'ids=${qaVisible.map((item) => item.id).join(',')}',
+        );
+      }
       return Scaffold(
         backgroundColor: AppTokens.background,
         appBar: AppBar(
@@ -236,6 +260,13 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                             itemBuilder: (context, index) => _NotificationCard(
                               notification: visible[index],
                               onOpen: () async {
+                                if (visible[index].id.startsWith('qa_activity_')) {
+                                  debugPrint(
+                                    'Sender Notification QA trace stage=cardOpen '
+                                    'id=${visible[index].id} '
+                                    'route=${visible[index].destination['route'] ?? ''}',
+                                  );
+                                }
                                 try {
                                   await _repository
                                       .markRead(visible[index].id)

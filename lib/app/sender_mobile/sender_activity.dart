@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../delivery/proof_of_delivery.dart';
@@ -115,6 +118,21 @@ class SenderActivityPage {
 }
 
 const _senderActivityPageSize = 20;
+const _senderActivityQaFaultModes = {'unavailable', 'rate_limit', 'internal'};
+
+String? _senderActivityQaFaultMode() {
+  if (!kIsWeb) return null;
+  final mode = Uri.base.queryParameters['activityFault']?.trim().toLowerCase();
+  return _senderActivityQaFaultModes.contains(mode) ? mode : null;
+}
+
+// `updatedAt` is the canonical server-owned Activity clock. The model keeps
+// legacy records readable when that field is absent, but Firestore queries
+// always order by the canonical field before applying a page limit.
+DateTime? senderActivityTimestamp(Map<String, dynamic> data) =>
+    _date(data['updatedAt']) ??
+    _date(data['activityAt']) ??
+    _date(data['createdAt']);
 
 Map<String, dynamic> _decodeActivityPageToken(String? token) {
   if (token == null || token.isEmpty) return <String, dynamic>{};
@@ -149,19 +167,6 @@ void _setActivityCursor(
   final occurredAt = item.occurredAt;
   if (occurredAt == null) return;
   cursors[source] = {'at': occurredAt.millisecondsSinceEpoch, 'id': item.id};
-}
-
-void _setActivityCursorFromDocument(
-  Map<String, dynamic> cursors,
-  String source,
-  QueryDocumentSnapshot<Map<String, dynamic>> document,
-) {
-  final occurredAt = _date(document.data()['updatedAt']);
-  if (occurredAt == null) return;
-  cursors[source] = {
-    'at': occurredAt.millisecondsSinceEpoch,
-    'id': document.id,
-  };
 }
 
 int _compareActivityItemsDescending(
@@ -201,6 +206,38 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return user?.uid;
   }
 
+  Future<void> _maybeInjectQaPageFault() async {
+    final mode = _senderActivityQaFaultMode();
+    final fixtureId = Uri.base.queryParameters['activityFixtureId']?.trim();
+    if (mode == null || fixtureId == null || fixtureId.isEmpty) return;
+    final token = await auth.currentUser?.getIdToken();
+    final appCheckToken = await FirebaseAppCheck.instance.getToken();
+    if (token == null || appCheckToken == null || appCheckToken.isEmpty) {
+      throw StateError('qa_activity_auth_required');
+    }
+    final response = await http
+        .post(
+          Uri.parse(
+            'https://circum-qa-special-flow-j2b7cicfwq-uc.a.run.app/qaSpecialFlowFixture',
+          ),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'X-Firebase-AppCheck': appCheckToken,
+          },
+          body: jsonEncode({
+            'data': {
+              'action': 'activity_page_fault',
+              'fixtureId': fixtureId,
+              'mode': mode,
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    throw StateError('qa_activity_page_fault_requested');
+  }
+
   SenderActivityItem itemFromDelivery(String id, Map<String, dynamic> data) =>
       _delivery(id, data);
 
@@ -227,6 +264,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
 
   @override
   Future<SenderActivityPage> history({String? pageToken}) async {
+    await _maybeInjectQaPageFault();
     final totalStopwatch = Stopwatch()..start();
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
@@ -297,8 +335,13 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     ]..removeWhere((item) => item.active);
     merged.sort(_compareActivityItemsDescending);
     final items = merged.take(_senderActivityPageSize).toList();
+    _traceQaActivityPage(
+      pageToken: pageToken,
+      sourceIds: deliveries.docs.map((doc) => doc.id).toList(growable: false),
+      renderedIds: items.map((item) => item.id).toList(growable: false),
+      nextPage: merged.length > items.length,
+    );
     final nextCursors = Map<String, dynamic>.from(cursors);
-    final selectedSources = <String>{};
     for (final item in items) {
       final source = switch (item.type) {
         SenderActivityType.gift => 'gifts',
@@ -306,21 +349,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         SenderActivityType.roth => 'wallet',
         _ => 'deliveries',
       };
-      selectedSources.add(source);
       _setActivityCursor(nextCursors, source, item);
-    }
-    if (!selectedSources.contains('deliveries') && deliveries.docs.isNotEmpty) {
-      _setActivityCursorFromDocument(
-        nextCursors,
-        'deliveries',
-        deliveries.docs.last,
-      );
-    }
-    if (!selectedSources.contains('gifts') && gifts.isNotEmpty) {
-      _setActivityCursorFromDocument(nextCursors, 'gifts', gifts.last);
-    }
-    if (!selectedSources.contains('health') && health.isNotEmpty) {
-      _setActivityCursorFromDocument(nextCursors, 'health', health.last);
     }
     final walletCursor = _activityCursor(nextCursors, 'wallet');
     if (walletCursor != null) {
@@ -333,8 +362,6 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           }),
         ),
       );
-    } else if (wallet.nextPageToken != null) {
-      nextCursors['walletToken'] = wallet.nextPageToken;
     }
     final hasMore =
         merged.length > items.length ||
@@ -357,6 +384,27 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return SenderActivityPage(
       items,
       hasMore ? _encodeActivityPageToken(nextCursors) : null,
+    );
+  }
+
+  void _traceQaActivityPage({
+    required String? pageToken,
+    required List<String> sourceIds,
+    required List<String> renderedIds,
+    required bool nextPage,
+  }) {
+    final ids = [...sourceIds, ...renderedIds];
+    if (!ids.any((id) => id.startsWith('qa_activity_'))) return;
+    final cursorId = _activityCursor(
+      _decodeActivityPageToken(pageToken),
+      'deliveries',
+    )?['id'];
+    debugPrint(
+      'Sender Activity QA trace stage=page '
+      'cursorId=${cursorId ?? 'initial'} '
+      'sourceIds=${sourceIds.where((id) => id.startsWith('qa_activity_')).join(',')} '
+      'renderedIds=${renderedIds.where((id) => id.startsWith('qa_activity_')).join(',')} '
+      'nextPage=$nextPage',
     );
   }
 
@@ -531,7 +579,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       amount: _number(
         data['paidAmount'] ?? data['price'] ?? data['totalAmount'],
       ),
-      occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+      occurredAt: senderActivityTimestamp(data),
       active: senderActivityIsLiveDeliveryStatus(normalized),
       riderId: _riderId(data),
       riderPhotoUrl: _first([
@@ -600,7 +648,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         amount: _number(data['grossGiftBudget'] ?? data['budget']),
         rothAmount: _number(data['rothApplied']),
         rothDirection: 'debit',
-        occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+        occurredAt: senderActivityTimestamp(data),
       );
 
   SenderActivityItem _health(String id, Map<String, dynamic> data) =>
@@ -614,7 +662,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           data['deliveryAddress'],
         ]),
         amount: _number(data['price'] ?? data['amount']),
-        occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+        occurredAt: senderActivityTimestamp(data),
       );
 
   SenderActivityItem _roth(SenderWalletTransaction item) => SenderActivityItem(
@@ -656,6 +704,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   String _query = '';
   String? _nextPage;
   String? _error;
+  String? _loadMoreError;
   bool _loading = true;
   bool _loadingMore = false;
   bool _activeLoaded = false;
@@ -721,6 +770,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     setState(() {
       _loading = !_hasCachedHistory && _history.isEmpty;
       _error = null;
+      _loadMoreError = null;
     });
     try {
       final page = await _repository.history();
@@ -734,10 +784,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
         _nextPage = page.nextPageToken;
         _loading = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _error = '$error';
+          _error = 'Activity is temporarily unavailable. Please try again.';
           _loading = false;
         });
       }
@@ -746,7 +796,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
 
   Future<void> _loadMore() async {
     if (_nextPage == null || _loadingMore) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
     try {
       final page = await _repository.history(pageToken: _nextPage);
       if (mounted) {
@@ -765,6 +818,13 @@ class _SenderActivityViewState extends State<SenderActivityView> {
             _nextPage,
           );
         });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _loadMoreError =
+              'More activity is unavailable right now. Please retry.',
+        );
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -880,9 +940,25 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           if (_nextPage != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: _loadingMore ? null : _loadMore,
-                child: Text(_loadingMore ? 'Loading…' : 'Load more activity'),
+              child: Column(
+                children: [
+                  if (_loadMoreError != null)
+                    Text(
+                      _loadMoreError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  TextButton(
+                    onPressed: _loadingMore ? null : _loadMore,
+                    child: Text(
+                      _loadingMore
+                          ? 'Loading…'
+                          : _loadMoreError == null
+                              ? 'Load more activity'
+                              : 'Retry',
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
@@ -2120,7 +2196,10 @@ class ActivityTimeline extends StatelessWidget {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: ActivityCard(item: item),
+                              child: ActivityCard(
+                                key: ValueKey('${item.type.name}:${item.id}'),
+                                item: item,
+                              ),
                             ),
                           ),
                         ],
