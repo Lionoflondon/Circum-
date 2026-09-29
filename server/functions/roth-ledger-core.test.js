@@ -63,6 +63,33 @@ test("Wallet transaction view and pagination preserve newest-first ledger order"
   assert.equal(secondPage.nextPageToken, null);
 });
 
+test("Wallet transaction view does not invent completion for missing status", () => {
+  assert.equal(walletTransactionView({id: "unknown-status"}).status, "unknown");
+});
+
+test("Wallet transaction view exposes customer-safe context only", () => {
+  const view = walletTransactionView({
+    id: "tx-1",
+    uid: "owner-1",
+    userId: "owner-1",
+    idempotencyKey: "provider-secret-key",
+    source: "gifts",
+    referenceType: "giftPaymentDraft",
+    metadata: {
+      source: "legacy-source",
+      paymentMethodLabel: "Visa •••• 4242",
+      customerId: "cus_secret",
+    },
+  });
+  assert.equal(view.source, "gifts");
+  assert.equal(view.referenceType, "giftPaymentDraft");
+  assert.equal(view.paymentMethodLabel, "Visa •••• 4242");
+  assert.equal(view.userId, undefined);
+  assert.equal(view.idempotencyKey, undefined);
+  assert.equal(view.metadata, undefined);
+  assert.equal(view.createdBy, "circum");
+});
+
 test("Roth credit cannot go negative unless reversal is explicit", () => {
   assert.throws(() => nextBalance({
     balanceBefore: 10,
