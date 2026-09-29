@@ -1129,6 +1129,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>?> _senderWebQaCapability() async {
+    if (!kIsWeb) return null;
+    late final Map<String, dynamic> capability;
+    try {
+      capability = await ProductionPaymentApi.call(
+        'sender_qa',
+        'qaSpecialFlowFixture',
+        const {'action': 'sender_capability'},
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Ordinary senders can still reach the live authority if the optional QA
+      // probe is unavailable. The live backend independently rejects QA IDs.
+      return null;
+    }
+    if (capability['enabled'] != true) return null;
+    final fixtureId = '${capability['fixtureId'] ?? ''}'.trim();
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(fixtureId)) {
+      throw StateError('qa_payment_scope_invalid');
+    }
+    return {'fixtureId': fixtureId};
+  }
+
   Future<void> _dispatchPaidDelivery(String requestId, String context) async {
     try {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -1372,17 +1394,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
-      final mode = await _callableMap('getSenderPaymentMode', const {});
-      if (!Env.paymentModeMatchesBackend('${mode['mode'] ?? ''}')) {
-        emit(
-          state.copyWith(
-            isSenderPaymentLoading: false,
-            senderPaymentStatus: 'configuration_blocked',
-            senderPaymentError:
-                'Payments are temporarily unavailable. Please try again later.',
-          ),
-        );
-        return;
+      final qaCapability = await _senderWebQaCapability();
+      if (qaCapability == null) {
+        final mode = await _callableMap('getSenderPaymentMode', const {});
+        if (!Env.paymentModeMatchesBackend('${mode['mode'] ?? ''}')) {
+          emit(
+            state.copyWith(
+              isSenderPaymentLoading: false,
+              senderPaymentStatus: 'configuration_blocked',
+              senderPaymentError:
+                  'Payments are temporarily unavailable. Please try again later.',
+            ),
+          );
+          return;
+        }
       }
       if (auth.currentUser?.uid != paymentUid) {
         emit(
@@ -1402,18 +1427,26 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               savedPayment['quoteId'] == paymentQuoteId
           ? Map<String, dynamic>.from(savedPayment['deliveryPayload'] as Map)
           : event.deliveryPayload;
-      final data = await _callableMap('createSenderPaymentSession', {
-        'quoteId': paymentQuoteId,
-        'rothEnabled': event.rothEnabled,
-        'fallbackMethod': event.fallbackMethod,
-        'paymentMethodId': event.paymentMethodId,
-        if (event.checkoutMode.isNotEmpty) 'checkoutMode': event.checkoutMode,
-        if (event.returnUrl.isNotEmpty) 'returnUrl': event.returnUrl,
-        if (event.draftId.isNotEmpty) 'draftId': event.draftId,
-        if (event.idempotencyKey.isNotEmpty)
-          'idempotencyKey': event.idempotencyKey,
-        if (stablePayload.isNotEmpty) 'deliveryPayload': stablePayload,
-      });
+      final data = qaCapability == null
+          ? await _callableMap('createSenderPaymentSession', {
+              'quoteId': paymentQuoteId,
+              'rothEnabled': event.rothEnabled,
+              'fallbackMethod': event.fallbackMethod,
+              'paymentMethodId': event.paymentMethodId,
+              if (event.checkoutMode.isNotEmpty)
+                'checkoutMode': event.checkoutMode,
+              if (event.returnUrl.isNotEmpty) 'returnUrl': event.returnUrl,
+              if (event.draftId.isNotEmpty) 'draftId': event.draftId,
+              if (event.idempotencyKey.isNotEmpty)
+                'idempotencyKey': event.idempotencyKey,
+              if (stablePayload.isNotEmpty) 'deliveryPayload': stablePayload,
+            })
+          : await _createSenderQaPaymentSession(
+              fixtureId: '${qaCapability['fixtureId']}',
+              quoteId: paymentQuoteId!,
+              event: event,
+              deliveryPayload: stablePayload,
+            );
       if (auth.currentUser?.uid != paymentUid) {
         emit(
           state.copyWith(
@@ -1425,7 +1458,26 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
       final requestId = confirmedSenderPaymentRequestId(data);
       if (requestId.isNotEmpty) {
-        await _dispatchPaidDelivery(requestId, 'direct paid delivery');
+        if (qaCapability != null) {
+          final read = await ProductionPaymentApi.call(
+            'sender_qa',
+            'qaSpecialFlowFixture',
+            {
+              'action': 'sender_read',
+              'fixtureId': qaCapability['fixtureId'],
+              'deliveryId': requestId,
+            },
+          );
+          final delivery = Map<String, dynamic>.from(
+            read['delivery'] as Map? ?? const {},
+          );
+          if (delivery['paymentStatus'] != 'paid' ||
+              delivery['realDispatch'] == true) {
+            throw StateError('qa_delivery_not_authoritative');
+          }
+        } else {
+          await _dispatchPaidDelivery(requestId, 'direct paid delivery');
+        }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -1502,6 +1554,36 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     }
+  }
+
+  Future<Map<String, dynamic>> _createSenderQaPaymentSession({
+    required String fixtureId,
+    required String quoteId,
+    required StartSenderPaymentSession event,
+    required Map<String, dynamic> deliveryPayload,
+  }) async {
+    final qaQuote = await ProductionPaymentApi.call(
+      'sender_qa',
+      'qaSpecialFlowFixture',
+      {'action': 'sender_quote', 'quoteId': quoteId},
+    );
+    final qaQuoteId = '${qaQuote['quoteId'] ?? ''}'.trim();
+    if (qaQuoteId.isEmpty) throw StateError('qa_quote_unavailable');
+    return ProductionPaymentApi.call(
+      'sender_qa',
+      'qaSpecialFlowFixture',
+      {
+        'action': 'sender_payment_session',
+        'fixtureId': fixtureId,
+        'quoteId': qaQuoteId,
+        'fallbackMethod': event.fallbackMethod,
+        'rothEnabled': event.rothEnabled,
+        'checkoutMode': 'web_checkout',
+        if (event.idempotencyKey.isNotEmpty)
+          'idempotencyKey': event.idempotencyKey,
+        if (deliveryPayload.isNotEmpty) 'deliveryPayload': deliveryPayload,
+      },
+    );
   }
 
   void _handleCreatePaidSenderDelivery(
@@ -1595,16 +1677,47 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
     try {
-      final data = await _callableMap('finalizeSenderWebCheckout', {
-        'checkoutSessionId': event.checkoutSessionId,
-        'paymentSessionId': event.paymentSessionId,
-      });
+      final qaCapability = await _senderWebQaCapability();
+      final data = qaCapability == null
+          ? await _callableMap('finalizeSenderWebCheckout', {
+              'checkoutSessionId': event.checkoutSessionId,
+              'paymentSessionId': event.paymentSessionId,
+            })
+          : await ProductionPaymentApi.call(
+              'sender_qa',
+              'qaSpecialFlowFixture',
+              {
+                'action': 'sender_finalize',
+                'fixtureId': qaCapability['fixtureId'],
+                'checkoutSessionId': event.checkoutSessionId,
+                'paymentSessionId': event.paymentSessionId,
+              },
+          );
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.trim().isEmpty) {
         throw StateError('payment_confirmation_missing_booking');
       }
       if (requestId.isNotEmpty) {
-        await _dispatchPaidDelivery(requestId, 'finalized checkout');
+        if (qaCapability != null) {
+          final read = await ProductionPaymentApi.call(
+            'sender_qa',
+            'qaSpecialFlowFixture',
+            {
+              'action': 'sender_read',
+              'fixtureId': qaCapability['fixtureId'],
+              'deliveryId': requestId,
+            },
+          );
+          final delivery = Map<String, dynamic>.from(
+            read['delivery'] as Map? ?? const {},
+          );
+          if (delivery['paymentStatus'] != 'paid' ||
+              delivery['realDispatch'] == true) {
+            throw StateError('qa_delivery_not_authoritative');
+          }
+        } else {
+          await _dispatchPaidDelivery(requestId, 'finalized checkout');
+        }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
