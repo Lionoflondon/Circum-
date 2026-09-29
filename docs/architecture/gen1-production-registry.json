@@ -7090,6 +7090,7 @@
       "callers": [
         "docs/qa/private-special-flow-fixture.md",
         "lib/app/send_package/bloc/send_package_bloc.dart",
+        "lib/app/sender_mobile/sender_activity.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-qa-special-flow.js",
         "server/functions/cloud-run-qa-special-flow.test.js"
