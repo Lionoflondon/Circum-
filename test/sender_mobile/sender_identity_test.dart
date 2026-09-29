@@ -79,6 +79,8 @@ void main() {
           contains("firstName: _firstName == 'there' ? 'Ayo' : _firstName"),
         ),
       );
+      expect(source, isNot(contains("return 'there';")));
+      expect(header, contains("firstName.trim().isNotEmpty"));
     });
   });
 }
