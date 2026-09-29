@@ -16,6 +16,7 @@ const qaRoth = require("./qa-roth-certification");
 const {normalizeEmail} = require("./wallet-core");
 const irisQa = require("./qa-iris-certification");
 const senderBooking = require("./sender-booking")._qa;
+const cancellationPolicy = require("./delivery-policy-core");
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = defineSecret("CIRCUM_QA_STRIPE_SECRET_KEY");
 const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
@@ -23,7 +24,8 @@ const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
 const senderActions = new Set(["sender_capability", "sender_quote", "sender_roth_prepare", "sender_roth_balance", "sender_payment_session", "sender_finalize", "sender_read", "sender_cancel"]);
-const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference"]);
+const activityActions = new Set(["activity_seed", "activity_insert", "activity_delete_reference", "activity_pagination_seed"]);
+const certificationActions = new Set(["wallet_notification_seed", "chat_retry_probe", "cancellation_quote_probe"]);
 function fixtureIdForRequest(uid, requestId) {
   if (typeof requestId !== "string" || !/^lifecycle_[A-Za-z0-9_-]{1,64}$/.test(requestId)) fail("A bounded QA request ID is required.");
   return createHash("sha256").update(`special-v5:${uid}:${requestId}`).digest("hex");
@@ -196,6 +198,131 @@ async function deleteActivityReference(db, fixture) {
   await db.collection(ROOT).doc(fixture.id).set({activitySeed: {...seed, referenceDeleted: true}}, {merge: true});
   return {deletedReferenceId: seed.deletedReferenceId, deleted: snapshot.exists};
 }
+
+async function seedActivityPagination(db, fixture) {
+  const root = db.collection(ROOT).doc(fixture.id);
+  const current = (await root.get()).data() || {};
+  if (current.activityPaginationSeed) return current.activityPaginationSeed;
+  const records = Array.from({length: 101}, (_, index) => activityDelivery(
+      fixture,
+      `p${String(index + 1).padStart(3, "0")}`,
+      index % 3 === 0 ? "cancelled" : "completed",
+      activityMillis(fixture, index + 1),
+      {qaActivityPagination: true},
+  ));
+  let batch = db.batch(); let writes = 0;
+  for (const record of [...records].reverse()) {
+    batch.create(db.collection("deliveryRequests").doc(record.id), record);
+    if (++writes === 400) {
+      await batch.commit(); batch = db.batch(); writes = 0;
+    }
+  }
+  if (writes) await batch.commit();
+  const result = {
+    count: records.length,
+    oldestId: records[0].id,
+    newestId: records[records.length - 1].id,
+    firstPageExpectedId: records[records.length - 1].id,
+    secondPageExpectedId: records[records.length - 21].id,
+    seededAt: Timestamp.now(),
+  };
+  await root.set({activityPaginationSeed: result}, {merge: true});
+  return result;
+}
+
+async function seedWalletNotification(db, fixture) {
+  const id = activityDeliveryId(fixture.id, "wallet_payment_notification");
+  const ref = db.collection("notifications").doc(id);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    await ref.create({
+      recipientId: fixture.senderId,
+      title: "QA Wallet payment received",
+      body: "Synthetic QA wallet payment for certification.",
+      type: "wallet_payment",
+      category: "wallet",
+      read: false,
+      archived: false,
+      createdAt: Timestamp.now(),
+      destination: {route: "wallet"},
+      walletTransactionId: id,
+      isSyntheticQa: true,
+      qaWalletNotification: true,
+      qaNamespace: ROOT,
+      qaFixtureId: fixture.id,
+      qaCreatedBy: fixture.qaCreatedBy,
+      qaCreatedAt: fixture.qaCreatedAt,
+      qaImmutable: true,
+      suppressExternalSideEffects: true,
+      excludeFromCustomerNotifications: true,
+    });
+  }
+  return {notificationId: id, category: "wallet", type: "wallet_payment", destinationRoute: "wallet", qaOnly: true};
+}
+
+async function chatRetryProbe(db, fixture) {
+  const deliveryId = activityDeliveryId(fixture.id, "chat");
+  const chatRef = db.collection("chats").doc(deliveryId);
+  const message = "QA timeout retry message";
+  const messageId = createHash("sha256").update(`${fixture.senderId}:${message}`).digest("hex");
+  const result = await db.runTransaction(async (tx) => {
+    const current = await tx.get(chatRef);
+    const chat = current.exists ? current.data() || {} : {
+      threadId: deliveryId, bookingId: deliveryId, requestId: deliveryId,
+      participants: [fixture.senderId, fixture.riderId],
+      members: [fixture.senderId, fixture.riderId],
+      status: "active", isSyntheticQa: true, qaFixtureId: fixture.id,
+      qaChatFixture: true, noExternalNotification: true,
+    };
+    const messages = Array.isArray(chat.messages) ? chat.messages : [];
+    const alreadyStored = messages.some((item) => item && item.id === messageId);
+    if (!alreadyStored) messages.push({id: messageId, senderId: fixture.senderId, text: message});
+    tx.set(chatRef, {...chat, messages, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    return {deliveryId, messageId, attempts: 2, created: alreadyStored ? 0 : 1, stored: messages.filter((item) => item && item.id === messageId).length};
+  });
+  return {...result, exactlyOnce: result.stored === 1, qaOnly: true};
+}
+
+async function cancellationQuoteProbe(db, fixture) {
+  const deliveryId = activityDeliveryId(fixture.id, "cancellation");
+  const ref = db.collection("deliveryRequests").doc(deliveryId);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    await ref.create(activityDelivery(fixture, "cancellation", "requested", Date.now(), {
+      paymentStatus: "paid", qaCancellationFixture: true,
+    }));
+  }
+  const decision = cancellationPolicy.cancellationDecision({
+    delivery: {status: "requested"}, state: "requested", serverNow: Date.now(),
+  });
+  const breakdown = cancellationPolicy.cancellationSettlement({
+    grossDeliveryTotal: 20, stripePaid: 20, rothPaid: 0,
+    cancellationFee: decision.feeAmount, riderCompensation: decision.riderCompensation,
+    circumRetained: decision.platformRetainedAmount,
+  });
+  const quote = cancellationPolicy.customerCancellationQuote({decision, breakdown});
+  return {
+    deliveryId,
+    quoteKeys: Object.keys(quote).sort(),
+    quote,
+    sensitiveKeysPresent: ["riderCompensation", "circumRetained", "stripePaymentIntentId", "senderEmail", "paymentSessionId"]
+        .filter((key) => Object.hasOwn(quote, key) || Object.hasOwn(quote.decision || {}, key)),
+    qaOnly: true,
+  };
+}
+
+async function deleteTopLevelQaRecords(db, fixtureId) {
+  const collections = ["deliveryRequests", "chats", "notifications", "walletTransactions"];
+  const deleted = {};
+  for (const collection of collections) {
+    const snapshot = await db.collection(collection).where("qaFixtureId", "==", fixtureId).limit(400).get();
+    if (!snapshot.empty) {
+      const batch = db.batch(); snapshot.docs.forEach((doc) => batch.delete(doc.ref)); await batch.commit();
+    }
+    deleted[collection] = snapshot.size;
+  }
+  return deleted;
+}
 function factory({db, env = process.env, stripe}) {
   const provider = (fixture) => providerForFixture({stripe, registry: db.collection(ROOT).doc(fixture.id).collection("qaCheckoutProviderObjects"), fixtureId: fixture.id, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
   const paidProvider = (fixture, qa) => paymentProviderForFixture({stripe, qa, fixture, secret: env.CIRCUM_QA_STRIPE_SECRET_KEY});
@@ -217,6 +344,7 @@ function factory({db, env = process.env, stripe}) {
       activityNotifications.docs.forEach((doc) => notificationBatch.delete(doc.ref));
       await notificationBatch.commit();
     }
+    const topLevelDeleted = await deleteTopLevelQaRecords(db, fixture.id);
     const testStripe = provider(fixture);
     const result = await testStripe.cleanup();
     const qa = scopedDatabase(db, fixture, true, ROOT, COLLECTIONS);
@@ -226,7 +354,7 @@ function factory({db, env = process.env, stripe}) {
       await require("./business-checkout-reservations").terminate({db: qa, stripe: testStripe, reservation: snap.data()});
     }
     await ref.set({archived: true, cleanupResult: result, cleanedAt: Timestamp.now()}, {merge: true});
-    return {...result, ...paidResult, sender: senderResult, activityNotificationsDeleted: activityNotifications.size};
+    return {...result, ...paidResult, sender: senderResult, activityNotificationsDeleted: activityNotifications.size, topLevelDeleted};
   }
   async function activeSenderFixture(uid) {
     const snapshot = await db.collection(ROOT)
@@ -282,7 +410,7 @@ function factory({db, env = process.env, stripe}) {
     }
     const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action) && !activityActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action) && !activityActions.has(data.action) && !certificationActions.has(data.action)) fail("Unknown QA action.");
     if (data.action === "sender_capability") {
       if (!lists.senders.includes(uid)) return {enabled: false};
       const active = await activeSenderFixture(uid);
@@ -296,7 +424,7 @@ function factory({db, env = process.env, stripe}) {
     }
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions, ...activityActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions, ...activityActions, ...certificationActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -320,7 +448,13 @@ function factory({db, env = process.env, stripe}) {
       if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
       if (data.action === "activity_seed") return {...await seedActivityFixture(db, fixture), fixtureId: fixture.id, qaOnly: true};
       if (data.action === "activity_insert") return {...await insertActivityFixtureRecord(db, fixture), fixtureId: fixture.id, qaOnly: true};
+      if (data.action === "activity_pagination_seed") return {...await seedActivityPagination(db, fixture), fixtureId: fixture.id, qaOnly: true};
       return {...await deleteActivityReference(db, fixture), fixtureId: fixture.id, qaOnly: true};
+    }
+    if (certificationActions.has(data.action)) {
+      if (data.action === "wallet_notification_seed") return seedWalletNotification(db, fixture);
+      if (data.action === "chat_retry_probe") return chatRetryProbe(db, fixture);
+      return cancellationQuoteProbe(db, fixture);
     }
     if (senderActions.has(data.action)) {
       if (uid !== fixture.senderId) fail("QA Sender required.", "permission-denied");
