@@ -4322,17 +4322,31 @@ bool _walletTransactionIssuedByCircum(String value) {
 }
 
 String _walletTransactionDisplayTitle(SenderWalletTransaction transaction) {
-  return _walletTransactionIssuedByCircum(transaction.type)
-      ? 'Issued by Circum'
-      : transaction.description;
+  if (_walletTransactionIssuedByCircum(transaction.type)) {
+    return 'Issued by Circum';
+  }
+  final description = transaction.description.trim();
+  final rawType = transaction.type.trim().toLowerCase();
+  final looksInternal = description.isEmpty ||
+      description.toLowerCase() == rawType ||
+      RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)+$').hasMatch(description);
+  return looksInternal ? _walletCategory(transaction.type) : description;
 }
 
 String _walletTransactionDisplayDescription(
   SenderWalletTransaction transaction,
 ) {
-  return _walletTransactionIssuedByCircum(transaction.type)
-      ? 'This Roth has been added to your account by the Circum team.'
-      : transaction.description;
+  if (_walletTransactionIssuedByCircum(transaction.type)) {
+    return 'This Roth has been added to your account by the Circum team.';
+  }
+  final description = transaction.description.trim();
+  final rawType = transaction.type.trim().toLowerCase();
+  final looksInternal = description.isEmpty ||
+      description.toLowerCase() == rawType ||
+      RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)+$').hasMatch(description);
+  return looksInternal
+      ? '${_walletCategory(transaction.type)} activity recorded in Wallet.'
+      : description;
 }
 
 String _walletCategory(String value) {
