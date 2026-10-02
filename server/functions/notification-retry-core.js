@@ -51,14 +51,23 @@ async function deactivateInvalidToken(db, token, row) {
   });
 }
 async function sourceIsStale(db, row) {
-  if (clean(row.type) !== "new_delivery") return false;
+  if (clean(row.type) === "operational_incident") {
+    const incidentId = clean(row.data && row.data.incidentId);
+    if (!incidentId) return true;
+    const incident = await db.collection("operationalIncidents").doc(incidentId).get();
+    if (!incident.exists || incident.data().status === "RESOLVED") return true;
+    const delivery = await db.collection("deliveryRequests").doc(clean(row.data.deliveryId)).get();
+    const {watchdogCondition} = require("./delivery-watchdog-policy");
+    return !delivery.exists || watchdogCondition(delivery.data() || {}) !== clean(row.data.incidentType);
+  }
+  if (!["new_delivery", "delivery_reminder", "unclaimed_delivery"].includes(clean(row.type))) return false;
   const deliveryId = clean(row.data && row.data.deliveryId || row.destination && row.destination.bookingId);
   if (!deliveryId) return true;
   const delivery = await db.collection("deliveryRequests").doc(deliveryId).get();
   if (!delivery.exists) return true;
   const current = delivery.data() || {};
   const status = clean(current.status || current.deliveryStatus || current.deliveryState).toLowerCase();
-  return !OPEN_DELIVERY_STATUSES.has(status) || Boolean(current.riderId || current.driverId ||
+  return require("./delivery-watchdog-policy").isArchivedDelivery(current) || !OPEN_DELIVERY_STATUSES.has(status) || Boolean(current.riderId || current.driverId ||
     current.assignedRiderId || current.assignedDriverId);
 }
 
@@ -117,9 +126,20 @@ async function recoverExpired(db, now) {
   return {recovered, uncertain};
 }
 
+async function notificationToken(uid, role, db) {
+  if (role !== "admin") return deviceTokenAuthority.ownedProfileToken(uid, role, {db});
+  const admins = await db.collection("adminUsers").get();
+  return [...new Set(admins.docs.filter((doc) => clean(doc.data().status || "active").toLowerCase() !== "disabled").map((doc) => clean(doc.data().fcmToken || doc.data().pushToken)).filter(Boolean))].slice(0, 500);
+}
+async function sendNotification(message) {
+  if (!message.tokens) return getMessaging().send(message);
+  const result = await getMessaging().sendEachForMulticast(message);
+  if (result.failureCount) throw Object.assign(new Error("admin_push_partial_outcome"), {code: "admin_push_partial_outcome"});
+  return "admin_multicast_completed";
+}
 async function processNotificationRetriesCore({
-  db = getFirestore(), now = Date.now(), sendPush = (message) => getMessaging().send(message),
-  ownedToken = (uid, role) => deviceTokenAuthority.ownedProfileToken(uid, role, {db}),
+  db = getFirestore(), now = Date.now(), sendPush = sendNotification,
+  ownedToken = (uid, role) => notificationToken(uid, role, db),
   dryRun = false,
 } = {}) {
   if (dryRun) {
@@ -167,7 +187,7 @@ async function processNotificationRetriesCore({
       continue;
     }
     const token = await ownedToken(clean(row.recipientId), clean(row.recipientRole));
-    if (!token) {
+    if (!token || Array.isArray(token) && token.length === 0) {
       await writeClaim(db, doc.ref, claimId, {
         pushDeliveryStatus: "skipped", deliveryStatus: "persisted", retryable: false,
         nextRetryAt: null, failureReason: "push_token_missing",
@@ -182,12 +202,16 @@ async function processNotificationRetriesCore({
       lastDeliveryAttemptAt: FieldValue.serverTimestamp(),
     });
     try {
-      const messageId = await sendPush(pushMessageFor({
-        token,
+      const message = pushMessageFor({
+        token: Array.isArray(token) ? token[0] : token,
         payload: {...row, notificationId: doc.id, title: clean(row.title) || "Circum update",
           body: clean(row.body || row.message), type: clean(row.type) || "system"},
         destination: row.destination || {},
-      }));
+      });
+      if (Array.isArray(token)) {
+delete message.token; message.tokens = token;
+}
+      const messageId = await sendPush(message);
       await writeClaim(db, doc.ref, claimId, {
         pushDeliveryStatus: "sent", deliveryStatus: "sent", deliveryState: "sent",
         messagingId: messageId, sentAt: FieldValue.serverTimestamp(),

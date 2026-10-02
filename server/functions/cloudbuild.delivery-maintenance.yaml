@@ -1,0 +1,9 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=Dockerfile.delivery-maintenance, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_IMAGE}', .]
+images: ['${_IMAGE}']
+substitutions:
+  _SOURCE_SHA: unknown
+  _IMAGE: us-central1-docker.pkg.dev/circum-2797c/circum-services/delivery-maintenance:unknown
+options:
+  logging: CLOUD_LOGGING_ONLY

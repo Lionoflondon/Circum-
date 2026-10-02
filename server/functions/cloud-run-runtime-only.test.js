@@ -27,7 +27,7 @@ test("Firebase SDK discovery excludes migrated exports and retains healthy manag
   const exported = require("./index");
   const endpoints = {};
   extractStack(exported, endpoints, [], {});
-  for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "createBusinessGiftOrder"]) {
+  for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "createBusinessGiftOrder", "escalateUnclaimedDeliveries", "markStaleRiderPresenceOffline"]) {
     assert.equal(endpoints[name], undefined, `${name} must never recreate a managed authority`);
     assert.equal(typeof exported[name].run, "function", `${name} remains usable by its existing Cloud Run owner`);
     assert.ok(exported[name]._cloudRunOnly.owner.startsWith("circum-"));

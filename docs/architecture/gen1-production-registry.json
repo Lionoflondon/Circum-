@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 276,
+  "gen1ExportCount": 274,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -4453,42 +4453,38 @@
     },
     {
       "functionName": "escalateUnclaimedDeliveries",
-      "sourceFile": "server/functions/platform-notifications.js",
-      "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 1 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "platformNotifications.escalateUnclaimedDeliveries",
-      "callers": [],
-      "criticality": "review-required",
-      "authRequired": false,
-      "appCheckRequired": false,
-      "secrets": [],
-      "firestoreCollections": [
-        "adminUsers",
-        "chats",
-        "deliveryRequests",
-        "dispatchInspections",
-        "notifications",
-        "riderPresence",
-        "riderProfiles",
-        "riders"
+      "sourceFile": "server/functions/index.js",
+      "triggerType": "callable",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly( platformNotifications.escalateUnclaimedDeliveries, \"circum-notification-retries\")",
+      "callers": [
+        "server/functions/cloud-run-notification-retries.js",
+        "server/functions/cloud-run-runtime-only.test.js",
+        "server/functions/delivery-maintenance-core.js",
+        "server/functions/delivery-maintenance-http.js",
+        "server/functions/platform-notifications.js",
+        "server/functions/scoped_functions_deploy_list.test.js"
       ],
-      "externalProviders": [],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": false,
+      "secrets": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET"
+      ],
+      "firestoreCollections": [],
+      "externalProviders": [
+        "Stripe"
+      ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-notification-retries.js",
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "executeRothGrantCampaign",
@@ -6191,40 +6187,38 @@
     },
     {
       "functionName": "markStaleRiderPresenceOffline",
-      "sourceFile": "server/functions/rider-presence.js",
-      "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 2 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "riderPresence.markStaleRiderPresenceOffline",
-      "callers": [],
+      "sourceFile": "server/functions/index.js",
+      "triggerType": "callable",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly( riderPresence.markStaleRiderPresenceOffline, \"circum-rider-availability-worker\")",
+      "callers": [
+        "server/functions/cloud-run-rider-availability-server.js",
+        "server/functions/cloud-run-runtime-only.test.js",
+        "server/functions/delivery-maintenance-core.js",
+        "server/functions/delivery-maintenance-http.js",
+        "server/functions/rider-presence.js",
+        "server/functions/scoped_functions_deploy_list.test.js"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
-      "appCheckRequired": true,
-      "secrets": [],
-      "firestoreCollections": [
-        "deliveryRequests",
-        "riderOperationalAudit",
-        "riderPresence",
-        "riderProfiles",
-        "riders",
-        "tracking"
+      "appCheckRequired": false,
+      "secrets": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET"
       ],
-      "externalProviders": [],
+      "firestoreCollections": [],
+      "externalProviders": [
+        "Stripe"
+      ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-rider-availability-server.js",
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "onChatMessageCreated",
@@ -9558,6 +9552,8 @@
         "dispatchInspections",
         "irisPrivate",
         "notifications",
+        "riderPresence",
+        "riderProfiles",
         "riders"
       ],
       "externalProviders": [],
