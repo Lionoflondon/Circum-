@@ -16,6 +16,10 @@ const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
+  getSenderAccountActivity: {handler: senderAccount.getSenderAccountActivity, appCheckRequired: false},
+  exportSenderData: {handler: senderAccount.exportSenderData, appCheckRequired: false},
+  updateSenderPreferences: {handler: senderAccount.updateSenderPreferences, appCheckRequired: false},
+  revokeSenderSessions: {handler: senderAccount.revokeSenderSessions, appCheckRequired: false},
   ensureSenderAccount: {handler: senderAccount.ensureSenderAccount, appCheckRequired: false},
   updateSenderNotificationState: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: true},
   getSenderWallet: {handler: {run: (_data, context) => rothLedger.readSenderWallet(context)}, appCheckRequired: true},
@@ -54,7 +58,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
