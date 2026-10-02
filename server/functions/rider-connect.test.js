@@ -123,7 +123,7 @@ test("Stripe Connect webhook money events are replay-safe", () => {
   assert.match(source, /event\.type === "payout\.created"[\s\S]*event\.type === "payout\.paid"[\s\S]*event\.type === "payout\.failed"[\s\S]*event\.type === "payout\.canceled"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /event\.type === "transfer\.created" \|\| event\.type === "transfer\.failed"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /const active = \["reserved", "processing", "pending", "requested"\]\.includes\(currentStatus\)/);
-  assert.match(source, /event\.type === "transfer\.failed" && active && riderId && amount > 0/);
+  assert.match(source, /event\.type === "transfer\.failed" && active && reserved && riderId && amount > 0/);
 });
 
 test("Rider payout transfer uses Stripe idempotency", () => {
@@ -280,4 +280,12 @@ test("canonical disabled Stripe capabilities override stale legacy readiness fla
 test("scheduled Rider projections preserve canonical zero earnings over stale estimates", () => {
   const {scheduledJobProjection} = require("./scheduled-delivery-core");
   assert.equal(scheduledJobProjection("fixture", {riderEarning: 0, estimatedEarnings: 80}).earnings, 0);
+});
+
+test("authoritative zero payout share and customer total never fall back to legacy amounts", () => {
+  const value = resolveRiderPayoutBreakdown({riderGrossShare: 0, amount: 80, totalCustomerPaid: 0, customerPaid: 100});
+  assert.equal(value.riderGrossShare, 0);
+  assert.equal(value.totalCustomerPaid, 0);
+  assert.equal(value.riderNetPayout, 0);
+  assert.equal(value.adminReviewRequired, true);
 });

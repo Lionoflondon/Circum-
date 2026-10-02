@@ -86,8 +86,8 @@ function estimateStripeFee(amountGbp, policy = payoutFeePolicy()) {
 }
 
 function resolveRiderPayoutBreakdown(input = {}) {
-  const riderGrossShare = roundMoney(input.riderGrossShare || input.amount || 0);
-  const totalCustomerPaid = roundMoney(input.totalCustomerPaid || input.customerPaid || input.total || 0);
+  const riderGrossShare = roundMoney(input.riderGrossShare ?? input.amount ?? 0);
+  const totalCustomerPaid = roundMoney(input.totalCustomerPaid ?? input.customerPaid ?? input.total ?? 0);
   const suppliedCommission = input.circumPlatformCommission != null ?
     input.circumPlatformCommission :
     input.platformCommission;
@@ -263,11 +263,14 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
       result.failures += 1;
     }
   }
-  await db.runTransaction(async (transaction) => {
-    const current = await transaction.get(cursorRef);
-    if (text(current.data()?.cursor) !== cursor) return;
-    transaction.set(cursorRef, {cursor: snapshot.size === boundedLimit ? snapshot.docs.at(-1).id : null}, {merge: true});
-  });
+  const nextCursor = snapshot.size === boundedLimit ? snapshot.docs.at(-1).id : null;
+  if (text(nextCursor) !== cursor) {
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(cursorRef);
+      if (text(current.data()?.cursor) !== cursor) return;
+      transaction.set(cursorRef, {cursor: nextCursor}, {merge: true});
+    });
+  }
   return result;
 }
 
@@ -827,7 +830,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         ...requestData,
         ...data,
         amount,
-        riderGrossShare: requestData.riderGrossShare || data.riderGrossShare || amount,
+        riderGrossShare: requestData.riderGrossShare ?? data.riderGrossShare ?? amount,
       };
       let breakdown = resolveRiderPayoutBreakdown(payoutInput);
       const existingStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
@@ -839,13 +842,16 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           id: existingTransferId,
           idempotent: true,
           metadata: {
-            stripeFeeDeductedFromRider: String(requestData.stripeFeeDeductedFromRider || breakdown.stripeFeeDeductedFromRider),
-            riderNetPayout: String(requestData.riderNetPayout || breakdown.riderNetPayout),
+            stripeFeeDeductedFromRider: String(requestData.stripeFeeDeductedFromRider ?? breakdown.stripeFeeDeductedFromRider),
+            riderNetPayout: String(requestData.riderNetPayout ?? breakdown.riderNetPayout),
           },
         };
       }
       if (existingRequest.exists && existingTransferId && existingStatus === "failed") {
         throw new functions.https.HttpsError("failed-precondition", "This payout transfer failed and must be retried with a new request.");
+      }
+      if (breakdown.riderGrossShare <= 0) {
+        throw new functions.https.HttpsError("invalid-argument", "A positive authoritative Rider payout share is required.");
       }
       const available = Number(walletData.availableBalance || 0);
       const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
@@ -1489,7 +1495,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
             const request = await transaction.get(requestRef);
             const requestData = request.data() || {};
             const riderId = text(requestData.riderId);
-            const amount = Number(requestData.amount || object.amount / 100 || 0);
+            const amount = Number(requestData.amount ?? object.amount / 100 ?? 0);
             const reserved = requestData.fundsReserved === true;
             const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
             const active = ["reserved", "processing", "pending", "requested"].includes(currentStatus);
@@ -1513,7 +1519,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-            if (event.type === "transfer.failed" && active && riderId && amount > 0) {
+            if (event.type === "transfer.failed" && active && reserved && riderId && amount > 0) {
               transaction.set(db.collection("riderEarnings").doc(riderId), {
                 availableBalance: FieldValue.increment(amount),
                 pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),

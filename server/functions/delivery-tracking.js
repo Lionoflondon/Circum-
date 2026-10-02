@@ -916,15 +916,14 @@ async function reconcilePendingDeliverySettlementsCore(db = getFirestore()) {
   for (const document of snapshot.docs) {
     results.push(await reconcileSettlementPendingDelivery(db, document.id));
   }
-  await db.runTransaction(async (transaction) => {
-    const current = (await transaction.get(stateRef)).data()?.cursor || null;
-    if (current === cursor) {
-transaction.set(stateRef, {
-      cursor: snapshot.size === 100 ? snapshot.docs[snapshot.size - 1].id : null,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-}
-  });
+  const nextCursor = snapshot.size === 100 ? snapshot.docs[snapshot.size - 1].id : null;
+  if (nextCursor !== cursor) {
+    await db.runTransaction(async (transaction) => {
+      const current = (await transaction.get(stateRef)).data()?.cursor || null;
+      if (current !== cursor) return;
+      transaction.set(stateRef, {cursor: nextCursor, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    });
+  }
   return {scanned: snapshot.size, results};
 }
 
