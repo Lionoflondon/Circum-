@@ -4629,6 +4629,8 @@
       "productionPurpose": "senderAccount.exportSenderData",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
@@ -4654,6 +4656,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
@@ -5301,6 +5305,8 @@
       "productionPurpose": "senderAccount.getSenderAccountActivity",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
@@ -5326,6 +5332,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
@@ -9049,6 +9057,8 @@
       "productionPurpose": "senderAccount.revokeSenderSessions",
       "callers": [
         "lib/app/sender_mobile/sender_mobile_profile.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
@@ -9074,6 +9084,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
@@ -10881,6 +10893,8 @@
       "productionPurpose": "senderAccount.updateSenderPreferences",
       "callers": [
         "lib/app/sender_mobile/sender_profile_preferences.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
@@ -10906,6 +10920,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
