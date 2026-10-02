@@ -71,7 +71,7 @@ for (const name of ["createSenderSetupIntent", "detachSenderPaymentMethod", "set
     await withServer(deps.factory, async (base) => {
       for (const headers of [{}, {authorization: "Bearer auth"}]) {
         const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", ...headers}, body: JSON.stringify({data: {fixture: true}})});
-        assert.equal(response.status, headers.authorization ? 400 : 401);
+        assert.equal(response.status, 401);
         assert.equal(deps.calls.length, 0);
       }
       const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", authorization: "Bearer auth", "x-firebase-appcheck": "valid"}, body: JSON.stringify({data: {fixture: true}})});
@@ -93,6 +93,17 @@ test("rejects unauthenticated callers", async () => {
     });
     assert.equal(response.status, 401);
     assert.equal((await response.json()).error.status, "UNAUTHENTICATED");
+  });
+});
+
+test("Setup Intent retains the installed native SDK no-argument data:null contract", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    const response = await fetch(`${base}/createSenderSetupIntent`, {method: "POST", headers: {"content-type": "application/json", authorization: "Bearer auth", "x-firebase-appcheck": "valid"}, body: JSON.stringify({data: null})});
+    assert.equal(response.status, 200);
+    assert.equal(deps.calls.length, 1);
+    assert.equal(deps.calls[0].name, "createSenderSetupIntent");
+    assert.deepEqual(deps.calls[0].data, {});
   });
 });
 

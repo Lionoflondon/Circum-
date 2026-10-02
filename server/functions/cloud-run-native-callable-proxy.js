@@ -2,15 +2,15 @@
 "use strict";
 const http = require("node:http");
 const OPERATIONS = Object.freeze({
-  createSenderBookingQuote: {owner: "circum-sender-booking-quotes", appCheck: true},
-  goOnline: {owner: "circum-rider-delivery-authority", appCheck: true},
+  createSenderBookingQuote: {owner: "circum-sender-booking-quotes", appCheck: true, sdkEnforced: true},
+  goOnline: {owner: "circum-rider-delivery-authority", appCheck: true, sdkAuthFailure: true},
   ensureReferralCode: {owner: "circum-referral-callables", appCheck: false, path: "v1/callable/ensureReferralCode"},
-  createSenderSetupIntent: {owner: "circum-account-bootstrap", appCheck: true},
-  detachSenderPaymentMethod: {owner: "circum-account-bootstrap", appCheck: true},
-  setDefaultSenderPaymentMethod: {owner: "circum-account-bootstrap", appCheck: true},
-  saveSenderCheckoutPreference: {owner: "circum-account-bootstrap", appCheck: true},
-  requestSenderWalletDebit: {owner: "circum-account-bootstrap", appCheck: true},
-  redeemGiftCard: {owner: "circum-account-bootstrap", appCheck: true},
+  createSenderSetupIntent: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
+  detachSenderPaymentMethod: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
+  setDefaultSenderPaymentMethod: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
+  saveSenderCheckoutPreference: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
+  requestSenderWalletDebit: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
+  redeemGiftCard: {owner: "circum-account-bootstrap", appCheck: true, sdkEnforced: true},
   createGiftPayment: {owner: "circum-gift-payments", appCheck: true, sdkEnforced: true},
   finalizeGiftPayment: {owner: "circum-gift-payments", appCheck: true, sdkEnforced: true},
   giftStoryLanding: {owner: "circum-gift-payments", appCheck: false, allowGuest: true, http: true},
@@ -58,7 +58,7 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
     const authorization = req.headers.authorization;
     if ((!policy.allowGuest || authorization) && !/^Bearer\s+\S+$/.test(authorization || "")) return error(res, 401, "UNAUTHENTICATED", "Sign in to continue.");
     const appCheck = req.headers["x-firebase-appcheck"];
-    if (policy.appCheck && !policy.sdkEnforced && !String(appCheck || "").trim()) return error(res, 400, "FAILED_PRECONDITION", "Security verification is required.");
+    if (policy.appCheck && !policy.sdkEnforced && !String(appCheck || "").trim()) return error(res, policy.sdkAuthFailure ? 401 : 400, policy.sdkAuthFailure ? "UNAUTHENTICATED" : "FAILED_PRECONDITION", "Security verification is required.");
     if (req.method === "POST" && !String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) return error(res, 415, "INVALID_ARGUMENT", "JSON required.");
     let size = 0;
     const chunks = [];
