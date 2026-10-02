@@ -158,3 +158,29 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
   assert.equal(second.reconciled, 1);
   assert.equal((await db.doc("payoutRequests/recover-timeout").get()).data().stripeTransferId, "tr_timeout");
 });
+
+
+test("recovery cursor advances past a full page of ineligible Riders to a later eligible payout", async () => {
+  const {fixtureDb} = require("./gift-story-fixture-db");
+  const isolated = fixtureDb(db, "__codex_recovery_pagination_test");
+  const now = Date.now();
+  const batch = isolated.batch();
+  for (let i = 0; i < 25; i++) batch.set(isolated.collection("payoutRequests").doc(`a_${String(i).padStart(3, "0")}`), {status: "processing", updatedAt: new Date(now)});
+  batch.set(isolated.collection("payoutRequests").doc("z_eligible"), {status: "processing",
+    riderId: "later-rider", stripeAccountId: "acct_fixture", riderNetPayout: 3,
+    stripeTransferId: "tr_fixture", transferAttemptStartedAt: new Date(now - 3600000), updatedAt: new Date(now - 3600000)});
+  await batch.commit();
+  let retrieved = 0;
+  const stripe = {transfers: {retrieve: async (id) => {
+ retrieved++; return {id};
+},
+    create: async () => {
+ throw new Error("No provider creation allowed");
+}}};
+  const first = await recoverRiderPayoutsCore(stripe, {db: isolated, now, limit: 25});
+  assert.equal(first.scanned, 25);
+  assert.equal(first.candidates, 0);
+  const next = await recoverRiderPayoutsCore(stripe, {db: isolated, now, limit: 25});
+  assert.equal(next.reconciled, 1);
+  assert.equal(retrieved, 1);
+});

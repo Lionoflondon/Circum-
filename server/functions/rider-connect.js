@@ -155,19 +155,24 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
   limit = payoutRecoveryMaxPerRun,
   leaseMs = payoutRecoveryLeaseMs,
   staleMs = payoutRecoveryStaleMs,
+  cursorId = "rider_payout_recovery",
 } = {}) {
   const stripe = stripeFrom(stripeOrFactory);
   const boundedLimit = Math.max(1, Math.min(Number(limit) || payoutRecoveryMaxPerRun, payoutRecoveryMaxPerRun));
-  const snapshot = await db.collection("payoutRequests")
+  const cursorRef = db.collection("operationsState").doc(cursorId);
+  const cursorDoc = await cursorRef.get();
+  const cursor = text(cursorDoc.data()?.cursor);
+  const query = db.collection("payoutRequests")
       .where("status", "in", ["reserved", "processing"])
       // Ordering by the document id keeps this bounded recovery query on the
       // built-in index.  Ordering the status-IN query by updatedAt would need
       // a production composite index and otherwise turns every recovery run
       // into a 500 before it can inspect a candidate.
       .orderBy(FieldPath.documentId(), "asc")
-      .limit(boundedLimit)
-      .get();
-  const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit, maxWrites: boundedLimit * 3};
+      .limit(boundedLimit);
+  let snapshot = await (cursor ? query.startAfter(cursor) : query).get();
+  if (snapshot.empty && cursor) snapshot = await query.get();
+  const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit + 2, maxWrites: boundedLimit * 3 + 1};
   for (const doc of snapshot.docs) {
     const record = doc.data() || {};
     const candidate = payoutRecoveryCandidate(record, now, staleMs);
@@ -258,6 +263,11 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
       result.failures += 1;
     }
   }
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(cursorRef);
+    if (text(current.data()?.cursor) !== cursor) return;
+    transaction.set(cursorRef, {cursor: snapshot.size === boundedLimit ? snapshot.docs.at(-1).id : null}, {merge: true});
+  });
   return result;
 }
 

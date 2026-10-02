@@ -265,9 +265,9 @@ function settlementValues(delivery = {}) {
       delivery.riderPayoutCalculationVersion === "65_35_v1";
   const base = explicit || (hasProvenance ? Math.round(eligibleFare * 0.65 * 100) / 100 : 0);
   const breakdown = delivery.riderEarningBreakdown || {};
-  const tip = Number(breakdown.tip || delivery.riderTip || delivery.tipAmount || 0);
-  const waiting = Number(breakdown.waiting || delivery.riderWaitingEarning || delivery.noShowEarning || 0);
-  const adjustment = Number(breakdown.adjustment || delivery.riderAdjustment || 0);
+  const tip = Number(breakdown.tip ?? delivery.riderTip ?? delivery.tipAmount ?? 0);
+  const waiting = Number(breakdown.waiting ?? delivery.riderWaitingEarning ?? delivery.noShowEarning ?? 0);
+  const adjustment = Number(breakdown.adjustment ?? delivery.riderAdjustment ?? 0);
   const amount = Number.isFinite(base) ? base : 0;
   return {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,

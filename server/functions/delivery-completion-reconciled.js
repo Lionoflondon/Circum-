@@ -246,16 +246,16 @@ function settlementValues(delivery = {}) {
   const base = canonical.amount;
   const breakdown = delivery.riderEarningBreakdown || {};
   const tip = Number(
-    breakdown.tip || delivery.riderTip || delivery.tipAmount || 0,
+    breakdown.tip ?? delivery.riderTip ?? delivery.tipAmount ?? 0,
   );
   const waiting = Number(
-    breakdown.waiting ||
-      delivery.riderWaitingEarning ||
-      delivery.noShowEarning ||
+    breakdown.waiting ??
+      delivery.riderWaitingEarning ??
+      delivery.noShowEarning ??
       0,
   );
   const adjustment = Number(
-    breakdown.adjustment || delivery.riderAdjustment || 0,
+    breakdown.adjustment ?? delivery.riderAdjustment ?? 0,
   );
   const amount = Number.isFinite(base) ? base : 0;
   return {
