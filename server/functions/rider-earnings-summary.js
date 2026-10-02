@@ -15,7 +15,10 @@ const money = (value) => Math.round(number(value) * 100) / 100;
 
 function connectReadiness(profile = {}) {
   const raw = text(profile.stripeConnectStatus || profile.stripeStatus);
-  if (profile.payoutsEnabled === true && profile.chargesEnabled !== false) return "ready";
+  const payoutsEnabled = profile.stripePayoutsEnabled ?? profile.payoutsEnabled;
+  const chargesEnabled = profile.stripeChargesEnabled ?? profile.chargesEnabled;
+  if (payoutsEnabled === false || chargesEnabled === false) return "restricted";
+  if (payoutsEnabled === true && chargesEnabled !== false) return "ready";
   if (["ready", "enabled", "payouts_enabled", "active"].includes(raw)) return "ready";
   if (["pending", "pending_verification", "under_review"].includes(raw)) return "pending_verification";
   if (["restricted", "requirements_due"].includes(raw)) return "restricted";

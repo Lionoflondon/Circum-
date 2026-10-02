@@ -96,3 +96,9 @@ test("canonical zero materialized totals and reconciliation delta override legac
   for (const field of ["delivery_earning", "tip", "waiting_fee", "no_show_fee", "adjustment_credit", "payout_completed"]) assert.equal(value.totals[field], 0);
   assert.equal(value.unexplained, 0);
 });
+
+test("summary readiness preserves authoritative false over legacy flags and status", () => {
+  assert.equal(connectReadiness({stripePayoutsEnabled: false, payoutsEnabled: true, stripeConnectStatus: "ready"}), "restricted");
+  assert.equal(connectReadiness({stripeChargesEnabled: false, chargesEnabled: true, payoutsEnabled: true}), "restricted");
+  assert.equal(connectReadiness({stripePayoutsEnabled: true, stripeChargesEnabled: true}), "ready");
+});
