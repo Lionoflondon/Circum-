@@ -85,3 +85,14 @@ test("canonical zero balances override stale legacy wallet balances", () => {
   assert.equal(summary.pending, 0);
   assert.equal(materializedSummary({wallet: {availableEarnings: 75}}).storedAvailable, 75);
 });
+
+
+test("canonical zero materialized totals and reconciliation delta override legacy amounts", () => {
+  const value = materializedSummary({wallet: {deliveryEarningsTotal: 0, deliveryTotal: 50,
+    tipsTotal: 0, tipsReceived: 10, waitingFeesTotal: 0, waitingTotal: 20,
+    noShowFeesTotal: 0, noShowTotal: 30, adjustmentsTotal: 0, adjustmentTotal: 5,
+    totalWithdrawn: 0, withdrawnEarnings: 60, reconciliationRequired: true,
+    unexplainedBalance: 0, reconciliationDelta: 70}});
+  for (const field of ["delivery_earning", "tip", "waiting_fee", "no_show_fee", "adjustment_credit", "payout_completed"]) assert.equal(value.totals[field], 0);
+  assert.equal(value.unexplained, 0);
+});

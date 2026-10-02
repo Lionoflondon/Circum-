@@ -259,11 +259,13 @@ function settlementValues(delivery = {}) {
     delivery.estimatedEarnings,
     delivery.riderShare,
     delivery.riderPayout,
-  ].map(Number).find((value) => Number.isFinite(value) && value > 0);
+  ].filter((value) => value !== undefined && value !== null)
+      .map(Number).find((value) => Number.isFinite(value) && value >= 0);
   const eligibleFare = Number(delivery.riderEligibleFare);
   const hasProvenance = Number.isFinite(eligibleFare) && eligibleFare > 0 &&
       delivery.riderPayoutCalculationVersion === "65_35_v1";
-  const base = explicit || (hasProvenance ? Math.round(eligibleFare * 0.65 * 100) / 100 : 0);
+  const hasExplicit = explicit !== undefined;
+  const base = explicit ?? (hasProvenance ? Math.round(eligibleFare * 0.65 * 100) / 100 : 0);
   const breakdown = delivery.riderEarningBreakdown || {};
   const tip = Number(breakdown.tip ?? delivery.riderTip ?? delivery.tipAmount ?? 0);
   const waiting = Number(breakdown.waiting ?? delivery.riderWaitingEarning ?? delivery.noShowEarning ?? 0);
@@ -271,8 +273,8 @@ function settlementValues(delivery = {}) {
   const amount = Number.isFinite(base) ? base : 0;
   return {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
-    amountSource: explicit ? "explicit_rider_earning" : hasProvenance ? "computed_authoritative_65_35" : "no_authoritative_payout",
-    requiresReview: !explicit && !hasProvenance,
+    amountSource: hasExplicit ? "explicit_rider_earning" : hasProvenance ? "computed_authoritative_65_35" : "no_authoritative_payout",
+    requiresReview: !hasExplicit && !hasProvenance,
     deliveryAmount: Math.max(0, Math.round((amount - tip - waiting - adjustment) * 100) / 100),
     tip: Number.isFinite(tip) ? Math.round(tip * 100) / 100 : 0,
     waiting: Number.isFinite(waiting) ? Math.round(waiting * 100) / 100 : 0,

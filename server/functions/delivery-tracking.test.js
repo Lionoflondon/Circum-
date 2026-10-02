@@ -353,3 +353,12 @@ test("canonical zero settlement components override stale legacy values and pres
   assert.equal(adjusted.adjustment, -2);
   assert.equal(adjusted.deliveryAmount, 12);
 });
+
+
+test("authoritative zero Rider earning does not fall back to stale estimates", () => {
+  const value = deliveryTracking.settlementValues({riderEarning: 0, estimatedEarnings: 80,
+    riderEligibleFare: 100, riderPayoutCalculationVersion: "65_35_v1"});
+  assert.equal(value.amount, 0);
+  assert.equal(value.amountSource, "explicit_rider_earning");
+  assert.equal(value.requiresReview, false);
+});

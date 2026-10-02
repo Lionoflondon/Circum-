@@ -55,16 +55,16 @@ function reconcileLedger(rows = [], wallet = {}, payouts = []) {
 }
 
 function materializedTotals(wallet = {}) {
-  const adjustments = money(wallet.adjustmentsTotal || wallet.adjustmentTotal);
+  const adjustments = money(wallet.adjustmentsTotal ?? wallet.adjustmentTotal);
   return {
-    delivery_earning: money(wallet.deliveryEarningsTotal || wallet.deliveryEarningTotal || wallet.deliveryTotal),
-    tip: money(wallet.tipsTotal || wallet.tipTotal || wallet.tipsReceived),
-    waiting_fee: money(wallet.waitingFeesTotal || wallet.waitingNoShowTotal || wallet.waitingTotal),
-    no_show_fee: money(wallet.noShowFeesTotal || wallet.noShowTotal),
+    delivery_earning: money(wallet.deliveryEarningsTotal ?? wallet.deliveryEarningTotal ?? wallet.deliveryTotal),
+    tip: money(wallet.tipsTotal ?? wallet.tipTotal ?? wallet.tipsReceived),
+    waiting_fee: money(wallet.waitingFeesTotal ?? wallet.waitingNoShowTotal ?? wallet.waitingTotal),
+    no_show_fee: money(wallet.noShowFeesTotal ?? wallet.noShowTotal),
     adjustment_credit: adjustments > 0 ? adjustments : 0,
     adjustment_debit: adjustments < 0 ? Math.abs(adjustments) : 0,
     payout_reserved: money(wallet.pendingWithdrawal),
-    payout_completed: money(wallet.totalWithdrawn || wallet.withdrawnEarnings),
+    payout_completed: money(wallet.totalWithdrawn ?? wallet.withdrawnEarnings),
     payout_failed_release: money(wallet.payoutFailedReleaseTotal),
     refund: money(wallet.refundTotal),
     reversal: money(wallet.reversalTotal),
@@ -90,7 +90,7 @@ function materializedSummary({wallet = {}, payouts = [], recentRows = [], profil
     calculatedAvailable: storedAvailable,
     storedAvailable,
     pending,
-    unexplained: reviewRequired ? money(wallet.unexplainedBalance || wallet.reconciliationDelta) : 0,
+    unexplained: reviewRequired ? money(wallet.unexplainedBalance ?? wallet.reconciliationDelta) : 0,
     reconciled: !reviewRequired,
     production: recentRows,
     quarantined: [],
