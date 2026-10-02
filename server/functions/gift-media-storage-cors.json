@@ -1,0 +1,26 @@
+[
+  {
+    "maxAgeSeconds": 3600,
+    "method": [
+      "GET",
+      "HEAD",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS"
+    ],
+    "origin": [
+      "https://circum-rider-2797c.web.app",
+      "https://circum-app-2797c.web.app"
+    ],
+    "responseHeader": [
+      "Authorization",
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Range",
+      "ETag",
+      "x-goog-resumable"
+    ]
+  }
+]
