@@ -262,3 +262,20 @@ test("Stripe Connect webhook covers payout cancellation and external account upd
   assert.match(source, /const releaseBalance = false/);
   assert.match(source, /availableBalance: releaseBalance \? FieldValue\.increment\(amount\) : FieldValue\.increment\(0\)/);
 });
+
+
+test("canonical disabled Stripe capabilities override stale legacy readiness flags", () => {
+  const result = payoutReadiness({stripeChargesEnabled: false, chargesEnabled: true,
+    stripePayoutsEnabled: false, payoutsEnabled: true});
+  assert.equal(result.checks.chargesEnabled, false);
+  assert.equal(result.checks.payoutsEnabled, false);
+  assert.equal(result.ready, false);
+  const legacy = payoutReadiness({chargesEnabled: true, payoutsEnabled: true});
+  assert.equal(legacy.checks.chargesEnabled, true);
+  assert.equal(legacy.checks.payoutsEnabled, true);
+});
+
+test("scheduled Rider projections preserve canonical zero earnings over stale estimates", () => {
+  const {scheduledJobProjection} = require("./scheduled-delivery-core");
+  assert.equal(scheduledJobProjection("fixture", {riderEarning: 0, estimatedEarnings: 80}).earnings, 0);
+});

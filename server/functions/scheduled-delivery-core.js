@@ -138,8 +138,8 @@ function scheduledJobProjection(id, delivery = {}) {
       delivery.deliveryTime && delivery.deliveryTime.scheduledWindow || null,
     pickupAddress: text(delivery.pickupAddress),
     dropoffAddress: text(delivery.dropoffAddress),
-    earnings: Number(delivery.riderEarning || delivery.riderPayout ||
-      delivery.driverPayout || delivery.estimatedEarnings || 0),
+    earnings: Number(delivery.riderEarning ?? delivery.riderPayout ??
+      delivery.driverPayout ?? delivery.estimatedEarnings ?? 0),
     instructions: text(delivery.riderInstructions || delivery.instructions ||
       delivery.packageDescription),
     status: normalized(delivery.status || "scheduled"),
