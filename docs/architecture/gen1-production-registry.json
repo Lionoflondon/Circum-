@@ -3085,6 +3085,8 @@
         "lib/app/business/business_gift_view.dart",
         "lib/app/business/business_repository.dart",
         "lib/app/sender_mobile/gift_payment_view.dart",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/production-functions-inventory.json",
@@ -3108,6 +3110,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-native-callable-proxy.test.js",
         "cloud-run-payment-family.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
@@ -4627,6 +4631,7 @@
         "lib/app/sender_mobile/sender_account_data.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
@@ -4652,7 +4657,8 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -5301,6 +5307,7 @@
         "lib/app/sender_mobile/sender_account_data.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
@@ -5326,7 +5333,8 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -9051,6 +9059,7 @@
         "lib/app/sender_mobile/sender_mobile_profile.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
@@ -9076,7 +9085,8 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -10885,6 +10895,7 @@
         "lib/app/sender_mobile/sender_profile_preferences.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
@@ -10910,7 +10921,8 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"

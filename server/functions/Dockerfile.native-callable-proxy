@@ -1,0 +1,7 @@
+FROM node:22-slim
+WORKDIR /app
+ARG CIRCUM_SOURCE_SHA=unknown
+ENV NODE_ENV=production CIRCUM_SOURCE_SHA=${CIRCUM_SOURCE_SHA}
+COPY cloud-run-native-callable-proxy.js ./
+EXPOSE 8080
+CMD ["node", "cloud-run-native-callable-proxy.js"]
