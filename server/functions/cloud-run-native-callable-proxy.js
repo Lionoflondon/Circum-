@@ -5,6 +5,7 @@ const OPERATIONS = Object.freeze({
   getSenderPaymentMode: {owner: "circum-sender-delivery-payments", appCheck: true, sdkEnforced: true},
   getSenderRothBalance: {owner: "circum-sender-delivery-payments", appCheck: true, sdkEnforced: true},
   getRiderEarningsSummary: {owner: "circum-rider-payouts", appCheck: true, sdkEnforced: true},
+  finalizeGiftStoryVideoUpload: {owner: "circum-gift-payments", appCheck: false, allowGuest: true},
   getGiftStoryVideoDownload: {owner: "circum-gift-payments", appCheck: false, allowGuest: true},
   getSenderAccountActivity: {owner: "circum-account-bootstrap", appCheck: false},
   exportSenderData: {owner: "circum-account-bootstrap", appCheck: false},

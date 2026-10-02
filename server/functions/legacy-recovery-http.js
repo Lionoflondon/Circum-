@@ -79,6 +79,10 @@ size += chunk.length; if (size <= 16384) chunks.push(chunk);
         const root = await db.collection("giftStoryRuntimeFixtures").doc(input.fixtureId).get();
         if (!root.exists || root.data().purpose !== "legacy_worker_recovery" || root.data().testOnly !== true || root.data().suppressExternalSideEffects !== true) throw Object.assign(new Error("fixture_not_authorized"), {statusCode: 403});
         const isolated = fixtureDb(db, input.fixtureId);
+        if (options.fixtureRun) {
+          result = await options.fixtureRun({db, worker, fixtureId: input.fixtureId});
+          console.info("legacy_recovery_completed", {worker, mode, result}); send(200, {ok: true, worker, result}); return;
+        }
         if (options.fixtureBucket) result = await (options.run || runLegacyWorker)({db: isolated, worker, now: Date.now(), limit: 20, stripe: options.fixtureStripe?.(), bucket: options.fixtureBucket(isolated)});
         else result = await run({db: isolated, worker, now: Date.now(), limit: 20});
       } else if (mode === "tick") {

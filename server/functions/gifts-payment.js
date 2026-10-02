@@ -530,6 +530,7 @@ async function finalizeGiftPaymentAuthority({
     if (payment.provider === "checkout" && payment.providerId !== gift.stripeCheckoutSessionId) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid checkout session.");
     }
+    await require("./gift-media-cleanup-authority").assertNotRetired(transaction, db, "voice", gift.voiceNote?.storagePath);
     const transactionVoiceNote = giftVoiceMedia.sanitizeGiftVoiceNoteMetadata(gift.voiceNote, gift.senderId);
     if ((transactionVoiceNote && !checkedVoiceNote) ||
         (checkedVoiceNote && (!transactionVoiceNote || transactionVoiceNote.storagePath !== checkedVoiceNote.storagePath))) {

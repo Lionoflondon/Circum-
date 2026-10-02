@@ -1,6 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
-const {createHash} = require("node:crypto");
+const {cleanupRef} = require("./gift-media-cleanup-authority");
 const {FieldValue, Timestamp} = require("firebase-admin/firestore");
 const millis = (v) => typeof v?.toMillis === "function" ? v.toMillis() : 0;
 async function cleanupGiftStories({db, bucket, now = Date.now(), limit = 20}) {
@@ -18,8 +18,7 @@ async function cleanupGiftStories({db, bucket, now = Date.now(), limit = 20}) {
       if (expireMedia) {
         const paths = [gift.giftStoryRenderedVideoPath, gift.giftStorySilentVersionUrl, gift.giftStorySoundVersionUrl].filter((p) => typeof p === "string" && p.startsWith(`gifts/${giftId}/story/exports/`));
         for (const path of new Set(paths)) {
-          const jobId = createHash("sha256").update(`${doc.id}:${path}`).digest("hex");
-          tx.set(db.collection("giftStoryCleanupJobs").doc(jobId), {path, giftId, tokenId: doc.id, state: "pending", createdAt: FieldValue.serverTimestamp()}, {merge: true});
+          tx.set(cleanupRef(db, "story", path), {path, giftId, tokenId: doc.id, state: "pending", createdAt: FieldValue.serverTimestamp()}, {merge: true});
         }
         tx.set(giftRef, {giftStoryRenderedVideoPath: FieldValue.delete(), giftStorySilentVersionUrl: FieldValue.delete(), giftStorySoundVersionUrl: FieldValue.delete(),
           giftStoryAccessToken: FieldValue.delete(), giftStoryAccessTokenHash: FieldValue.delete(), recipientStoryToken: FieldValue.delete(), recipientStoryTokenHash: FieldValue.delete(), recipientStoryUrl: FieldValue.delete(),

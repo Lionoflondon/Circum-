@@ -2,6 +2,7 @@
 "use strict";
 const {createHash} = require("node:crypto");
 const {FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {cleanupRef} = require("./gift-media-cleanup-authority");
 const {parseGiftVoiceStoragePath} = require("./gift-voice-media");
 async function cleanupVoice({db, bucket, now = Date.now(), limit = 20}) {
   const candidates = await db.collection("giftPaymentDrafts").where("createdAt", "<=", Timestamp.fromMillis(now - 86400000)).where("paymentStatus", "in", ["payment_pending", "checkout_pending"]).limit(limit).get();
@@ -16,8 +17,9 @@ async function cleanupVoice({db, bucket, now = Date.now(), limit = 20}) {
       // Only the current reservation protocol proves that no hidden provider
       // object exists. Never erase media from a live/legacy checkout.
       if (draft.giftCheckoutProtocol !== 1 || reservation.exists || draft.giftCheckoutReservationId || draft.stripePaymentIntentId || draft.stripeCheckoutSessionId) return "review";
-      const jobId = createHash("sha256").update(`${doc.id}:${path}`).digest("hex");
-      tx.set(db.collection("giftVoiceCleanupJobs").doc(jobId), {path, giftDraftId: doc.id, state: "pending", createdAt: FieldValue.serverTimestamp()}, {merge: true});
+      const otherDrafts = await tx.get(db.collection("giftPaymentDrafts").where("voiceNote.storagePath", "==", path).limit(2));
+      if (otherDrafts.docs.some((other) => other.id !== doc.id)) return "review";
+      tx.set(cleanupRef(db, "voice", path), {path, giftDraftId: doc.id, state: "pending", createdAt: FieldValue.serverTimestamp()}, {merge: true});
       tx.set(doc.ref, {voiceNote: FieldValue.delete(), voiceNoteCleanupStatus: "pending_delete", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
       return "detached";
     });

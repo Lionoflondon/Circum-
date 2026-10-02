@@ -1334,15 +1334,15 @@ exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context
 });
 
 exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
   const giftId = text(data.giftRequestId);
+  const db = await videoDownloadDb(getFirestore(), giftId);
   const giftRef = db.collection("giftRequests").doc(giftId);
   const giftSnap = await giftRef.get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
   const gift = {...(giftSnap.data() || {}), id: giftId};
-  if (!await participantAuthorized(context, gift, text(data.token))) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
+  if (!await participantAuthorized(context, gift, text(data.token), db)) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
   const storagePath = text(data.storagePath);
-  if (!storagePath.startsWith(`gifts/${giftId}/story/exports/silent/`) &&
+  if (!(db.fixtureMode && storagePath.startsWith(`runtime-fixtures/gift-video/${giftId}/`)) && !storagePath.startsWith(`gifts/${giftId}/story/exports/silent/`) &&
       !storagePath.startsWith(`gifts/${giftId}/story/exports/sound/`)) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid story video path.");
   }
@@ -1350,18 +1350,13 @@ exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, conte
   const [exists] = await file.exists();
   if (!exists) throw new functions.https.HttpsError("not-found", "Rendered video upload was not found.");
   const expiresAt = Timestamp.fromMillis(Date.now() + STORY_RETENTION_HOURS * 60 * 60 * 1000);
-  const previousPath = text(gift.giftStoryRenderedVideoPath);
-  if (previousPath && previousPath !== storagePath) await getStorage().bucket().file(previousPath).delete({ignoreNotFound: true}).catch(() => null);
-  await giftRef.set({
-    giftStoryRenderedVideoPath: storagePath,
-    ...(storagePath.includes("/exports/silent/") ? {giftStorySilentVersionUrl: storagePath} : {giftStorySoundVersionUrl: storagePath}),
-    giftStoryVideoMime: text(data.mime),
-    giftStoryVideoStatus: "ready",
-    giftStoryVideoRenderedAt: FieldValue.serverTimestamp(),
-    giftStoryVideoExpiresAt: expiresAt,
-    giftStoryUpdatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
-  return {ok: true, expiresAt: expiresAt.toMillis()};
+  try {
+    return await require("./gift-media-cleanup-authority").finalizeStory({db, giftId, path: storagePath, mime: text(data.mime), expiresAt,
+      authorize: (current) => participantAuthorized(context, current, text(data.token), db)});
+  } catch (error) {
+    if (["failed-precondition", "not-found", "permission-denied"].includes(error.code)) throw new functions.https.HttpsError(error.code, error.message);
+    throw error;
+  }
 });
 
 async function videoDownloadDb(rawDb, giftId) {

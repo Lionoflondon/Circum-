@@ -385,8 +385,8 @@ exports.retryGiftStoryAutomation = giftStoryAutomation.retryGiftStoryAutomation;
 exports.manageGiftStoryAccess = giftStoryAutomation.manageGiftStoryAccess;
 exports.createGiftStoryVideoUpload =
   giftStoryAutomation.createGiftStoryVideoUpload;
-exports.finalizeGiftStoryVideoUpload =
-  giftStoryAutomation.finalizeGiftStoryVideoUpload;
+exports.finalizeGiftStoryVideoUpload = cloudRunOnly(
+    giftStoryAutomation.finalizeGiftStoryVideoUpload, "circum-gift-payments");
 exports.getGiftStoryVideoDownload = cloudRunOnly(
     giftStoryAutomation.getGiftStoryVideoDownload, "circum-gift-payments");
 exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;

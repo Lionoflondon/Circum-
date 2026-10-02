@@ -98,3 +98,30 @@ await ref.update({paused: true}); return db.runTransaction(run);
   await runLegacyWorker({db: raced, worker: "generateHealthPlusRecurringBookings", now, limit: 20});
   assert.equal((await db.collection("prescriptionPickups").get()).size, 0);
 }));
+
+test("retired Story media cannot be resurrected by a concurrent finalization", () => fixture("story-retired", async (db) => {
+  const {cleanupRef, finalizeStory} = require("./gift-media-cleanup-authority");
+  const path = "gifts/gift/story/exports/sound/old.webm";
+  await db.doc("giftRequests/gift").set({senderId: "sender", giftStoryVideoStatus: "expired"});
+  await cleanupRef(db, "story", path).set({path, state: "pending"});
+  await assert.rejects(finalizeStory({db, giftId: "gift", path, mime: "video/webm", expiresAt: Timestamp.fromMillis(Date.now() + 60000), authorize: async () => true}), /expired/);
+  assert.equal((await db.doc("giftRequests/gift").get()).data().giftStoryVideoStatus, "expired");
+}));
+test("a retired voice path is rejected before any checkout reservation or provider call", () => fixture("voice-retired", async (db) => {
+  const {cleanupRef} = require("./gift-media-cleanup-authority"); const {reserve} = require("./gift-checkout-reservations");
+  const path = "gift_requests/sender_1/voice/original.webm";
+  const ref = db.doc("giftPaymentDrafts/draft");
+  await ref.set({senderId: "sender", giftCheckoutProtocol: 1, grossBudget: 50, paymentStatus: "payment_pending", voiceNote: {storagePath: path}});
+  await db.doc("giftCheckoutOrigins/draft").set({senderId: "sender"}); await cleanupRef(db, "voice", path).set({path, state: "pending"});
+  await assert.rejects(reserve({db, giftRef: ref, uid: "sender", split: {walletContributionGbp: 0, remainingGbp: 50}, nativePayment: true}), /expired/);
+  assert.equal((await db.collection("giftCheckoutReservations").get()).size, 0);
+}));
+test("reconciliation writes one audit receipt from an atomic ledger snapshot and changes no balances", () => fixture("earnings-audit", async (db) => {
+  await db.doc("riderEarnings/rider").set({availableBalance: 4});
+  await db.doc("riderEarningTransactions/earning").set({riderId: "rider", type: "delivery_earning", amount: 4, idempotencyKey: "earning"});
+  const args = {db, worker: "scheduledRiderEarningsReconciliation", now: Date.now(), limit: 20};
+  await runLegacyWorker(args); await runLegacyWorker(args);
+  assert.equal((await db.collection("riderEarningsReconciliations").get()).size, 1);
+  const row = (await db.doc("riderEarnings/rider").get()).data(); assert.equal(row.availableBalance, 4); assert.equal(row.reconciliationRequired, false);
+  assert.equal((await db.collection("riderEarningTransactions").get()).size, 1);
+}));

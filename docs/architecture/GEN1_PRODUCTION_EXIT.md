@@ -3,15 +3,15 @@
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
 - Source exports: 283
-- Gen 1 exports: 262
-- Files importing Firebase Functions v1: 67
+- Gen 1 exports: 261
+- Files importing Firebase Functions v1: 68
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 94
-- MIGRATE TO CLOUD RUN: 146
+- MIGRATE TO CLOUD RUN: 145
 - REPLACE WITH CLOUD RUN + EVENTARC: 18
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 3
 - RETIRE — no legitimate production dependency: 3
 - CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED: 10
-- CLOUD RUN ONLY — LEGACY URL RETAINED: 9
+- CLOUD RUN ONLY — LEGACY URL RETAINED: 10
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
 |---|---|---|---|---|---|
@@ -132,7 +132,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | exportSenderData | server/functions/sender-account.js | Cloud Run | callable | CLOUD RUN ONLY — LEGACY URL RETAINED | lib/app/sender_mobile/sender_account_data.dart<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/cloud-run-native-callable-proxy.js<br>server/functions/cloud-run-runtime-only.test.js<br>server/functions/production-functions-inventory.json<br>server/functions/scoped_functions_deploy_list.test.js<br>server/functions/sender-account-authority.test.js<br>test/sender_mobile/sender_mobile_profile_test.dart |
 | finalizeDeliveryAdjustmentPayment | server/functions/delivery-adjustments.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js |
 | finalizeGiftPayment | server/functions/gifts-payment.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/gift_payment_view.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-payment-family.js<br>server/functions/gift-checkout-reservations.emulator.test.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js<br>test/sender_mobile/gift_native_payment_contract_test.dart |
-| finalizeGiftStoryVideoUpload | server/functions/gift-story-automation.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart |
+| finalizeGiftStoryVideoUpload | server/functions/gift-story-automation.js | Cloud Run | callable | CLOUD RUN ONLY — LEGACY URL RETAINED | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart<br>server/functions/cloud-run-native-callable-proxy.js<br>server/functions/cloud-run-payment-family.js |
 | finalizeIrisReferenceImage | server/functions/admin-iris-reference-images.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-iris-reference-images.test.js<br>test/admin_operations_test.dart |
 | finalizeSenderWebCheckout | server/functions/sender-booking.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/bloc/send_package_bloc.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-sender-delivery-payments.js<br>server/functions/core-payment-amount-security.test.js<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js<br>test/sender_mobile/sender_payment_delivery_bounds_test.dart<br>test/web_platform_routing_test.dart |
 | generateHealthPlusRecurringBookings | server/functions/health-plus-operations.js | Cloud Run | schedule | CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED | server/functions/health-recurring-recovery.js<br>server/functions/legacy-scheduled-recovery.js<br>server/functions/legacy-worker-recovery.emulator.test.js |
@@ -250,7 +250,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | saveSenderCheckoutPreference | server/functions/sender-finance.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_finance.dart<br>lib/app/sender_mobile/sender_wallet.dart<br>server/functions/payment-runtime-bindings.test.js<br>server/functions/sender-payment-app-check.test.js |
 | saveSenderDraft | server/functions/sender-booking.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/sender_booking_canvas.dart<br>lib/app/sender_mobile/sender_draft_api.dart<br>server/functions/cloud-run-replacement-registry.js<br>server/functions/cloud-run-sender-drafts.js<br>server/functions/cloud-run-sender-drafts.test.js<br>test/sender_draft_api_test.dart |
 | saveSenderSavedAddress | server/functions/sender-saved-addresses.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/sender_mobile/sender_saved_addresses.dart<br>lib/website/shared/circum_website_app.dart |
-| scheduledRiderEarningsReconciliation | server/functions/rider-earnings-summary.js | Cloud Run | schedule | CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED | server/functions/legacy-scheduled-recovery.js<br>server/functions/rider-earnings-summary.test.js |
+| scheduledRiderEarningsReconciliation | server/functions/rider-earnings-summary.js | Cloud Run | schedule | CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED | server/functions/legacy-scheduled-recovery.js<br>server/functions/legacy-worker-recovery.emulator.test.js<br>server/functions/rider-earnings-summary.test.js |
 | scheduledRiderStripeStatusSync | server/functions/rider-connect.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-payment-schedulers.js<br>server/functions/cloud-run-payment-schedulers.test.js |
 | searchFreeUkAddresses | server/functions/address-places-compat.js | Gen 2 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/BACKEND_REMEDIATION_2026-09-21.md<br>docs/google-maps-production-architecture.md<br>lib/app/send_package/repo/address_places_api.dart<br>lib/app/send_package/repo/place_api.dart<br>lib/app/sender_mobile/gift_delivery_view.dart<br>lib/app/sender_mobile/sender_saved_addresses.dart<br>lib/website/shared/address_places_api.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/address-places-compat.test.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/cloud-run-address-places.js<br>server/functions/cloud-run-address-places.test.js<br>server/functions/free-address-core.js<br>server/functions/free-address-core.test.js<br>test/security/circum_app_check_contract_test.dart<br>test/sender_address_places_api_test.dart<br>test/sender_mobile/sender_canonical_destination_guard_test.dart<br>test/website_address_places_api_test.dart |
 | sendCircumAnnouncement | server/functions/communication-engine.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/admin/admin_phase1_shell.dart<br>server/functions/admin-hardening-contract.test.js<br>test/admin_operations_test.dart |

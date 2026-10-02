@@ -181,7 +181,7 @@ async function processNoShowSettlement({db, stripe, deliveryId}) {
   let originalIntent = {};
   if (delivery.stripePaymentIntentId) {
     try {
-      originalIntent = await stripe.paymentIntents.retrieve(delivery.stripePaymentIntentId);
+      originalIntent = await stripe.paymentIntents.retrieve(delivery.stripePaymentIntentId, {expand: ["latest_charge"]});
     } catch (error) {
       return markFailure(db, deliveryId, "original_payment_unavailable", {providerCode: text(error && error.code)});
     }

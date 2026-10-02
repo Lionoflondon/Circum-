@@ -20,11 +20,15 @@ function authorityDecision({delivery = {}, paymentSession = {}, paymentIntent = 
   if (!["paid", "succeeded", "success", "captured"].includes(paymentStatus) || paidAmountPence < AMOUNTS.customerPence) {
     return {allowed: false, reason: "paid_amount_insufficient"};
   }
+  if (paymentSession.currency && text(paymentSession.currency).toUpperCase() !== "GBP") return {allowed: false, reason: "payment_authority_mismatch"};
   if (intentId) {
     const linked = text(paymentSession.stripePaymentIntentId) === intentId &&
       text(intentMetadata.paymentSessionId) === sessionId &&
       text(intentMetadata.userId) === senderId;
-    if (!linked || text(paymentIntent.status) !== "succeeded") {
+    if (!linked || text(paymentIntent.status) !== "succeeded" || text(paymentIntent.currency).toLowerCase() !== "gbp" ||
+        !Number.isSafeInteger(paymentIntent.amount_received) || paymentIntent.amount_received < Math.round(Number(delivery.remainingAmount || 0) * 100) ||
+        !Number.isFinite(Number(delivery.remainingAmount)) || Number(delivery.remainingAmount) <= 0 ||
+        paymentIntent.latest_charge?.refunded === true || Number(paymentIntent.latest_charge?.amount_refunded || 0) > 0) {
       return {allowed: false, reason: "payment_authority_mismatch"};
     }
   } else if (Number(delivery.remainingAmount || 0) > 0 || Number(delivery.rothAppliedAmount || 0) < 7) {

@@ -8,7 +8,7 @@ function fixture(overrides = {}) {
   return {
     delivery: {senderId: "sender-a", paymentSessionId: "session-a", stripePaymentIntentId: "pi-a", paidAmount: 15, paymentStatus: "paid", remainingAmount: 15},
     paymentSession: {userId: "sender-a", stripePaymentIntentId: "pi-a"},
-    paymentIntent: {id: "pi-a", status: "succeeded", metadata: {userId: "sender-a", paymentSessionId: "session-a"}},
+    paymentIntent: {id: "pi-a", status: "succeeded", currency: "gbp", amount_received: 1500, metadata: {userId: "sender-a", paymentSessionId: "session-a"}},
     ...overrides,
   };
 }
@@ -47,4 +47,11 @@ test("legacy or mismatched authority fails closed", () => {
   const wrongSender = fixture();
   wrongSender.paymentIntent.metadata.userId = "sender-b";
   assert.equal(core.authorityDecision(wrongSender).reason, "payment_authority_mismatch");
+});
+
+test("refunded or insufficient provider receipts never allocate a no-show fee", () => {
+  for (const patch of [{currency: "usd"}, {amount_received: 100}, {latest_charge: {amount_refunded: 1}}, {latest_charge: {refunded: true}}]) {
+    const f = fixture(); Object.assign(f.paymentIntent, patch);
+    assert.equal(core.authorityDecision(f).allowed, false);
+  }
 });

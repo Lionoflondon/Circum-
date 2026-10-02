@@ -2,4 +2,4 @@ FROM us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-qa-s
 ARG CIRCUM_SOURCE_SHA=unknown
 ENV CIRCUM_SOURCE_SHA=$CIRCUM_SOURCE_SHA
 WORKDIR /app
-COPY server/functions/cloud-run-qa-special-flow.js server/functions/qa-special-flow.js server/functions/qa-expiry-recovery-http.js server/functions/legacy-recovery-http.js server/functions/legacy-scheduled-recovery.js server/functions/legacy-no-show-policy.js server/functions/legacy-no-show-settlement.js server/functions/stale-lock-recovery.js server/functions/gift-story-fixture-db.js ./
+COPY server/functions/cloud-run-qa-special-flow.js server/functions/qa-special-flow.js server/functions/qa-expiry-recovery-http.js server/functions/legacy-recovery-http.js server/functions/legacy-scheduled-recovery.js server/functions/legacy-no-show-policy.js server/functions/legacy-no-show-settlement.js server/functions/stale-lock-recovery.js server/functions/gift-story-fixture-db.js server/functions/gift-media-cleanup-authority.js ./
