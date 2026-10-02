@@ -21,7 +21,9 @@ async function processTick({db, worker, tick, now = Date.now(), run = runWorker}
   if (receipt.exists) return {replayed: true, result: receipt.data().result};
   const c = control.data() || {}; const l = lease.data() || {};
   const maximum = Number(c.maxAcknowledgements || 0); const acknowledged = Number(c.acknowledged || 0);
-  if (c.enabled !== true || !Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(acknowledged) || acknowledged < 0 || acknowledged >= maximum) throw Object.assign(new Error("bounded_cutover_paused"), {statusCode: 503});
+  const certifiedAt = typeof c.drainCertifiedAt?.toMillis === "function" ? c.drainCertifiedAt.toMillis() : 0;
+  const steady = c.mode === "steady" && certifiedAt > 0 && certifiedAt <= now;
+  if (c.enabled !== true || !Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(acknowledged) || acknowledged < 0 || (c.mode === "steady" && !steady) || (!steady && acknowledged >= maximum)) throw Object.assign(new Error("bounded_cutover_paused"), {statusCode: 503});
   if (Number(l.leaseUntil || 0) > now) throw Object.assign(new Error("worker_busy"), {statusCode: 503});
   if (l.lastCompletedAt && now - l.lastCompletedAt < INTERVALS[worker]) {
    tx.create(receiptRef, {worker, publishTime: tick.publishTime, ageSeconds: tick.ageSeconds, result: {coalesced: true}, createdAt: FieldValue.serverTimestamp()});

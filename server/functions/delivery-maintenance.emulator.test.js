@@ -83,6 +83,8 @@ throw new Error("crash");
  assert.equal((await ref.get()).data().acknowledged, 2);
  await processTick({db, worker, now: now + 120000, tick: tick("3"), run}); assert.equal((await ref.get()).data().acknowledged, 3);
  await ref.set({maxAcknowledgements: "not-a-number"}, {merge: true}); await assert.rejects(processTick({db, worker, now: now + 240000, tick: tick("4"), run}), /bounded_cutover_paused/);
+ await ref.set({maxAcknowledgements: 3, mode: "steady"}, {merge: true}); await assert.rejects(processTick({db, worker, now: now + 240000, tick: tick("4"), run}), /bounded_cutover_paused/);
+ await ref.set({drainCertifiedAt: Timestamp.fromMillis(now)}, {merge: true}); await processTick({db, worker, now: now + 240000, tick: tick("4"), run}); assert.equal((await ref.get()).data().acknowledged, 4);
 }));
 test("durable admin alert uses active admins and uncertain sends are not replayed", () => withDb("admin-push", async (db) => {
  const now = Date.now(); await db.doc("deliveryRequests/open").set({status: "requested", createdAt: Timestamp.fromMillis(now - 10 * 60000)});
