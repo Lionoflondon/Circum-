@@ -3086,6 +3086,8 @@
         "lib/app/business/business_repository.dart",
         "lib/app/sender_mobile/gift_payment_view.dart",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/native-callable-cloud-run-compat.js",
+        "server/functions/native-callable-cloud-run-compat.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/production-functions-inventory.json",
         "test/sender_mobile/business_gift_flow_contract_test.dart"
