@@ -44,7 +44,7 @@ for (const [operation, policy] of Object.entries(OPERATIONS)) {
       assert.equal(denied.status, policy.allowGuest ? 200 : 401);
       assert.equal(calls, policy.allowGuest ? 1 : 0);
       const optional = await fetch(base, {method: "POST", headers: {authorization: "Bearer qa-token", "content-type": "application/json"}, body: "{\"data\":{}}"});
-      assert.equal(optional.status, policy.appCheck && !policy.sdkEnforced ? 400 : 200);
+      assert.equal(optional.status, policy.appCheck && !policy.sdkEnforced ? policy.sdkAuthFailure ? 401 : 400 : 200);
       assert.equal(calls, (policy.allowGuest ? 1 : 0) + (policy.appCheck && !policy.sdkEnforced ? 0 : 1));
     });
   });

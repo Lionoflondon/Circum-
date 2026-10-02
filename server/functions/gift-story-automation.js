@@ -1310,20 +1310,19 @@ async function participantAuthorized(context, gift, suppliedToken, db = getFires
   return false;
 }
 
-exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
-  const db = await storyRuntimeDb(getFirestore(), data);
+async function createStoryVideoUpload({db, bucket, data, context}) {
   const giftId = text(data.giftRequestId);
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
   const gift = {...(giftSnap.data() || {}), id: giftId};
   if (!isComplete(gift.giftStatus || gift.status)) throw new functions.https.HttpsError("failed-precondition", "Gift Story is not unlocked.");
-  if (!await participantAuthorized(context, gift, text(data.token))) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
+  if (!await participantAuthorized(context, gift, text(data.token), db)) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
   const extension = text(data.extension).toLowerCase() === "mp4" ? "mp4" : "webm";
   const mime = extension === "mp4" ? "video/mp4" : "video/webm";
   const nonce = crypto.randomBytes(12).toString("hex");
   const exportKind = text(data.version).toLowerCase() === "silent" ? "silent" : "sound";
   const storagePath = db.fixtureMode ? `runtime-fixtures/gift-video/${giftId}/exports/${exportKind}/${Date.now()}_${nonce}.${extension}` : `gifts/${giftId}/story/exports/${exportKind}/${Date.now()}_${nonce}.${extension}`;
-  const file = getStorage().bucket().file(storagePath);
+  const file = bucket.file(storagePath);
   const [uploadUrl] = await file.getSignedUrl({
     version: "v4",
     action: "write",
@@ -1331,6 +1330,11 @@ exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context
     contentType: mime,
   });
   return {uploadUrl, storagePath, mime};
+}
+
+exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
+  const db = await storyRuntimeDb(getFirestore(), data);
+  return createStoryVideoUpload({db, bucket: getStorage().bucket(), data, context});
 });
 
 exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
@@ -1593,3 +1597,5 @@ module.exports.getSenderGiftStory = exports.getSenderGiftStory;
 module.exports.videoDownloadDb = videoDownloadDb;
 
 module.exports.storyRuntimeDb = storyRuntimeDb;
+
+module.exports.createStoryVideoUpload = createStoryVideoUpload;
