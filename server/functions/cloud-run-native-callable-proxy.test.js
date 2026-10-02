@@ -91,3 +91,13 @@ test("Gift Story landing preserves HTTP path, HTML, and guest transport without 
   assert.equal((await fetch(base + "/other/operation")).status, 400); assert.equal(calls, 1);
  });
 });
+
+test("Gift landing preflight permits its GET and HEAD contract while callables remain POST-only", async () => {
+  for (const operation of ["giftStoryLanding", "getGiftStoryVideoDownload"]) {
+    await withServer(operation, async () => { throw new Error("preflight must not call owner"); }, async (base) => {
+      const response = await fetch(base, {method: "OPTIONS", headers: {origin: "https://circum-app-2797c.web.app", "access-control-request-method": "GET"}});
+      assert.equal(response.status, 204);
+      assert.equal(response.headers.get("access-control-allow-methods"), operation === "giftStoryLanding" ? "GET, HEAD, POST, OPTIONS" : "POST, OPTIONS");
+    });
+  }
+});
