@@ -80,7 +80,7 @@ size += chunk.length; if (size <= 16384) chunks.push(chunk);
         if (!root.exists || root.data().purpose !== "legacy_worker_recovery" || root.data().testOnly !== true || root.data().suppressExternalSideEffects !== true) throw Object.assign(new Error("fixture_not_authorized"), {statusCode: 403});
         const isolated = fixtureDb(db, input.fixtureId);
         if (options.fixtureRun) {
-          result = await options.fixtureRun({db, worker, fixtureId: input.fixtureId});
+          result = await options.fixtureRun({db, worker, fixtureId: input.fixtureId, fixture: root.data()});
           console.info("legacy_recovery_completed", {worker, mode, result}); send(200, {ok: true, worker, result}); return;
         }
         if (options.fixtureBucket) result = await (options.run || runLegacyWorker)({db: isolated, worker, now: Date.now(), limit: 20, stripe: options.fixtureStripe?.(), bucket: options.fixtureBucket(isolated)});

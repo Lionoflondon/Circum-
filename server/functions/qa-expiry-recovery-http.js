@@ -33,14 +33,16 @@ function handleQaRecovery(request, response, options = {}) {
   const load = () => cached || (cached = options.dependencies || dependencies());
   return handleRecovery(request, response, {
     db: () => load().db, workers: ["expireQaLifecycleFixtures", "expireQaSpecialFlowFixtures"], authorize: options.authorize || authorize,
-    fixtureRun: async ({db, worker, fixtureId}) => {
+    fixtureRun: async ({db, worker, fixture}) => {
+      const fixtureId = fixture.qaFixtureId;
+      if (!/^[a-f0-9]{64}$/.test(fixtureId || "")) throw Object.assign(new Error("fixture_not_authorized"), {statusCode: 403});
       const root = worker === "expireQaSpecialFlowFixtures" ? "qaSpecialFlowFixtures" : "qaLifecycleFixtures";
       const selected = await db.collection(root).doc(fixtureId).get();
       if (!selected.exists || selected.data().id !== fixtureId || selected.data().isSyntheticQa !== true || selected.data().testOnly !== true) throw Object.assign(new Error("fixture_not_authorized"), {statusCode: 403});
       const originalCollection = db.collection.bind(db);
       const scoped = {collection: (name) => name === root ? {doc: (id) => {
 if (id !== fixtureId) throw new Error("cross_fixture_access"); return originalCollection(root).doc(id);
-}, where: (...args) => originalCollection(root).where(require("firebase-admin/firestore").FieldPath.documentId(), "==", fixtureId).where(...args)} : originalCollection(name), doc: db.doc.bind(db), runTransaction: db.runTransaction.bind(db)};
+}, where: (...args) => originalCollection(root).where(require("firebase-admin/firestore").FieldPath.documentId(), "==", fixtureId).where(...args)} : originalCollection(name), doc: db.doc.bind(db), batch: db.batch.bind(db), runTransaction: db.runTransaction.bind(db)};
       const d = load();
       if (worker === "expireQaSpecialFlowFixtures") return require("./qa-special-flow")._test.factory({db: scoped, env: d.env, stripe: d.stripe}).expire();
       const providerFactory = (qa, fixture) => require("./qa-special-provider").paymentProviderForFixture({stripe: d.stripe, qa, fixture, secret: d.env.CIRCUM_QA_STRIPE_SECRET_KEY});
