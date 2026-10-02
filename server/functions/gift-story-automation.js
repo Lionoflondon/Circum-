@@ -1295,7 +1295,7 @@ async function adminAuthorized(context) {
   return ["admin", "super_admin", "gifts_admin", "operations_admin"].includes(role);
 }
 
-async function participantAuthorized(context, gift, suppliedToken) {
+async function participantAuthorized(context, gift, suppliedToken, db = getFirestore()) {
   if (await adminAuthorized(context)) return true;
   if (context.auth) {
     const uid = context.auth.uid;
@@ -1304,7 +1304,7 @@ async function participantAuthorized(context, gift, suppliedToken) {
     if (email && [normalizeEmail(gift.senderEmail), normalizeEmail(gift.recipientEmail || gift.recipientContact)].includes(email)) return true;
   }
   if (suppliedToken) {
-    const record = await tokenRecord(getFirestore(), suppliedToken);
+    const record = await tokenRecord(db, suppliedToken);
     return Boolean(record && record.data.giftRequestId === gift.id);
   }
   return false;
@@ -1364,14 +1364,24 @@ exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, conte
   return {ok: true, expiresAt: expiresAt.toMillis()};
 });
 
+async function videoDownloadDb(rawDb, giftId) {
+  if (!/^__codex_video_[A-Za-z0-9_-]{1,80}$/.test(giftId)) return rawDb;
+  const root = await rawDb.collection("giftStoryRuntimeFixtures").doc(giftId).get();
+  const fixture = root.data() || {};
+  if (!root.exists || fixture.purpose !== "gift_video_certification" || fixture.testOnly !== true || fixture.suppressExternalSideEffects !== true) {
+    throw new functions.https.HttpsError("not-found", "Gift Story not found.");
+  }
+  return require("./gift-story-fixture-db").fixtureDb(rawDb, giftId);
+}
+
 exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
   const giftId = text(data.giftRequestId);
+  const db = await videoDownloadDb(getFirestore(), giftId);
   const suppliedToken = text(data.token);
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
   const gift = {...(giftSnap.data() || {}), id: giftId};
-  if (!await participantAuthorized(context, gift, suppliedToken)) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
+  if (!await participantAuthorized(context, gift, suppliedToken, db)) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
   const storagePath = text(gift.giftStoryRenderedVideoPath);
   if (!storagePath || gift.giftStoryVideoStatus !== "ready") throw new functions.https.HttpsError("failed-precondition", "Gift Story video is still processing.");
   const expiry = gift.giftStoryVideoExpiresAt && gift.giftStoryVideoExpiresAt.toMillis ? gift.giftStoryVideoExpiresAt.toMillis() : 0;
@@ -1381,6 +1391,9 @@ exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context)
       token: suppliedToken,
       event: "guest_watched_video",
     }).catch((error) => console.error("Gift Story guest video analytics failed", error));
+  }
+  if (db.fixtureMode && !storagePath.startsWith(`runtime-fixtures/gift-video/${giftId}/`)) {
+    throw new functions.https.HttpsError("permission-denied", "TEST media scope required.");
   }
   const [downloadUrl] = await getStorage().bucket().file(storagePath).getSignedUrl({version: "v4", action: "read", expires: Math.min(expiry, Date.now() + 15 * 60 * 1000)});
   return {downloadUrl, mime: gift.giftStoryVideoMime || "video/webm", expiresAt: expiry};
@@ -1573,3 +1586,5 @@ module.exports.campaignRevealMatchDecision = campaignRevealMatchDecision;
 module.exports.buildRevealedCampaignMatchRecord = buildRevealedCampaignMatchRecord;
 module.exports.giftStoryActionIds = giftStoryActionIds;
 module.exports.getSenderGiftStory = exports.getSenderGiftStory;
+
+module.exports.videoDownloadDb = videoDownloadDb;
