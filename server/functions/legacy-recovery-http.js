@@ -7,7 +7,9 @@ const {fixtureDb, isFixtureDeliveryId} = require("./gift-story-fixture-db");
 function parseTick(worker, body, now = Date.now()) {
  const subscription = `projects/circum-2797c/subscriptions/gcf-${worker}-us-central1-firebase-schedule-${worker}-us-central1`;
  const message = body?.message;
- if (body?.subscription !== subscription || !message || message.attributes?.scheduled !== "true" || (message.data != null && message.data !== "") || !/^[A-Za-z0-9_-]{1,128}$/.test(message.messageId || "") || !Number.isFinite(Date.parse(message.publishTime)) || Date.parse(message.publishTime) > now + 60000) throw Object.assign(new Error("invalid_scheduler_tick"), {statusCode: 400});
+ const qaTick = worker === "expireQaLifecycleFixtures" || worker === "expireQaSpecialFlowFixtures";
+ const payloadValid = qaTick ? message?.data === "e30=" && message.attributes?.scheduled == null : message?.attributes?.scheduled === "true" && (message.data == null || message.data === "");
+ if (body?.subscription !== subscription || !message || !payloadValid || !/^[A-Za-z0-9_-]{1,128}$/.test(message.messageId || "") || !Number.isFinite(Date.parse(message.publishTime)) || Date.parse(message.publishTime) > now + 60000) throw Object.assign(new Error("invalid_scheduler_tick"), {statusCode: 400});
  return {messageId: message.messageId, publishTime: message.publishTime, ageSeconds: Math.max(0, Math.floor((now - Date.parse(message.publishTime)) / 1000))};
 }
 async function processTick({db, worker, tick, now = Date.now(), run}) {
