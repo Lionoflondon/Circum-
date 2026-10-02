@@ -169,7 +169,9 @@ test("Rider payout readiness is backend authoritative", () => {
   assert.equal(typeof computeRiderPayoutReadiness, "function");
   assert.match(source, /function riderPayoutReadiness\(\)/);
   assert.match(source, /computeRiderPayoutReadiness\(riderId\)/);
-  assert.match(index, /exports\.riderPayoutReadiness = riderConnect\.riderPayoutReadiness\(\);/);
+  assert.match(index, /exports\.riderPayoutReadiness = riderBackendCompat\.createCompat\("riderPayoutReadiness"\);/);
+  const owner = fs.readFileSync("cloud-run-rider-finance-handlers.js", "utf8");
+  assert.match(owner, /riderPayoutReadiness: rider\.riderPayoutReadiness\(\)/);
   assert.match(source, /payoutReadinessStatus/);
   assert.match(source, /payoutReadinessChecks/);
 });

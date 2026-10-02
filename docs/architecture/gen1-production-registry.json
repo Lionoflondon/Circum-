@@ -52,6 +52,7 @@
     "server/functions/referrals.js",
     "server/functions/rider-account.js",
     "server/functions/rider-app-check.js",
+    "server/functions/rider-backend-compat.js",
     "server/functions/rider-cancellation.js",
     "server/functions/rider-connect.js",
     "server/functions/rider-document-chunks.js",
@@ -1033,14 +1034,16 @@
     },
     {
       "functionName": "adminReviewRiderWithdrawal",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.adminReviewRiderWithdrawal()",
+      "productionPurpose": "riderBackendCompat.createCompat(\"adminReviewRiderWithdrawal\")",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js",
         "test/admin_operations_test.dart",
         "test/admin_rider_payout_live_caller_test.dart"
@@ -1048,33 +1051,16 @@
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -2654,45 +2640,30 @@
     },
     {
       "functionName": "cancelRiderWithdrawal",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.cancelRiderWithdrawal()",
+      "productionPurpose": "riderBackendCompat.createCompat(\"cancelRiderWithdrawal\")",
       "callers": [
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-withdrawal-cancel.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -2928,11 +2899,11 @@
     },
     {
       "functionName": "completeDelivery",
-      "sourceFile": "server/functions/index.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "require(\"./delivery-completion-reconciled\").completeDelivery",
+      "productionPurpose": "riderBackendCompat.createCompat(\"completeDelivery\")",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "lib/website/shared/rider_delivery_authority_api.dart",
@@ -2947,10 +2918,7 @@
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
-      ],
+      "secrets": [],
       "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
@@ -3528,16 +3496,19 @@
     },
     {
       "functionName": "createRiderTransferOrPayout",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.createRiderTransferOrPayout(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"createRiderTransferOrPayout\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-payment-schedulers.test.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-backend-compat.test.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-payout-allocation.emulator.test.js",
         "test/admin_operations_test.dart",
         "test/admin_rider_payout_live_caller_test.dart"
@@ -3545,26 +3516,8 @@
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
@@ -3572,7 +3525,8 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
         "cloud-run-payment-family.js",
-        "cloud-run-payment-schedulers.test.js"
+        "cloud-run-payment-schedulers.test.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -3813,136 +3767,91 @@
     },
     {
       "functionName": "createStripeAccountManagementLink",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.createStripeAccountManagementLink(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"createStripeAccountManagementLink\")",
       "callers": [
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
       "functionName": "createStripeConnectAccountForRider",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.createStripeConnectAccountForRider(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"createStripeConnectAccountForRider\")",
       "callers": [
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
       "functionName": "createStripeOnboardingLink",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.createStripeOnboardingLink(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"createStripeOnboardingLink\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -5312,6 +5221,7 @@
       "callers": [
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/core-payment-amount-security.test.js",
         "server/functions/scoped_functions_deploy_list.test.js"
@@ -5334,6 +5244,7 @@
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js",
         "cloud-run-runtime-only.test.js"
       ],
       "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
@@ -8040,45 +7951,30 @@
     },
     {
       "functionName": "refreshStripeOnboardingLink",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.refreshStripeOnboardingLink(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"refreshStripeOnboardingLink\")",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -8465,48 +8361,34 @@
     },
     {
       "functionName": "requestRiderWithdrawal",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.requestRiderWithdrawal()",
+      "productionPurpose": "riderBackendCompat.createCompat(\"requestRiderWithdrawal\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/firestore-financial-authority-rules.test.js",
+        "server/functions/rider-backend-compat.test.js",
+        "server/functions/rider-connect.js",
         "test/website_rider_payout_live_caller_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -9157,45 +9039,30 @@
     },
     {
       "functionName": "riderPayoutReadiness",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.riderPayoutReadiness()",
+      "productionPurpose": "riderBackendCompat.createCompat(\"riderPayoutReadiness\")",
       "callers": [
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -10223,48 +10090,33 @@
     },
     {
       "functionName": "syncStripeConnectStatus",
-      "sourceFile": "server/functions/rider-connect.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "riderConnect.syncStripeConnectStatus(stripeConnectClient)",
+      "productionPurpose": "riderBackendCompat.createCompat(\"syncStripeConnectStatus\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
+        "server/functions/rider-connect.js",
         "server/functions/rider-connect.test.js",
         "test/admin_operations_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_CONNECT_WEBHOOK_SECRET",
-        "STRIPE_SECRET_KEY"
-      ],
-      "firestoreCollections": [
-        "adminUsers",
-        "bookings",
-        "deliveries",
-        "deliveryRecords",
-        "deliveryRequests",
-        "operationsState",
-        "payoutRequests",
-        "riderDocuments",
-        "riderEarnings",
-        "riderPayoutAudit",
-        "riderProfiles",
-        "riderWalletTransactions",
-        "riders",
-        "stripeConnectWebhookEvents"
-      ],
+      "secrets": [],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-finance-handlers.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
@@ -10457,11 +10309,11 @@
     },
     {
       "functionName": "updateDeliveryTrackingStatus",
-      "sourceFile": "server/functions/delivery-tracking.js",
+      "sourceFile": "server/functions/rider-backend-compat.js",
       "triggerType": "callable",
       "triggerDefinition": {},
       "generation": "Gen 1",
-      "productionPurpose": "deliveryTracking.updateDeliveryTrackingStatus",
+      "productionPurpose": "riderBackendCompat.createCompat(\"updateDeliveryTrackingStatus\")",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "lib/website/shared/rider_delivery_authority_api.dart",
@@ -10473,6 +10325,7 @@
         "server/functions/delivery-completion-reconciled.js",
         "server/functions/delivery-evidence-reconciled.emulator.test.js",
         "server/functions/delivery-lifecycle.emulator.test.js",
+        "server/functions/delivery-tracking.js",
         "server/functions/rider-cancellation.emulator.test.js",
         "test/sender_mobile/ratings_tipping_v2_test.dart",
         "test/website_rider_delivery_authority_api_test.dart"
@@ -10481,18 +10334,7 @@
       "authRequired": true,
       "appCheckRequired": true,
       "secrets": [],
-      "firestoreCollections": [
-        "activeDeliveries",
-        "chats",
-        "deliveryRequests",
-        "deliveryRequestsPrivate",
-        "riderEarningTransactions",
-        "riderEarnings",
-        "riderPresence",
-        "riderProfiles",
-        "riders",
-        "tracking"
-      ],
+      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
