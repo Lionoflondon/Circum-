@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs');
-if (!process.env.FIRESTORE_EMULATOR_HOST) throw Error('Emulator required: no production writes');
-require('firebase-admin/app').initializeApp({projectId:'demo-circum-email'});
+if (!process.env.FIRESTORE_EMULATOR_HOST && process.env.QA_EMAIL_CERTIFICATION !== 'true') throw Error('Explicit private TEST job or emulator required');
+require('firebase-admin/app').initializeApp({projectId:process.env.FIRESTORE_EMULATOR_HOST ? 'demo-circum-email' : 'circum-2797c'});
 const {getFirestore,Timestamp}=require('firebase-admin/firestore');const raw=getFirestore();raw.settings({ignoreUndefinedProperties:true});
 const fid='__codex_email_lifecycle_'+Date.now(),root=raw.collection('giftStoryRuntimeFixtures').doc(fid);
 const db=require('./gift-story-fixture-db').fixtureDb(raw,fid);
@@ -23,5 +23,5 @@ const e={fixture:fid,customerProviderCalls:0,pushCalls:0,steps:[]};
  const queue=await db.collection('emailQueue').get();assert.equal(queue.size,6);let n=0;
  for(const row of queue.docs){const result=await processEmailQueueRecord({db,emailId:row.id,eventId:'consume_'+row.id,apiKey:'not-a-provider-key',fetchImpl:async(_url,o)=>{assert.ok(JSON.parse(o.body).to.every(x=>x.endsWith('@example.test')));n++;return{ok:true,status:200,json:async()=>({id:'00000000-0000-4000-8000-'+String(n).padStart(12,'0')})};}});assert.ok(['sent','suppressed'].includes(result.status));assert.equal((await processEmailQueueRecord({db,emailId:row.id,eventId:'replay_'+row.id,apiKey:'not-a-provider-key',fetchImpl:()=>{throw Error('duplicate provider call')}})).status,'duplicate');}
  e.emailCount=queue.size;e.notifications=(await db.collection('notifications').get()).size;e.simulatedProviderAcceptances=n;e.status='PASS';
- }finally{await raw.recursiveDelete(root);e.cleanup={rootExists:(await root.get()).exists,remainingSubcollections:(await root.listCollections()).length};fs.writeFileSync('/Users/jason/Documents/Codex/2026-10-02/sear/outputs/gifts-isolated-email-lifecycle.json',JSON.stringify(e,null,2));}console.log(JSON.stringify(e,null,2));process.exit(0);
+ }finally{await raw.recursiveDelete(root);e.cleanup={rootExists:(await root.get()).exists,remainingSubcollections:(await root.listCollections()).length};if(process.env.QA_EMAIL_EVIDENCE_PATH) fs.writeFileSync(process.env.QA_EMAIL_EVIDENCE_PATH,JSON.stringify(e,null,2));}console.log(JSON.stringify(e,null,2));process.exit(0);
 })().catch(x=>{console.error(x.message);process.exit(1)});
