@@ -136,3 +136,19 @@ test("an existing cancellation settlement blocks no-show allocation even without
   assert.equal((await db.collection("riderEarningTransactions").get()).size, 0);
   assert.equal((await db.collection("platformSettlementTransactions").get()).size, 0);
 }));
+test("private QA expiry certification reads only the selected fixture and retries actual cleanup safely", () => fixture("qa-expiry", async (db) => {
+  const {fixtureCollection} = require("./qa-expiry-recovery-http");
+  const root = db.collection("qaLifecycleFixtures"); const id = "a".repeat(64); const other = "b".repeat(64);
+  const data = {id, isSyntheticQa: true, testOnly: true, qaCreatedBy: "operator", senderId: "sender", riderId: "rider", expiresAt: Timestamp.fromMillis(1), cleanupDueAt: Timestamp.fromMillis(1), archived: false};
+  await root.doc(id).set(data); await root.doc(other).set({...data, id: other});
+  const scoped = {collection: (name) => name === "qaLifecycleFixtures" ? fixtureCollection(root, id) : db.collection(name), doc: db.doc.bind(db), batch: db.batch.bind(db), runTransaction: db.runTransaction.bind(db)};
+  const env = {GCLOUD_PROJECT: "circum-2797c", STRIPE_MODE: "TEST", QA_LIFECYCLE_ENABLED: "true", QA_LIFECYCLE_ALLOWLIST: JSON.stringify({operators: ["operator"], senders: ["sender"], riders: ["rider"]})};
+  let providerCleanup = 0;
+  const owner = require("./qa-lifecycle")._test.factory({db: scoped, env, providerFactory: () => ({cleanup: async () => {
+providerCleanup++;
+}})});
+  assert.deepEqual(await owner.expire(), {archived: 1}); assert.deepEqual(await owner.expire(), {archived: 0});
+  assert.equal((await root.doc(id).get()).data().archived, true); assert.equal((await root.doc(other).get()).data().archived, false); assert.equal(providerCleanup, 1);
+  assert.throws(() => fixtureCollection(root, id).doc(other), /cross_fixture_access/);
+  await assert.rejects(fixtureCollection(root, id).where("unexpected", "==", true).get(), /unsupported_fixture_query/);
+}));
