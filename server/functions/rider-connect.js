@@ -127,6 +127,7 @@ function stripeTransferIdempotencyKey(requestId) {
 const payoutRecoveryLeaseMs = 5 * 60 * 1000;
 const payoutRecoveryStaleMs = 10 * 60 * 1000;
 const payoutRecoveryMaxPerRun = 25;
+const payoutTransferRetryWindowMs = 23 * 60 * 60 * 1000;
 
 function timestampMillis(value) {
   if (!value) return 0;
@@ -146,7 +147,10 @@ function payoutRecoveryCandidate(record = {}, now = Date.now(), staleMs = payout
   // missing Stripe object is eligible only when the primary path had already
   // begun its transfer attempt.
   if (text(record.stripeTransferId)) return now - Math.max(updated, started) >= staleMs;
-  return record.transferDispatching === true && started > 0 && now - started >= staleMs;
+  // The primary payout authority stops automatic creation after 23 hours.
+  // Recovery must share that fence: provider idempotency keys can expire.
+  return record.transferDispatching === true && started > 0 &&
+    now - started >= staleMs && now - started <= payoutTransferRetryWindowMs;
 }
 
 async function recoverRiderPayoutsCore(stripeOrFactory, {
@@ -1006,7 +1010,7 @@ payoutAllocation.writePayoutLedger(transaction, db, {requestId: requestRef.id, v
       const request = await transaction.get(requestRef);
       if (request.data().tipRefundBlocked === true) throw new functions.https.HttpsError("failed-precondition", "This payout was adjusted by a tip refund. Please create a new request.");
       const priorAttempt = request.data().transferAttemptStartedAt;
-      if (priorAttempt && Date.now() - priorAttempt.toMillis() > 23 * 60 * 60 * 1000 && !request.data().stripeTransferId) {
+      if (priorAttempt && Date.now() - priorAttempt.toMillis() > payoutTransferRetryWindowMs && !request.data().stripeTransferId) {
         throw new functions.https.HttpsError("failed-precondition", "This transfer needs provider reconciliation before retry.");
       }
       transaction.set(requestRef, {transferDispatching: true, transferAttemptStartedAt: priorAttempt || FieldValue.serverTimestamp()}, {merge: true});

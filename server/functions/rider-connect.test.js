@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  payoutRecoveryCandidate,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
   stripeConnectAccountIdempotencyKey,
@@ -288,4 +289,12 @@ test("authoritative zero payout share and customer total never fall back to lega
   assert.equal(value.totalCustomerPaid, 0);
   assert.equal(value.riderNetPayout, 0);
   assert.equal(value.adminReviewRequired, true);
+});
+
+test("recovery shares the primary 23-hour retry fence while known transfers remain safe to reconcile", () => {
+  const now = Date.now();
+  const record = {status: "reserved", fundsReserved: true, transferDispatching: true, transferAttemptStartedAt: new Date(now - 24 * 60 * 60 * 1000), updatedAt: new Date(now - 24 * 60 * 60 * 1000)};
+  assert.equal(payoutRecoveryCandidate(record, now), false);
+  assert.equal(payoutRecoveryCandidate({...record, stripeTransferId: "tr_known"}, now), true);
+  assert.equal(payoutRecoveryCandidate({...record, transferAttemptStartedAt: new Date(now - 22 * 60 * 60 * 1000)}, now), true);
 });

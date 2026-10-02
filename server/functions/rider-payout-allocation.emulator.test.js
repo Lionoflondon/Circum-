@@ -129,6 +129,11 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
     status: "reserved", payoutStatus: "reserved", fundsReserved: true, transferDispatching: true,
     transferAttemptStartedAt: stale, updatedAt: stale,
   });
+  await db.doc("payoutRequests/recover-expired-key").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 7,
+    status: "reserved", fundsReserved: true, transferDispatching: true,
+    transferAttemptStartedAt: new Date(now - 24 * 60 * 60 * 1000), updatedAt: stale,
+  });
   const keys = [];
   const stripe = {transfers: {
     retrieve: async (id) => ({id}),
@@ -139,6 +144,8 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
   await Promise.all(Array.from({length: 20}, () => recoverRiderPayoutsCore(stripe, {db, now})));
   assert.equal(keys.length, 1);
   assert.deepEqual(keys, ["rider_payout_transfer_recover-concurrent"]);
+  assert.equal((await db.doc("payoutRequests/recover-expired-key").get()).data().stripeTransferId, undefined);
+  assert.equal((await db.doc("payoutRequests/recover-expired-key").get()).data().fundsReserved, true);
   const recovered = (await db.doc("payoutRequests/recover-concurrent").get()).data();
   assert.equal(recovered.stripeTransferId, "tr_concurrent");
   assert.equal(recovered.transferDispatching, false);
