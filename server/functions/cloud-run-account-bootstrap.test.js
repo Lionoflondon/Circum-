@@ -356,3 +356,35 @@ for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSende
     });
   });
 }
+
+for (const name of ["getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"]) {
+  test(`${name} accepts the installed SDK's no-argument data:null envelope`, async () => {
+    const deps = dependencies();
+    await withServer(deps.factory, async (base) => {
+      const headers = {authorization: "Bearer valid", "content-type": "application/json", "x-firebase-appcheck": "app"};
+      const response = await fetch(`${base}/${name}`, {method: "POST", headers, body: JSON.stringify({data: null})});
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {result: {ok: true, name}});
+      assert.deepEqual(deps.calls[0].data, {});
+      assert.equal(deps.calls[0].context.auth.uid, "user-1");
+      const missing = await fetch(`${base}/${name}`, {method: "POST", headers, body: "{}"});
+      assert.equal(missing.status, 400);
+      const unauthenticated = await fetch(`${base}/${name}`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: null})});
+      assert.equal(unauthenticated.status, 401);
+      assert.equal(deps.calls.length, 1);
+    });
+  });
+}
+
+test("no-argument read compatibility does not change mutation envelope validation", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+    for (const name of ["updateSenderPreferences", "revokeSenderSessions"]) {
+      const response = await fetch(`${base}/${name}`, {
+        method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: null}),
+      });
+      assert.equal(response.status, 400);
+    }
+    assert.equal(deps.calls.length, 0);
+  });
+});

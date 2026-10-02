@@ -158,11 +158,16 @@ function createServer(options = {}) {
         }
         if (!allowRequest(`${uid}:${name}`)) throw callableError("resource-exhausted", "Too many account requests. Try again shortly.");
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-        if (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
+        // Firebase's installed callable SDK sends data:null for call() with no arguments.
+        const data = payload && payload.data;
+        const noArguments = data === null &&
+          ["getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"].includes(name);
+        if (!payload || Array.isArray(payload) || !Object.hasOwn(payload, "data") ||
+          (!noArguments && (!data || typeof data !== "object" || Array.isArray(data)))) {
           throw callableError("invalid-argument", "Callable request must contain data.");
         }
         const context = {auth: {uid, token: decoded}, app, rawRequest: request};
-        const result = await operation.handler.run(payload.data, context);
+        const result = await operation.handler.run(noArguments ? {} : data, context);
         console.info("account_bootstrap_success", {
           operation: name,
           correlationId,
