@@ -17,10 +17,15 @@ function writeJson(response, status, body) {
 }
 
 function documentIdentity(headers, decoded) {
-  const raw = String(headers["ce-document"] || headers["ce-subject"] || decoded.documentName || "");
+  const raw = String(decoded.documentName || headers["ce-document"] || headers["ce-subject"] || "");
   const path = (raw.split("/documents/")[1] || raw.replace(/^documents\//, "")).replace(/^\//, "");
   const match = /^(deliveryRequests|giftRequests|prescriptionPickups)\/([A-Za-z0-9_-]{1,256})$/.exec(path);
   return match && {collection: match[1], id: match[2]};
+}
+
+function needsRetry(result) {
+  if (!result || typeof result !== "object") return false;
+  return String(result.status || "").toLowerCase() === "review" || result.needsReview === true || Object.values(result).some((value) => value && typeof value === "object" && needsRetry(value));
 }
 
 function createServer(options = {}) {
@@ -30,6 +35,7 @@ function createServer(options = {}) {
     if (request.method === "GET" && request.url === "/health") return writeJson(response, 200, {status: "ok", runtime: "node22", source: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (request.url !== "/v1/events/firestore/referral-completion") return writeJson(response, 404, {error: "not_found"});
     if (request.method !== "POST") return writeJson(response, 405, {error: "method_not_allowed"});
+    if (request.headers["ce-source"] !== "//firestore.googleapis.com/projects/circum-2797c/databases/(default)") return writeJson(response, 400, {error: "invalid_event_source"});
     if (String(request.headers["ce-type"] || "") !== EVENT_TYPE) return writeJson(response, 400, {error: "invalid_event_type"});
     const eventId = String(request.headers["ce-id"] || "").trim();
     if (!eventId || eventId.length > 128) return writeJson(response, 400, {error: "invalid_event_id"});
@@ -43,6 +49,7 @@ function createServer(options = {}) {
       if (size > MAX_EVENT_BODY_BYTES) return writeJson(response, 413, {error: "request_too_large"});
       try {
         const decoded = decodeEventData(Buffer.concat(chunks));
+        if (!String(decoded.documentName || "").startsWith("projects/circum-2797c/databases/(default)/documents/")) return writeJson(response, 400, {error: "invalid_event_source"});
         const identity = documentIdentity(request.headers, decoded);
         if (!identity) return writeJson(response, 400, {error: "invalid_event_document"});
         if (!handlers) handlers = handlersFactory();
@@ -51,6 +58,7 @@ function createServer(options = {}) {
         if (identity.collection === "deliveryRequests") result = await handlers.handleDeliveryCompletedReferral({delivery: decoded.after, deliveryId: identity.id});
         if (identity.collection === "giftRequests") result = await handlers.handleGiftCompletedReferral({giftId: identity.id, senderId: decoded.after.senderId, senderEmail: decoded.after.senderEmail});
         if (identity.collection === "prescriptionPickups") result = await handlers.handleHealthPlusCompletedReferral({pickupId: identity.id, userId: decoded.after.senderId || decoded.after.userId || decoded.after.profileId, email: decoded.after.email});
+        if (needsRetry(result)) return writeJson(response, 503, {error: "referral_review_requires_retry", eventId});
         console.info(JSON.stringify({event: "referral_completion_processed", eventId, collection: identity.collection, documentId: identity.id, outcome: result && result.status || "processed"}));
         return writeJson(response, 200, {outcome: "PROCESSED", eventId});
       } catch (error) {
@@ -63,4 +71,4 @@ function createServer(options = {}) {
 
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
 
-module.exports = {createServer, documentIdentity, productionHandlers, MAX_EVENT_BODY_BYTES};
+module.exports = {createServer, documentIdentity, productionHandlers, MAX_EVENT_BODY_BYTES, needsRetry};
