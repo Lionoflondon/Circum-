@@ -114,3 +114,14 @@ test("already-stale Riders cannot starve later presence pages", () => withDb("pr
  const now = Date.now(); await db.doc("riderPresence/a").set({isOnline: true, lastHeartbeatAt: now - 600000, presenceFreshness: "stale"}); await db.doc("riderPresence/b").set({isOnline: true, lastHeartbeatAt: now - 600000});
  assert.equal((await stalePresence({db, now, limit: 1})).markedStale, 0); assert.equal((await stalePresence({db, now, limit: 1})).markedStale, 1); assert.equal((await db.doc("riderPresence/b").get()).data().presenceFreshness, "stale");
 }));
+
+test("archived deliveries cannot activate, escalate, dispatch or create watchdog incidents", () => withDb("archived", async (db) => {
+ const now = Date.now(); await db.doc("deliveryRequests/scheduled").set({status: "scheduled", productType: "standard", scheduledAt: Timestamp.fromMillis(now - 600000), archived: true});
+ assert.equal((await activateOne(db, "scheduled", now)).activated, false);
+ await db.doc("deliveryRequests/open").set({requestId: "open", senderId: "sender", status: "requested", createdAt: Timestamp.fromMillis(now - 600000), removedFromActiveQueues: true});
+ assert.equal((await escalation({db, now, limit: 20})).escalated, 0);
+ await require("./send-package").dispatchDeliveryRequest({db, requestId: "open", uid: "sender", durableOnly: true});
+ await db.doc("deliveryRequests/accepted").set({status: "accepted", riderId: "rider", staleArchived: true});
+ assert.equal((await watchdogOne(db, "accepted", now)).created, false);
+ assert.equal((await db.collection("notifications").get()).size, 0); assert.equal((await db.collection("deliveryMaintenanceJobs").get()).size, 0); assert.equal((await db.doc("deliveryRequests/open").get()).data().status, "requested");
+}));

@@ -3,7 +3,7 @@
 const {FieldValue, FieldPath, Timestamp} = require("firebase-admin/firestore");
 const {createHash} = require("node:crypto");
 const scheduled = require("./scheduled-delivery-core");
-const {watchdogCondition, INCIDENT_MESSAGES} = require("./delivery-watchdog-policy");
+const {watchdogCondition, INCIDENT_MESSAGES, isArchivedDelivery} = require("./delivery-watchdog-policy");
 const presenceCore = require("./rider-presence-core");
 const {notificationInput, queueNotifications} = require("./delivery-maintenance-notifications");
 const {eventRecord} = require("./delivery-operational-events");
@@ -32,7 +32,7 @@ async function activateOne(db, id, now) {
  const ref = db.collection("deliveryRequests").doc(id);
  return db.runTransaction(async (tx) => {
   const snap = await tx.get(ref); if (!snap.exists) return {activated: false};
-  const delivery = snap.data(); if (normalized(delivery.status || delivery.deliveryStatus) !== "scheduled") return {activated: false};
+  const delivery = snap.data(); if (isArchivedDelivery(delivery) || normalized(delivery.status || delivery.deliveryStatus) !== "scheduled") return {activated: false};
   const plan = scheduled.activationPlan(delivery, now); if (!plan.activate) return {activated: false};
   const riderId = scheduled.assignedRiderId(delivery);
   let presence;
@@ -61,7 +61,7 @@ const r = await activateOne(db, doc.id, now); if (r.activated) result.activated+
  for (const job of jobs.docs) {
   const id = job.data().deliveryId; const ref = db.collection("deliveryRequests").doc(id); const current = await ref.get();
   const row = current.data() || {};
-  if (current.exists && OPEN.includes(normalized(row.status)) && !scheduled.assignedRiderId(row)) {
+  if (current.exists && !isArchivedDelivery(row) && OPEN.includes(normalized(row.status)) && !scheduled.assignedRiderId(row)) {
    await dispatchDeliveryRequest({db, requestId: row.requestId || id, uid: row.senderId || row.userId || row.customerId, source: "activateDueScheduledDeliveries", durableOnly: true});
   }
   await job.ref.set({state: "completed", completedAt: FieldValue.serverTimestamp()}, {merge: true}); result.dispatchRecovered++;
@@ -74,13 +74,13 @@ async function escalation({db, now, limit}) {
  const result = {scanned: p.docs.length, escalated: 0};
  let candidates = null;
  for (const doc of p.docs) {
-  const initial = doc.data(); const stage = platform.escalationStage(initial, now);
+  const initial = doc.data(); if (isArchivedDelivery(initial)) continue; const stage = platform.escalationStage(initial, now);
   if (!stage || Number(initial.notificationEscalationStage || 0) >= stage) continue;
   if (stage !== 5 && !candidates) candidates = await platform.onlineCandidateRiderRecords(db);
   const changed = await db.runTransaction(async (tx) => {
    const fresh = await tx.get(doc.ref); if (!fresh.exists) return false; const d = fresh.data();
    const currentStage = platform.escalationStage(d, now);
-   if (currentStage !== stage || !OPEN.includes(normalized(d.status)) || scheduled.assignedRiderId(d) || !currentStage || Number(d.notificationEscalationStage || 0) >= currentStage) return false;
+   if (isArchivedDelivery(d) || currentStage !== stage || !OPEN.includes(normalized(d.status)) || scheduled.assignedRiderId(d) || !currentStage || Number(d.notificationEscalationStage || 0) >= currentStage) return false;
    const inputs = [];
    if (currentStage === 5) inputs.push(notificationInput({key: `delivery_escalation:${doc.id}:5:admin`, recipientRole: "admin", type: "unclaimed_delivery", title: "Unclaimed delivery", body: "A delivery remains unclaimed after five minutes.", deliveryId: doc.id}));
    else {

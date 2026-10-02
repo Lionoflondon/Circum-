@@ -67,7 +67,7 @@ async function sourceIsStale(db, row) {
   if (!delivery.exists) return true;
   const current = delivery.data() || {};
   const status = clean(current.status || current.deliveryStatus || current.deliveryState).toLowerCase();
-  return !OPEN_DELIVERY_STATUSES.has(status) || Boolean(current.riderId || current.driverId ||
+  return require("./delivery-watchdog-policy").isArchivedDelivery(current) || !OPEN_DELIVERY_STATUSES.has(status) || Boolean(current.riderId || current.driverId ||
     current.assignedRiderId || current.assignedDriverId);
 }
 

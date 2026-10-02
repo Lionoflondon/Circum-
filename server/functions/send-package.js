@@ -5,6 +5,7 @@ const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, rider
 const {hasAdminClaim} = require("./admin-auth");
 const {timing, start: startLatency} = require("./latency-observability");
 const communicationEngine = require("./communication-engine");
+const {isArchivedDelivery} = require("./delivery-watchdog-policy");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -41,6 +42,7 @@ async function dispatchDeliveryRequest({
     );
   }
 
+  if (isArchivedDelivery(deliveryRequest[0])) return {message: "Delivery is archived", requestId, idempotent: true};
   const currentDispatchStatus = `${deliveryRequest[0].dispatchStatus || ""}`.toLowerCase();
   const currentMatchingStatus = `${deliveryRequest[0].matchingStatus || ""}`.toLowerCase();
   if (
@@ -243,7 +245,7 @@ async function dispatchDeliveryRequest({
     const ref = db.collection("deliveryRequests").doc(deliveryRequest[0].id);
     const latest = await tx.get(ref);
     const current = latest.data() || {};
-    if (!latest.exists || !["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"].includes(`${current.status || current.deliveryStatus || ""}`.toLowerCase()) || current.riderId || current.assignedRiderId || current.driverId || current.assignedDriverId) return;
+    if (!latest.exists || isArchivedDelivery(current) || !["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"].includes(`${current.status || current.deliveryStatus || ""}`.toLowerCase()) || current.riderId || current.assignedRiderId || current.driverId || current.assignedDriverId) return;
     if (!dispatchComplianceDecision(current).dispatchable) return;
     let matchedRiderIds = closestRiders.map((rider) => rider.id);
     if (durableOnly) {
