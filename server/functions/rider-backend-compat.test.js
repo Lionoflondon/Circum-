@@ -33,8 +33,8 @@ calls++; throw new Error("timeout");
 }});
   await assert.rejects(unavailable.run({requestId: "stable"}, context), {code: "unavailable"});
   assert.equal(calls, 1);
-  const duplicate = createCompat("requestRiderWithdrawal", {fetchImpl: async () => ({ok: false, json: async () => ({error: {status: "ALREADY_EXISTS", message: "Pending withdrawal"}})})});
-  await assert.rejects(duplicate.run({}, context), {code: "already-exists"});
+  const duplicate = createCompat("requestRiderWithdrawal", {fetchImpl: async () => ({ok: false, json: async () => ({error: {status: "ALREADY_EXISTS", message: "Pending withdrawal", details: {requestId: "stable"}}})})});
+  await assert.rejects(duplicate.run({}, context), {code: "already-exists", details: {requestId: "stable"}});
 });
 test("standalone Rider owners construct real handlers without loading compatibility exports", () => {
   const {createHandlers} = require("./cloud-run-rider-finance-handlers");

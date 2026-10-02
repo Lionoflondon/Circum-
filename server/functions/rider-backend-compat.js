@@ -38,7 +38,7 @@ function createCompat(operation, {fetchImpl = fetch} = {}) {
     }
     if (body.error) {
       const code = String(body.error.status || "internal").toLowerCase().replace(/_/g, "-");
-      throw new functions.https.HttpsError(ERROR_CODES.has(code) ? code : "internal", body.error.message || "Rider backend request failed.");
+      throw new functions.https.HttpsError(ERROR_CODES.has(code) ? code : "internal", body.error.message || "Rider backend request failed.", body.error.details);
     }
     if (!Object.prototype.hasOwnProperty.call(body, "result")) throw new functions.https.HttpsError("internal", "Rider backend returned an invalid confirmation.");
     return body.result;
