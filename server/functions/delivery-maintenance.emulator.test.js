@@ -128,3 +128,18 @@ test("archived deliveries cannot activate, escalate, dispatch or create watchdog
  assert.equal((await watchdogOne(db, "accepted", now)).created, false);
  assert.equal((await db.collection("notifications").get()).size, 0); assert.equal((await db.collection("deliveryMaintenanceJobs").get()).size, 0); assert.equal((await db.doc("deliveryRequests/open").get()).data().status, "requested");
 }));
+
+test("pending Rider settlement cursor continues beyond 100 unresolved deliveries", () => withDb("settlement-cursor", async (db) => {
+  const batch = db.batch();
+  for (let i = 0; i < 101; i++) batch.set(db.collection("deliveryRequests").doc(`pending_${String(i).padStart(3, "0")}`), {status: "settlement_pending", settlementStatus: "pending_authority"});
+  await batch.commit();
+  const run = require("./delivery-tracking")._private.reconcilePendingDeliverySettlementsCore;
+  const first = await run(db);
+  const second = await run(db);
+  assert.equal(first.scanned, 100);
+  assert.equal(second.scanned, 1);
+  assert.equal(second.results[0].deliveryId, "pending_100");
+  assert.equal(second.results[0].status, "pending_authority");
+  assert.equal((await db.collection("riderEarningTransactions").get()).size, 0);
+  assert.equal((await db.collection("operationsState").doc("rider_pending_delivery_settlements").get()).data().cursor, null);
+}));

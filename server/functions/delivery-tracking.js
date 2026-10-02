@@ -6,7 +6,7 @@ const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
 const {start: startLatency} = require("./latency-observability");
 const qaPublic = require("./qa-public-delivery");
-const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 const evidenceAuthority = require("./delivery-evidence")._private;
 
@@ -905,14 +905,24 @@ async function reconcileSettlementPendingDelivery(db, deliveryId) {
 }
 
 async function reconcilePendingDeliverySettlementsCore(db = getFirestore()) {
-  const snapshot = await db.collection("deliveryRequests")
+  const stateRef = db.collection("operationsState").doc("rider_pending_delivery_settlements");
+  const cursor = (await stateRef.get()).data()?.cursor || null;
+  const query = db.collection("deliveryRequests")
       .where("settlementStatus", "==", "pending_authority")
-      .limit(100)
-      .get();
+      .orderBy(FieldPath.documentId()).limit(100);
+  let snapshot = await (cursor ? query.startAfter(cursor) : query).get();
+  if (snapshot.empty && cursor) snapshot = await query.get();
   const results = [];
   for (const document of snapshot.docs) {
     results.push(await reconcileSettlementPendingDelivery(db, document.id));
   }
+  await db.runTransaction(async (transaction) => {
+    const current = (await transaction.get(stateRef)).data()?.cursor || null;
+    if (current === cursor) transaction.set(stateRef, {
+      cursor: snapshot.size === 100 ? snapshot.docs[snapshot.size - 1].id : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
   return {scanned: snapshot.size, results};
 }
 
