@@ -4511,6 +4511,8 @@
       "callers": [
         "server/functions/QA-LIFECYCLE.md",
         "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/private-qa-cleanup-certifier.js",
+        "server/functions/private-qa-cleanup-certifier.test.js",
         "server/functions/qa-expiry-recovery-http.js"
       ],
       "criticality": "review-required",
@@ -4558,6 +4560,7 @@
       "callers": [
         "docs/qa/private-special-flow-fixture.md",
         "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/private-qa-cleanup-certifier.js",
         "server/functions/qa-expiry-recovery-http.js"
       ],
       "criticality": "review-required",

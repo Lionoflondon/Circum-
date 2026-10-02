@@ -89,6 +89,7 @@ async function readJson(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (require("./private-qa-cleanup-certifier").handle(req, res)) return;
   if (require("./legacy-recovery-http").handleRecovery(req, res, {
     workers: Object.keys(require("./legacy-scheduled-recovery").CONFIG).filter((name) => !name.startsWith("expireQa")),
     stripe: stripeClient,
