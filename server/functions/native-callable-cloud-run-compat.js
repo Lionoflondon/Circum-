@@ -3,9 +3,15 @@
 
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const ENDPOINTS = Object.freeze({
+  getSenderAccountActivity: "https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app/getSenderAccountActivity",
+  exportSenderData: "https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app/exportSenderData",
+  updateSenderPreferences: "https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app/updateSenderPreferences",
+  revokeSenderSessions: "https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app/revokeSenderSessions",
+
   verifyRiderAccountAccess: "https://circum-account-bootstrap-j2b7cicfwq-uc.a.run.app/verifyRiderAccountAccess",
   createBusinessGiftOrder: "https://circum-business-invoice-payments-j2b7cicfwq-uc.a.run.app/createBusinessGiftOrder",
 });
+const APP_CHECK_REQUIRED = new Set(["verifyRiderAccountAccess", "createBusinessGiftOrder"]);
 const CODES = new Set(["cancelled", "unknown", "invalid-argument", "deadline-exceeded", "not-found", "already-exists", "permission-denied", "resource-exhausted", "failed-precondition", "aborted", "out-of-range", "unimplemented", "internal", "unavailable", "data-loss", "unauthenticated"]);
 
 function createProxy(name, fetchImpl = fetch) {
@@ -13,17 +19,17 @@ function createProxy(name, fetchImpl = fetch) {
   if (!endpoint) throw new Error("Unsupported compatibility operation.");
   return async (request) => {
     if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
-    if (!request.app) throw new HttpsError("failed-precondition", "Security verification is required.");
+    if (APP_CHECK_REQUIRED.has(name) && !request.app) throw new HttpsError("failed-precondition", "Security verification is required.");
     const headers = request.rawRequest && request.rawRequest.headers || {};
     const authorization = headers.authorization;
     const appCheck = headers["x-firebase-appcheck"];
     if (typeof authorization !== "string" || !/^Bearer\s+\S+$/.test(authorization)) throw new HttpsError("unauthenticated", "Sign in to continue.");
-    if (typeof appCheck !== "string" || !appCheck.trim()) throw new HttpsError("failed-precondition", "Security verification is required.");
+    if (APP_CHECK_REQUIRED.has(name) && (typeof appCheck !== "string" || !appCheck.trim())) throw new HttpsError("failed-precondition", "Security verification is required.");
     let response;
     try {
       response = await fetchImpl(endpoint, {
         method: "POST",
-        headers: {authorization, "x-firebase-appcheck": appCheck, "content-type": "application/json"},
+        headers: {authorization, ...(typeof appCheck === "string" && appCheck.trim() ? {"x-firebase-appcheck": appCheck} : {}), "content-type": "application/json"},
         body: JSON.stringify({data: request.data || {}}),
         signal: AbortSignal.timeout(55000),
       });
@@ -49,5 +55,12 @@ function createProxy(name, fetchImpl = fetch) {
 const options = {region: "us-central1", enforceAppCheck: true, timeoutSeconds: 60, memory: "256MiB", maxInstances: 1};
 exports.verifyRiderAccountAccess = onCall(options, createProxy("verifyRiderAccountAccess"));
 exports.createBusinessGiftOrder = onCall(options, createProxy("createBusinessGiftOrder"));
+
+exports.getSenderAccountActivity = onCall({...options, enforceAppCheck: false}, createProxy("getSenderAccountActivity"));
+exports.exportSenderData = onCall({...options, enforceAppCheck: false}, createProxy("exportSenderData"));
+exports.updateSenderPreferences = onCall({...options, enforceAppCheck: false}, createProxy("updateSenderPreferences"));
+exports.revokeSenderSessions = onCall({...options, enforceAppCheck: false}, createProxy("revokeSenderSessions"));
 exports.createProxy = createProxy;
 exports.ENDPOINTS = ENDPOINTS;
+
+exports.APP_CHECK_REQUIRED = APP_CHECK_REQUIRED;
