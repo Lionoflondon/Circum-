@@ -1,11 +1,16 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
 const {createHash} = require("node:crypto");
-const {FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {FieldValue, Timestamp, FieldPath} = require("firebase-admin/firestore");
 const {cleanupRef} = require("./gift-media-cleanup-authority");
 const {parseGiftVoiceStoragePath} = require("./gift-voice-media");
 async function cleanupVoice({db, bucket, now = Date.now(), limit = 20}) {
-  const candidates = await db.collection("giftPaymentDrafts").where("createdAt", "<=", Timestamp.fromMillis(now - 86400000)).where("paymentStatus", "in", ["payment_pending", "checkout_pending"]).limit(limit).get();
+  const scanRef = db.collection("giftVoiceCleanupScans").doc("current");
+  const cursor = (await scanRef.get()).data() || {};
+  let query = db.collection("giftPaymentDrafts").where("createdAt", "<=", Timestamp.fromMillis(now - 86400000)).where("paymentStatus", "in", ["payment_pending", "checkout_pending"])
+      .orderBy("createdAt").orderBy(FieldPath.documentId());
+  if (cursor.lastCreatedAt?.toMillis && typeof cursor.lastDraftId === "string" && cursor.lastDraftId && !cursor.lastDraftId.includes("/")) query = query.startAfter(cursor.lastCreatedAt, cursor.lastDraftId);
+  const candidates = await query.limit(limit).get();
   const result = {scanned: candidates.size, detached: 0, deleted: 0, reviewRequired: 0};
   for (const doc of candidates.docs) {
     const status = await db.runTransaction(async (tx) => {
@@ -36,6 +41,13 @@ async function cleanupVoice({db, bucket, now = Date.now(), limit = 20}) {
     await bucket.file(data.path).delete({ignoreNotFound: true});
     await job.ref.set({state: "completed", completedAt: FieldValue.serverTimestamp()}, {merge: true}); result.deleted++;
   }
+  // Reviewed legacy/reserved drafts remain untouched, but cannot permanently
+  // occupy the first page. Advance only after every retirement job succeeds;
+  // a crash before this point repeats the same idempotent page.
+  const last = candidates.docs[candidates.size - 1];
+  await scanRef.set(candidates.size === limit && last ? {
+    lastCreatedAt: last.data().createdAt, lastDraftId: last.id, updatedAt: FieldValue.serverTimestamp(),
+  } : {lastCreatedAt: null, lastDraftId: null, updatedAt: FieldValue.serverTimestamp()});
   return result;
 }
 module.exports = {cleanupVoice};

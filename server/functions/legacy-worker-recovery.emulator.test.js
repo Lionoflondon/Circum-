@@ -152,3 +152,38 @@ providerCleanup++;
   assert.throws(() => fixtureCollection(root, id).doc(other), /cross_fixture_access/);
   await assert.rejects(fixtureCollection(root, id).where("unexpected", "==", true).get(), /unsupported_fixture_query/);
 }));
+
+test("review-only legacy voice drafts cannot starve later safe drafts across scheduled scans", () => fixture("voice-pagination", async (db) => {
+  const now = Date.now();
+  const legacyPath = "gift_requests/sender_1/voice/original.webm";
+  for (let i = 0; i < 21; i++) {
+    await db.doc(`giftPaymentDrafts/legacy_${i}`).set({createdAt: Timestamp.fromMillis(now - 3 * 86400000), paymentStatus: "payment_pending", voiceNote: {storagePath: legacyPath}});
+  }
+  const safePath = "gift_requests/sender_2/voice/original.webm";
+  await db.doc("giftPaymentDrafts/safe").set({createdAt: Timestamp.fromMillis(now - 2 * 86400000), paymentStatus: "payment_pending", giftCheckoutProtocol: 1, voiceNote: {storagePath: safePath}});
+  const deleted = [];
+  const bucket = {file: (path) => ({delete: async () => deleted.push(path)})};
+  for (let i = 0; i < 5; i++) await runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket, now, limit: 5});
+  assert.deepEqual(deleted, [safePath]);
+  assert.equal((await db.doc("giftPaymentDrafts/safe").get()).data().voiceNote, undefined);
+  for (let i = 0; i < 21; i++) assert.equal((await db.doc(`giftPaymentDrafts/legacy_${i}`).get()).data().voiceNote.storagePath, legacyPath);
+  await runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket, now, limit: 5});
+  assert.deepEqual(deleted, [safePath]);
+}));
+
+test("a failed voice object deletion cannot advance the scan cursor past its retirement job", () => fixture("voice-cursor-crash", async (db) => {
+  const now = Date.now();
+  const path = "gift_requests/sender_3/voice/original.webm";
+  await db.doc("giftPaymentDrafts/draft").set({createdAt: Timestamp.fromMillis(now - 2 * 86400000), paymentStatus: "payment_pending", giftCheckoutProtocol: 1, voiceNote: {storagePath: path}});
+  await assert.rejects(runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket: {file: () => ({delete: async () => {
+    throw new Error("storage unavailable");
+  }})}, now, limit: 1}), /storage unavailable/);
+  assert.equal((await db.doc("giftVoiceCleanupScans/current").get()).exists, false);
+  const deleted = [];
+  const bucket = {file: (value) => ({delete: async () => deleted.push(value)})};
+  await runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket, now, limit: 1});
+  assert.deepEqual(deleted, [path]);
+  assert.equal((await db.doc("giftVoiceCleanupScans/current").get()).data().lastDraftId, "draft");
+  await runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket, now, limit: 1});
+  assert.deepEqual(deleted, [path]);
+}));
