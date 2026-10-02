@@ -91,6 +91,8 @@ function moduleExportMap() {
 const names = [...source.matchAll(/exports\.([A-Za-z0-9_]+)/g)]
     .map((match) => match[1]);
 const unique = [...new Set(names)];
+const runtimeOnly = new Set([...source.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*cloudRunOnly\(/g)]
+    .map((match) => match[1]));
 
 if (unique.length !== names.length) {
   const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
@@ -146,6 +148,9 @@ for (const file of impacted) {
 if (changed.includes("server/functions/index.js")) {
   for (const name of addedIndexExports(base)) affected.add(name);
 }
+
+// Detached endpoints retain runtime handlers but cannot be redeployed as Functions.
+for (const name of runtimeOnly) affected.delete(name);
 
 if (affected.size === 0) {
   if (!allowEmpty) {

@@ -29,3 +29,11 @@ test("a UI-only change produces no Functions deployment", () => {
 test("no backend diff produces no Functions deployment", () => {
   assert.deepEqual(names(["--files", ""]), []);
 });
+
+test("runtime declaration changes exclude detached Cloud Run endpoints", () => {
+  const result = names(["--files", "server/functions/package.json"]);
+  assert.ok(result.includes("ensureSenderAccount"));
+  for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "createBusinessGiftOrder"]) {
+    assert.ok(!result.includes(name));
+  }
+});

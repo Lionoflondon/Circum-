@@ -3091,6 +3091,7 @@
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "test/sender_mobile/business_gift_flow_contract_test.dart"
       ],
       "criticality": "review-required",
@@ -4428,6 +4429,7 @@
         "server/functions/cloud-run-sender-drafts.test.js",
         "server/functions/firestore-sender-bootstrap-rules.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
         "test/sender_account_bootstrap_api_test.dart",
@@ -4637,6 +4639,7 @@
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -5315,6 +5318,7 @@
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -9069,6 +9073,7 @@
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -10907,6 +10912,7 @@
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
