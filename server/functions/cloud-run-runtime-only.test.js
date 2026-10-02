@@ -18,7 +18,7 @@ test("runtime-only handler preserves context, results and failures without deplo
   await assert.rejects(wrapped.run({fail: true}, context), (error) => error === failure);
   assert.equal(wrapped.__endpoint, undefined);
   assert.equal(wrapped.__trigger, undefined);
-  assert.deepEqual(wrapped._cloudRunOnly, {owner: "existing-owner", appCheckRequired: true});
+  assert.deepEqual(wrapped._cloudRunOnly, {owner: "existing-owner", triggerType: "callable", appCheckRequired: true});
   assert.ok(Object.isFrozen(wrapped));
   assert.throws(() => cloudRunOnly({}, "existing-owner"), TypeError);
 });

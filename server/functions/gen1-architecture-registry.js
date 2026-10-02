@@ -32,7 +32,7 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
   const name = match[1];
   const expression = match[2].replace(/\s+/g, " ").trim();
   const runtimeOnly = loadedExports[name] && loadedExports[name]._cloudRunOnly;
-  const ownerExpression = runtimeOnly ? expression.replace(/^cloudRunOnly\(/, "").replace(/, "[^"]+"(?:, true)?\)$/, "") : expression;
+  const ownerExpression = runtimeOnly ? expression.replace(/^cloudRunOnly\(/, "").replace(/, "[^"]+"(?:, (?:true|false))?(?:, "(?:schedule|callable|http)")?\)$/, "").trim() : expression;
   const owner = /^(\w+)\./.exec(ownerExpression);
   const bareOwner = /^(\w+)$/.exec(ownerExpression);
   const sourceFile = owner && imports.get(owner[1]) || bareOwner && imports.get(bareOwner[1]) || "index.js";
@@ -44,7 +44,8 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
   const triggerSource = sourceFile === "index.js" ? match[0] : definition && definition[0] || expression;
   const endpoint = loadedExports[name] && loadedExports[name].__endpoint || {};
   let triggerType = "callable";
-  if (endpoint.eventTrigger) triggerType = "firestore-event";
+  if (runtimeOnly && runtimeOnly.triggerType) triggerType = runtimeOnly.triggerType;
+  else if (endpoint.eventTrigger) triggerType = "firestore-event";
   else if (endpoint.scheduleTrigger) triggerType = "schedule";
   else if (endpoint.httpsTrigger && !endpoint.callableTrigger) triggerType = "http";
   else if (/\.firestore\.|\.document\(/.test(triggerSource) && /\.on(?:Create|Update|Write|Delete)\(/.test(triggerSource)) triggerType = "firestore-event";

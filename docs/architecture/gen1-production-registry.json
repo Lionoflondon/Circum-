@@ -4455,37 +4455,40 @@
     },
     {
       "functionName": "escalateUnclaimedDeliveries",
-      "sourceFile": "server/functions/index.js",
-      "triggerType": "callable",
+      "sourceFile": "server/functions/platform-notifications.js",
+      "triggerType": "schedule",
       "triggerDefinition": null,
       "generation": "Cloud Run",
-      "productionPurpose": "cloudRunOnly( platformNotifications.escalateUnclaimedDeliveries, \"circum-notification-retries\")",
+      "productionPurpose": "cloudRunOnly( platformNotifications.escalateUnclaimedDeliveries, \"circum-notification-retries\", false, \"schedule\")",
       "callers": [
         "server/functions/cloud-run-notification-retries.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/delivery-maintenance-core.js",
         "server/functions/delivery-maintenance-http.js",
-        "server/functions/platform-notifications.js",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
       "criticality": "review-required",
-      "authRequired": true,
+      "authRequired": false,
       "appCheckRequired": false,
-      "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "chats",
+        "deliveryRequests",
+        "dispatchInspections",
+        "notifications",
+        "riderPresence",
+        "riderProfiles",
+        "riders"
       ],
-      "firestoreCollections": [],
-      "externalProviders": [
-        "Stripe"
-      ],
+      "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-notification-retries.js",
         "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
       "retirementStatus": "managed-deployment-disabled"
     },
     {
@@ -5079,7 +5082,7 @@
     },
     {
       "functionName": "getGiftStoryVideoDownload",
-      "sourceFile": "server/functions/index.js",
+      "sourceFile": "server/functions/gift-story-automation.js",
       "triggerType": "callable",
       "triggerDefinition": null,
       "generation": "Cloud Run",
@@ -5091,20 +5094,32 @@
         "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-runtime-only.test.js",
-        "server/functions/gift-story-automation.js",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": false,
-      "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+      "secrets": [],
+      "firestoreCollections": [
+        "adminUsers",
+        "auditLogs",
+        "deliveryRequests",
+        "emailQueue",
+        "giftCampaignParticipants",
+        "giftRequests",
+        "giftStories",
+        "giftStoryAccessTokens",
+        "giftStoryAnalytics",
+        "giftStoryCompletionAudit",
+        "giftStoryVaults",
+        "matches",
+        "notifications",
+        "stories",
+        "storyNotifications",
+        "timeline",
+        "users"
       ],
-      "firestoreCollections": [],
-      "externalProviders": [
-        "Stripe"
-      ],
+      "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
@@ -5273,7 +5288,7 @@
     },
     {
       "functionName": "getRiderEarningsSummary",
-      "sourceFile": "server/functions/index.js",
+      "sourceFile": "server/functions/rider-earnings-summary.js",
       "triggerType": "callable",
       "triggerDefinition": null,
       "generation": "Cloud Run",
@@ -5283,17 +5298,18 @@
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/core-payment-amount-security.test.js",
-        "server/functions/rider-earnings-summary.js",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
-      "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+      "secrets": [],
+      "firestoreCollections": [
+        "riderEarnings",
+        "riderEarningsReconciliations",
+        "riderProfiles",
+        "riders"
       ],
-      "firestoreCollections": [],
       "externalProviders": [
         "Stripe"
       ],
@@ -5439,7 +5455,7 @@
     },
     {
       "functionName": "getSenderRothBalance",
-      "sourceFile": "server/functions/index.js",
+      "sourceFile": "server/functions/sender-booking.js",
       "triggerType": "callable",
       "triggerDefinition": null,
       "generation": "Cloud Run",
@@ -5455,17 +5471,32 @@
         "server/functions/health-plus-checkout-security.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/scoped_functions_deploy_list.test.js",
-        "server/functions/sender-booking.js",
         "server/functions/sender-payment-app-check.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": true,
       "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+        "GOOGLE_MAPS_DIRECTIONS_API_KEY",
+        "STRIPE_SECRET_KEY"
       ],
-      "firestoreCollections": [],
+      "firestoreCollections": [
+        "businessAccounts",
+        "deliveryRequests",
+        "deliveryRequestsPrivate",
+        "dispatchInspections",
+        "qaSpecialFlowFixtures",
+        "senderBookingDrafts",
+        "senderBookingQuotes",
+        "senderDeliveryIdempotency",
+        "senderPaymentRecords",
+        "senderPaymentSessions",
+        "senderPaymentWalletDebits",
+        "senderWallets",
+        "users",
+        "walletTransactions",
+        "wallets"
+      ],
       "externalProviders": [
         "Stripe"
       ],
@@ -6192,37 +6223,38 @@
     },
     {
       "functionName": "markStaleRiderPresenceOffline",
-      "sourceFile": "server/functions/index.js",
-      "triggerType": "callable",
+      "sourceFile": "server/functions/rider-presence.js",
+      "triggerType": "schedule",
       "triggerDefinition": null,
       "generation": "Cloud Run",
-      "productionPurpose": "cloudRunOnly( riderPresence.markStaleRiderPresenceOffline, \"circum-rider-availability-worker\")",
+      "productionPurpose": "cloudRunOnly( riderPresence.markStaleRiderPresenceOffline, \"circum-rider-availability-worker\", false, \"schedule\")",
       "callers": [
         "server/functions/cloud-run-rider-availability-server.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/delivery-maintenance-core.js",
         "server/functions/delivery-maintenance-http.js",
-        "server/functions/rider-presence.js",
         "server/functions/scoped_functions_deploy_list.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": false,
-      "secrets": [
-        "STRIPE_SECRET_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+      "secrets": [],
+      "firestoreCollections": [
+        "deliveryRequests",
+        "riderOperationalAudit",
+        "riderPresence",
+        "riderProfiles",
+        "riders",
+        "tracking"
       ],
-      "firestoreCollections": [],
-      "externalProviders": [
-        "Stripe"
-      ],
+      "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-rider-availability-server.js",
         "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
       "retirementStatus": "managed-deployment-disabled"
     },
     {
