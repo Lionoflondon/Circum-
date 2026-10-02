@@ -31,12 +31,14 @@ const imports = new Map([...indexSource.matchAll(/const\s+(\w+)\s*=\s*require\("
 const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\S]*?);/g)].map((match) => {
   const name = match[1];
   const expression = match[2].replace(/\s+/g, " ").trim();
-  const owner = /^(\w+)\./.exec(expression);
-  const bareOwner = /^(\w+)$/.exec(expression);
+  const runtimeOnly = loadedExports[name] && loadedExports[name]._cloudRunOnly;
+  const ownerExpression = runtimeOnly ? expression.replace(/^cloudRunOnly\(/, "").replace(/, "[^"]+"(?:, true)?\)$/, "") : expression;
+  const owner = /^(\w+)\./.exec(ownerExpression);
+  const bareOwner = /^(\w+)$/.exec(ownerExpression);
   const sourceFile = owner && imports.get(owner[1]) || bareOwner && imports.get(bareOwner[1]) || "index.js";
   const sourcePath = path.join(__dirname, sourceFile);
   const source = textByFile.get(sourcePath) || indexSource;
-  const member = owner && /^(?:\w+)\.([A-Za-z0-9_]+)/.exec(expression);
+  const member = owner && /^(?:\w+)\.([A-Za-z0-9_]+)/.exec(ownerExpression);
   const definitionPattern = member ? new RegExp(`exports\\.${member[1]}\\s*=[\\s\\S]{0,900}?(?=\\nexports\\.|$)`) : null;
   const definition = definitionPattern && definitionPattern.exec(source);
   const triggerSource = sourceFile === "index.js" ? match[0] : definition && definition[0] || expression;
@@ -60,8 +62,8 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
     ...(endpoint.secretEnvironmentVariables || []).map((item) => item.key),
   ])].sort();
   const replacements = findCloudRunReplacements(name, files, textByFile);
-  const generation = endpoint.platform === "gcfv2" ? "Gen 2" : "Gen 1";
-  const migrationStatus = generation === "Gen 2" || replacements.length ? "ALREADY MIGRATED — CUT OVER REMAINING CALLERS" : triggerType === "firestore-event" ? "REPLACE WITH CLOUD RUN + EVENTARC" : triggerType === "schedule" ? "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER" : ["RetrieveCardDetails", "calculateEarnings", "endTrip"].includes(name) ? "RETIRE — no legitimate production dependency" : "MIGRATE TO CLOUD RUN";
+  const generation = runtimeOnly ? "Cloud Run" : endpoint.platform === "gcfv2" ? "Gen 2" : "Gen 1";
+  const migrationStatus = runtimeOnly ? "CLOUD RUN ONLY — LEGACY URL RETAINED" : generation === "Gen 2" || replacements.length ? "ALREADY MIGRATED — CUT OVER REMAINING CALLERS" : triggerType === "firestore-event" ? "REPLACE WITH CLOUD RUN + EVENTARC" : triggerType === "schedule" ? "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER" : ["RetrieveCardDetails", "calculateEarnings", "endTrip"].includes(name) ? "RETIRE — no legitimate production dependency" : "MIGRATE TO CLOUD RUN";
   const scannedCallers = callers.sort();
   return {
     functionName: name,
@@ -73,15 +75,15 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
     callers: productionCallers(name, scannedCallers),
     criticality: /ensure|auth|account|delivery|payment|stripe|dispatch|tracking|complete|settle|notification|message|online|offline/i.test(name) ? "P0/P1-review-required" : "review-required",
     authRequired: /context\.auth|verifyIdToken|require[A-Z]/.test(source),
-    appCheckRequired: ["adminResolveAccess", "adminSaveGiftRequestEditor"].includes(name) || /app.?check|enforceAppCheck/i.test(source),
+    appCheckRequired: runtimeOnly ? runtimeOnly.appCheckRequired : ["adminResolveAccess", "adminSaveGiftRequestEditor"].includes(name) || /app.?check|enforceAppCheck/i.test(source),
     secrets,
     firestoreCollections: collections,
     externalProviders: /stripe/i.test(source) ? ["Stripe"] : [],
     idempotencyProtectionDetected: /idempoten|eventId|requestId|transaction|already[- ](?:exists|processed)|processedEvents/i.test(source),
-    currentProductionRuntime: generation === "Gen 2" ? "Firebase Functions Gen 2 (Cloud Run managed) export" : "Firebase Functions Gen 1 export",
+    currentProductionRuntime: runtimeOnly ? "Runtime-only Cloud Run handler export; managed deployment disabled" : generation === "Gen 2" ? "Firebase Functions Gen 2 (Cloud Run managed) export" : "Firebase Functions Gen 1 export",
     cloudRunReplacement: replacements,
     migrationStatus,
-    retirementStatus: migrationStatus.startsWith("RETIRE") ? "candidate" : "not-retired",
+    retirementStatus: runtimeOnly ? "managed-deployment-disabled" : migrationStatus.startsWith("RETIRE") ? "candidate" : "not-retired",
   };
 }).sort((a, b) => a.functionName.localeCompare(b.functionName));
 

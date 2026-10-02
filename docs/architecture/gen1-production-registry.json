@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 281,
+  "gen1ExportCount": 276,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -3078,9 +3078,9 @@
       "functionName": "createBusinessGiftOrder",
       "sourceFile": "server/functions/business-gifts.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessGifts.createBusinessGiftOrder(stripe)",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessGifts.createBusinessGiftOrder(stripe), \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/business/business_gift_view.dart",
         "lib/app/business/business_repository.dart",
@@ -3088,8 +3088,10 @@
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "test/sender_mobile/business_gift_flow_contract_test.dart"
       ],
       "criticality": "review-required",
@@ -3108,14 +3110,15 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-native-callable-proxy.test.js",
-        "cloud-run-payment-family.js"
+        "cloud-run-payment-family.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "createBusinessInvoiceCheckout",
@@ -4422,9 +4425,11 @@
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-replacement-registry.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/cloud-run-sender-drafts.test.js",
         "server/functions/firestore-sender-bootstrap-rules.test.js",
         "server/functions/firestore-starter-roth-rules.test.js",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "server/functions/sender-account.js",
         "test/sender_account_bootstrap_api_test.dart",
@@ -4624,15 +4629,17 @@
       "functionName": "exportSenderData",
       "sourceFile": "server/functions/sender-account.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "senderAccount.exportSenderData",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(senderAccount.exportSenderData, \"circum-account-bootstrap\")",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -4654,14 +4661,15 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
-        "cloud-run-native-callable-proxy.js"
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "finalizeDeliveryAdjustmentPayment",
@@ -5300,15 +5308,17 @@
       "functionName": "getSenderAccountActivity",
       "sourceFile": "server/functions/sender-account.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "senderAccount.getSenderAccountActivity",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(senderAccount.getSenderAccountActivity, \"circum-account-bootstrap\")",
       "callers": [
         "lib/app/sender_mobile/sender_account_data.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -5330,14 +5340,15 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
-        "cloud-run-native-callable-proxy.js"
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "getSenderGiftStory",
@@ -9052,15 +9063,17 @@
       "functionName": "revokeSenderSessions",
       "sourceFile": "server/functions/sender-account.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "senderAccount.revokeSenderSessions",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(senderAccount.revokeSenderSessions, \"circum-account-bootstrap\")",
       "callers": [
         "lib/app/sender_mobile/sender_mobile_profile.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -9082,14 +9095,15 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
-        "cloud-run-native-callable-proxy.js"
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "riderPayoutReadiness",
@@ -10888,15 +10902,17 @@
       "functionName": "updateSenderPreferences",
       "sourceFile": "server/functions/sender-account.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "senderAccount.updateSenderPreferences",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(senderAccount.updateSenderPreferences, \"circum-account-bootstrap\")",
       "callers": [
         "lib/app/sender_mobile/sender_profile_preferences.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/scoped_functions_deploy_list.test.js",
         "server/functions/sender-account-authority.test.js",
         "test/sender_mobile/sender_mobile_profile_test.dart"
       ],
@@ -10918,14 +10934,15 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
-        "cloud-run-native-callable-proxy.js"
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "updateSenderProfile",

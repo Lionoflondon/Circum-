@@ -77,6 +77,7 @@ const senderFinance = require("./sender-finance");
 const {senderPaymentCallable} = require("./sender-app-check");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
+const {cloudRunOnly} = require("./cloud-run-runtime-only");
 const accountBootstrapCompat = require("./account-bootstrap-compat");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
@@ -254,7 +255,7 @@ exports.adminCreateBusinessInvoice =
   businessPayments.adminCreateBusinessInvoice;
 exports.createBusinessInvoiceCheckout =
   businessPayments.createBusinessInvoiceCheckout(stripe);
-exports.createBusinessGiftOrder = businessGifts.createBusinessGiftOrder(stripe);
+exports.createBusinessGiftOrder = cloudRunOnly(businessGifts.createBusinessGiftOrder(stripe), "circum-business-invoice-payments", true);
 exports.cancelBusinessInvoiceCheckout = businessPayments.cancelBusinessInvoiceCheckout(stripe);
 exports.createBusinessAccount = businessAccess.createBusinessAccount;
 exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
@@ -449,10 +450,10 @@ exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateSenderProfile = senderAccount.updateSenderProfile;
 exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
-exports.updateSenderPreferences = senderAccount.updateSenderPreferences;
-exports.revokeSenderSessions = senderAccount.revokeSenderSessions;
-exports.getSenderAccountActivity = senderAccount.getSenderAccountActivity;
-exports.exportSenderData = senderAccount.exportSenderData;
+exports.updateSenderPreferences = cloudRunOnly(senderAccount.updateSenderPreferences, "circum-account-bootstrap");
+exports.revokeSenderSessions = cloudRunOnly(senderAccount.revokeSenderSessions, "circum-account-bootstrap");
+exports.getSenderAccountActivity = cloudRunOnly(senderAccount.getSenderAccountActivity, "circum-account-bootstrap");
+exports.exportSenderData = cloudRunOnly(senderAccount.exportSenderData, "circum-account-bootstrap");
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =
   senderAccount.updateSenderNotificationState;
