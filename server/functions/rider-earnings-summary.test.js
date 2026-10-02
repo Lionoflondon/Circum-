@@ -69,5 +69,5 @@ test("Rider earnings reconciliation is audited and does not mutate balances", ()
   assert.doesNotMatch(source, /availableBalance:\s*FieldValue\.increment/);
   assert.doesNotMatch(source, /availableBalance:\s*result\.calculatedAvailable/);
   assert.match(index, /exports\.adminReconcileRiderEarnings = riderEarningsSummary\.adminReconcileRiderEarnings\(\);/);
-  assert.match(index, /exports\.scheduledRiderEarningsReconciliation = riderEarningsSummary\.scheduledRiderEarningsReconciliation;/);
+  assert.match(index, /exports\.scheduledRiderEarningsReconciliation = cloudRunOnly\(riderEarningsSummary\.scheduledRiderEarningsReconciliation, "circum-payment-schedulers", false, "schedule"\);/);
 });

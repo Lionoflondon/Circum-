@@ -89,10 +89,19 @@ async function readJson(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (require("./legacy-recovery-http").handleRecovery(req, res, {
+    workers: Object.keys(require("./legacy-scheduled-recovery").CONFIG).filter((name) => !name.startsWith("expireQa")),
+    stripe: stripeClient,
+    bucket: () => require("firebase-admin/storage").getStorage().bucket("circum-2797c.appspot.com"),
+    fixtureStripe: () => ({paymentIntents: {retrieve: async () => {
+throw new Error("fixture_provider_read_not_configured");
+}}}),
+    fixtureBucket: (db) => ({file: (path) => ({delete: async () => db.collection("fixtureStorageOperations").doc(require("node:crypto").createHash("sha256").update(path).digest("hex")).set({path, deleted: true})})}),
+  })) return;
   const path = new URL(req.url, "http://localhost").pathname;
-  if (req.method === "GET" && path === "/healthz") {
+  if (req.method === "GET" && ["/health", "/healthz"].includes(path)) {
     res.writeHead(200, {"content-type": "application/json"});
-    res.end(JSON.stringify({ok: true, service: "payment-schedulers"}));
+    res.end(JSON.stringify({ok: true, service: "payment-schedulers", sourceSha: process.env.CIRCUM_SOURCE_SHA || process.env.SOURCE_SHA || "unknown"}));
     return;
   }
   let name = path.slice(1);

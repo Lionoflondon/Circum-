@@ -1,0 +1,5 @@
+FROM us-central1-docker.pkg.dev/circum-2797c/circum-services/payment-schedulers@sha256:144c3906ee9736c0dacbdbf2a1a77ea28c382a076d17444b73f70c63deed3207
+ARG CIRCUM_SOURCE_SHA=unknown
+ENV CIRCUM_SOURCE_SHA=$CIRCUM_SOURCE_SHA
+WORKDIR /srv/app
+COPY server/functions/cloud-run-payment-schedulers.js server/functions/legacy-recovery-http.js server/functions/legacy-scheduled-recovery.js server/functions/legacy-no-show-policy.js server/functions/legacy-no-show-settlement.js server/functions/stale-lock-recovery.js server/functions/gift-story-cleanup-recovery.js server/functions/gift-voice-cleanup-recovery.js server/functions/health-recurring-recovery.js server/functions/gift-story-fixture-db.js ./

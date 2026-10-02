@@ -113,6 +113,7 @@ function createServer(options = {}) {
   const dependenciesFactory = options.dependenciesFactory || productionDependencies;
   let dependencies;
   return http.createServer((request, response) => {
+    if (require("./qa-expiry-recovery-http").handleQaRecovery(request, response)) return;
     if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) {
       return writeJson(response, 200, {
         status: "ok", runtime: "node22", service: "circum-qa-special-flow",

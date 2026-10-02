@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 270,
+  "gen1ExportCount": 262,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -2722,20 +2722,13 @@
       "functionName": "cleanupExpiredGiftStories",
       "sourceFile": "server/functions/gift-story-automation.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 60 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "giftStoryAutomation.cleanupExpiredGiftStories",
-      "callers": [],
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(giftStoryAutomation.cleanupExpiredGiftStories, \"circum-payment-schedulers\", false, \"schedule\")",
+      "callers": [
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/legacy-worker-recovery.emulator.test.js"
+      ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": false,
@@ -2762,35 +2755,27 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "cleanupExpiredGiftVoiceDrafts",
       "sourceFile": "server/functions/gifts-payment.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 24 hours",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "giftsPayment.cleanupExpiredGiftVoiceDrafts",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(giftsPayment.cleanupExpiredGiftVoiceDrafts, \"circum-payment-schedulers\", false, \"schedule\")",
       "callers": [
         "server/functions/gift-voice-media.js",
-        "server/functions/gifts-payment-finalization-contract.test.js"
+        "server/functions/gifts-payment-finalization-contract.test.js",
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/legacy-worker-recovery.emulator.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [
         "STRIPE_SECRET_KEY"
       ],
@@ -2810,32 +2795,24 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "cleanupExpiredSenderDrafts",
       "sourceFile": "server/functions/sender-booking.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 24 hours",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "senderBooking.cleanupExpiredSenderDrafts",
-      "callers": [],
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(senderBooking.cleanupExpiredSenderDrafts, \"circum-payment-schedulers\", false, \"schedule\")",
+      "callers": [
+        "server/functions/legacy-scheduled-recovery.js"
+      ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [
         "GOOGLE_MAPS_DIRECTIONS_API_KEY",
         "STRIPE_SECRET_KEY"
@@ -2861,10 +2838,10 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "cleanupRiderDocumentChunks",
@@ -4527,25 +4504,17 @@
       "functionName": "expireQaLifecycleFixtures",
       "sourceFile": "server/functions/qa-lifecycle.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 15 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "qaLifecycle.scheduled()",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(qaLifecycle.scheduled(), \"circum-qa-special-flow\", false, \"schedule\")",
       "callers": [
-        "server/functions/QA-LIFECYCLE.md"
+        "server/functions/QA-LIFECYCLE.md",
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/qa-expiry-recovery-http.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [],
       "firestoreCollections": [
         "activeDeliveries",
@@ -4573,34 +4542,26 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "expireQaSpecialFlowFixtures",
       "sourceFile": "server/functions/qa-special-flow.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 10 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "qaSpecialFlow.scheduled()",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(qaSpecialFlow.scheduled(), \"circum-qa-special-flow\", false, \"schedule\")",
       "callers": [
-        "docs/qa/private-special-flow-fixture.md"
+        "docs/qa/private-special-flow-fixture.md",
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/qa-expiry-recovery-http.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [
         "CIRCUM_QA_STRIPE_SECRET_KEY",
         "GOOGLE_MAPS_DIRECTIONS_API_KEY"
@@ -4624,10 +4585,10 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "exportSenderData",
@@ -4880,20 +4841,14 @@
       "functionName": "generateHealthPlusRecurringBookings",
       "sourceFile": "server/functions/health-plus-operations.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every day 01:30",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": "Europe/London"
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "healthPlusOperations.generateHealthPlusRecurringBookings",
-      "callers": [],
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(healthPlusOperations.generateHealthPlusRecurringBookings, \"circum-payment-schedulers\", false, \"schedule\")",
+      "callers": [
+        "server/functions/health-recurring-recovery.js",
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/legacy-worker-recovery.emulator.test.js"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -4910,10 +4865,10 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "getAvailableRequests",
@@ -7512,20 +7467,13 @@
       "functionName": "reconcileStaleDeliveryLocks",
       "sourceFile": "server/functions/stale-delivery.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 15 minutes",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": "Europe/London"
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "staleDelivery.reconcileStaleDeliveryLocks",
-      "callers": [],
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(staleDelivery.reconcileStaleDeliveryLocks, \"circum-payment-schedulers\", false, \"schedule\")",
+      "callers": [
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/legacy-worker-recovery.emulator.test.js"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": false,
@@ -7540,10 +7488,10 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "recordArrivalZoneCheck",
@@ -9351,25 +9299,16 @@
       "functionName": "scheduledRiderEarningsReconciliation",
       "sourceFile": "server/functions/rider-earnings-summary.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 24 hours",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": null
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "riderEarningsSummary.scheduledRiderEarningsReconciliation",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(riderEarningsSummary.scheduledRiderEarningsReconciliation, \"circum-payment-schedulers\", false, \"schedule\")",
       "callers": [
+        "server/functions/legacy-scheduled-recovery.js",
         "server/functions/rider-earnings-summary.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [],
       "firestoreCollections": [
         "riderEarnings",
@@ -9381,10 +9320,10 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "scheduledRiderStripeStatusSync",

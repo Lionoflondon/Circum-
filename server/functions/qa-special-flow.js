@@ -847,6 +847,7 @@ if (doc.data().expiresAt.toMillis() <= Date.now()) {
 results.push(await cleanup(doc.data()));
 } catch (error) {
 console.error("QA cleanup remains pending", {fixtureId: doc.id, message: error.message});
+throw error;
 }
     }
 }
