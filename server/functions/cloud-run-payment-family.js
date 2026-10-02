@@ -15,6 +15,14 @@ const FAMILY_ROUTES = Object.freeze({
   ],
   gifts: [
     "getGiftStoryVideoDownload",
+    "getSenderGiftStory",
+    "getGiftStoryActionState",
+    "acknowledgeGiftStory",
+    "saveGiftStoryToVault",
+    "giftStoryLanding",
+    "recordGiftStoryGuestEvent",
+    "resolveGiftStoryAccess",
+    "createGiftStoryVideoUpload",
     "finalizeGiftStoryVideoUpload",
     "createGiftPayment",
     "finalizeGiftPayment",
@@ -48,6 +56,8 @@ const FAMILY_ROUTES = Object.freeze({
 });
 
 function addExpressCompatibility(req, res) {
+  req.path = new URL(req.url || "/", "http://localhost").pathname;
+  req.query = Object.fromEntries(new URL(req.url || "/", "http://localhost").searchParams);
   req.header = (name) => req.headers[String(name).toLowerCase()];
   req.get = req.header;
   res.status = (code) => {
@@ -89,11 +99,11 @@ function createPaymentFamilyServer({family, handlers}) {
         ...(path === "/health" ? {sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"} : {}),
       });
     }
-    const handlerName = path.slice(1);
+    const handlerName = path.startsWith("/giftStoryLanding/") ? "giftStoryLanding" : path.slice(1);
     if (!routeNames.includes(handlerName)) {
       return res.status(404).send({error: "not_found"});
     }
-    if (req.method !== "POST" && req.method !== "OPTIONS") {
+    if (req.method !== "POST" && req.method !== "OPTIONS" && !(handlerName === "giftStoryLanding" && ["GET", "HEAD"].includes(req.method))) {
       return res.status(405).send({error: "method_not_allowed"});
     }
     const chunks = [];

@@ -77,7 +77,7 @@ const senderFinance = require("./sender-finance");
 const {senderPaymentCallable} = require("./sender-app-check");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
-const {cloudRunOnly} = require("./cloud-run-runtime-only");
+const {cloudRunOnly, cloudRunHttpOnly} = require("./cloud-run-runtime-only");
 const accountBootstrapCompat = require("./account-bootstrap-compat");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
@@ -145,14 +145,14 @@ exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
 exports.escalateUnclaimedDeliveries = cloudRunOnly(
     platformNotifications.escalateUnclaimedDeliveries, "circum-notification-retries", false, "schedule");
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
-exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
+exports.createGiftPayment = cloudRunOnly(giftsPayment.createGiftPayment(stripe), "circum-gift-payments", true);
 const giftRecurringCallables = giftRecurring.createGiftRecurringCallables(stripe);
 exports.cancelGiftRecurring = giftRecurringCallables.cancel;
 exports.getGiftRecurringStatus = giftRecurringCallables.status;
 exports.getGiftRecurringPreview = giftRecurringCallables.preview;
 exports.createGiftRecurringBillingPortalSession = giftRecurringCallables.portal;
 exports.reconcileGiftRecurringRenewals = giftRecurring.reconcileGiftRecurringRenewals(stripe);
-exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.finalizeGiftPayment = cloudRunOnly(giftsPayment.finalizeGiftPayment(stripe), "circum-gift-payments", true);
 exports.cancelGiftPayment = giftsPayment.cancelGiftPayment(stripe);
 exports.cleanupExpiredGiftVoiceDrafts = cloudRunOnly(giftsPayment.cleanupExpiredGiftVoiceDrafts, "circum-payment-schedulers", false, "schedule");
 exports.onGiftRequestVoiceMediaDeleted =
@@ -225,7 +225,7 @@ exports.executeRothGrantCampaign = rothGrantCampaigns.executeRothGrantCampaign;
 exports.reconcileRothGrantCampaign = rothGrantCampaigns.reconcileRothGrantCampaign;
 exports.cancelRothGrantCampaign = rothGrantCampaigns.cancelRothGrantCampaign;
 exports.debitRothCredit = rothLedger.debitRothCredit;
-exports.redeemGiftCard = rothLedger.redeemGiftCard;
+exports.redeemGiftCard = cloudRunOnly(rothLedger.redeemGiftCard, "circum-account-bootstrap", true);
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
@@ -234,7 +234,7 @@ exports.getSenderWallet = rothLedger.getSenderWallet;
 exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
 exports.completeSenderWalletOnboarding =
   rothLedger.completeSenderWalletOnboarding;
-exports.requestSenderWalletDebit = rothLedger.requestSenderWalletDebit;
+exports.requestSenderWalletDebit = cloudRunOnly(rothLedger.requestSenderWalletDebit, "circum-account-bootstrap", true);
 exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
 exports.reportRating = ratingsTipping.reportRating;
 exports.confirmRiderIrisAssessment =
@@ -357,7 +357,7 @@ exports.redactLegacyPayoutBankFields =
   riderConnect.redactLegacyPayoutBankFields();
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
-exports.ensureReferralCode = referrals.ensureReferralCode;
+exports.ensureReferralCode = cloudRunOnly(referrals.ensureReferralCode, "circum-referral-callables", false);
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted =
@@ -370,30 +370,27 @@ exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite =
   movementLedger.onHealthPaymentMovementWrite;
-exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
-exports.onDeliveryLiveLocationWrite =
-  movementTimeline.onDeliveryLiveLocationWrite;
+exports.onMovementTimelineWrite = cloudRunOnly(movementTimeline.onMovementTimelineWrite, "circum-gift-movement", false, "firestore");
+exports.onDeliveryLiveLocationWrite = cloudRunOnly(movementTimeline.onDeliveryLiveLocationWrite, "circum-gift-movement", false, "firestore");
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
 exports.onDeliveryCompletedEvent = deliveryCompletedEvent.onDeliveryCompletedEvent;
-exports.getSenderGiftStory = giftStoryAutomation.getSenderGiftStory;
-exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
+exports.getSenderGiftStory = cloudRunOnly(giftStoryAutomation.getSenderGiftStory, "circum-gift-payments", false);
+exports.resolveGiftStoryAccess = cloudRunOnly(giftStoryAutomation.resolveGiftStoryAccess, "circum-gift-payments", false);
 exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;
-exports.recordGiftStoryGuestEvent =
-  giftStoryAutomation.recordGiftStoryGuestEvent;
+exports.recordGiftStoryGuestEvent = cloudRunHttpOnly(giftStoryAutomation.recordGiftStoryGuestEvent, "circum-gift-payments");
 exports.updateGiftStoryPrivacy = giftStoryAutomation.updateGiftStoryPrivacy;
 exports.retryGiftStoryAutomation = giftStoryAutomation.retryGiftStoryAutomation;
 exports.manageGiftStoryAccess = giftStoryAutomation.manageGiftStoryAccess;
-exports.createGiftStoryVideoUpload =
-  giftStoryAutomation.createGiftStoryVideoUpload;
+exports.createGiftStoryVideoUpload = cloudRunOnly(giftStoryAutomation.createGiftStoryVideoUpload, "circum-gift-payments", false);
 exports.finalizeGiftStoryVideoUpload = cloudRunOnly(
     giftStoryAutomation.finalizeGiftStoryVideoUpload, "circum-gift-payments");
 exports.getGiftStoryVideoDownload = cloudRunOnly(
     giftStoryAutomation.getGiftStoryVideoDownload, "circum-gift-payments");
-exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
+exports.giftStoryLanding = cloudRunHttpOnly(giftStoryAutomation.giftStoryLanding, "circum-gift-payments");
 exports.submitGiftStoryThankYou = giftStoryAutomation.submitGiftStoryThankYou;
-exports.acknowledgeGiftStory = giftStoryAutomation.acknowledgeGiftStory;
-exports.saveGiftStoryToVault = giftStoryAutomation.saveGiftStoryToVault;
-exports.getGiftStoryActionState = giftStoryAutomation.getGiftStoryActionState;
+exports.acknowledgeGiftStory = cloudRunOnly(giftStoryAutomation.acknowledgeGiftStory, "circum-gift-payments", false);
+exports.saveGiftStoryToVault = cloudRunOnly(giftStoryAutomation.saveGiftStoryToVault, "circum-gift-payments", false);
+exports.getGiftStoryActionState = cloudRunOnly(giftStoryAutomation.getGiftStoryActionState, "circum-gift-payments", false);
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
 exports.cleanupExpiredGiftStories = cloudRunOnly(giftStoryAutomation.cleanupExpiredGiftStories, "circum-payment-schedulers", false, "schedule");
 exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation(stripe);
@@ -403,10 +400,10 @@ exports.reconcilePendingSenderCancellations =
 exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
 exports.recordCustomerArrivalResponse =
   deliveryPolicy.recordCustomerArrivalResponse;
-exports.goOnline = riderPresence.goOnline;
+exports.goOnline = cloudRunOnly(riderPresence.goOnline, "circum-rider-delivery-authority", true);
 exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
-exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
+exports.onDeliveryPresenceWrite = cloudRunOnly(riderPresence.onDeliveryPresenceWrite, "circum-rider-availability-worker", false, "firestore");
 exports.markStaleRiderPresenceOffline = cloudRunOnly(
     riderPresence.markStaleRiderPresenceOffline, "circum-rider-availability-worker", false, "schedule");
 exports.searchFreeUkAddresses = addressPlacesCompat.searchFreeUkAddresses;
@@ -423,7 +420,7 @@ exports.getSenderPaymentMode = cloudRunOnly(senderPaymentCallable((_data, contex
   }
   return {mode: getStripeRuntimeConfig().mode};
 }), "circum-sender-delivery-payments", true);
-exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
+exports.createSenderBookingQuote = cloudRunOnly(senderBooking.createSenderBookingQuote, "circum-sender-booking-quotes", true);
 exports.createSenderPaymentSession =
   senderBooking.createSenderPaymentSession(stripe);
 exports.createSenderPaidDelivery =
@@ -436,13 +433,10 @@ exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
 exports.cleanupExpiredSenderDrafts = cloudRunOnly(senderBooking.cleanupExpiredSenderDrafts, "circum-payment-schedulers", false, "schedule");
 exports.listSenderPaymentMethods =
   senderFinance.listSenderPaymentMethods(stripe);
-exports.createSenderSetupIntent = senderFinance.createSenderSetupIntent(stripe);
-exports.detachSenderPaymentMethod =
-  senderFinance.detachSenderPaymentMethod(stripe);
-exports.setDefaultSenderPaymentMethod =
-  senderFinance.setDefaultSenderPaymentMethod(stripe);
-exports.saveSenderCheckoutPreference =
-  senderFinance.saveSenderCheckoutPreference;
+exports.createSenderSetupIntent = cloudRunOnly(senderFinance.createSenderSetupIntent(stripe), "circum-account-bootstrap", true);
+exports.detachSenderPaymentMethod = cloudRunOnly(senderFinance.detachSenderPaymentMethod(stripe), "circum-account-bootstrap", true);
+exports.setDefaultSenderPaymentMethod = cloudRunOnly(senderFinance.setDefaultSenderPaymentMethod(stripe), "circum-account-bootstrap", true);
+exports.saveSenderCheckoutPreference = cloudRunOnly(senderFinance.saveSenderCheckoutPreference, "circum-account-bootstrap", true);
 exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
 exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;

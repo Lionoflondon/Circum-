@@ -64,7 +64,7 @@ const functions = [...indexSource.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([\s\
   ])].sort();
   const replacements = findCloudRunReplacements(name, files, textByFile);
   const generation = runtimeOnly ? "Cloud Run" : endpoint.platform === "gcfv2" ? "Gen 2" : "Gen 1";
-  const migrationStatus = runtimeOnly ? (triggerType === "schedule" ? "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED" : "CLOUD RUN ONLY — LEGACY URL RETAINED") : generation === "Gen 2" || replacements.length ? "ALREADY MIGRATED — CUT OVER REMAINING CALLERS" : triggerType === "firestore-event" ? "REPLACE WITH CLOUD RUN + EVENTARC" : triggerType === "schedule" ? "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER" : ["RetrieveCardDetails", "calculateEarnings", "endTrip"].includes(name) ? "RETIRE — no legitimate production dependency" : "MIGRATE TO CLOUD RUN";
+  const migrationStatus = runtimeOnly ? (triggerType === "schedule" ? "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED" : triggerType === "firestore" ? "CLOUD RUN ONLY — EXISTING EVENTARC" : "CLOUD RUN ONLY — LEGACY URL RETAINED") : generation === "Gen 2" || replacements.length ? "ALREADY MIGRATED — CUT OVER REMAINING CALLERS" : triggerType === "firestore-event" ? "REPLACE WITH CLOUD RUN + EVENTARC" : triggerType === "schedule" ? "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER" : ["RetrieveCardDetails", "calculateEarnings", "endTrip"].includes(name) ? "RETIRE — no legitimate production dependency" : "MIGRATE TO CLOUD RUN";
   const scannedCallers = callers.sort();
   return {
     functionName: name,

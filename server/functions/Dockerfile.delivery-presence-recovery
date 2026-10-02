@@ -1,0 +1,5 @@
+FROM us-central1-docker.pkg.dev/circum-2797c/circum-services/delivery-maintenance@sha256:0bd98c54927ae6ce56476b2ffccf9d22d7a515dc323c80c6e6ed5b87e998d97e
+ARG CIRCUM_SOURCE_SHA=unknown
+ENV CIRCUM_SOURCE_SHA=$CIRCUM_SOURCE_SHA
+WORKDIR /app
+COPY server/functions/cloud-run-rider-availability-server.js server/functions/delivery-write-recovery.js server/functions/delivery-write-recovery-http.js server/functions/movement-timeline.js server/functions/rider-presence-core.js server/functions/gift-story-fixture-db.js ./

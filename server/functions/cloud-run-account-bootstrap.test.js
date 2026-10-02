@@ -33,6 +33,7 @@ function dependencies(overrides = {}) {
       verifyIdToken: async () => ({uid: "user-1", email: "safe@example.invalid"}),
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
+        ...Object.fromEntries(["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"].map((name) => [name, handler(name)])),
         getSenderAccountActivity: {...handler("getSenderAccountActivity"), appCheckRequired: false},
         exportSenderData: {...handler("exportSenderData"), appCheckRequired: false},
         updateSenderPreferences: {...handler("updateSenderPreferences"), appCheckRequired: false},
@@ -63,6 +64,24 @@ test("routes only the supported account operations", () => {
   assert.equal(routeName("/submitRiderApplication"), "submitRiderApplication");
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
+
+for (const name of ["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"]) {
+  test(`${name} preserves Auth and App Check before delegating financial logic`, async () => {
+    const deps = dependencies();
+    await withServer(deps.factory, async (base) => {
+      for (const headers of [{}, {authorization: "Bearer auth"}]) {
+        const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", ...headers}, body: JSON.stringify({data: {fixture: true}})});
+        assert.equal(response.status, headers.authorization ? 400 : 401);
+        assert.equal(deps.calls.length, 0);
+      }
+      const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", authorization: "Bearer auth", "x-firebase-appcheck": "valid"}, body: JSON.stringify({data: {fixture: true}})});
+      assert.equal(response.status, 200);
+      assert.equal(deps.calls.length, 1);
+      assert.equal(deps.calls[0].name, name);
+      assert.equal(deps.calls[0].context.auth.uid, "user-1");
+    });
+  });
+}
 
 test("rejects unauthenticated callers", async () => {
   const deps = dependencies();

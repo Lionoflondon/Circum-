@@ -1,0 +1,5 @@
+FROM us-central1-docker.pkg.dev/circum-2797c/circum-services/gift-movement@sha256:a413281433114687a2addf07ab904d452d28709147220c83acc4bf2219356242
+ARG CIRCUM_SOURCE_SHA=unknown
+ENV SOURCE_SHA=$CIRCUM_SOURCE_SHA CIRCUM_SOURCE_SHA=$CIRCUM_SOURCE_SHA
+WORKDIR /srv/app
+COPY server/functions/cloud-run-gift-movement.js server/functions/delivery-write-recovery.js server/functions/delivery-write-recovery-http.js server/functions/movement-timeline.js server/functions/rider-presence-core.js server/functions/gift-story-fixture-db.js ./

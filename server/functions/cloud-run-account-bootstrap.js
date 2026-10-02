@@ -16,6 +16,12 @@ const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
+  createSenderSetupIntent: {handler: null, appCheckRequired: true},
+  detachSenderPaymentMethod: {handler: null, appCheckRequired: true},
+  setDefaultSenderPaymentMethod: {handler: null, appCheckRequired: true},
+  saveSenderCheckoutPreference: {handler: senderFinance.saveSenderCheckoutPreference, appCheckRequired: true},
+  requestSenderWalletDebit: {handler: rothLedger.requestSenderWalletDebit, appCheckRequired: true},
+  redeemGiftCard: {handler: rothLedger.redeemGiftCard, appCheckRequired: true},
   getSenderAccountActivity: {handler: senderAccount.getSenderAccountActivity, appCheckRequired: false},
   exportSenderData: {handler: senderAccount.exportSenderData, appCheckRequired: false},
   updateSenderPreferences: {handler: senderAccount.updateSenderPreferences, appCheckRequired: false},
@@ -58,7 +64,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -84,6 +90,9 @@ function productionDependencies() {
     verifyAppCheck: (token) => getAppCheck().verifyToken(token),
     operations: {
       ...OPERATIONS,
+      createSenderSetupIntent: {handler: senderFinance.createSenderSetupIntent(stripe), appCheckRequired: true},
+      detachSenderPaymentMethod: {handler: senderFinance.detachSenderPaymentMethod(stripe), appCheckRequired: true},
+      setDefaultSenderPaymentMethod: {handler: senderFinance.setDefaultSenderPaymentMethod(stripe), appCheckRequired: true},
       listSenderPaymentMethods: {
         handler: {run: senderFinance.readSenderPaymentMethods(stripe)},
         appCheckRequired: true,
