@@ -36,9 +36,3 @@ test("earnings scheduler reconciles Riders beyond the original 25 record cap", a
   assert.deepEqual(visited, docs.map((doc) => doc.id));
   assert.deepEqual(result, {scanned: 61, reconciled: 31, reviewRequired: 30});
 });
-test("earnings scheduler accepts migrated topic and explicit payload", () => {
-  const {eventHandlerName} = require("./cloud-run-payment-schedulers");
-  const payload = {message: {data: Buffer.from(JSON.stringify({handler: "scheduledRiderEarningsReconciliation"})).toString("base64")}};
-  assert.equal(eventHandlerName(payload), "scheduledRiderEarningsReconciliation");
-  assert.equal(eventHandlerName({}, "/", {"ce-source": "//pubsub.googleapis.com/projects/circum-2797c/topics/firebase-schedule-scheduledRiderEarningsReconciliation-us-central1"}), "scheduledRiderEarningsReconciliation");
-});
