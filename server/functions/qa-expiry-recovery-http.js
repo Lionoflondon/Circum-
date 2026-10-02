@@ -27,6 +27,25 @@ function dependencies() {
   const stripe = require("stripe")(secret, {timeout: 20000, maxNetworkRetries: 1});
   return {env, stripe, db: getFirestore()};
 }
+// A single selected TEST document is read directly. Firestore disallows
+// document-ID equality combined with the cleanup expiry inequality.
+function fixtureCollection(collection, fixtureId) {
+  const ref = collection.doc(fixtureId);
+  const query = (field, op, expected, maximum = 1) => ({
+    limit: (count) => query(field, op, expected, count),
+    get: async () => {
+      if (![["cleanupDueAt", "<="], ["archived", "=="]].some(([f, o]) => f === field && o === op) || maximum < 1) throw new Error("unsupported_fixture_query");
+      const snap = await ref.get();
+      const actual = snap.data()?.[field];
+      const matches = snap.exists && (op === "==" ? actual === expected : actual?.toMillis && actual.toMillis() <= expected.toMillis());
+      const docs = matches ? [snap] : [];
+      return {docs, size: docs.length, empty: !docs.length};
+    },
+  });
+  return {doc: (id) => {
+    if (id !== fixtureId) throw new Error("cross_fixture_access"); return ref;
+  }, where: query};
+}
 function handleQaRecovery(request, response, options = {}) {
   if (!new URL(request.url, "http://localhost").pathname.startsWith("/recovery/")) return false;
   let cached;
@@ -40,9 +59,7 @@ function handleQaRecovery(request, response, options = {}) {
       const selected = await db.collection(root).doc(fixtureId).get();
       if (!selected.exists || selected.data().id !== fixtureId || selected.data().isSyntheticQa !== true || selected.data().testOnly !== true) throw Object.assign(new Error("fixture_not_authorized"), {statusCode: 403});
       const originalCollection = db.collection.bind(db);
-      const scoped = {collection: (name) => name === root ? {doc: (id) => {
-if (id !== fixtureId) throw new Error("cross_fixture_access"); return originalCollection(root).doc(id);
-}, where: (...args) => originalCollection(root).where(require("firebase-admin/firestore").FieldPath.documentId(), "==", fixtureId).where(...args)} : originalCollection(name), doc: db.doc.bind(db), batch: db.batch.bind(db), runTransaction: db.runTransaction.bind(db)};
+      const scoped = {collection: (name) => name === root ? fixtureCollection(originalCollection(root), fixtureId) : originalCollection(name), doc: db.doc.bind(db), batch: db.batch.bind(db), runTransaction: db.runTransaction.bind(db)};
       const d = load();
       if (worker === "expireQaSpecialFlowFixtures") return require("./qa-special-flow")._test.factory({db: scoped, env: d.env, stripe: d.stripe}).expire();
       const providerFactory = (qa, fixture) => require("./qa-special-provider").paymentProviderForFixture({stripe: d.stripe, qa, fixture, secret: d.env.CIRCUM_QA_STRIPE_SECRET_KEY});
@@ -56,4 +73,4 @@ if (id !== fixtureId) throw new Error("cross_fixture_access"); return originalCo
     },
   });
 }
-module.exports = {handleQaRecovery, authorize, CALLERS};
+module.exports = {handleQaRecovery, authorize, CALLERS, fixtureCollection};
