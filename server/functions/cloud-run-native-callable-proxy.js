@@ -38,7 +38,7 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
   if (!policy) throw new Error("Unsupported callable operation.");
   const endpoint = `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path || operation}`;
   const maxBody = ["createBusinessGiftOrder", "createGiftPayment", "finalizeGiftPayment"].includes(operation) ? 1024 * 1024 : operation === "createSenderBookingQuote" ? 64 * 1024 : operation === "goOnline" ? 32 * 1024 : 16 * 1024;
-  const cors = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*", "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck", "access-control-allow-methods": "POST, OPTIONS"};
+  const cors = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*", "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck", "access-control-allow-methods": operation === "giftStoryLanding" ? "GET, HEAD, POST, OPTIONS" : "POST, OPTIONS"};
   function send(res, status, payload) {
     res.writeHead(status, cors);
     res.end(Buffer.isBuffer(payload) ? payload : JSON.stringify(payload));
