@@ -101,3 +101,12 @@ await ref.set({status: "accepted", riderId: "rider", dispatchStatus: "accepted"}
 }};
  await dispatchDeliveryRequest({db: raced, requestId: "job", uid: "sender", durableOnly: true}); assert.equal((await ref.get()).data().dispatchStatus, "accepted");
 }));
+test("recovered dispatch persists one eligible Rider offer and survives retry without sending providers", () => withDb("dispatch-offer", async (db) => {
+ const now = Date.now(); const {GeoPoint} = require("firebase-admin/firestore"); const {dispatchDeliveryRequest} = require("./send-package");
+ await db.doc("deliveryRequests/job").set({requestId: "job", senderId: "sender", status: "requested", dispatchStatus: "requested", packageDescription: "A small paperback book", weight: "0.5 kg", distanceMiles: 1, pickupPosition: {geopoint: new GeoPoint(51, 0.1)}});
+ const profile = {status: "online", approvalStatus: "approved", riderStatus: "approved", vehicleApproved: true, vehicleType: "van", availabilityStatus: "available", position: {geopoint: new GeoPoint(51.001, 0.1)}};
+ await db.doc("riders/rider").set(profile); await db.doc("riderProfiles/rider").set(profile);
+ await db.doc("riderPresence/rider").set({isOnline: true, availabilityStatus: "available", busy: false, dispatchEligible: true, lastHeartbeatAt: now, currentLocation: {latitude: 51.001, longitude: 0.1, accuracyMeters: 10, updatedAt: now}});
+ await dispatchDeliveryRequest({db, requestId: "job", uid: "sender", durableOnly: true}); await dispatchDeliveryRequest({db, requestId: "job", uid: "sender", durableOnly: true});
+ const notes = await db.collection("notifications").get(); assert.equal(notes.size, 1); assert.equal(notes.docs[0].data().recipientId, "rider"); assert.equal(notes.docs[0].data().failureReason, "retry_worker_exited_before_send"); assert.equal((await db.doc("deliveryRequests/job").get()).data().dispatchStatus, "broadcasted");
+}));

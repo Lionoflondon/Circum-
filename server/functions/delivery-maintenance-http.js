@@ -65,7 +65,7 @@ size += x.length; if (size <= 16384) chunks.push(x);
    if (size > 16384) {
 send(413, {error: "request_too_large"}); return;
 }
-   const input = JSON.parse(Buffer.concat(chunks).toString("utf8")); const rawDb = options.db || getFirestore(); let result;
+   const input = JSON.parse(Buffer.concat(chunks).toString("utf8")); const rawDb = options.db || (options.dbFactory ? options.dbFactory() : getFirestore()); let result;
    if (mode === "fixture") {
     if (!isFixtureDeliveryId(input.fixtureId)) throw Object.assign(new Error("invalid_fixture_delivery_id"), {statusCode: 400});
     const root = await rawDb.collection("giftStoryRuntimeFixtures").doc(input.fixtureId).get();

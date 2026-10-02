@@ -16,17 +16,22 @@ const EVENT_PATHS = Object.freeze({
   "/v1/events/firestore/runtime-fixture": "_runtimeFixtures",
 });
 
+let runtimeDb;
+function availabilityDb() {
+  if (!runtimeDb) {
+    if (!getApps().length) initializeApp();
+    runtimeDb = getFirestore();
+    runtimeDb.settings({ignoreUndefinedProperties: true});
+  }
+  return runtimeDb;
+}
 function fixtureProductionProcessor() {
-  if (!getApps().length) initializeApp();
-  const db = getFirestore();
-  db.settings({ignoreUndefinedProperties: true});
+  const db = availabilityDb();
   return (event) => processFixtureAvailabilityEvent({db, event, fieldValue: FieldValue});
 }
 
 function productionProcessor() {
-  if (!getApps().length) initializeApp();
-  const db = getFirestore();
-  db.settings({ignoreUndefinedProperties: true});
+  const db = availabilityDb();
   return (event) => processAvailabilityEvent({db, event, fieldValue: FieldValue});
 }
 
@@ -41,7 +46,7 @@ function createServer(options = {}) {
   let processor;
   let fixtureProcessor;
   return http.createServer((request, response) => {
-    if (handleMaintenance(request, response, ["markStaleRiderPresenceOffline"])) return;
+    if (handleMaintenance(request, response, ["markStaleRiderPresenceOffline"], {dbFactory: availabilityDb})) return;
     if (request.method === "GET" && request.url === "/health") return json(response, 200, {status: "ok", runtime: "node22", sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     const collection = EVENT_PATHS[request.url];
     if (!collection) return json(response, 404, {error: "not_found"});
