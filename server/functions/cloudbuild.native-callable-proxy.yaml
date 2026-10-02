@@ -1,0 +1,6 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, Dockerfile.native-callable-proxy, --build-arg, 'CIRCUM_SOURCE_SHA=${_CIRCUM_SOURCE_SHA}', -t, '${_IMAGE}', .]
+images: ['${_IMAGE}']
+substitutions:
+  _CIRCUM_SOURCE_SHA: unknown
