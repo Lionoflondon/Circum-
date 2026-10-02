@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+const {scanQuery} = require("./rider-query-scan");
 const payoutAllocation = require("./rider-payout-allocation");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
@@ -1523,17 +1524,10 @@ async function scheduledRiderStripeStatusSyncCore(stripeOrFactory) {
     const stripe = stripeFrom(stripeOrFactory);
     const db = getFirestore();
     const byId = new Map();
-    const addDocs = (snapshot) => {
-      snapshot.docs.forEach((doc) => byId.set(doc.id, doc));
-    };
-    addDocs(await db.collection("riderProfiles")
-        .where("stripeAccountId", ">", "")
-        .limit(200)
-        .get());
-    addDocs(await db.collection("riderProfiles")
-        .where("stripeConnectAccountId", ">", "")
-        .limit(200)
-        .get());
+    for (const field of ["stripeAccountId", "stripeConnectAccountId"]) {
+      await scanQuery(db.collection("riderProfiles").where(field, ">", "")
+          .orderBy(field), 200, async (doc) => byId.set(doc.id, doc));
+    }
     let synced = 0;
     let failed = 0;
     for (const doc of byId.values()) {

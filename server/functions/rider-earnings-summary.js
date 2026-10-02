@@ -3,6 +3,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {scanQuery} = require("./rider-query-scan");
 const {riderCallable} = require("./rider-app-check");
 
 const ACTIVE_PAYOUTS = new Set(["requested", "processing"]);
@@ -213,13 +214,13 @@ function adminReconcileRiderEarnings() {
   });
 }
 
-const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24 hours").onRun(async () => {
-  const db = getFirestore();
-  const snapshot = await db.collection("riderEarnings").limit(25).get();
+async function scheduledRiderEarningsReconciliationCore({db = getFirestore(), reconcile = reconcileRiderEarnings} = {}) {
+  let scanned = 0;
   let reconciled = 0;
   let reviewRequired = 0;
-  for (const doc of snapshot.docs) {
-    const result = await reconcileRiderEarnings({
+  await scanQuery(db.collection("riderEarnings"), 25, async (doc) => {
+    scanned += 1;
+    const result = await reconcile({
       db,
       riderId: doc.id,
       actorId: "system",
@@ -228,14 +229,18 @@ const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24
     });
     if (result.reconciled) reconciled += 1;
     else reviewRequired += 1;
-  }
-  return {scanned: snapshot.size, reconciled, reviewRequired};
-});
+  });
+  return {scanned, reconciled, reviewRequired};
+}
+
+const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24 hours")
+    .onRun(() => scheduledRiderEarningsReconciliationCore());
 
 module.exports = {
   getRiderEarningsSummary,
   adminReconcileRiderEarnings,
   scheduledRiderEarningsReconciliation,
+  scheduledRiderEarningsReconciliationCore,
   reconcileLedger,
   connectReadiness,
   materializedSummary,

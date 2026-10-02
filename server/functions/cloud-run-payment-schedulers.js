@@ -5,6 +5,7 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const businessPayments = require("./business-payments");
+const riderEarnings = require("./rider-earnings-summary");
 const riderConnect = require("./rider-connect");
 const deliveryTracking = require("./delivery-tracking");
 const healthPlusOperations = require("./health-plus-operations");
@@ -25,6 +26,8 @@ function stripeClient() {
 }
 
 const handlers = Object.freeze({
+  scheduledRiderEarningsReconciliation: () =>
+    riderEarnings.scheduledRiderEarningsReconciliationCore(),
   reconcileBusinessInvoiceCheckouts: () =>
     businessPayments.reconcileBusinessInvoiceCheckoutsCore(stripeClient()),
   scheduledRiderStripeStatusSync: () =>
@@ -46,6 +49,7 @@ const handlers = Object.freeze({
 });
 
 const TOPIC_HANDLER_BY_NAME = Object.freeze({
+  "firebase-schedule-scheduledRiderEarningsReconciliation-us-central1": "scheduledRiderEarningsReconciliation",
   "firebase-schedule-reconcilePendingDeliverySettlements-us-central1": "reconcilePendingDeliverySettlements",
   "firebase-schedule-processHealthPlusReminders-us-central1": "processHealthPlusReminders",
   "firebase-schedule-reconcileDeliveryTips-us-central1": "reconcileDeliveryTips",
