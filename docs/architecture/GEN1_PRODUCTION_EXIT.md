@@ -3,14 +3,14 @@
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
 - Source exports: 283
-- Gen 1 exports: 276
+- Gen 1 exports: 274
 - Files importing Firebase Functions v1: 67
-- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 97
+- ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 95
 - MIGRATE TO CLOUD RUN: 149
 - REPLACE WITH CLOUD RUN + EVENTARC: 18
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 11
 - RETIRE — no legitimate production dependency: 3
-- CLOUD RUN ONLY — LEGACY URL RETAINED: 5
+- CLOUD RUN ONLY — LEGACY URL RETAINED: 7
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
 |---|---|---|---|---|---|
@@ -124,7 +124,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | ensureReferralCode | server/functions/referrals.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/HISTORICAL_ADMIN_PARITY_REPORT.md<br>lib/app/sender_mobile/sender_wallet.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-referral-callable-server.js<br>server/functions/cloud-run-referral-servers.test.js<br>test/website_rider_referral_test.dart |
 | ensureRiderRothWallet | server/functions/rider-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/rider-onboarding-flow.emulator.test.js |
 | ensureSenderAccount | server/functions/account-bootstrap-compat.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/account_bootstrap_api.dart<br>lib/app/sender_mobile/sender_profile_authority.dart<br>lib/website/shared/account_bootstrap_api.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/account-bootstrap-compat.test.js<br>server/functions/account-bootstrap-gen2.js<br>server/functions/account-bootstrap-gen2.test.js<br>server/functions/check-functions-inventory.test.js<br>server/functions/cloud-run-account-bootstrap.js<br>server/functions/cloud-run-account-bootstrap.test.js<br>server/functions/cloud-run-replacement-registry.js<br>server/functions/cloud-run-runtime-only.test.js<br>server/functions/cloud-run-sender-drafts.test.js<br>server/functions/firestore-sender-bootstrap-rules.test.js<br>server/functions/firestore-starter-roth-rules.test.js<br>server/functions/scoped_functions_deploy_list.test.js<br>server/functions/sender-account-authority.test.js<br>server/functions/sender-account.js<br>test/sender_account_bootstrap_api_test.dart<br>test/website_account_bootstrap_api_test.dart<br>test/website_sender_auth_deterministic_contract_test.dart |
-| escalateUnclaimedDeliveries | server/functions/platform-notifications.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-notification-retries.js<br>server/functions/delivery-maintenance-core.js<br>server/functions/delivery-maintenance-http.js |
+| escalateUnclaimedDeliveries | server/functions/index.js | Cloud Run | callable | CLOUD RUN ONLY — LEGACY URL RETAINED | server/functions/cloud-run-notification-retries.js<br>server/functions/cloud-run-runtime-only.test.js<br>server/functions/delivery-maintenance-core.js<br>server/functions/delivery-maintenance-http.js<br>server/functions/platform-notifications.js<br>server/functions/scoped_functions_deploy_list.test.js |
 | executeRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
 | expireQaLifecycleFixtures | server/functions/qa-lifecycle.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | server/functions/QA-LIFECYCLE.md |
 | expireQaSpecialFlowFixtures | server/functions/qa-special-flow.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | docs/qa/private-special-flow-fixture.md |
@@ -169,7 +169,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | markConversationRead | server/functions/communication-engine.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/send_package/view/ride_chats.dart<br>server/functions/firestore-chat-notification-rules.test.js |
 | markRiderNoShow | server/functions/delivery-policy.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/delivery-cancellation.emulator.test.js<br>server/functions/dispatch-completion-spine.test.js |
 | markSenderLegendCelebrationSeen | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
-| markStaleRiderPresenceOffline | server/functions/rider-presence.js | Gen 1 | schedule | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | server/functions/cloud-run-rider-availability-server.js<br>server/functions/delivery-maintenance-core.js<br>server/functions/delivery-maintenance-http.js |
+| markStaleRiderPresenceOffline | server/functions/index.js | Cloud Run | callable | CLOUD RUN ONLY — LEGACY URL RETAINED | server/functions/cloud-run-rider-availability-server.js<br>server/functions/cloud-run-runtime-only.test.js<br>server/functions/delivery-maintenance-core.js<br>server/functions/delivery-maintenance-http.js<br>server/functions/rider-presence.js<br>server/functions/scoped_functions_deploy_list.test.js |
 | onChatMessageCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/firestore-chat-notification-rules.test.js<br>server/functions/platform-notifications.test.js<br>server/functions/production-functions-inventory.json |
 | onDeliveryCompletedEvent | server/functions/delivery-completed-event.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md |
 | onDeliveryCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/production-functions-inventory.json |

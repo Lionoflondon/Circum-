@@ -173,7 +173,7 @@ const r = await watchdogOne(db, doc.id, now); scanned++; if (r.created) incident
  return {scanned, incidentsCreated};
 }
 async function stalePresence({db, now, limit}) {
- const docs = await db.collection("riderPresence").where("isOnline", "==", true).where("lastHeartbeatAt", "<", now - presenceCore.STALE_HEARTBEAT_MS).limit(limit).get(); let markedStale = 0;
+ const docs = await page(db, "stale_presence", "riderPresence", "isOnline", true, limit); let markedStale = 0;
  for (const doc of docs.docs) {
   const changed = await db.runTransaction(async (tx) => {
    const [fresh, profile] = await Promise.all([tx.get(doc.ref), tx.get(db.collection("riderProfiles").doc(doc.id))]); const row = fresh.data() || {};
@@ -182,7 +182,8 @@ async function stalePresence({db, now, limit}) {
    tx.set(doc.ref, patch, {merge: true}); if (profile.exists) tx.set(profile.ref, patch, {merge: true}); return true;
   }); if (changed) markedStale++;
  }
- return {scanned: docs.size, markedStale};
+ await docs.save();
+ return {scanned: docs.docs.length, markedStale};
 }
 const WORKERS = {activateDueScheduledDeliveries: activation, escalateUnclaimedDeliveries: escalation, deliveryLifecycleWatchdog: watchdog, markStaleRiderPresenceOffline: stalePresence};
 async function runWorker({worker, db, now = Date.now(), limit = 20}) {

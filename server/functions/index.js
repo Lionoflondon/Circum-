@@ -142,8 +142,8 @@ exports.onSupportTicketCreated = platformNotifications.onSupportTicketCreated;
 exports.onDisputeCreated = platformNotifications.onDisputeCreated;
 exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
-exports.escalateUnclaimedDeliveries =
-  platformNotifications.escalateUnclaimedDeliveries;
+exports.escalateUnclaimedDeliveries = cloudRunOnly(
+    platformNotifications.escalateUnclaimedDeliveries, "circum-notification-retries");
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 const giftRecurringCallables = giftRecurring.createGiftRecurringCallables(stripe);
@@ -410,8 +410,8 @@ exports.goOnline = riderPresence.goOnline;
 exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
-exports.markStaleRiderPresenceOffline =
-  riderPresence.markStaleRiderPresenceOffline;
+exports.markStaleRiderPresenceOffline = cloudRunOnly(
+    riderPresence.markStaleRiderPresenceOffline, "circum-rider-availability-worker");
 exports.searchFreeUkAddresses = addressPlacesCompat.searchFreeUkAddresses;
 exports.resolveUkAddressPlace = addressPlacesCompat.resolveUkAddressPlace;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;

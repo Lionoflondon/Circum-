@@ -110,3 +110,7 @@ test("recovered dispatch persists one eligible Rider offer and survives retry wi
  await dispatchDeliveryRequest({db, requestId: "job", uid: "sender", durableOnly: true}); await dispatchDeliveryRequest({db, requestId: "job", uid: "sender", durableOnly: true});
  const notes = await db.collection("notifications").get(); assert.equal(notes.size, 1); assert.equal(notes.docs[0].data().recipientId, "rider"); assert.equal(notes.docs[0].data().failureReason, "retry_worker_exited_before_send"); assert.equal((await db.doc("deliveryRequests/job").get()).data().dispatchStatus, "broadcasted");
 }));
+test("already-stale Riders cannot starve later presence pages", () => withDb("presence-pages", async (db) => {
+ const now = Date.now(); await db.doc("riderPresence/a").set({isOnline: true, lastHeartbeatAt: now - 600000, presenceFreshness: "stale"}); await db.doc("riderPresence/b").set({isOnline: true, lastHeartbeatAt: now - 600000});
+ assert.equal((await stalePresence({db, now, limit: 1})).markedStale, 0); assert.equal((await stalePresence({db, now, limit: 1})).markedStale, 1); assert.equal((await db.doc("riderPresence/b").get()).data().presenceFreshness, "stale");
+}));
