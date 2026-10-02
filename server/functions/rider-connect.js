@@ -45,6 +45,10 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function riderWalletAvailable(wallet = {}) {
+  return roundMoney(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
+}
+
 function roundMoney(value) {
   return Math.round(numberValue(value) * 100) / 100;
 }
@@ -1146,9 +1150,7 @@ function requestRiderWithdrawal() {
           existing.status || existing.payoutStatus,
       ).toLowerCase();
       const wallet = walletDoc.data() || {};
-      const available = roundMoney(
-          wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance,
-      );
+      const available = riderWalletAvailable(wallet);
       const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
       const failure = riderWithdrawalFailure({
         amount,
@@ -1610,6 +1612,7 @@ module.exports = {
   resolveRiderPayoutBreakdown,
   stripeConnectAccountIdempotencyKey,
   riderWithdrawalFailure,
+  riderWalletAvailable,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
 };

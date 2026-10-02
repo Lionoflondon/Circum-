@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const {riderWithdrawalFailure} = require("./rider-connect");
+const {riderWithdrawalFailure, riderWalletAvailable} = require("./rider-connect");
 
 const valid = {
   amount: 25,
@@ -47,4 +47,12 @@ test("unapproved or Stripe-incomplete riders are blocked", () => {
       riderWithdrawalFailure({...valid, stripeReady: false}),
       "stripe_not_ready",
   );
+});
+
+
+test("canonical zero cash cannot authorize a withdrawal from legacy balances", () => {
+  const available = riderWalletAvailable({availableBalance: 0, availableEarnings: 80, accountBalance: 100});
+  assert.equal(available, 0);
+  assert.equal(riderWithdrawalFailure({...valid, available}), "exceeds_available");
+  assert.equal(riderWalletAvailable({availableEarnings: 80}), 80);
 });

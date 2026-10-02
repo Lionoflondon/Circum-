@@ -71,3 +71,17 @@ test("Rider earnings reconciliation is audited and does not mutate balances", ()
   assert.match(index, /exports\.adminReconcileRiderEarnings = riderEarningsSummary\.adminReconcileRiderEarnings\(\);/);
   assert.match(index, /exports\.scheduledRiderEarningsReconciliation = cloudRunOnly\(riderEarningsSummary\.scheduledRiderEarningsReconciliation, "circum-payment-schedulers", false, "schedule"\);/);
 });
+
+
+test("canonical zero balances override stale legacy wallet balances", () => {
+  const wallet = {availableBalance: 0, availableEarnings: 75, accountBalance: 90,
+    pendingBalance: 0, pendingEarnings: 12};
+  const reconciled = reconcileLedger([], wallet, []);
+  assert.equal(reconciled.storedAvailable, 0);
+  assert.equal(reconciled.pending, 0);
+  assert.equal(reconciled.reconciled, true);
+  const summary = materializedSummary({wallet});
+  assert.equal(summary.storedAvailable, 0);
+  assert.equal(summary.pending, 0);
+  assert.equal(materializedSummary({wallet: {availableEarnings: 75}}).storedAvailable, 75);
+});

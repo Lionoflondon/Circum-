@@ -47,9 +47,9 @@ function reconcileLedger(rows = [], wallet = {}, payouts = []) {
   const credits = totals.delivery_earning + totals.tip + totals.waiting_fee + totals.no_show_fee + totals.adjustment_credit + totals.payout_failed_release;
   const debits = totals.adjustment_debit + totals.payout_reserved + totals.refund + totals.reversal;
   const calculatedAvailable = money(credits - debits);
-  const storedAvailable = money(wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance);
+  const storedAvailable = money(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
   const unexplained = money(storedAvailable - calculatedAvailable);
-  const pending = money(wallet.pendingBalance || wallet.pendingEarnings);
+  const pending = money(wallet.pendingBalance ?? wallet.pendingEarnings);
   const normalizedPayouts = payouts.map((p) => ({...p, status: text(p.status || p.payoutStatus)}));
   return {totals, calculatedAvailable, storedAvailable, pending, unexplained, reconciled: Math.abs(unexplained) < 0.01, production, quarantined, activePayout: normalizedPayouts.find((p) => ACTIVE_PAYOUTS.has(p.status)) || null, latestFailed: normalizedPayouts.find((p) => p.status === "failed") || null};
 }
@@ -80,8 +80,8 @@ function payoutState(payouts = []) {
 }
 
 function materializedSummary({wallet = {}, payouts = [], recentRows = [], profile = {}}) {
-  const storedAvailable = money(wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance);
-  const pending = money(wallet.pendingBalance || wallet.pendingEarnings);
+  const storedAvailable = money(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
+  const pending = money(wallet.pendingBalance ?? wallet.pendingEarnings);
   const reviewRequired = wallet.payoutReviewRequired === true || wallet.reconciliationRequired === true;
   const activityCount = Number.isFinite(Number(wallet.activityCount || wallet.transactionCount)) ?
     Number(wallet.activityCount || wallet.transactionCount) : recentRows.length;
