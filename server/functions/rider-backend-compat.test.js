@@ -20,13 +20,17 @@ test("Rider compatibility preserves every request identity and verified security
   }
 });
 test("compatibility rejects missing verified auth and attestation without dispatch", async () => {
-  const handler = createCompat("requestRiderWithdrawal", {fetchImpl: async () => {throw new Error("must not dispatch");}});
+  const handler = createCompat("requestRiderWithdrawal", {fetchImpl: async () => {
+throw new Error("must not dispatch");
+}});
   await assert.rejects(handler.run({}, {}), {code: "unauthenticated"});
   await assert.rejects(handler.run({}, {...context, app: null}), {code: "failed-precondition"});
 });
 test("uncertain financial transport never retries and retains owner error semantics", async () => {
   let calls = 0;
-  const unavailable = createCompat("createRiderTransferOrPayout", {fetchImpl: async () => {calls++;throw new Error("timeout");}});
+  const unavailable = createCompat("createRiderTransferOrPayout", {fetchImpl: async () => {
+calls++; throw new Error("timeout");
+}});
   await assert.rejects(unavailable.run({requestId: "stable"}, context), {code: "unavailable"});
   assert.equal(calls, 1);
   const duplicate = createCompat("requestRiderWithdrawal", {fetchImpl: async () => ({ok: false, json: async () => ({error: {status: "ALREADY_EXISTS", message: "Pending withdrawal"}})})});
