@@ -581,7 +581,7 @@ test("recipient token-only video download remains available while ownership acti
       "utf8",
   );
   assert.doesNotMatch(source, /Join Circum to see this Gift Story video/);
-  assert.match(source, /participantAuthorized\(context, gift, suppliedToken\)/);
+  assert.match(source, /participantAuthorized\(context, gift, suppliedToken(?:, db)?\)/);
   assert.match(source, /exports\.acknowledgeGiftStory[\s\S]*requireAccount: true/);
   assert.match(source, /exports\.saveGiftStoryToVault[\s\S]*requireAccount: true/);
   assert.match(source, /recordGiftStoryGuestAnalytics\(db, \{[\s\S]*event: "guest_watched_video"/);
