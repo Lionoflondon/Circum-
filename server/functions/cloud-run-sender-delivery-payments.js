@@ -5,6 +5,7 @@ const http = require("node:http");
 const MAX_BODY_BYTES = 1024 * 1024;
 const ROUTES = Object.freeze({
   "/getSenderPaymentMode": "getSenderPaymentMode",
+  "/getSenderRothBalance": "getSenderRothBalance",
   "/createSenderPaymentSession": "createSenderPaymentSession",
   "/createSenderPaidDelivery": "createSenderPaidDelivery",
   "/finalizeSenderWebCheckout": "finalizeSenderWebCheckout",
@@ -54,11 +55,12 @@ function createSenderDeliveryPaymentsServer(handlers) {
     addExpressCompatibility(req, res);
     applyCors(req, res);
     const path = new URL(req.url || "/", "http://localhost").pathname;
-    if (path === "/healthz") {
+    if (["/health", "/healthz"].includes(path)) {
       return res.status(200).send({
         status: "ok",
         service: "sender-delivery-payments",
         mode: String(process.env.STRIPE_MODE || "").toLowerCase(),
+        ...(path === "/health" ? {sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"} : {}),
       });
     }
     const handlerName = ROUTES[path];
@@ -91,6 +93,7 @@ if (require.main === module) {
   const port = Number(process.env.PORT || 8080);
   createSenderDeliveryPaymentsServer({
     getSenderPaymentMode: functions.getSenderPaymentMode,
+    getSenderRothBalance: functions.getSenderRothBalance,
     createSenderPaymentSession: functions.createSenderPaymentSession,
     createSenderPaidDelivery: functions.createSenderPaidDelivery,
     finalizeSenderWebCheckout: functions.finalizeSenderWebCheckout,

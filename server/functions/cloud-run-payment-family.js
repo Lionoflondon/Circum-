@@ -14,6 +14,7 @@ const FAMILY_ROUTES = Object.freeze({
     "createBusinessGiftOrder",
   ],
   gifts: [
+    "getGiftStoryVideoDownload",
     "createGiftPayment",
     "finalizeGiftPayment",
     "cancelGiftPayment",
@@ -36,6 +37,7 @@ const FAMILY_ROUTES = Object.freeze({
     "createStripeAccountManagementLink",
   ],
   rider_payouts: [
+    "getRiderEarningsSummary",
     "riderPayoutReadiness",
     "createRiderTransferOrPayout",
     "requestRiderWithdrawal",
@@ -78,11 +80,12 @@ function createPaymentFamilyServer({family, handlers}) {
   return http.createServer((req, res) => {
     addExpressCompatibility(req, res);
     const path = new URL(req.url || "/", "http://localhost").pathname;
-    if (path === "/healthz") {
+    if (["/health", "/healthz"].includes(path)) {
       return res.status(200).send({
         status: "ok",
         family,
         mode: String(process.env.STRIPE_MODE || "").toLowerCase(),
+        ...(path === "/health" ? {sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"} : {}),
       });
     }
     const handlerName = path.slice(1);

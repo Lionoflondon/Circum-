@@ -34,18 +34,18 @@ for (const [operation, policy] of Object.entries(OPERATIONS)) {
       assert.equal(response.headers.get("access-control-allow-origin"), "*");
     });
   });
-  test(`${operation} refuses missing Auth and retains App Check policy`, async () => {
+  test(`${operation} retains its native Auth and App Check policy`, async () => {
     let calls = 0;
     await withServer(operation, async () => {
       calls++;
       return {status: 200, arrayBuffer: async () => Buffer.from("{\"result\":{}}")};
     }, async (base) => {
       const denied = await fetch(base, {method: "POST", headers: {"content-type": "application/json"}, body: "{\"data\":{}}"});
-      assert.equal(denied.status, 401);
-      assert.equal(calls, 0);
+      assert.equal(denied.status, policy.allowGuest ? 200 : 401);
+      assert.equal(calls, policy.allowGuest ? 1 : 0);
       const optional = await fetch(base, {method: "POST", headers: {authorization: "Bearer qa-token", "content-type": "application/json"}, body: "{\"data\":{}}"});
-      assert.equal(optional.status, policy.appCheck ? 400 : 200);
-      assert.equal(calls, policy.appCheck ? 0 : 1);
+      assert.equal(optional.status, policy.appCheck && !policy.sdkEnforced ? 400 : 200);
+      assert.equal(calls, (policy.allowGuest ? 1 : 0) + (policy.appCheck && !policy.sdkEnforced ? 0 : 1));
     });
   });
 }
@@ -68,4 +68,14 @@ test("upstream callable errors retain status and details without a second envelo
     assert.equal(response.status, 403);
     assert.equal(await response.text(), reply);
   });
+});
+
+test("Gift Story guest tokens remain opaque and cannot select a payment operation", async () => {
+ const data = JSON.stringify({data: {giftRequestId: "test-gift", token: "opaque-test-token", operation: "cancelGiftPayment"}});
+ await withServer("getGiftStoryVideoDownload", async (url, options) => {
+  assert.equal(url, "https://circum-gift-payments-j2b7cicfwq-uc.a.run.app/getGiftStoryVideoDownload"); assert.equal(options.body.toString(), data); assert.equal(options.headers.authorization, undefined);
+  return {status: 403, arrayBuffer: async () => Buffer.from("{\"error\":{\"status\":\"PERMISSION_DENIED\"}}")};
+ }, async (base) => {
+  const response = await fetch(base, {method: "POST", headers: {"content-type": "application/json"}, body: data}); assert.equal(response.status, 403); assert.equal((await response.json()).error.status, "PERMISSION_DENIED");
+ });
 });

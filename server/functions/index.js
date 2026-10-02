@@ -143,7 +143,7 @@ exports.onDisputeCreated = platformNotifications.onDisputeCreated;
 exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
 exports.escalateUnclaimedDeliveries = cloudRunOnly(
-    platformNotifications.escalateUnclaimedDeliveries, "circum-notification-retries");
+    platformNotifications.escalateUnclaimedDeliveries, "circum-notification-retries", false, "schedule");
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 const giftRecurringCallables = giftRecurring.createGiftRecurringCallables(stripe);
@@ -179,8 +179,8 @@ exports.repairRiderRatingFeedback = ratingsTipping.repairRiderRatingFeedback;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 exports.refundDeliveryTip = ratingsTipping.refundDeliveryTip(stripe);
 
-exports.getRiderEarningsSummary =
-  riderEarningsSummary.getRiderEarningsSummary();
+exports.getRiderEarningsSummary = cloudRunOnly(
+    riderEarningsSummary.getRiderEarningsSummary(), "circum-rider-payouts", true);
 exports.adminReconcileRiderEarnings = riderEarningsSummary.adminReconcileRiderEarnings();
 exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRiderEarningsReconciliation;
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
@@ -389,8 +389,8 @@ exports.createGiftStoryVideoUpload =
   giftStoryAutomation.createGiftStoryVideoUpload;
 exports.finalizeGiftStoryVideoUpload =
   giftStoryAutomation.finalizeGiftStoryVideoUpload;
-exports.getGiftStoryVideoDownload =
-  giftStoryAutomation.getGiftStoryVideoDownload;
+exports.getGiftStoryVideoDownload = cloudRunOnly(
+    giftStoryAutomation.getGiftStoryVideoDownload, "circum-gift-payments");
 exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
 exports.submitGiftStoryThankYou = giftStoryAutomation.submitGiftStoryThankYou;
 exports.acknowledgeGiftStory = giftStoryAutomation.acknowledgeGiftStory;
@@ -411,12 +411,13 @@ exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
 exports.markStaleRiderPresenceOffline = cloudRunOnly(
-    riderPresence.markStaleRiderPresenceOffline, "circum-rider-availability-worker");
+    riderPresence.markStaleRiderPresenceOffline, "circum-rider-availability-worker", false, "schedule");
 exports.searchFreeUkAddresses = addressPlacesCompat.searchFreeUkAddresses;
 exports.resolveUkAddressPlace = addressPlacesCompat.resolveUkAddressPlace;
-exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
+exports.getSenderRothBalance = cloudRunOnly(
+    senderBooking.getSenderRothBalance, "circum-sender-delivery-payments", true);
 exports.getSenderRoutePreview = senderBooking.getSenderRoutePreview;
-exports.getSenderPaymentMode = senderPaymentCallable((_data, context) => {
+exports.getSenderPaymentMode = cloudRunOnly(senderPaymentCallable((_data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
         "unauthenticated",
@@ -424,7 +425,7 @@ exports.getSenderPaymentMode = senderPaymentCallable((_data, context) => {
     );
   }
   return {mode: getStripeRuntimeConfig().mode};
-});
+}), "circum-sender-delivery-payments", true);
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession =
   senderBooking.createSenderPaymentSession(stripe);
