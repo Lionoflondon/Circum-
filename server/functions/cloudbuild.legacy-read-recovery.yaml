@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=server/functions/Dockerfile.sender-delivery-payments, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_PAYMENTS_IMAGE}', .]
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=server/functions/Dockerfile.payment-family, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_FAMILY_IMAGE}', .]
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=server/functions/Dockerfile.native-callable-proxy, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_PROXY_IMAGE}', .]
+images: ['${_PAYMENTS_IMAGE}', '${_FAMILY_IMAGE}', '${_PROXY_IMAGE}']
+substitutions:
+  _SOURCE_SHA: unknown
+  _PAYMENTS_IMAGE: us-central1-docker.pkg.dev/circum-2797c/circum-services/sender-delivery-payments:unknown
+  _FAMILY_IMAGE: us-central1-docker.pkg.dev/circum-2797c/circum-services/payment-family:unknown
+  _PROXY_IMAGE: us-central1-docker.pkg.dev/circum-2797c/circum-services/native-callable-proxy:unknown
+options:
+  logging: CLOUD_LOGGING_ONLY

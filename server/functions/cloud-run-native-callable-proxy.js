@@ -2,6 +2,10 @@
 "use strict";
 const http = require("node:http");
 const OPERATIONS = Object.freeze({
+  getSenderPaymentMode: {owner: "circum-sender-delivery-payments", appCheck: true, sdkEnforced: true},
+  getSenderRothBalance: {owner: "circum-sender-delivery-payments", appCheck: true, sdkEnforced: true},
+  getRiderEarningsSummary: {owner: "circum-rider-payouts", appCheck: true, sdkEnforced: true},
+  getGiftStoryVideoDownload: {owner: "circum-gift-payments", appCheck: false, allowGuest: true},
   getSenderAccountActivity: {owner: "circum-account-bootstrap", appCheck: false},
   exportSenderData: {owner: "circum-account-bootstrap", appCheck: false},
   updateSenderPreferences: {owner: "circum-account-bootstrap", appCheck: false},
@@ -29,9 +33,9 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (req.method !== "POST") return error(res, 405, "INVALID_ARGUMENT", "POST required.");
     const authorization = req.headers.authorization;
-    if (!/^Bearer\s+\S+$/.test(authorization || "")) return error(res, 401, "UNAUTHENTICATED", "Sign in to continue.");
+    if ((!policy.allowGuest || authorization) && !/^Bearer\s+\S+$/.test(authorization || "")) return error(res, 401, "UNAUTHENTICATED", "Sign in to continue.");
     const appCheck = req.headers["x-firebase-appcheck"];
-    if (policy.appCheck && !String(appCheck || "").trim()) return error(res, 400, "FAILED_PRECONDITION", "Security verification is required.");
+    if (policy.appCheck && !policy.sdkEnforced && !String(appCheck || "").trim()) return error(res, 400, "FAILED_PRECONDITION", "Security verification is required.");
     if (!String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) return error(res, 415, "INVALID_ARGUMENT", "JSON required.");
     let size = 0;
     const chunks = [];
@@ -45,7 +49,7 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
         // The existing owner verifies Firebase Auth/App Check and remains the only business authority.
         const upstream = await fetchImpl(endpoint, {
           method: "POST", redirect: "error",
-          headers: {authorization, "content-type": req.headers["content-type"], ...(appCheck ? {"x-firebase-appcheck": appCheck} : {})},
+          headers: {...(authorization ? {authorization} : {}), "content-type": req.headers["content-type"], ...(appCheck ? {"x-firebase-appcheck": appCheck} : {})},
           body: Buffer.concat(chunks), signal: AbortSignal.timeout(55000),
         });
         const body = Buffer.from(await upstream.arrayBuffer());

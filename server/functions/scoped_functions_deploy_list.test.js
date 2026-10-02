@@ -33,7 +33,7 @@ test("no backend diff produces no Functions deployment", () => {
 test("runtime declaration changes exclude detached Cloud Run endpoints", () => {
   const result = names(["--files", "server/functions/package.json"]);
   assert.ok(result.includes("ensureSenderAccount"));
-  for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "createBusinessGiftOrder", "escalateUnclaimedDeliveries", "markStaleRiderPresenceOffline"]) {
+  for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "createBusinessGiftOrder", "escalateUnclaimedDeliveries", "markStaleRiderPresenceOffline", "getSenderPaymentMode", "getSenderRothBalance", "getRiderEarningsSummary", "getGiftStoryVideoDownload"]) {
     assert.ok(!result.includes(name));
   }
 });
