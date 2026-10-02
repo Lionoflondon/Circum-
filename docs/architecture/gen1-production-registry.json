@@ -4510,6 +4510,8 @@
       "productionPurpose": "cloudRunOnly(qaLifecycle.scheduled(), \"circum-qa-special-flow\", false, \"schedule\")",
       "callers": [
         "server/functions/QA-LIFECYCLE.md",
+        "server/functions/legacy-recovery-http.js",
+        "server/functions/legacy-recovery-http.test.js",
         "server/functions/legacy-scheduled-recovery.js",
         "server/functions/private-qa-cleanup-certifier.js",
         "server/functions/private-qa-cleanup-certifier.test.js",
@@ -4559,6 +4561,8 @@
       "productionPurpose": "cloudRunOnly(qaSpecialFlow.scheduled(), \"circum-qa-special-flow\", false, \"schedule\")",
       "callers": [
         "docs/qa/private-special-flow-fixture.md",
+        "server/functions/legacy-recovery-http.js",
+        "server/functions/legacy-recovery-http.test.js",
         "server/functions/legacy-scheduled-recovery.js",
         "server/functions/private-qa-cleanup-certifier.js",
         "server/functions/qa-expiry-recovery-http.js"
@@ -7480,6 +7484,7 @@
       "generation": "Cloud Run",
       "productionPurpose": "cloudRunOnly(staleDelivery.reconcileStaleDeliveryLocks, \"circum-payment-schedulers\", false, \"schedule\")",
       "callers": [
+        "server/functions/legacy-recovery-http.test.js",
         "server/functions/legacy-scheduled-recovery.js",
         "server/functions/legacy-worker-recovery.emulator.test.js"
       ],

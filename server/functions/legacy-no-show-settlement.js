@@ -69,11 +69,12 @@ async function settleCollected(db, deliveryId, paymentAuthority, paymentIntent =
     if (!riderId || riderId !== text(settlement.riderId)) throw new Error("Assigned Rider authority changed.");
     const earningRef = db.collection("riderEarningTransactions").doc(`no_show_${deliveryId}`);
     const platformRef = db.collection("platformSettlementTransactions").doc(`no_show_${deliveryId}`);
-    const [cancellationRows, earningRows] = await Promise.all([
-      transaction.get(db.collection("deliveryCancellationSettlements").where("deliveryId", "==", deliveryId).limit(1)),
+    const [cancellationRecord, existingDeliveryEarning, earningRows] = await Promise.all([
+      transaction.get(db.collection("deliveryCancellationSettlements").doc(deliveryId)),
+      transaction.get(db.collection("riderEarningTransactions").doc(deliveryId)),
       transaction.get(db.collection("riderEarningTransactions").where("deliveryId", "==", deliveryId).limit(50)),
     ]);
-    if (!cancellationRows.empty || earningRows.docs.some((doc) => doc.id !== earningRef.id)) throw new Error("no_show_other_settlement_authority_requires_review");
+    if (cancellationRecord.exists || existingDeliveryEarning.exists || earningRows.docs.some((doc) => doc.id !== earningRef.id)) throw new Error("no_show_other_settlement_authority_requires_review");
     if (!delivery.stripePaymentIntentId) {
       const debitId = sessionSnap.data()?.rothDebitTransactionId;
       if (!debitId || sessionSnap.data()?.rothDebitStatus !== "completed") throw new Error("no_show_roth_debit_authority_missing");

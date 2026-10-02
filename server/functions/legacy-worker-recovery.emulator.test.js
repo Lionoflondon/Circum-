@@ -125,3 +125,14 @@ test("reconciliation writes one audit receipt from an atomic ledger snapshot and
   const row = (await db.doc("riderEarnings/rider").get()).data(); assert.equal(row.availableBalance, 4); assert.equal(row.reconciliationRequired, false);
   assert.equal((await db.collection("riderEarningTransactions").get()).size, 1);
 }));
+
+test("an existing cancellation settlement blocks no-show allocation even without a deliveryId field", () => fixture("noshow-cancellation", async (db) => {
+  await db.doc("deliveryRequests/job").set({status: "sender_no_show_pickup", riderId: "rider", senderId: "sender", paymentSessionId: "session", paymentStatus: "paid", paidAmount: 7, remainingAmount: 0, rothAppliedAmount: 7});
+  await db.doc("senderPaymentSessions/session").set({userId: "sender", rothAppliedAmount: 7, rothDebitStatus: "completed", rothDebitTransactionId: "debit"});
+  await db.doc("walletTransactions/debit").set({status: "completed", uid: "sender", balanceType: "rothCredit", referenceId: "session", relatedEntityId: "job", amount: -7});
+  await db.doc("noShowSettlements/job").set({state: "SETTLEMENT_PENDING", riderId: "rider"});
+  await db.doc("deliveryCancellationSettlements/job").set({state: "pending_refund"});
+  await assert.rejects(processNoShowSettlement({db, stripe: {}, deliveryId: "job"}), /other_settlement_authority/);
+  assert.equal((await db.collection("riderEarningTransactions").get()).size, 0);
+  assert.equal((await db.collection("platformSettlementTransactions").get()).size, 0);
+}));
