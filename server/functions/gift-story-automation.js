@@ -929,7 +929,7 @@ exports.getSenderGiftStory = functions.https.onCall(async (data, context) => {
   if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in to view sent Gift Stories.");
   const giftId = text(data && data.giftRequestId);
   if (!giftId) throw new functions.https.HttpsError("invalid-argument", "Gift Story reference required.");
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const [storySnap, giftSnap] = await Promise.all([
     db.collection("users").doc(uid).collection("giftStories").doc(giftId).get(),
     db.collection("giftRequests").doc(giftId).get(),
@@ -1078,18 +1078,18 @@ async function acknowledgeGiftStory(db, access) {
     }, {merge: true});
     return true;
   });
-  if (created && senderId) await sendThankYouPush(access.giftId, access.gift, ids.thankYouNotification);
+  if (created && senderId && !db.fixtureMode) await sendThankYouPush(access.giftId, access.gift, ids.thankYouNotification);
   return {ok: true, alreadySent: !created};
 }
 
 exports.acknowledgeGiftStory = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
   return acknowledgeGiftStory(db, {...access, thankYouMessage: data && data.thankYouMessage});
 });
 
 exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
   const ids = giftStoryActionIds(access.giftId, access.uid);
   const vaultRef = db.collection("giftStoryVaults").doc(access.uid).collection("stories").doc(access.giftId);
@@ -1130,7 +1130,7 @@ exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
 });
 
 exports.getGiftStoryActionState = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const access = await resolveGiftStoryActionAccess(db, data, context);
   let saved = false;
   if (access.uid) {
@@ -1145,7 +1145,7 @@ exports.getGiftStoryActionState = functions.https.onCall(async (data, context) =
 });
 
 exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const record = await tokenRecord(db, data && data.token);
   if (!record) throw new functions.https.HttpsError("permission-denied", "This Gift Story link is invalid or expired.");
   const giftSnap = await db.collection("giftRequests").doc(record.data.giftRequestId).get();
@@ -1221,7 +1221,7 @@ exports.recordGiftStoryGuestEvent = functions.https.onRequest(async (req, res) =
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).json({ok: false});
   try {
-    const db = getFirestore();
+    const db = await storyRuntimeDb(getFirestore(), req.body || {});
     const result = await recordGiftStoryGuestAnalytics(db, {
       token: text(req.body && req.body.token),
       event: text(req.body && req.body.event),
@@ -1311,7 +1311,7 @@ async function participantAuthorized(context, gift, suppliedToken, db = getFires
 }
 
 exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
-  const db = getFirestore();
+  const db = await storyRuntimeDb(getFirestore(), data);
   const giftId = text(data.giftRequestId);
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
@@ -1322,7 +1322,7 @@ exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context
   const mime = extension === "mp4" ? "video/mp4" : "video/webm";
   const nonce = crypto.randomBytes(12).toString("hex");
   const exportKind = text(data.version).toLowerCase() === "silent" ? "silent" : "sound";
-  const storagePath = `gifts/${giftId}/story/exports/${exportKind}/${Date.now()}_${nonce}.${extension}`;
+  const storagePath = db.fixtureMode ? `runtime-fixtures/gift-video/${giftId}/exports/${exportKind}/${Date.now()}_${nonce}.${extension}` : `gifts/${giftId}/story/exports/${exportKind}/${Date.now()}_${nonce}.${extension}`;
   const file = getStorage().bucket().file(storagePath);
   const [uploadUrl] = await file.getSignedUrl({
     version: "v4",
@@ -1358,6 +1358,12 @@ exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, conte
     throw error;
   }
 });
+
+async function storyRuntimeDb(rawDb, data = {}) {
+  const fromToken = /^(__codex_video_[A-Za-z0-9_-]{1,80})\.[A-Za-z0-9_-]{20,}$/.exec(text(data.token));
+  const giftId = text(data.giftRequestId || data.senderStoryId) || fromToken?.[1] || "";
+  return videoDownloadDb(rawDb, giftId);
+}
 
 async function videoDownloadDb(rawDb, giftId) {
   if (!/^__codex_video_[A-Za-z0-9_-]{1,80}$/.test(giftId)) return rawDb;
@@ -1465,10 +1471,12 @@ exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => 
 exports.giftStoryLanding = functions.https.onRequest(async (req, res) => {
   res.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   res.set("Cache-Control", "no-store");
-  const token = text(req.path.split("/").filter(Boolean).pop() || req.query.token);
-  const record = await tokenRecord(getFirestore(), token);
+  const pathToken = req.path.split("/").filter(Boolean).pop();
+  const token = text(pathToken && pathToken !== "giftStoryLanding" ? pathToken : req.query.token);
+  const db = await storyRuntimeDb(getFirestore(), {token});
+  const record = await tokenRecord(db, token);
   if (!record) return res.status(410).send("<!doctype html><title>Gift Story expired</title><meta name=robots content=noindex><body style='background:#050816;color:white;font-family:Helvetica;padding:48px'><h1>This Gift Story link has expired.</h1></body>");
-  const giftSnap = await getFirestore().collection("giftRequests").doc(record.data.giftRequestId).get();
+  const giftSnap = await db.collection("giftRequests").doc(record.data.giftRequestId).get();
   if (!giftSnap.exists) return res.status(404).send("Gift Story not found.");
   const gift = giftSnap.data() || {};
   if (gift.giftStoryEnabled === false || gift.giftStoryApproved === false) {
@@ -1480,7 +1488,7 @@ exports.giftStoryLanding = functions.https.onRequest(async (req, res) => {
   if (!isComplete(gift.giftStatus || gift.status) && gift.giftStoryAdminOverride !== true) {
     return res.status(423).send("<!doctype html><title>Gift Story locked</title><meta name=robots content=noindex><body style='background:#090B1D;color:#F5F3ED;font-family:Helvetica;padding:48px'><h1>Gift Story locked</h1><p>Your story will unlock after delivery is confirmed.</p></body>");
   }
-  await maybeCreateRevealedCampaignMatch(getFirestore(), giftSnap.ref, giftSnap.id, gift, "");
+  await maybeCreateRevealedCampaignMatch(db, giftSnap.ref, giftSnap.id, gift, "");
   return res.status(200).send(renderGiftStoryHtml({
     token,
     giftId: giftSnap.id,
@@ -1583,3 +1591,5 @@ module.exports.giftStoryActionIds = giftStoryActionIds;
 module.exports.getSenderGiftStory = exports.getSenderGiftStory;
 
 module.exports.videoDownloadDb = videoDownloadDb;
+
+module.exports.storyRuntimeDb = storyRuntimeDb;

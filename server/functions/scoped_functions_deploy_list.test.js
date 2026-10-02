@@ -16,7 +16,9 @@ function names(args) {
 
 test("Gift Story module changes deploy only Gift Story exports", () => {
   const result = names(["--files", "server/functions/gift-story-automation.js"]);
-  assert.ok(result.includes("getSenderGiftStory"));
+  assert.ok(!result.includes("getSenderGiftStory"));
+  assert.ok(!result.includes("resolveGiftStoryAccess"));
+  assert.ok(!result.includes("createGiftStoryVideoUpload"));
   assert.ok(result.includes("onGiftDeliveryCompleted"));
   assert.ok(!result.includes("createSenderPaidDelivery"));
   assert.ok(result.length < 252);

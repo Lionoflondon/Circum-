@@ -169,7 +169,7 @@ test("giftStoryLanding renders successfully without attributing query viewer ide
   const requestUrl = "/story/valid-reveal-token?viewerUserId=forged-uid";
   assert.match(requestUrl, /\?viewerUserId=forged-uid$/);
   assert.match(block, /return res\.status\(200\)\.send\(renderGiftStoryHtml\(/);
-  assert.match(block, /maybeCreateRevealedCampaignMatch\(getFirestore\(\), giftSnap\.ref, giftSnap\.id, gift, ""\);/);
+  assert.match(block, /maybeCreateRevealedCampaignMatch\(db, giftSnap\.ref, giftSnap\.id, gift, ""\);/);
   assert.doesNotMatch(block, /maybeCreateRevealedCampaignMatch\([^;]*req\.query\.viewerUserId/);
   assert.doesNotMatch(block, /storyViewedBy.*forged-uid/);
   assert.doesNotMatch(block, /giftStoryViewedBy.*forged-uid/);

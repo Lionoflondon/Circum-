@@ -20,7 +20,7 @@ for (const [operation, policy] of Object.entries(OPERATIONS)) {
     const requestBody = JSON.stringify({data: {idempotencyKey: "qa-replay", scope: "all_other_devices"}});
     const reply = JSON.stringify({result: {ok: true, idempotent: true}});
     const fakeFetch = async (url, options) => {
-      assert.equal(url, `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${operation}`);
+      assert.equal(url, `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path || operation}`);
       assert.equal(options.body.toString(), requestBody);
       assert.equal(options.headers.authorization, "Bearer qa-token");
       assert.equal(options.headers["x-firebase-appcheck"], "qa-app-check");
@@ -77,5 +77,17 @@ test("Gift Story guest tokens remain opaque and cannot select a payment operatio
   return {status: 403, arrayBuffer: async () => Buffer.from("{\"error\":{\"status\":\"PERMISSION_DENIED\"}}")};
  }, async (base) => {
   const response = await fetch(base, {method: "POST", headers: {"content-type": "application/json"}, body: data}); assert.equal(response.status, 403); assert.equal((await response.json()).error.status, "PERMISSION_DENIED");
+ });
+});
+test("Gift Story landing preserves HTTP path, HTML, and guest transport without selecting other handlers", async () => {
+ let calls = 0;
+ await withServer("giftStoryLanding", async (url, options) => {
+  calls++;
+  assert.equal(url, "https://circum-gift-payments-j2b7cicfwq-uc.a.run.app/giftStoryLanding/opaque-token?view=story");
+  assert.equal(options.method, "GET"); assert.equal(options.body, undefined);
+  return {status: 410, headers: new Headers({"content-type": "text/html"}), arrayBuffer: async () => Buffer.from("<title>Expired</title>")};
+ }, async (base) => {
+  const r = await fetch(base + "/opaque-token?view=story"); assert.equal(r.status, 410); assert.equal(r.headers.get("content-type"), "text/html"); assert.equal(await r.text(), "<title>Expired</title>");
+  assert.equal((await fetch(base + "/other/operation")).status, 400); assert.equal(calls, 1);
  });
 });
