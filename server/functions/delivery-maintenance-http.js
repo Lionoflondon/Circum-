@@ -20,7 +20,8 @@ async function processTick({db, worker, tick, now = Date.now(), run = runWorker}
   const [control, lease, receipt] = await Promise.all([tx.get(controlRef), tx.get(leaseRef), tx.get(receiptRef)]);
   if (receipt.exists) return {replayed: true, result: receipt.data().result};
   const c = control.data() || {}; const l = lease.data() || {};
-  if (c.enabled !== true || Number(c.acknowledged || 0) >= Number(c.maxAcknowledgements || 0)) throw Object.assign(new Error("bounded_cutover_paused"), {statusCode: 503});
+  const maximum = Number(c.maxAcknowledgements || 0); const acknowledged = Number(c.acknowledged || 0);
+  if (c.enabled !== true || !Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(acknowledged) || acknowledged < 0 || acknowledged >= maximum) throw Object.assign(new Error("bounded_cutover_paused"), {statusCode: 503});
   if (Number(l.leaseUntil || 0) > now) throw Object.assign(new Error("worker_busy"), {statusCode: 503});
   if (l.lastCompletedAt && now - l.lastCompletedAt < INTERVALS[worker]) {
    tx.create(receiptRef, {worker, publishTime: tick.publishTime, ageSeconds: tick.ageSeconds, result: {coalesced: true}, createdAt: FieldValue.serverTimestamp()});
