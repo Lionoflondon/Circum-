@@ -158,7 +158,7 @@ function createServer(options = {}) {
         let app;
         if (operation.appCheckRequired) {
           const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
-          if (!appCheckToken) throw callableError("failed-precondition", "Circum security verification is required.");
+          if (!appCheckToken) throw callableError(["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"].includes(name) ? "unauthenticated" : "failed-precondition", "Circum security verification is required.");
           try {
             app = await dependencies.verifyAppCheck(appCheckToken);
           } catch {
@@ -170,7 +170,7 @@ function createServer(options = {}) {
         // Firebase's installed callable SDK sends data:null for call() with no arguments.
         const data = payload && payload.data;
         const noArguments = data === null &&
-          ["getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"].includes(name);
+          ["createSenderSetupIntent", "getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"].includes(name);
         if (!payload || Array.isArray(payload) || !Object.hasOwn(payload, "data") ||
           (!noArguments && (!data || typeof data !== "object" || Array.isArray(data)))) {
           throw callableError("invalid-argument", "Callable request must contain data.");
