@@ -339,3 +339,26 @@ test("trust award patch writes backend-owned rank unless manually overridden", (
   assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "riderRank"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "rank"), false);
 });
+
+
+test("canonical zero settlement components override stale legacy values and preserve adjustments", () => {
+  const zero = deliveryTracking.settlementValues({riderEarning: 10,
+    riderEarningBreakdown: {tip: 0, waiting: 0, adjustment: 0},
+    riderTip: 3, riderWaitingEarning: 2, riderAdjustment: 4});
+  assert.equal(zero.deliveryAmount, 10);
+  assert.equal(zero.tip, 0);
+  assert.equal(zero.waiting, 0);
+  assert.equal(zero.adjustment, 0);
+  const adjusted = deliveryTracking.settlementValues({riderEarning: 10, riderAdjustment: -2});
+  assert.equal(adjusted.adjustment, -2);
+  assert.equal(adjusted.deliveryAmount, 12);
+});
+
+
+test("authoritative zero Rider earning does not fall back to stale estimates", () => {
+  const value = deliveryTracking.settlementValues({riderEarning: 0, estimatedEarnings: 80,
+    riderEligibleFare: 100, riderPayoutCalculationVersion: "65_35_v1"});
+  assert.equal(value.amount, 0);
+  assert.equal(value.amountSource, "explicit_rider_earning");
+  assert.equal(value.requiresReview, false);
+});

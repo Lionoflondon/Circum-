@@ -145,8 +145,8 @@ function payoutReadiness(profile = {}, documents = []) {
   const requiredDocumentsApproved = missingDocuments.length === 0;
   const stripeAccountExists = Boolean(text(profile.stripeConnectAccountId || profile.stripeAccountId));
   const stripeDetailsSubmitted = profile.stripeDetailsSubmitted === true;
-  const chargesEnabled = profile.stripeChargesEnabled === true || profile.chargesEnabled === true;
-  const payoutsEnabled = profile.stripePayoutsEnabled === true || profile.payoutsEnabled === true;
+  const chargesEnabled = (profile.stripeChargesEnabled ?? profile.chargesEnabled) === true;
+  const payoutsEnabled = (profile.stripePayoutsEnabled ?? profile.payoutsEnabled) === true;
   const disabledReason = text(profile.stripeDisabledReason);
   const complianceRestrictions = Array.isArray(profile.stripeRequirementsDue) && profile.stripeRequirementsDue.length > 0;
   const suspended = activeSuspension(profile);

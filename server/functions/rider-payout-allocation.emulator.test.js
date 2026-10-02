@@ -64,6 +64,9 @@ test("actual payout callable reserves FIFO identities once and protects the whol
   const callable = require("./rider-connect").createRiderTransferOrPayout(stripe);
   const input = {riderId, requestId: "fifo-request", amount: 10, estimatedStripeFees: 1};
   const context = {auth: {uid: "emulator-admin", token: {}}, app: {appId: "emulator"}};
+  await assert.rejects(callable.run({...input, requestId: "zero-share-rejected", riderGrossShare: 0}, context), {code: "invalid-argument"});
+  assert.equal((await db.doc("payoutRequests/zero-share-rejected").get()).exists, false);
+  assert.equal(calls.length, 0);
   await callable.run(input, context);
   await callable.run(input, context);
   assert.equal(calls.length, 1);
@@ -126,6 +129,11 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
     status: "reserved", payoutStatus: "reserved", fundsReserved: true, transferDispatching: true,
     transferAttemptStartedAt: stale, updatedAt: stale,
   });
+  await db.doc("payoutRequests/recover-expired-key").set({
+    riderId: "recover-rider", stripeAccountId: "acct_recover", riderNetPayout: 7,
+    status: "reserved", fundsReserved: true, transferDispatching: true,
+    transferAttemptStartedAt: new Date(now - 24 * 60 * 60 * 1000), updatedAt: stale,
+  });
   const keys = [];
   const stripe = {transfers: {
     retrieve: async (id) => ({id}),
@@ -136,6 +144,8 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
   await Promise.all(Array.from({length: 20}, () => recoverRiderPayoutsCore(stripe, {db, now})));
   assert.equal(keys.length, 1);
   assert.deepEqual(keys, ["rider_payout_transfer_recover-concurrent"]);
+  assert.equal((await db.doc("payoutRequests/recover-expired-key").get()).data().stripeTransferId, undefined);
+  assert.equal((await db.doc("payoutRequests/recover-expired-key").get()).data().fundsReserved, true);
   const recovered = (await db.doc("payoutRequests/recover-concurrent").get()).data();
   assert.equal(recovered.stripeTransferId, "tr_concurrent");
   assert.equal(recovered.transferDispatching, false);
@@ -157,4 +167,59 @@ test("twenty concurrent recovery deliveries create one deterministic Stripe tran
   assert.equal(first.failures, 1);
   assert.equal(second.reconciled, 1);
   assert.equal((await db.doc("payoutRequests/recover-timeout").get()).data().stripeTransferId, "tr_timeout");
+});
+
+
+test("recovery cursor advances past a full page of ineligible Riders to a later eligible payout", async () => {
+  const {fixtureDb} = require("./gift-story-fixture-db");
+  const isolated = fixtureDb(db, "__codex_recovery_pagination_test");
+  const now = Date.now();
+  const batch = isolated.batch();
+  for (let i = 0; i < 25; i++) batch.set(isolated.collection("payoutRequests").doc(`a_${String(i).padStart(3, "0")}`), {status: "processing", updatedAt: new Date(now)});
+  batch.set(isolated.collection("payoutRequests").doc("z_eligible"), {status: "processing",
+    riderId: "later-rider", stripeAccountId: "acct_fixture", riderNetPayout: 3, fundsReserved: true,
+    stripeTransferId: "tr_fixture", transferAttemptStartedAt: new Date(now - 3600000), updatedAt: new Date(now - 3600000)});
+  await batch.commit();
+  let retrieved = 0;
+  const stripe = {transfers: {retrieve: async (id) => {
+ retrieved++; return {id};
+},
+    create: async () => {
+ throw new Error("No provider creation allowed");
+}}};
+  const first = await recoverRiderPayoutsCore(stripe, {db: isolated, now, limit: 25});
+  assert.equal(first.scanned, 25);
+  assert.equal(first.candidates, 0);
+  const next = await recoverRiderPayoutsCore(stripe, {db: isolated, now, limit: 25});
+  assert.equal(next.reconciled, 1);
+  assert.equal(retrieved, 1);
+});
+
+test("failed transfer preserves authoritative zero and cannot release unreserved funds", async (t) => {
+  const oldSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "emulator-only";
+  t.after(() => {
+    if (oldSecret === undefined) delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+    else process.env.STRIPE_CONNECT_WEBHOOK_SECRET = oldSecret;
+  });
+  for (const [id, amount, reserved] of [["zero-authority", 0, true], ["already-released", 5, false]]) {
+    await db.doc(`riderEarnings/${id}`).set({availableBalance: 0, pendingWithdrawal: 0});
+    await db.doc(`payoutRequests/${id}`).set({riderId: id, amount, status: "processing", riderNetPayout: 5, stripeTransferId: `tr_${id}`, fundsReserved: reserved});
+    const event = {type: "transfer.failed", id: `evt_${id}`, data: {object: {id: `tr_${id}`, amount: 500, currency: "gbp", metadata: {payoutRequestId: id}}}};
+    const stripe = {webhooks: {constructEvent: () => event}};
+    const response = {code: 200, status(code) {
+      this.code = code; return this;
+    }, json(body) {
+      this.body = body;
+    }, send(body) {
+      this.body = body;
+    }};
+    const handler = handleStripeConnectWebhook(stripe);
+    await handler({headers: {"stripe-signature": "test"}, rawBody: Buffer.from("test")}, response);
+    assert.equal(response.code, 200, JSON.stringify(response));
+    await handler({headers: {"stripe-signature": "test"}, rawBody: Buffer.from("test")}, response);
+    const wallet = (await db.doc(`riderEarnings/${id}`).get()).data();
+    assert.equal(wallet.availableBalance, 0);
+    assert.equal(wallet.pendingWithdrawal, 0);
+  }
 });

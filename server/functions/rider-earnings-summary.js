@@ -3,6 +3,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {scanQuery} = require("./rider-query-scan");
 const {riderCallable} = require("./rider-app-check");
 
 const ACTIVE_PAYOUTS = new Set(["requested", "processing"]);
@@ -14,7 +15,10 @@ const money = (value) => Math.round(number(value) * 100) / 100;
 
 function connectReadiness(profile = {}) {
   const raw = text(profile.stripeConnectStatus || profile.stripeStatus);
-  if (profile.payoutsEnabled === true && profile.chargesEnabled !== false) return "ready";
+  const payoutsEnabled = profile.stripePayoutsEnabled ?? profile.payoutsEnabled;
+  const chargesEnabled = profile.stripeChargesEnabled ?? profile.chargesEnabled;
+  if (payoutsEnabled === false || chargesEnabled === false) return "restricted";
+  if (payoutsEnabled === true && chargesEnabled !== false) return "ready";
   if (["ready", "enabled", "payouts_enabled", "active"].includes(raw)) return "ready";
   if (["pending", "pending_verification", "under_review"].includes(raw)) return "pending_verification";
   if (["restricted", "requirements_due"].includes(raw)) return "restricted";
@@ -46,24 +50,24 @@ function reconcileLedger(rows = [], wallet = {}, payouts = []) {
   const credits = totals.delivery_earning + totals.tip + totals.waiting_fee + totals.no_show_fee + totals.adjustment_credit + totals.payout_failed_release;
   const debits = totals.adjustment_debit + totals.payout_reserved + totals.refund + totals.reversal;
   const calculatedAvailable = money(credits - debits);
-  const storedAvailable = money(wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance);
+  const storedAvailable = money(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
   const unexplained = money(storedAvailable - calculatedAvailable);
-  const pending = money(wallet.pendingBalance || wallet.pendingEarnings);
+  const pending = money(wallet.pendingBalance ?? wallet.pendingEarnings);
   const normalizedPayouts = payouts.map((p) => ({...p, status: text(p.status || p.payoutStatus)}));
   return {totals, calculatedAvailable, storedAvailable, pending, unexplained, reconciled: Math.abs(unexplained) < 0.01, production, quarantined, activePayout: normalizedPayouts.find((p) => ACTIVE_PAYOUTS.has(p.status)) || null, latestFailed: normalizedPayouts.find((p) => p.status === "failed") || null};
 }
 
 function materializedTotals(wallet = {}) {
-  const adjustments = money(wallet.adjustmentsTotal || wallet.adjustmentTotal);
+  const adjustments = money(wallet.adjustmentsTotal ?? wallet.adjustmentTotal);
   return {
-    delivery_earning: money(wallet.deliveryEarningsTotal || wallet.deliveryEarningTotal || wallet.deliveryTotal),
-    tip: money(wallet.tipsTotal || wallet.tipTotal || wallet.tipsReceived),
-    waiting_fee: money(wallet.waitingFeesTotal || wallet.waitingNoShowTotal || wallet.waitingTotal),
-    no_show_fee: money(wallet.noShowFeesTotal || wallet.noShowTotal),
+    delivery_earning: money(wallet.deliveryEarningsTotal ?? wallet.deliveryEarningTotal ?? wallet.deliveryTotal),
+    tip: money(wallet.tipsTotal ?? wallet.tipTotal ?? wallet.tipsReceived),
+    waiting_fee: money(wallet.waitingFeesTotal ?? wallet.waitingNoShowTotal ?? wallet.waitingTotal),
+    no_show_fee: money(wallet.noShowFeesTotal ?? wallet.noShowTotal),
     adjustment_credit: adjustments > 0 ? adjustments : 0,
     adjustment_debit: adjustments < 0 ? Math.abs(adjustments) : 0,
     payout_reserved: money(wallet.pendingWithdrawal),
-    payout_completed: money(wallet.totalWithdrawn || wallet.withdrawnEarnings),
+    payout_completed: money(wallet.totalWithdrawn ?? wallet.withdrawnEarnings),
     payout_failed_release: money(wallet.payoutFailedReleaseTotal),
     refund: money(wallet.refundTotal),
     reversal: money(wallet.reversalTotal),
@@ -79,8 +83,8 @@ function payoutState(payouts = []) {
 }
 
 function materializedSummary({wallet = {}, payouts = [], recentRows = [], profile = {}}) {
-  const storedAvailable = money(wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance);
-  const pending = money(wallet.pendingBalance || wallet.pendingEarnings);
+  const storedAvailable = money(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
+  const pending = money(wallet.pendingBalance ?? wallet.pendingEarnings);
   const reviewRequired = wallet.payoutReviewRequired === true || wallet.reconciliationRequired === true;
   const activityCount = Number.isFinite(Number(wallet.activityCount || wallet.transactionCount)) ?
     Number(wallet.activityCount || wallet.transactionCount) : recentRows.length;
@@ -89,7 +93,7 @@ function materializedSummary({wallet = {}, payouts = [], recentRows = [], profil
     calculatedAvailable: storedAvailable,
     storedAvailable,
     pending,
-    unexplained: reviewRequired ? money(wallet.unexplainedBalance || wallet.reconciliationDelta) : 0,
+    unexplained: reviewRequired ? money(wallet.unexplainedBalance ?? wallet.reconciliationDelta) : 0,
     reconciled: !reviewRequired,
     production: recentRows,
     quarantined: [],
@@ -213,13 +217,13 @@ function adminReconcileRiderEarnings() {
   });
 }
 
-const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24 hours").onRun(async () => {
-  const db = getFirestore();
-  const snapshot = await db.collection("riderEarnings").limit(25).get();
+async function scheduledRiderEarningsReconciliationCore({db = getFirestore(), reconcile = reconcileRiderEarnings} = {}) {
+  let scanned = 0;
   let reconciled = 0;
   let reviewRequired = 0;
-  for (const doc of snapshot.docs) {
-    const result = await reconcileRiderEarnings({
+  await scanQuery(db.collection("riderEarnings"), 25, async (doc) => {
+    scanned += 1;
+    const result = await reconcile({
       db,
       riderId: doc.id,
       actorId: "system",
@@ -228,14 +232,18 @@ const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24
     });
     if (result.reconciled) reconciled += 1;
     else reviewRequired += 1;
-  }
-  return {scanned: snapshot.size, reconciled, reviewRequired};
-});
+  });
+  return {scanned, reconciled, reviewRequired};
+}
+
+const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24 hours")
+    .onRun(() => scheduledRiderEarningsReconciliationCore());
 
 module.exports = {
   getRiderEarningsSummary,
   adminReconcileRiderEarnings,
   scheduledRiderEarningsReconciliation,
+  scheduledRiderEarningsReconciliationCore,
   reconcileLedger,
   connectReadiness,
   materializedSummary,

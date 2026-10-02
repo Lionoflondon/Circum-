@@ -218,5 +218,11 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
 });
 
 test("Rider withdrawal authority remains exported by the backend", () => {
-  assert.match(index, /exports\.requestRiderWithdrawal = riderConnect\.requestRiderWithdrawal\(\);/);
+  assert.match(index, /exports\.requestRiderWithdrawal = riderBackendCompat\.createCompat\("requestRiderWithdrawal"\);/);
+  const compatibility = require("./rider-backend-compat");
+  assert.equal(compatibility.OWNERS.requestRiderWithdrawal, "circum-rider-payouts");
+  const owner = fs.readFileSync(path.join(__dirname, "cloud-run-rider-finance-handlers.js"), "utf8");
+  assert.match(owner, /requestRiderWithdrawal: rider\.requestRiderWithdrawal\(\)/);
+  const handlers = require("./cloud-run-rider-finance-handlers").createHandlers("rider_payouts");
+  assert.equal(typeof handlers.requestRiderWithdrawal.run, "function");
 });

@@ -64,6 +64,7 @@ const rothGrantCampaigns = require("./roth-grant-campaigns");
 const businessPayments = require("./business-payments");
 const businessGifts = require("./business-gifts");
 const riderConnect = require("./rider-connect");
+const riderBackendCompat = require("./rider-backend-compat");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
@@ -164,9 +165,8 @@ exports.requestRiderCancellation = require("./rider-cancellation").requestRiderC
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
 exports.ensureSenderAccount = accountBootstrapCompat.ensureSenderAccount;
 exports.updateRiderProfile = accountBootstrapCompat.updateRiderProfile;
-exports.updateDeliveryTrackingStatus =
-  deliveryTracking.updateDeliveryTrackingStatus;
-exports.completeDelivery = require("./delivery-completion-reconciled").completeDelivery;
+exports.updateDeliveryTrackingStatus = riderBackendCompat.createCompat("updateDeliveryTrackingStatus");
+exports.completeDelivery = riderBackendCompat.createCompat("completeDelivery");
 exports.recordDeliveryEvidence = deliveryEvidence.recordDeliveryEvidence;
 exports.submitDeliveryEvidence = deliveryEvidence.submitDeliveryEvidence;
 exports.updateDeliveryLiveLocation =
@@ -268,22 +268,16 @@ exports.updateBusinessMemberRole = businessAccess.updateBusinessMemberRole;
 exports.updateBusinessMemberStatus = businessAccess.updateBusinessMemberStatus;
 exports.removeBusinessMember = businessAccess.removeBusinessMember;
 exports.recordBusinessIrisMoment = businessAccess.recordBusinessIrisMoment;
-exports.createStripeConnectAccountForRider =
-  riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
-exports.createStripeOnboardingLink =
-  riderConnect.createStripeOnboardingLink(stripeConnectClient);
-exports.refreshStripeOnboardingLink =
-  riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
-exports.syncStripeConnectStatus =
-  riderConnect.syncStripeConnectStatus(stripeConnectClient);
-exports.createStripeAccountManagementLink =
-  riderConnect.createStripeAccountManagementLink(stripeConnectClient);
-exports.riderPayoutReadiness = riderConnect.riderPayoutReadiness();
-exports.createRiderTransferOrPayout =
-  riderConnect.createRiderTransferOrPayout(stripeConnectClient);
-exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
-exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
-exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
+exports.createStripeConnectAccountForRider = riderBackendCompat.createCompat("createStripeConnectAccountForRider");
+exports.createStripeOnboardingLink = riderBackendCompat.createCompat("createStripeOnboardingLink");
+exports.refreshStripeOnboardingLink = riderBackendCompat.createCompat("refreshStripeOnboardingLink");
+exports.syncStripeConnectStatus = riderBackendCompat.createCompat("syncStripeConnectStatus");
+exports.createStripeAccountManagementLink = riderBackendCompat.createCompat("createStripeAccountManagementLink");
+exports.riderPayoutReadiness = riderBackendCompat.createCompat("riderPayoutReadiness");
+exports.createRiderTransferOrPayout = riderBackendCompat.createCompat("createRiderTransferOrPayout");
+exports.requestRiderWithdrawal = riderBackendCompat.createCompat("requestRiderWithdrawal");
+exports.cancelRiderWithdrawal = riderBackendCompat.createCompat("cancelRiderWithdrawal");
+exports.adminReviewRiderWithdrawal = riderBackendCompat.createCompat("adminReviewRiderWithdrawal");
 exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
 exports.adminGovernanceAction = adminGovernance.adminGovernanceAction;
 exports.adminResolveAccess = adminOperationsAuthority.adminResolveAccess;

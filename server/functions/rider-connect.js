@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+const {scanQuery} = require("./rider-query-scan");
 const payoutAllocation = require("./rider-payout-allocation");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
@@ -44,6 +45,10 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function riderWalletAvailable(wallet = {}) {
+  return roundMoney(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
+}
+
 function roundMoney(value) {
   return Math.round(numberValue(value) * 100) / 100;
 }
@@ -81,8 +86,8 @@ function estimateStripeFee(amountGbp, policy = payoutFeePolicy()) {
 }
 
 function resolveRiderPayoutBreakdown(input = {}) {
-  const riderGrossShare = roundMoney(input.riderGrossShare || input.amount || 0);
-  const totalCustomerPaid = roundMoney(input.totalCustomerPaid || input.customerPaid || input.total || 0);
+  const riderGrossShare = roundMoney(input.riderGrossShare ?? input.amount ?? 0);
+  const totalCustomerPaid = roundMoney(input.totalCustomerPaid ?? input.customerPaid ?? input.total ?? 0);
   const suppliedCommission = input.circumPlatformCommission != null ?
     input.circumPlatformCommission :
     input.platformCommission;
@@ -122,6 +127,7 @@ function stripeTransferIdempotencyKey(requestId) {
 const payoutRecoveryLeaseMs = 5 * 60 * 1000;
 const payoutRecoveryStaleMs = 10 * 60 * 1000;
 const payoutRecoveryMaxPerRun = 25;
+const payoutTransferRetryWindowMs = 23 * 60 * 60 * 1000;
 
 function timestampMillis(value) {
   if (!value) return 0;
@@ -141,7 +147,10 @@ function payoutRecoveryCandidate(record = {}, now = Date.now(), staleMs = payout
   // missing Stripe object is eligible only when the primary path had already
   // begun its transfer attempt.
   if (text(record.stripeTransferId)) return now - Math.max(updated, started) >= staleMs;
-  return record.transferDispatching === true && started > 0 && now - started >= staleMs;
+  // The primary payout authority stops automatic creation after 23 hours.
+  // Recovery must share that fence: provider idempotency keys can expire.
+  return record.transferDispatching === true && started > 0 &&
+    now - started >= staleMs && now - started <= payoutTransferRetryWindowMs;
 }
 
 async function recoverRiderPayoutsCore(stripeOrFactory, {
@@ -150,19 +159,24 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
   limit = payoutRecoveryMaxPerRun,
   leaseMs = payoutRecoveryLeaseMs,
   staleMs = payoutRecoveryStaleMs,
+  cursorId = "rider_payout_recovery",
 } = {}) {
   const stripe = stripeFrom(stripeOrFactory);
   const boundedLimit = Math.max(1, Math.min(Number(limit) || payoutRecoveryMaxPerRun, payoutRecoveryMaxPerRun));
-  const snapshot = await db.collection("payoutRequests")
+  const cursorRef = db.collection("operationsState").doc(cursorId);
+  const cursorDoc = await cursorRef.get();
+  const cursor = text(cursorDoc.data()?.cursor);
+  const query = db.collection("payoutRequests")
       .where("status", "in", ["reserved", "processing"])
       // Ordering by the document id keeps this bounded recovery query on the
       // built-in index.  Ordering the status-IN query by updatedAt would need
       // a production composite index and otherwise turns every recovery run
       // into a 500 before it can inspect a candidate.
       .orderBy(FieldPath.documentId(), "asc")
-      .limit(boundedLimit)
-      .get();
-  const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit, maxWrites: boundedLimit * 3};
+      .limit(boundedLimit);
+  let snapshot = await (cursor ? query.startAfter(cursor) : query).get();
+  if (snapshot.empty && cursor) snapshot = await query.get();
+  const result = {scanned: snapshot.size, candidates: 0, reconciled: 0, noops: 0, rejected: 0, failures: 0, maxReads: boundedLimit + 2, maxWrites: boundedLimit * 3 + 1};
   for (const doc of snapshot.docs) {
     const record = doc.data() || {};
     const candidate = payoutRecoveryCandidate(record, now, staleMs);
@@ -252,6 +266,14 @@ async function recoverRiderPayoutsCore(stripeOrFactory, {
       console.error("rider_payout_recovery_failed", {requestId: doc.id, message: error && error.message});
       result.failures += 1;
     }
+  }
+  const nextCursor = snapshot.size === boundedLimit ? snapshot.docs.at(-1).id : null;
+  if (text(nextCursor) !== cursor) {
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(cursorRef);
+      if (text(current.data()?.cursor) !== cursor) return;
+      transaction.set(cursorRef, {cursor: nextCursor}, {merge: true});
+    });
   }
   return result;
 }
@@ -812,7 +834,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         ...requestData,
         ...data,
         amount,
-        riderGrossShare: requestData.riderGrossShare || data.riderGrossShare || amount,
+        riderGrossShare: requestData.riderGrossShare ?? data.riderGrossShare ?? amount,
       };
       let breakdown = resolveRiderPayoutBreakdown(payoutInput);
       const existingStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
@@ -824,13 +846,16 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           id: existingTransferId,
           idempotent: true,
           metadata: {
-            stripeFeeDeductedFromRider: String(requestData.stripeFeeDeductedFromRider || breakdown.stripeFeeDeductedFromRider),
-            riderNetPayout: String(requestData.riderNetPayout || breakdown.riderNetPayout),
+            stripeFeeDeductedFromRider: String(requestData.stripeFeeDeductedFromRider ?? breakdown.stripeFeeDeductedFromRider),
+            riderNetPayout: String(requestData.riderNetPayout ?? breakdown.riderNetPayout),
           },
         };
       }
       if (existingRequest.exists && existingTransferId && existingStatus === "failed") {
         throw new functions.https.HttpsError("failed-precondition", "This payout transfer failed and must be retried with a new request.");
+      }
+      if (breakdown.riderGrossShare <= 0) {
+        throw new functions.https.HttpsError("invalid-argument", "A positive authoritative Rider payout share is required.");
       }
       const available = Number(walletData.availableBalance || 0);
       const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
@@ -985,7 +1010,7 @@ payoutAllocation.writePayoutLedger(transaction, db, {requestId: requestRef.id, v
       const request = await transaction.get(requestRef);
       if (request.data().tipRefundBlocked === true) throw new functions.https.HttpsError("failed-precondition", "This payout was adjusted by a tip refund. Please create a new request.");
       const priorAttempt = request.data().transferAttemptStartedAt;
-      if (priorAttempt && Date.now() - priorAttempt.toMillis() > 23 * 60 * 60 * 1000 && !request.data().stripeTransferId) {
+      if (priorAttempt && Date.now() - priorAttempt.toMillis() > payoutTransferRetryWindowMs && !request.data().stripeTransferId) {
         throw new functions.https.HttpsError("failed-precondition", "This transfer needs provider reconciliation before retry.");
       }
       transaction.set(requestRef, {transferDispatching: true, transferAttemptStartedAt: priorAttempt || FieldValue.serverTimestamp()}, {merge: true});
@@ -1145,9 +1170,7 @@ function requestRiderWithdrawal() {
           existing.status || existing.payoutStatus,
       ).toLowerCase();
       const wallet = walletDoc.data() || {};
-      const available = roundMoney(
-          wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance,
-      );
+      const available = riderWalletAvailable(wallet);
       const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
       const failure = riderWithdrawalFailure({
         amount,
@@ -1476,7 +1499,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
             const request = await transaction.get(requestRef);
             const requestData = request.data() || {};
             const riderId = text(requestData.riderId);
-            const amount = Number(requestData.amount || object.amount / 100 || 0);
+            const amount = Number(requestData.amount ?? object.amount / 100 ?? 0);
             const reserved = requestData.fundsReserved === true;
             const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
             const active = ["reserved", "processing", "pending", "requested"].includes(currentStatus);
@@ -1500,7 +1523,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-            if (event.type === "transfer.failed" && active && riderId && amount > 0) {
+            if (event.type === "transfer.failed" && active && reserved && riderId && amount > 0) {
               transaction.set(db.collection("riderEarnings").doc(riderId), {
                 availableBalance: FieldValue.increment(amount),
                 pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),
@@ -1523,17 +1546,10 @@ async function scheduledRiderStripeStatusSyncCore(stripeOrFactory) {
     const stripe = stripeFrom(stripeOrFactory);
     const db = getFirestore();
     const byId = new Map();
-    const addDocs = (snapshot) => {
-      snapshot.docs.forEach((doc) => byId.set(doc.id, doc));
-    };
-    addDocs(await db.collection("riderProfiles")
-        .where("stripeAccountId", ">", "")
-        .limit(200)
-        .get());
-    addDocs(await db.collection("riderProfiles")
-        .where("stripeConnectAccountId", ">", "")
-        .limit(200)
-        .get());
+    for (const field of ["stripeAccountId", "stripeConnectAccountId"]) {
+      await scanQuery(db.collection("riderProfiles").where(field, ">", "")
+          .orderBy(field), 200, async (doc) => byId.set(doc.id, doc));
+    }
     let synced = 0;
     let failed = 0;
     for (const doc of byId.values()) {
@@ -1616,6 +1632,7 @@ module.exports = {
   resolveRiderPayoutBreakdown,
   stripeConnectAccountIdempotencyKey,
   riderWithdrawalFailure,
+  riderWalletAvailable,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
 };

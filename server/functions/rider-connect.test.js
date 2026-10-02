@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  payoutRecoveryCandidate,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
   stripeConnectAccountIdempotencyKey,
@@ -123,7 +124,7 @@ test("Stripe Connect webhook money events are replay-safe", () => {
   assert.match(source, /event\.type === "payout\.created"[\s\S]*event\.type === "payout\.paid"[\s\S]*event\.type === "payout\.failed"[\s\S]*event\.type === "payout\.canceled"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /event\.type === "transfer\.created" \|\| event\.type === "transfer\.failed"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /const active = \["reserved", "processing", "pending", "requested"\]\.includes\(currentStatus\)/);
-  assert.match(source, /event\.type === "transfer\.failed" && active && riderId && amount > 0/);
+  assert.match(source, /event\.type === "transfer\.failed" && active && reserved && riderId && amount > 0/);
 });
 
 test("Rider payout transfer uses Stripe idempotency", () => {
@@ -169,7 +170,9 @@ test("Rider payout readiness is backend authoritative", () => {
   assert.equal(typeof computeRiderPayoutReadiness, "function");
   assert.match(source, /function riderPayoutReadiness\(\)/);
   assert.match(source, /computeRiderPayoutReadiness\(riderId\)/);
-  assert.match(index, /exports\.riderPayoutReadiness = riderConnect\.riderPayoutReadiness\(\);/);
+  assert.match(index, /exports\.riderPayoutReadiness = riderBackendCompat\.createCompat\("riderPayoutReadiness"\);/);
+  const owner = fs.readFileSync("cloud-run-rider-finance-handlers.js", "utf8");
+  assert.match(owner, /riderPayoutReadiness: rider\.riderPayoutReadiness\(\)/);
   assert.match(source, /payoutReadinessStatus/);
   assert.match(source, /payoutReadinessChecks/);
 });
@@ -261,4 +264,37 @@ test("Stripe Connect webhook covers payout cancellation and external account upd
   assert.match(source, /event\.type === "payout\.canceled"/);
   assert.match(source, /const releaseBalance = false/);
   assert.match(source, /availableBalance: releaseBalance \? FieldValue\.increment\(amount\) : FieldValue\.increment\(0\)/);
+});
+
+
+test("canonical disabled Stripe capabilities override stale legacy readiness flags", () => {
+  const result = payoutReadiness({stripeChargesEnabled: false, chargesEnabled: true,
+    stripePayoutsEnabled: false, payoutsEnabled: true});
+  assert.equal(result.checks.chargesEnabled, false);
+  assert.equal(result.checks.payoutsEnabled, false);
+  assert.equal(result.ready, false);
+  const legacy = payoutReadiness({chargesEnabled: true, payoutsEnabled: true});
+  assert.equal(legacy.checks.chargesEnabled, true);
+  assert.equal(legacy.checks.payoutsEnabled, true);
+});
+
+test("scheduled Rider projections preserve canonical zero earnings over stale estimates", () => {
+  const {scheduledJobProjection} = require("./scheduled-delivery-core");
+  assert.equal(scheduledJobProjection("fixture", {riderEarning: 0, estimatedEarnings: 80}).earnings, 0);
+});
+
+test("authoritative zero payout share and customer total never fall back to legacy amounts", () => {
+  const value = resolveRiderPayoutBreakdown({riderGrossShare: 0, amount: 80, totalCustomerPaid: 0, customerPaid: 100});
+  assert.equal(value.riderGrossShare, 0);
+  assert.equal(value.totalCustomerPaid, 0);
+  assert.equal(value.riderNetPayout, 0);
+  assert.equal(value.adminReviewRequired, true);
+});
+
+test("recovery shares the primary 23-hour retry fence while known transfers remain safe to reconcile", () => {
+  const now = Date.now();
+  const record = {status: "reserved", fundsReserved: true, transferDispatching: true, transferAttemptStartedAt: new Date(now - 24 * 60 * 60 * 1000), updatedAt: new Date(now - 24 * 60 * 60 * 1000)};
+  assert.equal(payoutRecoveryCandidate(record, now), false);
+  assert.equal(payoutRecoveryCandidate({...record, stripeTransferId: "tr_known"}, now), true);
+  assert.equal(payoutRecoveryCandidate({...record, transferAttemptStartedAt: new Date(now - 22 * 60 * 60 * 1000)}, now), true);
 });

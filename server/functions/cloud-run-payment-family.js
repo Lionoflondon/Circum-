@@ -128,9 +128,10 @@ function createPaymentFamilyServer({family, handlers}) {
 
 if (require.main === module) {
   const family = String(process.env.PAYMENT_FAMILY || "").trim();
-  const functions = require("./index");
   const routeNames = FAMILY_ROUTES[family] || [];
-  const handlers = Object.fromEntries(routeNames.map((name) => [name, functions[name]]));
+  const handlers = family.startsWith("rider_") ?
+    require("./cloud-run-rider-finance-handlers").createHandlers(family) :
+    Object.fromEntries(routeNames.map((name) => [name, require("./index")[name]]));
   const port = Number(process.env.PORT || 8080);
   createPaymentFamilyServer({family, handlers}).listen(port, "0.0.0.0");
 }
