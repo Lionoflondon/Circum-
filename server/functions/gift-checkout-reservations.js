@@ -15,6 +15,7 @@ async function reserve({db, giftRef, uid, split, paymentMethod, nativePayment}) 
     const [giftSnap, existing, origin] = await tx.getAll(giftRef, reservationRef, db.doc(`giftCheckoutOrigins/${giftRef.id}`));
     const gift = giftSnap.data() || {};
     if (!giftSnap.exists || gift.senderId !== uid) throw blocked("Gift ownership changed.", "gift_owner");
+    await require("./gift-media-cleanup-authority").assertNotRetired(tx, db, "voice", gift.voiceNote?.storagePath);
     if (existing.exists) {
       const r = existing.data();
       if (r.senderId !== uid || r.giftDraftId !== giftRef.id) throw blocked("Gift reservation ownership mismatch.", "gift_owner");

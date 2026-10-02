@@ -154,8 +154,7 @@ exports.createGiftRecurringBillingPortalSession = giftRecurringCallables.portal;
 exports.reconcileGiftRecurringRenewals = giftRecurring.reconcileGiftRecurringRenewals(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 exports.cancelGiftPayment = giftsPayment.cancelGiftPayment(stripe);
-exports.cleanupExpiredGiftVoiceDrafts =
-  giftsPayment.cleanupExpiredGiftVoiceDrafts;
+exports.cleanupExpiredGiftVoiceDrafts = cloudRunOnly(giftsPayment.cleanupExpiredGiftVoiceDrafts, "circum-payment-schedulers", false, "schedule");
 exports.onGiftRequestVoiceMediaDeleted =
   giftsPayment.onGiftRequestVoiceMediaDeleted;
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
@@ -182,7 +181,7 @@ exports.refundDeliveryTip = ratingsTipping.refundDeliveryTip(stripe);
 exports.getRiderEarningsSummary = cloudRunOnly(
     riderEarningsSummary.getRiderEarningsSummary(), "circum-rider-payouts", true);
 exports.adminReconcileRiderEarnings = riderEarningsSummary.adminReconcileRiderEarnings();
-exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRiderEarningsReconciliation;
+exports.scheduledRiderEarningsReconciliation = cloudRunOnly(riderEarningsSummary.scheduledRiderEarningsReconciliation, "circum-payment-schedulers", false, "schedule");
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
 exports.designateGooglePlayReviewAccount = founderReviewFixture.designateReviewAccount();
 exports.revokeGooglePlayReviewAccount = founderReviewFixture.revokeReviewAccount();
@@ -206,8 +205,7 @@ exports.processHealthPlusReminders =
   healthPlusOperations.processHealthPlusReminders;
 exports.resetHealthPlusMonthlyUsage =
   healthPlusOperations.resetHealthPlusMonthlyUsage;
-exports.generateHealthPlusRecurringBookings =
-  healthPlusOperations.generateHealthPlusRecurringBookings;
+exports.generateHealthPlusRecurringBookings = cloudRunOnly(healthPlusOperations.generateHealthPlusRecurringBookings, "circum-payment-schedulers", false, "schedule");
 exports.onGiftRequestCreated = platformNotifications.onGiftRequestCreated;
 exports.onGiftRequestUpdated = platformNotifications.onGiftRequestUpdated;
 exports.onGiftCampaignParticipantUpdated =
@@ -387,8 +385,8 @@ exports.retryGiftStoryAutomation = giftStoryAutomation.retryGiftStoryAutomation;
 exports.manageGiftStoryAccess = giftStoryAutomation.manageGiftStoryAccess;
 exports.createGiftStoryVideoUpload =
   giftStoryAutomation.createGiftStoryVideoUpload;
-exports.finalizeGiftStoryVideoUpload =
-  giftStoryAutomation.finalizeGiftStoryVideoUpload;
+exports.finalizeGiftStoryVideoUpload = cloudRunOnly(
+    giftStoryAutomation.finalizeGiftStoryVideoUpload, "circum-gift-payments");
 exports.getGiftStoryVideoDownload = cloudRunOnly(
     giftStoryAutomation.getGiftStoryVideoDownload, "circum-gift-payments");
 exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
@@ -397,8 +395,7 @@ exports.acknowledgeGiftStory = giftStoryAutomation.acknowledgeGiftStory;
 exports.saveGiftStoryToVault = giftStoryAutomation.saveGiftStoryToVault;
 exports.getGiftStoryActionState = giftStoryAutomation.getGiftStoryActionState;
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
-exports.cleanupExpiredGiftStories =
-  giftStoryAutomation.cleanupExpiredGiftStories;
+exports.cleanupExpiredGiftStories = cloudRunOnly(giftStoryAutomation.cleanupExpiredGiftStories, "circum-payment-schedulers", false, "schedule");
 exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation(stripe);
 exports.previewSenderCancellation = deliveryPolicy.previewSenderCancellation;
 exports.reconcilePendingSenderCancellations =
@@ -436,7 +433,7 @@ exports.finalizeSenderWebCheckout =
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
-exports.cleanupExpiredSenderDrafts = senderBooking.cleanupExpiredSenderDrafts;
+exports.cleanupExpiredSenderDrafts = cloudRunOnly(senderBooking.cleanupExpiredSenderDrafts, "circum-payment-schedulers", false, "schedule");
 exports.listSenderPaymentMethods =
   senderFinance.listSenderPaymentMethods(stripe);
 exports.createSenderSetupIntent = senderFinance.createSenderSetupIntent(stripe);
@@ -482,7 +479,7 @@ exports.updateRiderApplicationSection =
 exports.submitRiderDocument = riderAccount.submitRiderDocument;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
-exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
+exports.reconcileStaleDeliveryLocks = cloudRunOnly(staleDelivery.reconcileStaleDeliveryLocks, "circum-payment-schedulers", false, "schedule");
 
 let stripeWebhookProcessor;
 function normalStripeWebhookProcessor() {
@@ -557,8 +554,8 @@ exports.reconcileBusinessInvoiceCheckouts = businessPayments.reconcileBusinessIn
 // Private QA namespace only; no Stripe SDK, dispatch or notification side effects.
 const qaLifecycle = require("./qa-lifecycle");
 exports.qaLifecycleFixture = qaLifecycle.callable();
-exports.expireQaLifecycleFixtures = qaLifecycle.scheduled();
+exports.expireQaLifecycleFixtures = cloudRunOnly(qaLifecycle.scheduled(), "circum-qa-special-flow", false, "schedule");
 
 const qaSpecialFlow = require("./qa-special-flow");
 exports.qaSpecialFlowFixture = qaSpecialFlow.callable();
-exports.expireQaSpecialFlowFixtures = qaSpecialFlow.scheduled();
+exports.expireQaSpecialFlowFixtures = cloudRunOnly(qaSpecialFlow.scheduled(), "circum-qa-special-flow", false, "schedule");

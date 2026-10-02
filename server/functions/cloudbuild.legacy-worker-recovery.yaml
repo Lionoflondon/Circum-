@@ -1,0 +1,8 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=server/functions/Dockerfile.legacy-payment-scheduler-overlay, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_SCHEDULER_IMAGE}', .]
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --file=server/functions/Dockerfile.legacy-qa-expiry-overlay, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_QA_IMAGE}', .]
+images: ['${_SCHEDULER_IMAGE}', '${_QA_IMAGE}']
+options:
+  logging: CLOUD_LOGGING_ONLY

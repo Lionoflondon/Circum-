@@ -15,6 +15,7 @@ const FAMILY_ROUTES = Object.freeze({
   ],
   gifts: [
     "getGiftStoryVideoDownload",
+    "finalizeGiftStoryVideoUpload",
     "createGiftPayment",
     "finalizeGiftPayment",
     "cancelGiftPayment",
