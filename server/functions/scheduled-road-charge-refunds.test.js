@@ -11,6 +11,19 @@ const charge = {
 };
 const evidence = {authoritative: true, incurred: false};
 
+test("zero customer road contribution never refunds a stale legacy charge", () => {
+  const zeroCharge = {...charge, customerContributionPence: 0, amountPence: 900};
+  const entitlement = refunds.createEntitlement({
+    deliveryId: "zero_contribution", quoteId: "zero_quote",
+    charge: zeroCharge, actualEvidence: evidence,
+  });
+  assert.equal(entitlement.entitlementPence, 0);
+  assert.equal(refunds.reserveRoth(entitlement, evidence).rothCreditedPence, 0);
+  assert.equal(refunds.customerContributionPence(zeroCharge), 0);
+  assert.equal(refunds.customerContributionPence({amountPence: 900}), 900);
+  assert.equal(refunds.customerContributionPence(undefined), 0);
+});
+
 test("unused scheduled road charge defaults to one Roth entitlement", () => {
   const entitlement = refunds.createEntitlement({
     deliveryId: "d1",

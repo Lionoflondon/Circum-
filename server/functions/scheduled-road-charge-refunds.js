@@ -40,10 +40,12 @@ function entitlementId({deliveryId, quoteId, chargeId, lineItemKey} = {}) {
     .join(":");
 }
 
+function customerContributionPence(charge) {
+  return pence(charge?.customerContributionPence ?? charge?.amountPence ?? 0);
+}
+
 function createEntitlement({deliveryId, quoteId, charge, actualEvidence} = {}) {
-  const amountPence = pence(
-    charge && (charge.customerContributionPence || charge.amountPence),
-  );
+  const amountPence = customerContributionPence(charge);
   const evidence = actualEvidence && actualEvidence.authoritative === true;
   return {
     entitlementId: entitlementId({
@@ -548,6 +550,7 @@ module.exports = {
   REFUND_POLICY_VERSION,
   STATES,
   pence,
+  customerContributionPence,
   refundableAmountPence,
   entitlementId,
   createEntitlement,

@@ -19,6 +19,7 @@ const {evaluateActualTraversal} = require("./actual-road-traversal");
 const {roadChargesFor} = require("./road-charge-settlement");
 const {
   createEntitlement,
+  customerContributionPence,
   settleEntitlementToRoth,
 } = require("./scheduled-road-charge-refunds");
 const {
@@ -798,15 +799,8 @@ async function updateDeliveryTrackingStatusHandler(
           const actualCharge = actualTraversal.charges.find(
             (item) => item.chargeId === charge.chargeId,
           );
-          const prepaidPence = Number(
-            charge.customerContributionPence || charge.amountPence || 0,
-          );
-          const actualPence = Number(
-            (actualCharge &&
-              (actualCharge.customerContributionPence ||
-                actualCharge.amountPence)) ||
-              0,
-          );
+          const prepaidPence = customerContributionPence(charge);
+          const actualPence = customerContributionPence(actualCharge);
           entitlement.refundablePence = Math.max(0, prepaidPence - actualPence);
           if (entitlement.refundablePence === 0) entitlement.state = "CLOSED";
           transaction.set(
