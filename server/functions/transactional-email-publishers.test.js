@@ -366,3 +366,24 @@ test("Story unlock publishes sender delivery plus both role-specific Story email
   assert.equal(db.read("emailQueue", "gift_g-5_recipient_delivered"), undefined);
   assert.equal((await publishFromEvent({db, ...input})).status, "published");
 });
+
+ test("unpaid booking transitioning to paid publishes once and later updates do not republish", async () => {
+  const db = fakeDb();
+  const unpaid = {status: "requested", paymentStatus: "pending", senderEmail: "sender@example.test"};
+  const paid = {...unpaid, paymentStatus: "paid"};
+  assert.equal((await publishFromEvent({db, ...event("deliveryRequests", "later-paid", null, unpaid)})).status, "ignored");
+  const input = event("deliveryRequests", "later-paid", unpaid, paid);
+  assert.equal((await publishFromEvent({db, ...input})).status, "queued");
+  assert.equal((await publishFromEvent({db, ...input})).status, "duplicate");
+  assert.equal((await publishFromEvent({db, ...event("deliveryRequests", "later-paid", paid, {...paid, updatedAt: "later"})})).status, "ignored");
+  assert.equal(db.read("emailQueue", "delivery_booking_paid_later-paid").eventType, "delivery_booking_paid");
+ });
+ test("paid transitions exclude cancelled bookings and other product families", async () => {
+  for (const overrides of [{status: "cancelled"}, {sourceModule: "gift"}, {serviceType: "HEALTH_PLUS"}, {businessMode: true}]) {
+    const db = fakeDb();
+    const before = {status: "requested", paymentStatus: "pending", senderEmail: "sender@example.test", ...overrides};
+    const after = {...before, paymentStatus: "paid"};
+    assert.equal((await publishFromEvent({db, ...event("deliveryRequests", "excluded", before, after)})).status, "ignored");
+    assert.equal(db.read("emailQueue", "delivery_booking_paid_excluded"), undefined);
+  }
+ });
