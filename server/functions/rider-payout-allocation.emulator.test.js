@@ -167,7 +167,7 @@ test("recovery cursor advances past a full page of ineligible Riders to a later 
   const batch = isolated.batch();
   for (let i = 0; i < 25; i++) batch.set(isolated.collection("payoutRequests").doc(`a_${String(i).padStart(3, "0")}`), {status: "processing", updatedAt: new Date(now)});
   batch.set(isolated.collection("payoutRequests").doc("z_eligible"), {status: "processing",
-    riderId: "later-rider", stripeAccountId: "acct_fixture", riderNetPayout: 3,
+    riderId: "later-rider", stripeAccountId: "acct_fixture", riderNetPayout: 3, fundsReserved: true,
     stripeTransferId: "tr_fixture", transferAttemptStartedAt: new Date(now - 3600000), updatedAt: new Date(now - 3600000)});
   await batch.commit();
   let retrieved = 0;
