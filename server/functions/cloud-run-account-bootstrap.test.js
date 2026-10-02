@@ -33,6 +33,10 @@ function dependencies(overrides = {}) {
       verifyIdToken: async () => ({uid: "user-1", email: "safe@example.invalid"}),
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
+        getSenderAccountActivity: {...handler("getSenderAccountActivity"), appCheckRequired: false},
+        exportSenderData: {...handler("exportSenderData"), appCheckRequired: false},
+        updateSenderPreferences: {...handler("updateSenderPreferences"), appCheckRequired: false},
+        revokeSenderSessions: {...handler("revokeSenderSessions"), appCheckRequired: false},
         ensureSenderAccount: handler("ensureSenderAccount"),
         updateSenderNotificationState: handler("updateSenderNotificationState"),
         getSenderWallet: handler("getSenderWallet"),
@@ -331,3 +335,24 @@ test("Rider application submission rejects invalid App Check before invoking the
     assert.equal(deps.calls.length, 0);
   });
 });
+
+for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions"]) {
+  test(`${name} preserves the installed Sender callable envelope and auth policy`, async () => {
+    const deps = dependencies();
+    await withServer(deps.factory, async (base) => {
+      const payload = {scope: "all_other_devices", preferences: {language: "en"}};
+      const denied = await fetch(`${base}/${name}`, {
+        method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: payload}),
+      });
+      assert.equal(denied.status, 401);
+      assert.equal(deps.calls.length, 0);
+      const response = await fetch(`${base}/v1/callable/${name}`, {
+        method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: payload}),
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {result: {ok: true, name}});
+      assert.deepEqual(deps.calls[0].data, payload);
+      assert.equal(deps.calls[0].context.auth.uid, "user-1");
+    });
+  });
+}
