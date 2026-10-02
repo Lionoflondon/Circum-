@@ -18,4 +18,11 @@ function cloudRunOnly(callable, owner, appCheckRequired = false, triggerType = "
   return Object.freeze(handler);
 }
 
-module.exports = {cloudRunOnly};
+function cloudRunHttpOnly(httpHandler, owner) {
+  if (typeof httpHandler !== "function" || !owner) throw new TypeError("An HTTP handler and its Cloud Run owner are required");
+  const handler = (...args) => httpHandler(...args);
+  handler.run = handler;
+  Object.defineProperty(handler, "_cloudRunOnly", {value: Object.freeze({owner, triggerType: "http", appCheckRequired: false})});
+  return Object.freeze(handler);
+}
+module.exports = {cloudRunOnly, cloudRunHttpOnly};

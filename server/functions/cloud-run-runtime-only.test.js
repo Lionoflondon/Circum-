@@ -2,8 +2,26 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {cloudRunOnly} = require("./cloud-run-runtime-only");
+const {cloudRunOnly, cloudRunHttpOnly} = require("./cloud-run-runtime-only");
 const {extractStack} = require("./node_modules/firebase-functions/lib/runtime/loader.js");
+test("HTTP-only delegation preserves the original request and response without managed deployment metadata", () => {
+  const req = {method: "GET", path: "/opaque-token", query: {token: "opaque-token"}};
+  const res = {};
+  const original = (request, response) => {
+    assert.equal(request, req);
+    assert.equal(response, res);
+    return "original-response";
+  };
+  original.__endpoint = {httpsTrigger: {}};
+  const wrapped = cloudRunHttpOnly(original, "circum-gift-payments");
+  assert.equal(wrapped(req, res), "original-response");
+  assert.equal(wrapped.run(req, res), "original-response");
+  assert.equal(wrapped.__endpoint, undefined);
+  assert.equal(wrapped.__trigger, undefined);
+  assert.equal(wrapped._cloudRunOnly.triggerType, "http");
+  assert.ok(Object.isFrozen(wrapped));
+  assert.throws(() => cloudRunHttpOnly({}, "circum-gift-payments"), TypeError);
+});
 test("runtime-only handler preserves context, results and failures without deployment metadata", async () => {
   const context = {auth: {uid: "approved-test"}};
   const failure = new Error("original handler failure");

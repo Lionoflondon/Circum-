@@ -46,6 +46,7 @@ function createServer(options = {}) {
   let processor;
   let fixtureProcessor;
   return http.createServer((request, response) => {
+    if (require("./delivery-write-recovery-http").handle(request, response, {dbFactory: availabilityDb, kinds: ["presence"]})) return;
     if (handleMaintenance(request, response, ["markStaleRiderPresenceOffline"], {dbFactory: availabilityDb})) return;
     if (request.method === "GET" && request.url === "/health") return json(response, 200, {status: "ok", runtime: "node22", sourceSha: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     const collection = EVENT_PATHS[request.url];
