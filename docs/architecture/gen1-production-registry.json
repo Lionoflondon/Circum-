@@ -4468,7 +4468,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "platformNotifications.escalateUnclaimedDeliveries",
-      "callers": [],
+      "callers": [
+        "server/functions/cloud-run-notification-retries.js",
+        "server/functions/delivery-maintenance-core.js",
+        "server/functions/delivery-maintenance-http.js"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
@@ -4486,8 +4490,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
+      "cloudRunReplacement": [
+        "cloud-run-notification-retries.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6206,7 +6212,11 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "riderPresence.markStaleRiderPresenceOffline",
-      "callers": [],
+      "callers": [
+        "server/functions/cloud-run-rider-availability-server.js",
+        "server/functions/delivery-maintenance-core.js",
+        "server/functions/delivery-maintenance-http.js"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
@@ -6222,8 +6232,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
+      "cloudRunReplacement": [
+        "cloud-run-rider-availability-server.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9558,6 +9570,8 @@
         "dispatchInspections",
         "irisPrivate",
         "notifications",
+        "riderPresence",
+        "riderProfiles",
         "riders"
       ],
       "externalProviders": [],

@@ -4,6 +4,8 @@ const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {processNotificationRetriesCore} = require("./notification-retry-core");
 
+const {handleMaintenance} = require("./delivery-maintenance-http");
+
 const TOPIC = "firebase-schedule-processNotificationRetries-us-central1";
 if (!getApps().length) initializeApp();
 
@@ -18,8 +20,9 @@ function isRetryEvent(url = "", headers = {}) {
 
 function createServer(run = processNotificationRetriesCore) {
   return http.createServer(async (req, res) => {
+    if (handleMaintenance(req, res, ["activateDueScheduledDeliveries", "escalateUnclaimedDeliveries", "deliveryLifecycleWatchdog"])) return;
     const path = new URL(req.url, "http://localhost").pathname;
-    if (req.method === "GET" && path === "/healthz") {
+    if (req.method === "GET" && ["/health", "/healthz"].includes(path)) {
       res.writeHead(200, {"content-type": "application/json"});
       res.end(JSON.stringify({ok: true, service: "notification-retries", sourceSha: process.env.SOURCE_SHA || "unknown"}));
       return;

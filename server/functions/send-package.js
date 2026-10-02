@@ -16,6 +16,7 @@ async function dispatchDeliveryRequest({
   uid,
   authToken = {},
   source = "sendPackage",
+  durableOnly = false,
 }) {
   const completeDispatch = startLatency("DISPATCH", {correlationId: requestId, source});
   const toRadians = (degrees) => {
@@ -190,7 +191,7 @@ async function dispatchDeliveryRequest({
       .slice(0, 5);
   timing("ELIGIBILITY_COMPLETE", {correlationId: requestId, workloadCount: closestRiders.length});
 
-  const sendResults = await Promise.all(closestRiders.map(async (rider) => {
+  const sendResults = durableOnly ? [] : await Promise.all(closestRiders.map(async (rider) => {
     try {
       const notificationId = await communicationEngine.emitNotification({
         recipientId: rider.id,
@@ -238,14 +239,31 @@ async function dispatchDeliveryRequest({
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   }, {merge: true});
-  await db.collection("deliveryRequests").doc(deliveryRequest[0].id).set({
-    dispatchStatus: closestRiders.length ? "broadcasted" : "requested",
-    matchingStatus: closestRiders.length ? "broadcasted" : "available",
-    dispatchAttemptedAt: FieldValue.serverTimestamp(),
-    dispatchLastSource: source,
-    dispatchMatchedRiderIds: closestRiders.map((rider) => rider.id),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  await db.runTransaction(async (tx) => {
+    const ref = db.collection("deliveryRequests").doc(deliveryRequest[0].id);
+    const latest = await tx.get(ref);
+    const current = latest.data() || {};
+    if (!latest.exists || !["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"].includes(`${current.status || current.deliveryStatus || ""}`.toLowerCase()) || current.riderId || current.assignedRiderId || current.driverId || current.assignedDriverId) return;
+    if (!dispatchComplianceDecision(current).dispatchable) return;
+    let matchedRiderIds = closestRiders.map((rider) => rider.id);
+    if (durableOnly) {
+      const {queueNotifications, notificationInput} = require("./delivery-maintenance-notifications");
+      const {canReceiveDispatch} = require("./rider-presence-core");
+      const inputs = [];
+      for (const rider of closestRiders) {
+        const [profile, record, presence] = await Promise.all([tx.get(db.collection("riderProfiles").doc(rider.id)), tx.get(db.collection("riders").doc(rider.id)), tx.get(db.collection("riderPresence").doc(rider.id))]);
+        if (canReceiveDispatch({profile: {...(record.data() || {}), ...(profile.data() || {})}, presence: presence.data() || {}}) && riderMatchesIris({...(record.data() || {}), ...(profile.data() || {})}, current)) inputs.push(notificationInput({key: `delivery_offer:${deliveryRequest[0].id}:${rider.id}`, recipientId: rider.id, recipientRole: "rider", type: "new_delivery", title: "New delivery available", body: "A delivery matching your vehicle is ready to review.", deliveryId: deliveryRequest[0].id, data: {requestId, category: "jobs", route: "jobs", distanceFromPickup: `${rider.distanceFromPickup}`}}));
+      }
+      await queueNotifications(tx, db, inputs);
+      matchedRiderIds = inputs.map((input) => input.payload.recipientId);
+    }
+    tx.set(ref, {
+      dispatchStatus: matchedRiderIds.length ? "broadcasted" : "requested",
+      matchingStatus: matchedRiderIds.length ? "broadcasted" : "available",
+      dispatchAttemptedAt: FieldValue.serverTimestamp(), dispatchLastSource: source,
+      dispatchMatchedRiderIds: matchedRiderIds, updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
   timing("FIRST_OFFER_COMMIT", {correlationId: requestId, deliveryId: deliveryRequest[0].id, workloadCount: closestRiders.length});
   completeDispatch({success: true, workloadCount: closestRiders.length, deliveryId: deliveryRequest[0].id});
 
