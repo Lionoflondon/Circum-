@@ -4,7 +4,8 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args: [build, --file=server/functions/Dockerfile.payment-family, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_FAMILY_IMAGE}', .]
   - name: gcr.io/cloud-builders/docker
-    args: [build, --file=server/functions/Dockerfile.native-callable-proxy, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_PROXY_IMAGE}', .]
+    dir: server/functions
+    args: [build, --file=Dockerfile.native-callable-proxy, --build-arg, 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', --tag, '${_PROXY_IMAGE}', .]
 images: ['${_PAYMENTS_IMAGE}', '${_FAMILY_IMAGE}', '${_PROXY_IMAGE}']
 substitutions:
   _SOURCE_SHA: unknown
