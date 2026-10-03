@@ -1,3 +1,16 @@
+String riderSignupEmailStatusMessage({
+  required bool emailVerified,
+  required bool verificationEmailSent,
+}) {
+  if (emailVerified) {
+    return 'Your account is ready. Your email is verified.';
+  }
+  if (verificationEmailSent) {
+    return 'Your account is ready. Check your inbox to verify your email before submitting an application.';
+  }
+  return 'Your account was created, but we could not send the verification email. Try again from your profile before submitting an application.';
+}
+
 String? riderApplicationError(Map<String, String> fields) {
   const required = {
     'fullName': 'Enter your full name.',

@@ -11,6 +11,29 @@ void main() {
     'vehicleType': 'Car',
     'vehicleRegistration': 'AB12 CDE'
   };
+  test('Rider signup reports actual email-verification delivery outcome', () {
+    expect(
+      riderSignupEmailStatusMessage(
+        emailVerified: true,
+        verificationEmailSent: false,
+      ),
+      'Your account is ready. Your email is verified.',
+    );
+    expect(
+      riderSignupEmailStatusMessage(
+        emailVerified: false,
+        verificationEmailSent: true,
+      ),
+      'Your account is ready. Check your inbox to verify your email before submitting an application.',
+    );
+    expect(
+      riderSignupEmailStatusMessage(
+        emailVerified: false,
+        verificationEmailSent: false,
+      ),
+      contains('could not send the verification email'),
+    );
+  });
   test('minimum fields are required, documents and notes are optional', () {
     expect(riderApplicationError(valid), null);
     expect(riderApplicationError({...valid, 'notes': ''}), null);

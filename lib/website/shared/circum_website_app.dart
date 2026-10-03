@@ -3783,6 +3783,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     try {
       await _ensureCircumFirebaseReady();
       final auth = FirebaseAuth.instance;
+      var verificationEmailSent = false;
       final credential = _signupMode
           ? await auth
               .createUserWithEmailAndPassword(
@@ -3798,7 +3799,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         await user
             .updateDisplayName(_fullName.text.trim())
             .timeout(const Duration(seconds: 20));
-        await _sendRiderVerificationEmail(user);
+        verificationEmailSent = await _sendRiderVerificationEmail(user);
         await _saveRiderProfile(user);
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
@@ -3831,7 +3832,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
         _authMessage = _signupMode
-            ? 'Your account is ready. ${user.emailVerified ? 'Your email is verified.' : 'Check your inbox to verify your email before submitting an application.'}'
+            ? riderSignupEmailStatusMessage(
+                emailVerified: user.emailVerified,
+                verificationEmailSent: verificationEmailSent,
+              )
             : user.emailVerified
                 ? 'You are signed in.'
                 : 'Check your inbox to verify your email before submitting an application.';
