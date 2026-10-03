@@ -6,7 +6,7 @@ function eligible(delivery, now) {
  const state = String(delivery.status || delivery.deliveryStatus || "").toLowerCase();
  if (!["requested", "pending", "finding_rider", "recoverable_incomplete"].includes(state)) return false;
  // Cleanup has no authority over custody, reservations or provider-backed money.
- if (["riderId", "assignedRiderId", "driverId", "assignedDriverId", "paymentIntentId", "stripePaymentIntentId", "stripeCheckoutSessionId", "checkoutSessionId", "paymentSessionId", "rothReservationId", "reservationId", "settlementId"].some((key) => delivery[key])) return false;
+ if (["riderId", "assignedRiderId", "driverId", "assignedDriverId", "paymentIntentId", "stripePaymentIntentId", "stripeCheckoutSessionId", "checkoutSessionId", "paymentSessionId", "paymentId", "stripeSessionId", "walletReservationId", "rothReservationId", "reservationId", "settlementId"].some((key) => delivery[key])) return false;
  if (["paid", "succeeded", "success", "processing", "authorized", "refunded", "partially_refunded"].includes(String(delivery.paymentStatus || "").toLowerCase())) return false;
  return canAutoArchiveExpired(delivery, new Date(now));
 }
