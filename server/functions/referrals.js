@@ -151,7 +151,7 @@ exports.activateReferral = functions.https.onCall(activateReferralHandler);
 const QUALIFYING_TERMINAL_STATES = new Set(["completed", "delivered"]);
 const PAID_STATES = new Set(["paid", "succeeded", "success"]);
 
-async function loadQualifyingActivity({referredUserId, activityType, activityId}) {
+async function loadQualifyingActivity({db = getFirestore(), referredUserId, activityType, activityId}) {
   const collections = {
     sender_completed_paid_booking: "deliveryRequests",
     rider_completed_delivery: "deliveryRequests",
@@ -160,7 +160,7 @@ async function loadQualifyingActivity({referredUserId, activityType, activityId}
   };
   const collection = collections[activityType];
   if (!collection || !activityId) return null;
-  const snap = await getFirestore().collection(collection).doc(activityId).get();
+  const snap = await db.collection(collection).doc(activityId).get();
   if (!snap.exists) return null;
   const activity = snap.data() || {};
   const ownerId = activityType === "rider_completed_delivery" ?
@@ -179,10 +179,9 @@ async function loadQualifyingActivity({referredUserId, activityType, activityId}
   return activity;
 }
 
-async function activateReferralForUser({referredUserId, activityType, activityId, userEmail = ""}) {
-  const activity = await loadQualifyingActivity({referredUserId, activityType, activityId});
+async function activateReferralForUser({db = getFirestore(), referredUserId, activityType, activityId, userEmail = ""}) {
+  const activity = await loadQualifyingActivity({db, referredUserId, activityType, activityId});
   if (!activity) return {status: "not_qualifying"};
-  const db = getFirestore();
   const referralRef = db.collection("referrals").doc(referredUserId);
   const snap = await referralRef.get();
   if (!snap.exists || snap.data().status === REFERRAL_STATUSES.rothAwarded || snap.data().status === "rewarded" || snap.data().status === "rejected") {
@@ -252,6 +251,8 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       rewardStatus: REFERRAL_STATUSES.rothAwarded,
       rewardAmount: reward,
       rewardCurrency: "ROTH",
+      needsReview: false,
+      reviewReason: FieldValue.delete(),
       inviterUserId: referral.referrerUserId,
       referredUserId,
       rewardedAt: FieldValue.serverTimestamp(),
@@ -272,19 +273,21 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   }
 }
 
-async function handleDeliveryCompletedReferral({delivery = {}, deliveryId}) {
+async function handleDeliveryCompletedReferral({db = getFirestore(), delivery = {}, deliveryId}) {
   const id = `${deliveryId || delivery.deliveryId || ""}`;
   if (!id) return {status: "not_qualifying"};
   const senderId = `${delivery.senderId || delivery.userId || ""}`;
   const riderId = `${delivery.riderId || delivery.assignedRiderId || ""}`;
   const results = await Promise.all([
     senderId ? activateReferralForUser({
+      db,
       referredUserId: senderId,
       activityType: "sender_completed_paid_booking",
       activityId: id,
       userEmail: delivery.senderEmail,
     }) : {status: "none"},
     riderId ? activateReferralForUser({
+      db,
       referredUserId: riderId,
       activityType: "rider_completed_delivery",
       activityId: id,
@@ -294,9 +297,10 @@ async function handleDeliveryCompletedReferral({delivery = {}, deliveryId}) {
   return {sender: results[0], rider: results[1]};
 }
 
-async function handleGiftCompletedReferral({giftId, senderId, senderEmail}) {
+async function handleGiftCompletedReferral({db = getFirestore(), giftId, senderId, senderEmail}) {
   if (!giftId || !senderId) return {status: "not_qualifying"};
   return activateReferralForUser({
+      db,
     referredUserId: `${senderId}`,
     activityType: "gift_request_completed",
     activityId: `${giftId}`,
@@ -304,9 +308,10 @@ async function handleGiftCompletedReferral({giftId, senderId, senderEmail}) {
   });
 }
 
-async function handleHealthPlusCompletedReferral({pickupId, userId, email}) {
+async function handleHealthPlusCompletedReferral({db = getFirestore(), pickupId, userId, email}) {
   if (!pickupId || !userId) return {status: "not_qualifying"};
   return activateReferralForUser({
+      db,
     referredUserId: `${userId}`,
     activityType: "health_plus_completed",
     activityId: `${pickupId}`,
