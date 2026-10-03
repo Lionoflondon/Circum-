@@ -9,6 +9,7 @@ const FAMILY_ROUTES = Object.freeze({
     "createHealthPlusCheckoutSession",
   ],
   business_invoices: [
+    "createBusinessAccount",
     "createBusinessInvoiceCheckout",
     "cancelBusinessInvoiceCheckout",
     "createBusinessGiftOrder",
