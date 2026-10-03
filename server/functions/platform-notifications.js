@@ -109,7 +109,7 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
       type,
       title,
       body,
-      data: {...data, bookingId, ticketId},
+      data: {...data, ...(bookingId ? {bookingId} : {}), ...(ticketId ? {ticketId} : {})},
       dedupeKey,
       ...(fixtureDb ? {db: fixtureDb, suppressPush} : {}),
     });

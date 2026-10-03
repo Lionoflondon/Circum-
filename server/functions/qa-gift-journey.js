@@ -204,6 +204,9 @@ await processEmailQueueRecord({db, emailId: row.id, eventId: `qa_consume_${row.i
         }
         const customerId = gift.stripeCustomerId || (await db.collection("users").doc(ids.sender.uid).get()).data()?.stripeCustomerId;
         if (customerId) {
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer.id !== customerId) fail("failed-precondition", "Provider customer mismatch.");
+          if (customer.deleted !== true) {
           await provider.customers.retrieve(customerId);
           const page = await stripe.paymentIntents.list({customer: customerId, limit: 100});
           if (page.has_more) fail("failed-precondition", "Provider reconciliation required before cleanup.");
@@ -212,6 +215,7 @@ await processEmailQueueRecord({db, emailId: row.id, eventId: `qa_consume_${row.i
             if (!["succeeded", "canceled"].includes(intent.status)) await stripe.paymentIntents.cancel(intent.id, {}, {idempotencyKey: `qa_cleanup_${intent.id}`});
           }
           await stripe.customers.del(customerId);
+          }
         }
         await raw.recursiveDelete(root);
         await raw.runTransaction(async (tx) => {

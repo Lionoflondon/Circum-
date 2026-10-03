@@ -40,7 +40,7 @@ test("QA provider rejects live/foreign objects and non-fixed checkout", async ()
 });
 test("authenticated private Gift checkout, canonical admin and Story lifecycle, replay, isolation and cleanup", {skip: !process.env.FIRESTORE_EMULATOR_HOST}, async () => {
   initializeApp({projectId: "demo-gifts-qa-route", storageBucket: "demo-gifts-qa-route.appspot.com"});
-  const raw = getFirestore(); raw.settings({ignoreUndefinedProperties: true}); const stripe = stripeFixture();
+  const raw = getFirestore(); const stripe = stripeFixture();
   const handler = factory({raw, stripe, secret: "sk_test_private", credentials}).handle;
   await assert.rejects(handler({action: "prepare", requestId: "a"}, {auth: {uid: "foreign"}, app: {appId: "qa"}}), /Approved QA/);
   await assert.rejects(handler({action: "prepare", requestId: "a"}, {auth: {uid: "qa_admin"}}), /App Check/);
