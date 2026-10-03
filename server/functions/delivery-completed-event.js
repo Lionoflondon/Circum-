@@ -233,6 +233,13 @@ async function runSubscriber(db, event, subscriber, handler) {
   }
 }
 
+async function runSubscribers(db, event) {
+  const settled = await Promise.allSettled(Object.entries(subscribers).map(([name, handler]) => runSubscriber(db, event, name, handler)));
+  const failed = settled.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
+  return settled.map((result) => result.value);
+}
+
 function completionNeedsRetry(result) {
   if (!result || typeof result !== "object") return false;
   return String(result.status || "").toLowerCase() === "review" || result.needsReview === true || Object.values(result).some((value) => value && typeof value === "object" && completionNeedsRetry(value));
@@ -416,11 +423,7 @@ exports.onDeliveryCompletedEvent = functions
     if (event.eventType !== EVENT_TYPE || event.version !== EVENT_VERSION) {
       return null;
     }
-    await Promise.all(
-      Object.entries(subscribers).map(([name, handler]) =>
-        runSubscriber(getFirestore(), event, name, handler),
-      ),
-    );
+    await runSubscribers(getFirestore(), event);
     return null;
   });
 exports._private = {
@@ -431,5 +434,6 @@ exports._private = {
   eventRef,
   subscriberRef,
   runSubscriber,
+  runSubscribers,
   completionNeedsRetry,
 };
