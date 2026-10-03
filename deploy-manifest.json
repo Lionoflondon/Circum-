@@ -57,6 +57,8 @@
         "pubspec.yaml",
         "windows/",
         "lib/main.dart",
+        "lib/gifts_test_main.dart",
+        "test/gifts_private_build_test.dart",
         "lib/app.dart",
         "lib/messaging.dart",
         "lib/firebase_options.dart",
