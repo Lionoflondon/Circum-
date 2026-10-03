@@ -250,6 +250,11 @@
       "reason": "The explicitly enabled private Gifts native TEST harness uses the approved-actor isolated QA checkout/finalization contract. Published app entrypoints and LIVE payment ownership are unchanged."
     },
     {
+      "products": ["sender-app", "backend"],
+      "files": ["deploy-manifest.json", "ios/Podfile.lock", "scripts/build_sender_ios.sh"],
+      "reason": "Sender-only native release inputs accompany their ownership metadata; this exact build-file exception does not permit backend runtime changes."
+    },
+    {
       "products": [
         "sender-app",
         "website"
