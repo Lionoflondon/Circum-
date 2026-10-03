@@ -730,8 +730,8 @@ void main() {
           'lib/app/admin/admin_phase1_shell.dart',
         ).readAsStringSync();
 
-        expect(source, contains("httpsCallable('adminReviewRider')"));
-        expect(source, contains("httpsCallable('syncStripeConnectStatus')"));
+        expect(source, contains("AdminProductionPaymentApi.call('adminReviewRider', payload)"));
+        expect(source, contains("AdminProductionPaymentApi.call(\n        'syncStripeConnectStatus'"));
         expect(
           source,
           contains("httpsCallable('resetRiderTestStripeAccount')"),
@@ -759,7 +759,7 @@ void main() {
         expect(methodEnd, greaterThan(methodStart));
         final statusMethod = source.substring(methodStart, methodEnd);
 
-        expect(source, contains("httpsCallable('adminReviewRider')"));
+        expect(source, contains("AdminProductionPaymentApi.call('adminReviewRider', payload)"));
         expect(statusMethod, contains('_callRiderAuthority'));
         expect(statusMethod, isNot(contains("collection('riderProfiles')")));
         expect(statusMethod, isNot(contains("collection('riders')")));

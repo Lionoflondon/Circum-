@@ -750,6 +750,9 @@
       "generation": "Gen 1",
       "productionPurpose": "riderEarningsSummary.adminReconcileRiderEarnings()",
       "callers": [
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-admin-closeout.test.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-earnings-summary.test.js"
       ],
       "criticality": "review-required",
@@ -767,8 +770,12 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-admin-closeout.test.js",
+        "cloud-run-rider-finance-handlers.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -1010,6 +1017,9 @@
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/admin-rider-authority.test.js",
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-rider-admin-closeout.test.js",
+        "server/functions/cloud-run-rider-finance-handlers.js",
         "test/admin_operations_test.dart"
       ],
       "criticality": "review-required",
@@ -1028,8 +1038,12 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-payment-family.js",
+        "cloud-run-rider-admin-closeout.test.js",
+        "cloud-run-rider-finance-handlers.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -3773,6 +3787,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeAccountManagementLink\")",
       "callers": [
+        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -3803,6 +3818,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeConnectAccountForRider\")",
       "callers": [
+        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -3834,6 +3850,7 @@
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeOnboardingLink\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
+        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -7959,6 +7976,7 @@
       "productionPurpose": "riderBackendCompat.createCompat(\"refreshStripeOnboardingLink\")",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js"
@@ -10099,6 +10117,7 @@
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",

@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 
 class AdminProductionPaymentApi {
@@ -9,18 +11,34 @@ class AdminProductionPaymentApi {
   static const _riderPayoutOrigin =
       'https://circum-rider-payouts-j2b7cicfwq-uc.a.run.app';
 
+  static const _riderConnectOrigin =
+      'https://circum-rider-connect-accounts-j2b7cicfwq-uc.a.run.app';
+  static const _connectRoutes = {
+    'createStripeConnectAccountForRider',
+    'createStripeOnboardingLink',
+    'refreshStripeOnboardingLink',
+    'syncStripeConnectStatus',
+    'createStripeAccountManagementLink',
+  };
+
   static Future<Map<String, dynamic>> call(
     String route,
     Map<String, dynamic> data,
   ) async {
+    final origin =
+        _connectRoutes.contains(route) ? _riderConnectOrigin : _riderPayoutOrigin;
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-    if (token == null) throw StateError('payment_auth_required');
+    final appCheckToken = await FirebaseAppCheck.instance.getToken();
+    if (token == null || appCheckToken == null || appCheckToken.isEmpty) {
+      throw StateError('payment_auth_required');
+    }
     final response = await http
         .post(
-          Uri.parse('$_riderPayoutOrigin/$route'),
+          Uri.parse('$origin/$route'),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
+            'X-Firebase-AppCheck': appCheckToken,
           },
           body: jsonEncode({'data': data}),
         )
@@ -31,7 +49,14 @@ class AdminProductionPaymentApi {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = decoded['error'];
       final message = error is Map ? error['message'] : decoded['message'];
-      throw StateError('${message ?? error ?? 'payment_request_failed'}');
+      final status = error is Map
+          ? '${error['status'] ?? 'INTERNAL'}'
+          : 'INTERNAL';
+      throw FirebaseFunctionsException(
+        code: status.toLowerCase().replaceAll('_', '-'),
+        message: '${message ?? error ?? 'payment_request_failed'}',
+        details: error is Map ? error['details'] : null,
+      );
     }
     final result = decoded['result'] ?? decoded['data'] ?? decoded;
     return result is Map
