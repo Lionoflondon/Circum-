@@ -319,9 +319,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   Future<Map<String, dynamic>> _callRiderAuthority(
     Map<String, Object?> payload,
   ) async {
-    final result =
-        await _functions.httpsCallable('adminReviewRider').call(payload);
-    return Map<String, dynamic>.from(result.data as Map? ?? {});
+    return AdminProductionPaymentApi.call('adminReviewRider', payload);
   }
 
   Future<void> _setRiderStatus(
@@ -378,9 +376,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final riderId = _riderId(rider);
     if (riderId.isEmpty) return;
     try {
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('syncStripeConnectStatus').call({'riderId': riderId});
+      await AdminProductionPaymentApi.call(
+        'syncStripeConnectStatus',
+        {'riderId': riderId},
+      );
       await _writeRiderAdminEvent(riderId, 'stripe_status_synced');
       setState(() => _message = 'Rider Stripe status synced.');
       await _loadAdminData();
@@ -403,10 +402,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final riderId = _riderId(rider);
     if (riderId.isEmpty) return null;
     try {
-      final result = await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('refreshStripeOnboardingLink').call({'riderId': riderId});
-      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final data = await AdminProductionPaymentApi.call(
+        'refreshStripeOnboardingLink',
+        {'riderId': riderId},
+      );
       final url = '${data['url'] ?? ''}'.trim();
       if (url.isEmpty) {
         setState(() => _message = 'Stripe onboarding link was not returned.');
@@ -623,7 +622,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     String? newStatus,
     String? note,
   }) async {
-    await _functions.httpsCallable('adminRecordRiderEvent').call({
+    await AdminProductionPaymentApi.call('adminRecordRiderEvent', {
       'riderId': riderId,
       'action': action,
       'previousStatus': previousStatus,
