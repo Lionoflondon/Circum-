@@ -525,11 +525,11 @@ function giftRequestEditorPatch(data, actor) {
     patch.giftStoryPhotoUrls = photos;
     patch.giftStoryPhotos = photos;
   }
-  patch.giftWorkspaceAuditTrail = FieldValue.arrayUnion([{
+  patch.giftWorkspaceAuditTrail = FieldValue.arrayUnion({
     event: "gift_request_editor_saved",
     updatedBy: actor.label,
     updatedAt: new Date().toISOString(),
-  }]);
+  });
   patch.updatedAt = FieldValue.serverTimestamp();
   patch.updatedBy = actor.label;
   return patch;
@@ -1418,11 +1418,11 @@ exports.adminUpdateGiftWorkspace = adminCallable(async (data, context) => {
     "giftsTeamWorkspace.status": action,
     "giftsTeamWorkspace.updatedAt": FieldValue.serverTimestamp(),
     "giftsTeamWorkspace.updatedBy": actor.label,
-    "giftWorkspaceAuditTrail": FieldValue.arrayUnion([{
+    "giftWorkspaceAuditTrail": FieldValue.arrayUnion({
       event: action,
       updatedBy: actor.label,
       updatedAt: new Date().toISOString(),
-    }]),
+    }),
     ...(action === "ready_for_procurement" ? {"giftsTeamWorkspace.readiness.readyForProcurement": true} : {}),
     ...(action === "ready_for_rider" ? {"giftsTeamWorkspace.readiness.readyForRider": true} : {}),
     ...(action === "ready_for_scheduling" ? {"giftsTeamWorkspace.readiness.readyForScheduling": true} : {}),
