@@ -1,0 +1,17 @@
+# Private Gifts TEST checkout and lifecycle
+
+The existing `circum-qa-special-flow` transport exposes `/qaGiftJourney` (also `/v1/callable/qaGiftJourney`) and a certification page at `/qa/gifts`. Every action requires a revocation-checked Firebase ID token and valid App Check token, plus the existing private QA credential allowlist. The page stores no tokens. No public Stripe webhook or production payment owner is added.
+
+Only the approved admin can prepare, confirm the fixed TEST payment, advance the canonical admin status, or clean up. The approved Sender starts checkout and retrieves the owner-checked Story; the approved Rider injects the private delivery-completed event. One active Gift fixture per admin is enforced by a server lock. A request lease prevents concurrent checkout, status changes and cleanup. Expired fixtures permit cleanup only.
+
+The checkout calls the same `createGiftPaymentHandler` and `finalizeGiftPaymentAuthority` as production with an explicitly injected fixture database. The normal callable keeps its original default database. Checkout is one-off card only, exactly £50, with the existing `sk_test_` key. Customers and intents are bound to the fixture, provider idempotency keys are namespaced, public routing metadata is replaced, and LIVE/foreign objects are rejected. The operator confirms only `tok_visa`, never customer card details. Client secrets/ephemeral keys are not returned. No real wallet, subscription, payout, dispatch or LIVE key is available.
+
+All documents stay below `giftStoryRuntimeFixtures/__codex_giftqa_<hash>`, including private admin-role simulation, Gift/payment records, delivery event, Story, email queue, notifications and ownership configuration. Canonical admin approval, notification status handler, transactional email publisher/consumer, Gift completion handler and Sender Story read are reused. Email transport is stubbed and push is suppressed; real Resend delivery/inbox was verified separately with the operator email.
+
+The private completion event is a TEST event from an authenticated QA Rider. It certifies completion effects, not physical delivery, PIN entry, device attestation or the released native UI. The certification page is the isolated TEST client; production Sender checkout stays LIVE. No IPA/AAB/store artifact changes are required.
+
+Actions: `prepare` with bounded `requestId`; then `checkout`, `confirm_test_payment`, `advance` with approved → curation_started → ready_for_gift_delivery, `complete_delivery`, `story`, `read`, `cleanup`, all with the returned fixtureId. Replays must not create a second payment, logical email or notification. Cleanup cancels matching open TEST intents, deletes the matching TEST customer, removes the entire fixture tree and clears only its own lock. Stripe's succeeded TEST intent remains provider audit evidence, not an active customer charge.
+
+The emulator test exercises the canonical handlers, ownership/role denials, fixed provider/mode guards, replay, out-of-order rejection, root isolation, Story access, queue consumption and zero-residue cleanup. It is included in protected `test:rules`.
+
+The journey exposed an existing Gift admin audit defect: `FieldValue.arrayUnion([object])` is a nested array rejected by Firestore. Both Gift editor/workspace audit writes now use `arrayUnion(object)`. The editor fix is exercised by the lifecycle emulator test. This source fix must not be called live in a separate production admin service until that service has its own scoped deployment evidence.
