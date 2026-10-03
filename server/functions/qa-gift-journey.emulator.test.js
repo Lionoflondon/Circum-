@@ -30,7 +30,11 @@ intents.get(id).status = "canceled"; return intents.get(id);
 },
   }, get creates() {
 return creates;
-}, get confirms() {return confirms;}, get intents() {return intents;}};
+}, get confirms() {
+return confirms;
+}, get intents() {
+return intents;
+}};
 }
 test("QA provider rejects live/foreign objects and non-fixed checkout", async () => {
   const p = testProvider({paymentIntents: {retrieve: async () => ({livemode: true})}}, "fixture");
