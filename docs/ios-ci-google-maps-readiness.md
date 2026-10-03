@@ -27,8 +27,14 @@ Do not add this as an active workflow until Apple signing is ready.
 
 ```bash
 test -n "${SENDER_IOS_GOOGLE_MAPS_API_KEY}" || (echo "Missing SENDER_IOS_GOOGLE_MAPS_API_KEY" >&2; exit 1)
-GOOGLE_MAPS_API_KEY="${SENDER_IOS_GOOGLE_MAPS_API_KEY}" flutter build ipa --release --target=lib/main.dart
+PAYMENT_ENVIRONMENT=live scripts/build_sender_ios.sh --build-number=<unused-build-number>
 ```
+
+The guarded script also requires `STRIPE_PUBLISHABLE_KEY` and an explicit
+`PAYMENT_ENVIRONMENT` with a matching key prefix. Release callers must obtain
+the live publishable key for the same Stripe account used by the payment
+backend. A plain `flutter build ipa` bypasses this guard and must not be used
+for Sender release artifacts.
 
 ## Remaining External Work
 
