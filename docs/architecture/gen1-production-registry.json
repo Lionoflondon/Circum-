@@ -18,6 +18,7 @@
     "server/functions/business-gifts.js",
     "server/functions/business-payments.js",
     "server/functions/cloud-run-account-bootstrap.js",
+    "server/functions/cloud-run-account-bootstrap.test.js",
     "server/functions/communication-engine.js",
     "server/functions/delivery-adjustments.js",
     "server/functions/delivery-cleanup.js",
@@ -2153,6 +2154,7 @@
         "server/functions/cloud-run-iris.js",
         "server/functions/cloud-run-iris.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-runtime-only.test.js"
       ],
       "criticality": "review-required",
@@ -2169,6 +2171,7 @@
         "cloud-run-iris.js",
         "cloud-run-iris.test.js",
         "cloud-run-native-callable-proxy.js",
+        "cloud-run-native-callable-proxy.test.js",
         "cloud-run-runtime-only.test.js"
       ],
       "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
@@ -2907,6 +2910,7 @@
       "callers": [
         "lib/app/authentication/sender_account_closure.dart",
         "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "test/website_sender_auth_deterministic_contract_test.dart"
@@ -2928,6 +2932,7 @@
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js",
         "cloud-run-runtime-only.test.js"
       ],
@@ -7764,6 +7769,7 @@
       "callers": [
         "lib/app/iris/iris_learning_bridge.dart",
         "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js"
       ],
@@ -7788,6 +7794,7 @@
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js",
         "cloud-run-runtime-only.test.js"
       ],
@@ -9274,6 +9281,7 @@
         "lib/app/sender_mobile/sender_booking_canvas.dart",
         "lib/app/sender_mobile/sender_draft_api.dart",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-replacement-registry.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/cloud-run-sender-drafts.js",
@@ -10863,6 +10871,7 @@
       "callers": [
         "lib/app/authentication/bloc/auth_bloc.dart",
         "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-runtime-only.test.js"
       ],
@@ -10887,6 +10896,7 @@
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js",
         "cloud-run-runtime-only.test.js"
       ],
