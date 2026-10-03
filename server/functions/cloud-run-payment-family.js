@@ -54,6 +54,7 @@ const FAMILY_ROUTES = Object.freeze({
     "adminReviewRiderWithdrawal",
     "adminReviewRider",
     "adminReconcileRiderEarnings",
+    "adminRecordRiderEvent",
   ],
 });
 

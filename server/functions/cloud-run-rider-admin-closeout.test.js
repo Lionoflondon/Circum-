@@ -10,7 +10,7 @@ test("standalone Rider admin routes reject unauthenticated HTTP before any mutat
   const server = createPaymentFamilyServer({family: "rider_payouts", handlers});
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
-    for (const operation of ["adminReviewRider", "adminReconcileRiderEarnings"]) {
+    for (const operation of ["adminReviewRider", "adminReconcileRiderEarnings", "adminRecordRiderEvent"]) {
       const response = await fetch(`http://127.0.0.1:${server.address().port}/${operation}`, {
         method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: {}}),
       });
