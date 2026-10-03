@@ -924,12 +924,12 @@ async function handleGiftDeliveryCompleted(change, context, options = {}) {
 exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(handleGiftDeliveryCompleted);
 exports.handleGiftDeliveryCompleted = handleGiftDeliveryCompleted;
 
-exports.getSenderGiftStory = functions.https.onCall(async (data, context) => {
+async function getSenderGiftStoryHandler(data, context, {injectedDb = null} = {}) {
   const uid = context.auth && context.auth.uid ? context.auth.uid : "";
   if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in to view sent Gift Stories.");
   const giftId = text(data && data.giftRequestId);
   if (!giftId) throw new functions.https.HttpsError("invalid-argument", "Gift Story reference required.");
-  const db = await storyRuntimeDb(getFirestore(), data);
+  const db = injectedDb || await storyRuntimeDb(getFirestore(), data);
   const [storySnap, giftSnap] = await Promise.all([
     db.collection("users").doc(uid).collection("giftStories").doc(giftId).get(),
     db.collection("giftRequests").doc(giftId).get(),
@@ -950,7 +950,9 @@ exports.getSenderGiftStory = functions.https.onCall(async (data, context) => {
     }),
     storyStatus: saved.storyStatus || "unlocked",
   };
-});
+}
+exports.getSenderGiftStory = functions.https.onCall(getSenderGiftStoryHandler);
+module.exports.getSenderGiftStoryHandler = getSenderGiftStoryHandler;
 
 async function tokenRecord(db, token) {
   const clean = text(token);
