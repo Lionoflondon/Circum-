@@ -185,6 +185,7 @@ test("completion linked projections preserve fresh reassignment, cancellations a
  await db.doc("prescriptionPickups/pickup").update({status: "cancelled"}); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "cancelled");
  await db.doc("prescriptionPickups/pickup").delete(); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).exists, false);
  await db.doc("prescriptionPickups/pickup").set({status: "requested", deliveryId: "job", riderId: "new"}); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "delivered"); assert.equal((await db.collection("healthPlusNotifications").get()).size, 1);
+ await db.doc("prescriptionPickups/pickup").update({status: "completed"}); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "completed");
 }));
 test("a replaced completion lease cannot be marked done by its stale worker", () => fixture("completion-fence", async (db) => {
  const {claimSubscriber, settleSubscriber} = require("./delivery-completed-event")._private;

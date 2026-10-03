@@ -248,7 +248,7 @@ async function projectLinkedCompletion(db, event, collection, id) {
     if (!source.exists || !target.exists || !["completed", "delivered"].includes(String(current.status || current.deliveryStatus).toLowerCase())) return {status: "ignored", reason: "current_completion_required"};
     const binding = collection === "prescriptionPickups" ? current.healthPlusPickupId || current.healthOrderId || current.healthPickupId || current.prescriptionPickupId : current.businessOrderId || current.businessDeliveryId || current.orderId;
     if (String(binding || "") !== String(id) || (linked.deliveryId && linked.deliveryId !== event.deliveryId) || (linked.riderId && linked.riderId !== current.riderId) || (event.riderId && event.riderId !== current.riderId) || ["cancelled", "canceled", "refunded", "archived", "archived_expired"].includes(String(linked.status || "").toLowerCase())) return {status: "ignored", reason: "current_binding_required"};
-    tx.set(targetRef, {deliveryCompletedEventId: event.eventId, status: "delivered", completedAt: event.completedAt, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    tx.set(targetRef, {deliveryCompletedEventId: event.eventId, status: String(linked.status || "").toLowerCase() === "completed" ? "completed" : "delivered", completedAt: event.completedAt, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
     if (collection === "prescriptionPickups") tx.set(db.collection("healthPlusNotifications").doc(event.eventId), {eventId: event.eventId, pickupId: id, type: "delivered", read: false, createdAt: FieldValue.serverTimestamp()}, {merge: true});
     return {status: "projected"};
   });
