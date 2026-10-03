@@ -2965,6 +2965,7 @@
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/sender-payment-app-check.test.js"
       ],
@@ -2992,6 +2993,7 @@
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js",
+        "cloud-run-native-callable-proxy.test.js",
         "cloud-run-runtime-only.test.js"
       ],
       "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
@@ -5595,6 +5597,7 @@
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-native-callable-proxy.test.js",
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/sender-payment-app-check.test.js",
         "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
@@ -5623,6 +5626,7 @@
         "cloud-run-account-bootstrap.js",
         "cloud-run-account-bootstrap.test.js",
         "cloud-run-native-callable-proxy.js",
+        "cloud-run-native-callable-proxy.test.js",
         "cloud-run-runtime-only.test.js"
       ],
       "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
