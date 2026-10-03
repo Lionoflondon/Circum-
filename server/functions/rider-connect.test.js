@@ -158,8 +158,13 @@ test("Rider Connect account creation is retry-idempotent per authenticated Rider
     const start = source.indexOf(`function ${functionName}`);
     const end = source.indexOf("\nfunction ", start + 1);
     const body = source.slice(start, end < 0 ? source.length : end);
-    assert.match(body, /const riderId = text\(context\.auth && context\.auth\.uid\)/);
-    assert.doesNotMatch(body, /data && data\.riderId/);
+    if (functionName === "riderPayoutReadiness") {
+      assert.match(body, /const riderId = text\(context\.auth && context\.auth\.uid\)/);
+      assert.doesNotMatch(body, /data && data\.riderId/);
+    } else {
+      assert.match(body, /await riderConnectTarget\(data, context\)/);
+      assert.doesNotMatch(body, /data && data\.riderId/);
+    }
   }
   assert.match(source, /stripe\.accounts\.createLoginLink\(account\.id\)/);
 });

@@ -84,7 +84,7 @@ function timestampMillis(value) {
 }
 
 function presenceState({presence = {}, now = Date.now()}) {
-  if (presence.isOnline !== true) return PRESENCE_STATES.OFFLINE;
+  if (presence.onlineIntent === false || presence.isOnline !== true) return PRESENCE_STATES.OFFLINE;
   const heartbeat = timestampMillis(presence.lastHeartbeatAt);
   if (!heartbeat || now - heartbeat > STALE_HEARTBEAT_MS) return PRESENCE_STATES.STALE;
   return PRESENCE_STATES.FRESH;
@@ -112,7 +112,7 @@ function dispatchRequirementsDecision({profile = {}, presence = {}, now = Date.n
 
 function computeRiderOperationalState({profile = {}, presence = {}, now = Date.now()}) {
   const terminal = terminalBlockedReason(profile);
-  const onlineIntent = terminal ? false : presence.onlineIntent === true || presence.isOnline === true;
+  const onlineIntent = terminal ? false : (presence.onlineIntent ?? presence.isOnline) === true;
   const candidate = {
     ...presence,
     onlineIntent,
