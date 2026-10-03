@@ -22,6 +22,35 @@ void main() {
     }
   });
 
+  test('Sender and Rider verification use the protected branded email route',
+      () async {
+    final website =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    expect(
+        RegExp("callAccountBootstrap\\('sendCircumVerificationEmail'")
+            .allMatches(website)
+            .length,
+        2);
+    expect(website, isNot(contains('user.sendEmailVerification()')));
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+          jsonEncode({
+            'result': {'ok': true, 'queued': true}
+          }),
+          200);
+    });
+    await invokeAccountBootstrap('sendCircumVerificationEmail', const {},
+        idToken: 'auth-token',
+        appCheckToken: 'app-check-token',
+        client: client);
+    expect(captured.url.path, '/sendCircumVerificationEmail');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+    expect(jsonDecode(captured.body), {'data': {}});
+  });
+
   test('account bootstrap uses Cloud Run callable envelope and auth', () async {
     late http.Request captured;
     final client = MockClient((request) async {
@@ -78,7 +107,11 @@ void main() {
     late http.Request captured;
     final client = MockClient((request) async {
       captured = request;
-      return http.Response(jsonEncode({'result': {'ok': true}}), 200);
+      return http.Response(
+          jsonEncode({
+            'result': {'ok': true}
+          }),
+          200);
     });
 
     final result = await invokeAccountBootstrap(
@@ -99,7 +132,11 @@ void main() {
     late http.Request captured;
     final client = MockClient((request) async {
       captured = request;
-      return http.Response(jsonEncode({'result': {'balance': 12.5}}), 200);
+      return http.Response(
+          jsonEncode({
+            'result': {'balance': 12.5}
+          }),
+          200);
     });
 
     final result = await invokeAccountBootstrap(

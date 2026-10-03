@@ -3854,7 +3854,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   Future<bool> _sendRiderVerificationEmail(User user) async {
     try {
       if (user.emailVerified) return true;
-      await user.sendEmailVerification().timeout(webAuthOperationTimeout);
+      await callAccountBootstrap('sendCircumVerificationEmail', const {})
+          .timeout(webAuthOperationTimeout);
       return true;
     } catch (_) {
       return false;
@@ -10589,7 +10590,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<bool> _sendSenderVerificationEmail(User user) async {
     try {
       if (user.emailVerified) return true;
-      await user.sendEmailVerification().timeout(webAuthOperationTimeout);
+      await callAccountBootstrap('sendCircumVerificationEmail', const {})
+          .timeout(webAuthOperationTimeout);
       return true;
     } catch (_) {
       return false;

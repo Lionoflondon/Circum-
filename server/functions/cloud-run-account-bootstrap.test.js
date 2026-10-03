@@ -42,6 +42,7 @@ function dependencies(overrides = {}) {
         updateSenderPreferences: {...handler("updateSenderPreferences"), appCheckRequired: false},
         revokeSenderSessions: {...handler("revokeSenderSessions"), appCheckRequired: false},
         ensureSenderAccount: handler("ensureSenderAccount"),
+        sendCircumVerificationEmail: handler("sendCircumVerificationEmail"),
         updateSenderNotificationState: handler("updateSenderNotificationState"),
         getSenderWallet: handler("getSenderWallet"),
         getSenderWalletTransactions: handler("getSenderWalletTransactions"),
@@ -69,7 +70,7 @@ test("routes only the supported account operations", () => {
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
 
-for (const name of ["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"]) {
+for (const name of ["sendCircumVerificationEmail", "createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"]) {
   test(`${name} preserves Auth and App Check before delegating financial logic`, async () => {
     const deps = dependencies();
     await withServer(deps.factory, async (base) => {

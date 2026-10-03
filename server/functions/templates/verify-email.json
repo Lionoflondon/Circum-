@@ -1,0 +1,6 @@
+{
+  "senderDisplayName": "Circum",
+  "subject": "Verify your email for Circum",
+  "bodyFormat": "HTML",
+  "body": "<p>Hello %DISPLAY_NAME%,</p>\n<p>Verify your email to continue with Circum.</p>\n<p><a href=\"%LINK%\" style=\"display:inline-block;padding:14px 24px;background:#142b58;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;\">Verify email</a></p>\n<p>You can also <a href=\"%LINK%\">verify your email</a>.</p>\n<p>If you did not create a Circum account, you can ignore this email.</p>\n<p>The Circum team</p>"
+}
