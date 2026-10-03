@@ -227,3 +227,22 @@ test("Cloud Run completion reloads canonical timestamps and deduplicates all sub
  assert.equal((await db.collection("walletTransactions").get()).size, 0); assert.equal((await db.collection("notifications").get()).size, 0);
  await assert.rejects(processCompletion(db, "delivery_completed_missing"), /invalid_canonical_completion/);
 }));
+
+test("completion retries preserve notification read state and immutable creation time after a crash", () => fixture("completion-record-crash", async (db) => {
+ const {runSubscriber, subscribers} = require("./delivery-completed-event")._private;
+ const event = {eventId: "delivery_completed_crash", deliveryId: "job", recipientId: "recipient"};
+ await assert.rejects(runSubscriber(db, event, "recipient", async (...args) => {
+ await subscribers.recipient(...args); throw new Error("crash_after_write");
+ }), /crash_after_write/);
+ const ref = db.doc("recipientNotifications/delivery_completed_crash"); const before = (await ref.get()).data();
+ await ref.update({read: true}); await runSubscriber(db, event, "recipient", subscribers.recipient);
+ const after = (await ref.get()).data(); assert.equal(after.read, true); assert.ok(after.createdAt.isEqual(before.createdAt)); assert.equal((await db.collection("recipientNotifications").get()).size, 1);
+}));
+test("completion projections preserve dispute and payment review holds", () => fixture("completion-review-holds", async (db) => {
+ const {projectLinkedCompletion} = require("./delivery-completed-event")._private;
+ await db.doc("deliveryRequests/job").set({status: "delivered", businessOrderId: "order", riderId: "rider"});
+ const event = {eventId: "delivery_completed_review", deliveryId: "job", riderId: "rider", completedAt: new Date()};
+ for (const hold of [{status: "under_review"}, {status: "disputed"}, {status: "accepted", underReview: true}, {status: "accepted", disputeOpen: true}, {status: "accepted", paymentInvestigation: true}]) {
+ await db.doc("businessOrders/order").set({...hold, deliveryId: "job"}); await projectLinkedCompletion(db, event, "businessOrders", "order"); assert.deepEqual((await db.doc("businessOrders/order").get()).data(), {...hold, deliveryId: "job"});
+ }
+}));

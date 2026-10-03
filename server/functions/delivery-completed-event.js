@@ -238,25 +238,34 @@ function completionNeedsRetry(result) {
   return String(result.status || "").toLowerCase() === "review" || result.needsReview === true || Object.values(result).some((value) => value && typeof value === "object" && completionNeedsRetry(value));
 }
 
+async function createCompletionRecord(db, ref, payload) {
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (!existing.exists) tx.create(ref, payload);
+  });
+}
+
 async function projectLinkedCompletion(db, event, collection, id) {
   if (!id) return {status: "ignored"};
   return db.runTransaction(async (tx) => {
     const sourceRef = db.collection("deliveryRequests").doc(event.deliveryId);
     const targetRef = db.collection(collection).doc(id);
-    const [source, target] = await Promise.all([tx.get(sourceRef), tx.get(targetRef)]);
+    const noticeRef = collection === "prescriptionPickups" ? db.collection("healthPlusNotifications").doc(event.eventId) : null;
+    const [source, target, notice] = await Promise.all([tx.get(sourceRef), tx.get(targetRef), noticeRef ? tx.get(noticeRef) : null]);
     const current = source.data() || {}; const linked = target.data() || {};
     if (!source.exists || !target.exists || !["completed", "delivered"].includes(String(current.status || current.deliveryStatus).toLowerCase())) return {status: "ignored", reason: "current_completion_required"};
     const binding = collection === "prescriptionPickups" ? current.healthPlusPickupId || current.healthOrderId || current.healthPickupId || current.prescriptionPickupId : current.businessOrderId || current.businessDeliveryId || current.orderId;
-    if (String(binding || "") !== String(id) || (linked.deliveryId && linked.deliveryId !== event.deliveryId) || (linked.riderId && linked.riderId !== current.riderId) || (event.riderId && event.riderId !== current.riderId) || ["cancelled", "canceled", "refunded", "archived", "archived_expired"].includes(String(linked.status || "").toLowerCase())) return {status: "ignored", reason: "current_binding_required"};
+    if (String(binding || "") !== String(id) || (linked.deliveryId && linked.deliveryId !== event.deliveryId) || (linked.riderId && linked.riderId !== current.riderId) || (event.riderId && event.riderId !== current.riderId) || ["cancelled", "canceled", "refunded", "archived", "archived_expired", "under_review", "disputed", "dispute"].includes(String(linked.status || "").toLowerCase()) || linked.underReview === true || linked.disputeOpen === true || linked.paymentInvestigation === true) return {status: "ignored", reason: "current_binding_required"};
+    if (linked.deliveryCompletedEventId === event.eventId) return {status: "already_projected"};
     tx.set(targetRef, {deliveryCompletedEventId: event.eventId, status: String(linked.status || "").toLowerCase() === "completed" ? "completed" : "delivered", completedAt: event.completedAt, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-    if (collection === "prescriptionPickups") tx.set(db.collection("healthPlusNotifications").doc(event.eventId), {eventId: event.eventId, pickupId: id, type: "delivered", read: false, createdAt: FieldValue.serverTimestamp()}, {merge: true});
+    if (noticeRef && !notice.exists) tx.create(noticeRef, {eventId: event.eventId, pickupId: id, type: "delivered", read: false, createdAt: FieldValue.serverTimestamp()});
     return {status: "projected"};
   });
 }
 
 const subscribers = {
   sender: async (db, event) => {
-    await db.collection("deliveryActivity").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("deliveryActivity").doc(event.eventId),
       {
         eventId: event.eventId,
         eventType: EVENT_TYPE,
@@ -266,26 +275,21 @@ const subscribers = {
         completedAt: event.completedAt,
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
   },
   rider: async (db, event) => {
     if (!event.riderId) return;
-    await db
-      .collection("riderCompletionEvents")
-      .doc(event.eventId)
-      .set(
-        {
-          ...event,
-          status: "completed",
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
+    await createCompletionRecord(db, db.collection("riderCompletionEvents").doc(event.eventId),
+      {
+        ...event,
+        status: "completed",
+        createdAt: FieldValue.serverTimestamp(),
+      },
+    );
   },
   recipient: async (db, event) => {
     if (!event.recipientId) return;
-    await db.collection("recipientNotifications").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("recipientNotifications").doc(event.eventId),
       {
         eventId: event.eventId,
         eventType: EVENT_TYPE,
@@ -295,7 +299,6 @@ const subscribers = {
         read: false,
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
   },
   // Gifts remain owned by the deliveryRequests Firestore completion path.
@@ -309,7 +312,7 @@ const subscribers = {
   notifications: async (db, event) => {
     // Existing deliveryRequests Eventarc notifications own customer delivery messages.
     // This bus records completion metadata; it must not create a second sender.
-    await db.collection("platformNotifications").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("platformNotifications").doc(event.eventId),
       {
         eventId: event.eventId,
         eventType: EVENT_TYPE,
@@ -321,12 +324,11 @@ const subscribers = {
         canonicalNotificationOwner: "circum-sender-notification-events",
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
     return {status: "ignored", reason: "platform_event_not_canonical_notification_owner"};
   },
   analytics: async (db, event) => {
-    await db.collection("deliveryAnalytics").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("deliveryAnalytics").doc(event.eventId),
       {
         eventId: event.eventId,
         deliveryId: event.deliveryId,
@@ -336,44 +338,37 @@ const subscribers = {
         vehicleType: event.vehicleType,
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
   },
   admin: async (db, event) => {
-    await db
-      .collection("deliveryAuditEvents")
-      .doc(event.eventId)
-      .set(
-        {
-          ...event,
-          auditType: EVENT_TYPE,
-          immutable: true,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
+    await createCompletionRecord(db, db.collection("deliveryAuditEvents").doc(event.eventId),
+      {
+        ...event,
+        auditType: EVENT_TYPE,
+        immutable: true,
+        createdAt: FieldValue.serverTimestamp(),
+      },
+    );
   },
   iris: async (db, event) => {
-    await db.collection("irisCompletionRecords").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("irisCompletionRecords").doc(event.eventId),
       {
         eventId: event.eventId,
         deliveryId: event.deliveryId,
         status: "finalized",
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
   },
   vanguard: async (db, event) => {
     if (!event.vanguardEnabled) return;
-    await db.collection("vanguardCompletionEvents").doc(event.eventId).set(
+    await createCompletionRecord(db, db.collection("vanguardCompletionEvents").doc(event.eventId),
       {
         eventId: event.eventId,
         deliveryId: event.deliveryId,
         status: "completed",
         createdAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
   },
   legends: async (db, event) => {
