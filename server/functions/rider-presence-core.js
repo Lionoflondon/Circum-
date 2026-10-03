@@ -84,7 +84,7 @@ function timestampMillis(value) {
 }
 
 function presenceState({presence = {}, now = Date.now()}) {
-  if (presence.isOnline !== true) return PRESENCE_STATES.OFFLINE;
+  if (presence.onlineIntent === false || presence.isOnline !== true) return PRESENCE_STATES.OFFLINE;
   const heartbeat = timestampMillis(presence.lastHeartbeatAt);
   if (!heartbeat || now - heartbeat > STALE_HEARTBEAT_MS) return PRESENCE_STATES.STALE;
   return PRESENCE_STATES.FRESH;
