@@ -86,8 +86,8 @@ function materializedSummary({wallet = {}, payouts = [], recentRows = [], profil
   const storedAvailable = money(wallet.availableBalance ?? wallet.availableEarnings ?? wallet.accountBalance);
   const pending = money(wallet.pendingBalance ?? wallet.pendingEarnings);
   const reviewRequired = wallet.payoutReviewRequired === true || wallet.reconciliationRequired === true;
-  const activityCount = Number.isFinite(Number(wallet.activityCount || wallet.transactionCount)) ?
-    Number(wallet.activityCount || wallet.transactionCount) : recentRows.length;
+  const activityCount = Number.isFinite(Number(wallet.activityCount ?? wallet.transactionCount)) ?
+    Number(wallet.activityCount ?? wallet.transactionCount) : recentRows.length;
   return {
     totals: materializedTotals(wallet),
     calculatedAvailable: storedAvailable,
