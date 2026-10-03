@@ -101,7 +101,7 @@ async function adminRecipients() {
   }));
 }
 
-async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}, dedupeKey = ""}) {
+async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}, dedupeKey = "", fixtureDb = null, suppressPush = false}) {
   if (recipientRole !== "admin") {
     return communicationEngine.emitNotification({
       recipientId,
@@ -111,6 +111,7 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
       body,
       data: {...data, bookingId, ticketId},
       dedupeKey,
+      ...(fixtureDb ? {db: fixtureDb, suppressPush} : {}),
     });
   }
   const db = getFirestore();
@@ -325,7 +326,7 @@ function giftStatusNotification(status) {
   return map[normalized] || null;
 }
 
-async function notifyGiftStatus({before = {}, after = {}, giftId}) {
+async function notifyGiftStatus({before = {}, after = {}, giftId, db = null, suppressPush = false}) {
   const oldStatus = giftStatus(before);
   const nextStatus = giftStatus(after);
   if (!nextStatus || oldStatus === nextStatus) return null;
@@ -347,9 +348,11 @@ async function notifyGiftStatus({before = {}, after = {}, giftId}) {
       giftType: text(after.giftType || after.type || "gift"),
     },
     dedupeKey: `gift_status:${giftId}:${eventType}:${senderId}`,
+    fixtureDb: db, suppressPush,
   });
   if (eventType === "gift_delivered") {
-    await giftEmailNotifications.queueGiftDeliveryEmail({giftId, gift: after});
+    if (db) await giftEmailNotifications.queueGiftDeliveryEmail({giftId, gift: after, db});
+    else await giftEmailNotifications.queueGiftDeliveryEmail({giftId, gift: after});
   }
   return notificationId;
 }
@@ -614,6 +617,7 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
 exports.giftNotificationRecord = giftNotificationRecord;
 exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransition;
 exports._private = {
+  notifyGiftStatus,
   arrivalNotificationContext,
   giftStatus,
   giftStatusNotification,

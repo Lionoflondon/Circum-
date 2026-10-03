@@ -202,3 +202,18 @@ test("provider-specific Auth and App Check failures remain fail-closed", () => {
     status: 401, payload: {error: {status: "UNAUTHENTICATED", message: "bad auth"}}, code: "unauthenticated",
   });
 });
+
+test("Gift QA transport enforces the existing Auth/App Check gates and selects its private handler", async () => {
+  let invoked = 0;
+  await withServer(() => ({...dependencies(() => {
+throw Error("wrong route");
+})(), giftHandler: async (data, context) => {
+invoked++; assert.equal(context.auth.uid, "qa-sender"); assert.equal(context.app.appId, "qa-web"); return {action: data.action};
+}}), async (base) => {
+    const headers = {"content-type": "application/json", "x-firebase-auth": "Bearer firebase-auth-token", "x-firebase-appcheck": "app-check-token"};
+    const send = (h) => fetch(`${base}/qaGiftJourney`, {method: "POST", headers: h, body: JSON.stringify({data: {action: "read"}})});
+    assert.equal((await send({"content-type": "application/json"})).status, 401);
+    assert.equal((await send({...headers, "x-firebase-appcheck": "invalid"})).status, 400);
+    const response = await send(headers); assert.equal(response.status, 200); assert.deepEqual(await response.json(), {result: {action: "read"}}); assert.equal(invoked, 1);
+  });
+});

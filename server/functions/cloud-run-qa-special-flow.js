@@ -8,7 +8,6 @@ const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const MAX_BODY_BYTES = 32 * 1024;
-const ROUTE = "qaSpecialFlowFixture";
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://circum-app-2797c.web.app",
   "https://circum-app-2797c.firebaseapp.com",
@@ -19,6 +18,7 @@ const STATUS = {
   "permission-denied": "PERMISSION_DENIED",
   "failed-precondition": "FAILED_PRECONDITION",
   unavailable: "UNAVAILABLE",
+  "not-found": "NOT_FOUND",
   internal: "INTERNAL",
 };
 
@@ -54,7 +54,8 @@ function firebaseToken(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  return /^\/(?:v1\/callable\/)?qaSpecialFlowFixture$/.test(pathname) ? ROUTE : null;
+  const match = /^\/(?:v1\/callable\/)?(qaSpecialFlowFixture|qaGiftJourney)$/.exec(pathname);
+  return match ? match[1] : null;
 }
 
 function allowlistFromCredentials(raw) {
@@ -91,6 +92,7 @@ function productionDependencies() {
     verifyIdToken: (token) => getAuth().verifyIdToken(token, true),
     verifyAppCheck: (token) => getAppCheck().verifyToken(token),
     handler: factory({db: getFirestore(), env, stripe}).handle,
+    giftHandler: require("./qa-gift-journey").factory({raw: getFirestore(), stripe, secret, credentials: JSON.parse(process.env.CIRCUM_QA_CERTIFICATION_CREDENTIALS)}).handle,
   };
 }
 
@@ -98,7 +100,7 @@ function errorResponse(error) {
   const rawCode = String(error.code || "internal").replace(/^functions\//, "");
   const code = rawCode.startsWith("app-check/") ? "failed-precondition" :
     rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
-  const status = code === "unauthenticated" ? 401 :
+  const status = code === "not-found" ? 404 : code === "unauthenticated" ? 401 :
     code === "permission-denied" ? 403 :
     code === "unavailable" ? 503 :
     ["invalid-argument", "failed-precondition"].includes(code) ? 400 : 500;
@@ -113,6 +115,10 @@ function createServer(options = {}) {
   const dependenciesFactory = options.dependenciesFactory || productionDependencies;
   let dependencies;
   return http.createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/qa/gifts") {
+      response.writeHead(200, {"content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"});
+      return response.end(require("node:fs").readFileSync(require("node:path").join(__dirname, "qa-gift-journey.html")));
+    }
     if (require("./qa-expiry-recovery-http").handleQaRecovery(request, response)) return;
     if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) {
       return writeJson(response, 200, {
@@ -150,7 +156,9 @@ function createServer(options = {}) {
           throw callableError("invalid-argument", "Callable request must contain data.");
         }
         action = String(payload.data.action || "unknown");
-        const result = await dependencies.handler(payload.data, {
+        const handler = routeName(request.url) === "qaGiftJourney" ? dependencies.giftHandler : dependencies.handler;
+        if (!handler) throw callableError("failed-precondition", "Gift QA route is unavailable.");
+        const result = await handler(payload.data, {
           auth: {uid, token: decoded},
           app: {appId: app.appId || app.sub},
           // Canonical onRequest handlers read Firebase Auth from Authorization;
