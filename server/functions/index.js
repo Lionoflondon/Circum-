@@ -231,9 +231,8 @@ exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 exports.initialiseSenderWallet = rothLedger.initialiseSenderWallet;
 exports.getSenderWallet = rothLedger.getSenderWallet;
-exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
-exports.completeSenderWalletOnboarding =
-  rothLedger.completeSenderWalletOnboarding;
+exports.getSenderWalletTransactions = cloudRunOnly(rothLedger.getSenderWalletTransactions, "circum-account-bootstrap", true);
+exports.completeSenderWalletOnboarding = cloudRunOnly(rothLedger.completeSenderWalletOnboarding, "circum-account-bootstrap", true);
 exports.requestSenderWalletDebit = cloudRunOnly(rothLedger.requestSenderWalletDebit, "circum-account-bootstrap", true);
 exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
 exports.reportRating = ratingsTipping.reportRating;
@@ -255,7 +254,7 @@ exports.createBusinessInvoiceCheckout =
   businessPayments.createBusinessInvoiceCheckout(stripe);
 exports.createBusinessGiftOrder = cloudRunOnly(businessGifts.createBusinessGiftOrder(stripe), "circum-business-invoice-payments", true);
 exports.cancelBusinessInvoiceCheckout = businessPayments.cancelBusinessInvoiceCheckout(stripe);
-exports.createBusinessAccount = businessAccess.createBusinessAccount;
+exports.createBusinessAccount = cloudRunOnly(businessAccess.createBusinessAccount, "circum-business-invoice-payments");
 exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
 exports.lookupBusinessByCompanyCode =
   businessAccess.lookupBusinessByCompanyCode;
