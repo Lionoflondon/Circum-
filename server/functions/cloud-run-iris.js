@@ -10,7 +10,7 @@ const {classifyIris, customerSafeIris} = require("./iris-core");
 const {loadLearningExamples} = require("./iris")._private;
 const {buildPhotoAnalysis, decodeBase64Image, detectImageType} = require("./iris-photo-analysis")._private;
 
-const ROUTES = new Set(["analyseIris", "analyseParcelPhotoForIris"]);
+const ROUTES = new Set(["analyseIris", "analyseParcelPhotoForIris", "analyseParcelPhotoForIrisLegacy"]);
 const MAX_BODY_BYTES = 14 * 1024 * 1024;
 const STATUS = {"invalid-argument": "INVALID_ARGUMENT", unauthenticated: "UNAUTHENTICATED", "permission-denied": "PERMISSION_DENIED", "failed-precondition": "FAILED_PRECONDITION", "resource-exhausted": "RESOURCE_EXHAUSTED", unavailable: "UNAVAILABLE", internal: "INTERNAL"};
 const QA_FAULT_MODES = new Set(["unavailable", "rate_limit", "malformed"]);
@@ -77,7 +77,7 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
   return http.createServer((request, response) => {
     if (request.method === "GET" && ["/health", "/healthz"].includes(request.url)) return writeJson(response, 200, {status: "ok", source: process.env.CIRCUM_SOURCE_SHA || "unknown", operations: [...ROUTES]});
     if (request.method === "OPTIONS") return writeJson(response, 204, {});
-    const match = /^(?:\/v1\/callable)?\/(analyseIris|analyseParcelPhotoForIris)$/.exec(new URL(request.url || "/", "http://localhost").pathname);
+    const match = /^(?:\/v1\/callable)?\/(analyseIris|analyseParcelPhotoForIris|analyseParcelPhotoForIrisLegacy)$/.exec(new URL(request.url || "/", "http://localhost").pathname);
     const route = match && match[1];
     if (!route || !ROUTES.has(route)) return writeJson(response, 404, {error: {status: "NOT_FOUND", message: "Not found."}});
     if (request.method !== "POST") return writeJson(response, 405, {error: {status: "INVALID_ARGUMENT", message: "POST required."}});
@@ -93,19 +93,19 @@ function createServer({dependenciesFactory = productionDependencies, allowReques
         const authMatch = /^Bearer ([^\s]+)$/.exec(String(request.headers.authorization || ""));
         if (!authMatch) throw error("unauthenticated", "Sign in to continue.");
         const appCheckToken = String(request.headers["x-firebase-appcheck"] || "").trim();
-        if (!appCheckToken) throw error("failed-precondition", "Circum security verification is required.");
+        if (!appCheckToken && route !== "analyseParcelPhotoForIrisLegacy") throw error("failed-precondition", "Circum security verification is required.");
         if (!dependencies) dependencies = dependenciesFactory();
-        const [decoded] = await Promise.all([dependencies.verifyIdToken(authMatch[1]), dependencies.verifyAppCheck(appCheckToken)]);
+        const [decoded] = await Promise.all([dependencies.verifyIdToken(authMatch[1]), appCheckToken ? dependencies.verifyAppCheck(appCheckToken) : null]);
         const uid = decoded && (decoded.uid || decoded.sub);
         if (!uid) throw error("unauthenticated", "Invalid authentication token.");
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) throw error("invalid-argument", "Callable request must contain data.");
         if (!allowRequest(uid)) throw error("resource-exhausted", "Too many IRIS requests. Try again shortly.");
-        const qaFaultMode = qaFaultModeFor({data: body.data, uid, env});
+        const qaFaultMode = route === "analyseParcelPhotoForIrisLegacy" ? null : qaFaultModeFor({data: body.data, uid, env});
         if (qaFaultMode === "unavailable") throw error("unavailable", "QA fault injection requested.");
         if (qaFaultMode === "rate_limit") throw error("resource-exhausted", "QA fault injection requested.");
         if (qaFaultMode === "malformed") throw error("internal", "QA fault injection requested.");
-        const result = await dependencies.handlers[route](body.data, {auth: {uid, token: decoded}});
+        const result = await dependencies.handlers[route.replace(/Legacy$/, "")](body.data, {auth: {uid, token: decoded}});
         return writeJson(response, 200, {result});
       } catch (failure) {
         const rawCode = String(failure.code || "internal").replace(/^functions\//, "");

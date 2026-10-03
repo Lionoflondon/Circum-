@@ -26,6 +26,14 @@ const OPERATIONS = Object.freeze({
   getRiderEarningsSummary: {owner: "circum-rider-payouts", appCheck: true, sdkEnforced: true},
   finalizeGiftStoryVideoUpload: {owner: "circum-gift-payments", appCheck: false, allowGuest: true},
   getGiftStoryVideoDownload: {owner: "circum-gift-payments", appCheck: false, allowGuest: true},
+  updateSenderLocation: {owner: "circum-account-bootstrap", appCheck: false},
+  recordIrisLearningCandidate: {owner: "circum-account-bootstrap", appCheck: false},
+  closeCircumAccount: {owner: "circum-account-bootstrap", appCheck: false},
+  updateSenderNotificationState: {owner: "circum-account-bootstrap", appCheck: false, path: "v1/callable/updateSenderNotificationStateLegacy", maxBody: 64 * 1024},
+  saveSenderDraft: {owner: "circum-sender-drafts", appCheck: false, path: "v1/callable/saveSenderDraftLegacy", maxBody: 40 * 1024},
+  loadSenderDraft: {owner: "circum-sender-drafts", appCheck: false, path: "v1/callable/loadSenderDraftLegacy", maxBody: 40 * 1024},
+  deleteSenderDraft: {owner: "circum-sender-drafts", appCheck: false, path: "v1/callable/deleteSenderDraftLegacy", maxBody: 40 * 1024},
+  analyseParcelPhotoForIris: {owner: "circum-iris", appCheck: false, path: "analyseParcelPhotoForIrisLegacy", maxBody: 14 * 1024 * 1024},
   updateSenderProfile: {owner: "circum-account-bootstrap", appCheck: false},
   updateSenderProfilePhoto: {owner: "circum-account-bootstrap", appCheck: false},
   saveSenderSavedAddress: {owner: "circum-account-bootstrap", appCheck: false},
@@ -50,7 +58,7 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
   const policy = OPERATIONS[operation];
   if (!policy) throw new Error("Unsupported callable operation.");
   const endpoint = `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path || operation}`;
-  const maxBody = ["createBusinessGiftOrder", "createGiftPayment", "finalizeGiftPayment"].includes(operation) ? 1024 * 1024 : operation === "createSenderBookingQuote" ? 64 * 1024 : operation === "goOnline" ? 32 * 1024 : 16 * 1024;
+  const maxBody = policy.maxBody || (["createBusinessGiftOrder", "createGiftPayment", "finalizeGiftPayment"].includes(operation) ? 1024 * 1024 : operation === "createSenderBookingQuote" ? 64 * 1024 : operation === "goOnline" ? 32 * 1024 : 16 * 1024);
   const cors = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*", "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck", "access-control-allow-methods": operation === "giftStoryLanding" ? "GET, HEAD, POST, OPTIONS" : "POST, OPTIONS"};
   function send(res, status, payload) {
     res.writeHead(status, cors);

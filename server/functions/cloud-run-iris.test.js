@@ -134,3 +134,34 @@ test("IRIS failures are bounded and never expose provider details", async () => 
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("original photo SDK policy remains isolated from primary IRIS App Check and delegates to the same owner core", async () => {
+  let calls = 0;
+  const server = createServer({dependenciesFactory: () => ({verifyIdToken: async (token) => {
+    if (token !== "valid") throw Object.assign(new Error("invalid"), {code: "auth/invalid-id-token"});
+    return {uid: "test-owner"};
+  }, verifyAppCheck: async () => {
+throw Object.assign(new Error("invalid"), {code: "app-check/invalid-argument"});
+}, handlers: {analyseParcelPhotoForIris: async (data, context) => {
+    calls++;
+    assert.equal(context.auth.uid, "test-owner");
+    assert.equal(data.photoBase64, "opaque-test-bytes");
+    return {serverAuthored: true};
+  }}})});
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const call = (name, auth, app) => fetch(`${base}/${name}`, {method: "POST", headers: {"content-type": "application/json", ...(auth ? {authorization: `Bearer ${auth}`} : {}), ...(app ? {"x-firebase-appcheck": app} : {})}, body: JSON.stringify({data: {photoBase64: "opaque-test-bytes"}})});
+    assert.equal((await call("analyseParcelPhotoForIrisLegacy", null, null)).status, 401);
+    assert.equal((await call("analyseParcelPhotoForIris", "valid", null)).status, 400);
+    assert.equal((await call("analyseParcelPhotoForIrisLegacy", "invalid", null)).status, 401);
+    assert.equal((await call("analyseParcelPhotoForIrisLegacy", "valid", "invalid")).status, 401);
+    assert.equal(calls, 0);
+    const response = await call("analyseParcelPhotoForIrisLegacy", "valid", null);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {result: {serverAuthored: true}});
+    assert.equal(calls, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
