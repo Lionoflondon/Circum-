@@ -251,6 +251,8 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
       rewardStatus: REFERRAL_STATUSES.rothAwarded,
       rewardAmount: reward,
       rewardCurrency: "ROTH",
+      needsReview: false,
+      reviewReason: FieldValue.delete(),
       inviterUserId: referral.referrerUserId,
       referredUserId,
       rewardedAt: FieldValue.serverTimestamp(),

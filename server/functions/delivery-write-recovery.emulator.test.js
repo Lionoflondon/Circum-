@@ -208,6 +208,7 @@ fail = false; throw new Error("test_crash_after_inviter_movement");
   assert.equal((await referrals.handleDeliveryCompletedReferral(args)).sender.status, "ROTH_AWARDED");
   await referrals.handleDeliveryCompletedReferral(args);
   assert.equal((await db.collection("walletTransactions").get()).size, 2);
+  assert.equal((await db.doc("referrals/fixture_referred").get()).data().needsReview, false);
   assert.equal((await db.doc("wallets/fixture_inviter").get()).data().rothCredit, 5); assert.equal((await db.doc("wallets/fixture_referred").get()).data().rothCredit, 5);
  } finally {
 ledger.recordRothMovement = original;
