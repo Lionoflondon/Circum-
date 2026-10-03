@@ -61,8 +61,7 @@ function authoritativeGiftBudget(value) {
   return amount;
 }
 
-async function giftWalletState(gift) {
-  const db = getFirestore();
+async function giftWalletState(gift, db = getFirestore()) {
   const walletId = normalizeEmail(gift.senderEmail) || gift.senderId;
   const [walletSnap, projectionSnap] = await Promise.all([
     db.collection("wallets").doc(walletId).get(),
@@ -81,8 +80,7 @@ async function giftWalletState(gift) {
   };
 }
 
-async function ensureGiftStripeCustomer(stripe, gift) {
-  const db = getFirestore();
+async function ensureGiftStripeCustomer(stripe, gift, db = getFirestore()) {
   const userRef = db.collection("users").doc(gift.senderId);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() || {} : {};
@@ -131,8 +129,7 @@ function giftVanguardFields() {
   };
 }
 
-async function createCampaignPaymentDraft({data, context}) {
-  const db = getFirestore();
+async function createCampaignPaymentDraft({data, context, db = getFirestore()}) {
   const participantPayload = cleanObject(data.campaignParticipant);
   const campaignId = text(participantPayload.campaignId);
   const campaignName = text(participantPayload.campaignName);
@@ -202,8 +199,7 @@ async function createCampaignPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: (await draftRef.get()).data()};
 }
 
-async function createStandardPaymentDraft({data, context}) {
-  const db = getFirestore();
+async function createStandardPaymentDraft({data, context, db = getFirestore()}) {
   const payload = clientGiftPayload(data.giftDraft);
   const requestedId = text(data.giftDraftId || payload.giftDraftId).replace(/[/.#[\]]/g, "_");
   const draftRef = requestedId ?
@@ -265,14 +261,16 @@ async function createStandardPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, gift: persisted.data() || draft};
 }
 
-exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, context) => {
+function createGiftPaymentHandler(stripe, injectedDb = null) {
+  return async (data, context) => {
   requireAuth(context);
+  const db = injectedDb || getFirestore();
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
-    await createCampaignPaymentDraft({data, context}) :
+    await createCampaignPaymentDraft({data, context, db}) :
     null;
   const standardDraft = !campaignDraft && data.giftDraft ?
-    await createStandardPaymentDraft({data, context}) :
+    await createStandardPaymentDraft({data, context, db}) :
     null;
   const giftDraftId = String(
       (standardDraft && standardDraft.giftDraftId) ||
@@ -280,7 +278,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
       data.giftDraftId ||
       "",
   );
-  const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
+  const ref = db.collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
@@ -294,7 +292,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
   if (recurringCheckout && gift.recurringConsentAccepted !== true && data.recurringConsentAccepted !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Recurring Gift consent is required before payment.");
   }
-  const wallet = data.applyRoth === true ? await giftWalletState(gift) : {
+  const wallet = data.applyRoth === true ? await giftWalletState(gift, db) : {
     walletId: normalizeEmail(gift.senderEmail) || gift.senderId,
     frozen: false,
     balance: 0,
@@ -309,14 +307,14 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
   }
   let requestedMethod = giftPaymentMethodFromSplit(split, data.paymentMethod);
   const nativePayment = text(data.checkoutMode) === "payment_intent";
-  await giftReservations.legacyGate({db: getFirestore(), stripe, giftRef: ref, gift});
-  const reservation = await giftReservations.reserve({db: getFirestore(), giftRef: ref, uid: context.auth.uid, split, paymentMethod: requestedMethod, nativePayment});
+  await giftReservations.legacyGate({db: db, stripe, giftRef: ref, gift});
+  const reservation = await giftReservations.reserve({db: db, giftRef: ref, uid: context.auth.uid, split, paymentMethod: requestedMethod, nativePayment});
   split = {...split, walletContributionGbp: reservation.rothAmount / 100, remainingGbp: reservation.externalAmount / 100, stripeAmountMinor: reservation.externalAmount, stripeRequired: reservation.externalAmount > 0};
   requestedMethod = reservation.paymentMethod;
   const paymentKey = reservation.providerIdempotencyKey;
   const existingIntentId = nativePayment ? reservation.providerId : null;
-  await giftReservations.fund({db: getFirestore(), reservation});
-  const recurringCustomerId = recurringCheckout ? await ensureGiftStripeCustomer(stripe, gift) : null;
+  await giftReservations.fund({db: db, reservation});
+  const recurringCustomerId = recurringCheckout ? await ensureGiftStripeCustomer(stripe, gift, db) : null;
 
   if (!split.stripeRequired) {
     const verifiedVoiceNote = await giftVoiceMedia.verifyGiftVoiceStorageObject({
@@ -325,6 +323,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
       senderId: gift.senderId,
     });
     return finalizeGiftPaymentAuthority({
+      db,
       giftDraftId,
       actorUid: context.auth.uid,
       verifiedVoiceNote,
@@ -341,7 +340,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
   }
 
   if (nativePayment) {
-    const customerId = recurringCustomerId || await ensureGiftStripeCustomer(stripe, gift);
+    const customerId = recurringCustomerId || await ensureGiftStripeCustomer(stripe, gift, db);
     const savedPaymentMethodId = text(data.paymentMethodId);
     if (savedPaymentMethodId) {
       await assertGiftPaymentMethodOwner(stripe, savedPaymentMethodId, customerId);
@@ -355,7 +354,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
         throw new functions.https.HttpsError("permission-denied", "Gift payment ownership mismatch.");
       }
     } else {
-      const params = await giftReservations.freezeParams({db: getFirestore(), reservation, params: {
+      const params = await giftReservations.freezeParams({db: db, reservation, params: {
         amount: split.stripeAmountMinor,
         currency: "gbp",
         customer: customerId,
@@ -379,7 +378,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
       }});
       intent = await stripe.paymentIntents.create(params, {idempotencyKey: paymentKey});
     }
-    await giftReservations.recordProvider({db: getFirestore(), reservation, provider: intent, nativePayment: true});
+    await giftReservations.recordProvider({db: db, reservation, provider: intent, nativePayment: true});
     const ephemeralKey = await stripe.ephemeralKeys.create(
         {customer: customerId},
         {apiVersion: "2020-08-27"},
@@ -404,7 +403,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
   const cancelUrl = `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
   let session;
   try {
-    const params = await giftReservations.freezeParams({db: getFirestore(), reservation, params: {
+    const params = await giftReservations.freezeParams({db: db, reservation, params: {
       mode: "payment",
       expires_at: Math.floor(reservation.expiresAt / 1000),
       ...(recurringCheckout ? {customer: recurringCustomerId} : {customer_email: gift.senderEmail}),
@@ -436,13 +435,13 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
       },
     }});
     session = reservation.providerId ? await stripe.checkout.sessions.retrieve(reservation.providerId) : await stripe.checkout.sessions.create(params, {idempotencyKey: paymentKey});
-    await giftReservations.recordProvider({db: getFirestore(), reservation, provider: session, nativePayment: false});
+    await giftReservations.recordProvider({db: db, reservation, provider: session, nativePayment: false});
   } catch (error) {
     console.error("createGiftPayment Stripe Checkout error", error);
     throw new functions.https.HttpsError("internal", "Could not start Stripe Checkout. Please try again.");
   }
   if (campaignDraft && campaignDraft.participantId) {
-    await getFirestore().collection("giftCampaignParticipants").doc(campaignDraft.participantId).set({
+    await db.collection("giftCampaignParticipants").doc(campaignDraft.participantId).set({
       stripeCheckoutSessionId: session.id,
       paymentDraftId: giftDraftId,
       updatedAt: FieldValue.serverTimestamp(),
@@ -454,7 +453,9 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
     giftDraftId,
     campaignParticipantId: campaignDraft ? campaignDraft.participantId : data.campaignParticipantId,
   };
-}, {secrets: ["STRIPE_SECRET_KEY"]});
+  };
+}
+exports.createGiftPayment = (stripe) => senderPaymentCallable((data, context) => createGiftPaymentHandler(stripe)(data, context), {secrets: ["STRIPE_SECRET_KEY"]});
 
 async function finalizeGiftPaymentAuthority({
   db = getFirestore(),
@@ -760,7 +761,7 @@ exports.handleGiftPaymentIntent = async (stripe, intent, eventId = "") => {
   });
   return {handled: true, ...result};
 };
-exports._private = {finalizeGiftPaymentAuthority};
+exports._private = {finalizeGiftPaymentAuthority, createGiftPaymentHandler};
 exports.cleanupExpiredGiftVoiceDrafts = giftVoiceMedia.cleanupExpiredGiftVoiceDrafts;
 exports.onGiftRequestVoiceMediaDeleted = giftVoiceMedia.onGiftRequestVoiceMediaDeleted;
 exports.handleGiftSubscriptionEvent = giftRecurring.handleGiftSubscriptionEvent;
