@@ -42,7 +42,7 @@ function eventTarget(name, db, enabledFixtureId) {
 function createServer({db = configuredDb(), project = projectLatestGiftMovement,
   fixtureId = process.env.GIFT_MOVEMENT_FIXTURE_ID} = {}) {
   return http.createServer((req, res) => {
-    if (require("./delivery-write-recovery-http").handle(req, res, {dbFactory: () => db, kinds: ["timeline", "tracking", "health", "terminal"]})) return;
+    if (require("./delivery-write-recovery-http").handle(req, res, {dbFactory: () => db, kinds: ["timeline", "tracking", "health", "terminal", "health-operational"]})) return;
     if (req.method === "GET" && ["/health", "/healthz"].includes(req.url)) {
       res.writeHead(200, {"content-type": "application/json"});
       res.end(JSON.stringify({ok: true, service: "gift-movement", sourceSha: process.env.SOURCE_SHA || "unknown"}));

@@ -3,6 +3,35 @@
 const test = require("node:test"); const assert = require("node:assert/strict");
 const {initializeApp, deleteApp} = require("firebase-admin/app"); const {getFirestore} = require("firebase-admin/firestore");
 const {projectTimeline, projectPresence} = require("./delivery-write-recovery");
+const {projectOperational} = require("./health-operational-recovery");
+test("concurrent Health operational delivery events debit one allowance and preserve read/provider state", () => fixture("health-usage", async (db) => {
+ const pickup = {status: "delivered", scheduleId: "schedule", senderId: "fixture-only", email: "fixture@example.invalid", assignedDriverId: "fixture-rider"};
+ await db.doc("prescriptionPickups/job").set(pickup); await db.doc("recurringPickupSchedules/schedule").set({planType: "basic", usedDeliveriesThisCycle: 0, usedPickupsThisCycle: 0});
+ const event = {deliveryId: "job", eventId: "health-first", before: {status: "collected"}, after: pickup, time: new Date().toISOString()};
+ await Promise.all(Array.from({length: 4}, (_, i) => projectOperational({db, event: {...event, eventId: `concurrent-${i}`}})));
+ const plan = (await db.doc("recurringPickupSchedules/schedule").get()).data(); assert.equal(plan.usedDeliveriesThisCycle, 1); assert.equal(plan.usedPickupsThisCycle, 1); assert.equal(plan.remainingDeliveriesThisCycle, 1); assert.equal(plan.remainingPickupsThisCycle, 1);
+ const noticeRef = db.doc("healthPlusNotifications/health_job_delivered"); const created = (await noticeRef.get()).data().createdAt; await noticeRef.update({read: true}); await db.doc("emailQueue/health_job_delivered").update({status: "sent", attempts: 1});
+ await projectOperational({db, event}); const replay = await projectOperational({db, event}); assert.equal(replay.outcome, "DUPLICATE");
+ const notice = (await noticeRef.get()).data(); assert.equal(notice.read, true); assert.ok(notice.createdAt.isEqual(created)); assert.equal((await db.doc("emailQueue/health_job_delivered").get()).data().status, "sent"); assert.equal((await db.doc("recurringPickupSchedules/schedule").get()).data().usedDeliveriesThisCycle, 1);
+ assert.equal((await db.collection("healthPlusUsageEvents").get()).size, 1); assert.equal((await db.collection("healthPlusCustodyArchive").get()).size, 1); assert.equal((await db.collection("walletTransactions").get()).size, 0);
+}));
+test("legacy Health usage ambiguity is held for review rather than incrementing again", () => fixture("health-legacy-usage", async (db) => {
+ const pickup = {status: "delivered", scheduleId: "schedule", senderId: "fixture-only"}; await db.doc("prescriptionPickups/job").set(pickup); await db.doc("recurringPickupSchedules/schedule").set({planType: "basic", usedDeliveriesThisCycle: 1}); await db.doc("healthPlusCustodyArchive/job_delivered_delivered").set({legacy: true});
+ const event = {deliveryId: "job", eventId: "legacy", after: pickup, time: new Date().toISOString()}; const first = await projectOperational({db, event}); assert.equal(first.outcome, "MANUAL_REVIEW"); await projectOperational({db, event: {...event, eventId: "other-transport"}});
+ assert.equal((await db.doc("recurringPickupSchedules/schedule").get()).data().usedDeliveriesThisCycle, 1); assert.equal((await db.collection("healthPlusOperationalErrors").get()).size, 1); assert.equal((await db.collection("healthPlusUsageEvents").get()).size, 0);
+}));
+test("Health usage cannot charge the current monthly allowance for a prior-cycle completion", () => fixture("health-old-cycle", async (db) => {
+ const old = new Date(); old.setMonth(old.getMonth() - 2);
+ const pickup = {status: "delivered", scheduleId: "schedule", deliveredAt: old}; await db.doc("prescriptionPickups/job").set(pickup); await db.doc("recurringPickupSchedules/schedule").set({planType: "basic", usedDeliveriesThisCycle: 0});
+ const result = await projectOperational({db, event: {deliveryId: "job", eventId: "old-cycle", after: {status: "delivered"}, time: old.toISOString()}}); assert.equal(result.outcome, "MANUAL_REVIEW"); assert.equal((await db.doc("recurringPickupSchedules/schedule").get()).data().usedDeliveriesThisCycle, 0); assert.equal((await db.doc("healthPlusOperationalErrors/delivery_usage_job").get()).data().reason, "prior_cycle_delivery_event");
+}));
+test("Health stale payloads and failed accounting transactions leave no partial notification or debit", () => fixture("health-atomic", async (db) => {
+ const pickup = {status: "delivered", scheduleId: "schedule", assignedDriverId: "new"}; await db.doc("prescriptionPickups/job").set(pickup); await db.doc("recurringPickupSchedules/schedule").set({planType: "basic", usedDeliveriesThisCycle: -1});
+ const stale = await projectOperational({db, event: {deliveryId: "job", eventId: "stale", after: {status: "assigned", assignedDriverId: "old"}}}); assert.equal(stale.outcome, "IGNORED");
+ await assert.rejects(projectOperational({db, event: {deliveryId: "job", eventId: "atomic-failure", after: pickup, time: new Date().toISOString()}}), /invalid_health_usage_counter/);
+ assert.equal((await db.collection("healthPlusCustodyArchive").get()).size, 0); assert.equal((await db.collection("healthPlusNotifications").get()).size, 0); assert.equal((await db.collection("healthPlusUsageEvents").get()).size, 0); assert.equal((await db.doc("eventHandlerClaims/health_operational_" + require("node:crypto").createHash("sha256").update("atomic-failure").digest("hex")).get()).exists, false);
+ await db.doc("recurringPickupSchedules/schedule").update({usedDeliveriesThisCycle: 0}); await projectOperational({db, event: {deliveryId: "job", eventId: "atomic-failure", after: pickup, time: new Date().toISOString()}}); assert.equal((await db.doc("recurringPickupSchedules/schedule").get()).data().usedDeliveriesThisCycle, 1);
+}));
 async function fixture(name, run) {
  assert.ok(process.env.FIRESTORE_EMULATOR_HOST); const app = initializeApp({projectId: `demo-delivery-write-${name}`}, name);
  try {

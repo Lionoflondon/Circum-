@@ -252,7 +252,7 @@ exports.processHealthPlusReminders = functions.pubsub
     .timeZone("Europe/London")
     .onRun(() => processHealthPlusRemindersCore());
 
-exports._private = {processHealthPlusRemindersCore};
+exports._private = {processHealthPlusRemindersCore, STATUS_EVENTS};
 
 exports.resetHealthPlusMonthlyUsage = functions.pubsub
     .schedule("0 2 1 * *")
