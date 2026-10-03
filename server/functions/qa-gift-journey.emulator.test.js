@@ -8,7 +8,7 @@ const {factory, testProvider, scopedDb} = require("./qa-gift-journey");
 const credentials = {identities: {admin: {uid: "qa_admin", email: "admin@example.test"}, sender: {uid: "qa_sender", email: "sender@example.test"}, rider: {uid: "qa_rider", email: "rider@example.test"}}};
 const context = (role) => ({auth: {uid: credentials.identities[role].uid, token: {email: credentials.identities[role].email}}, app: {appId: "qa"}});
 function stripeFixture() {
-  const customers = new Map(); const intents = new Map(); let creates = 0;
+  const customers = new Map(); const intents = new Map(); let creates = 0; let confirms = 0;
   return {customers: {
     create: async (p) => {
 const r = {id: "cus_test", livemode: false, ...p}; customers.set(r.id, r); return r;
@@ -18,11 +18,11 @@ customers.delete(id); return {deleted: true};
 },
   }, paymentIntents: {
     create: async (p) => {
-creates++; const r = {id: "pi_test", livemode: false, status: "requires_payment_method", ...p}; intents.set(r.id, r); return r;
+creates++; const r = {id: "pi_test", client_secret: "pi_test_secret_private", livemode: false, status: "requires_payment_method", ...p}; intents.set(r.id, r); return r;
 },
     retrieve: async (id) => intents.get(id),
     confirm: async (id) => {
-const r = {...intents.get(id), status: "succeeded", amount_received: 5000}; intents.set(id, r); return r;
+confirms++; const r = {...intents.get(id), status: "succeeded", amount_received: 5000}; intents.set(id, r); return r;
 },
     list: async () => ({data: [...intents.values()], has_more: false}),
     cancel: async (id) => {
@@ -30,7 +30,7 @@ intents.get(id).status = "canceled"; return intents.get(id);
 },
   }, get creates() {
 return creates;
-}};
+}, get confirms() {return confirms;}, get intents() {return intents;}};
 }
 test("QA provider rejects live/foreign objects and non-fixed checkout", async () => {
   const p = testProvider({paymentIntents: {retrieve: async () => ({livemode: true})}}, "fixture");
@@ -52,7 +52,23 @@ test("authenticated private Gift checkout, canonical admin and Story lifecycle, 
     await assert.rejects(handler({action: "prepare", requestId: "another"}, context("admin")), /cleaned first/);
     const db = scopedDb(raw, fid); assert.throws(() => db.collection("giftStoryRuntimeFixtures"), /scope/);
     await assert.rejects(db.runTransaction((tx) => tx.set(raw.collection("giftRequests").doc("foreign"), {})), /scope/);
-    await call("sender", "checkout"); await call("sender", "checkout"); assert.equal(stripe.creates, 1);
+    assert.deepEqual(await handler({action: "identity"}, context("sender")), {role: "sender", testOnly: true});
+    await assert.rejects(call("admin", "checkout_native"), /Wrong QA actor/);
+    const native = await call("sender", "checkout_native");
+    assert.equal(native.clientSecret, "pi_test_secret_private");
+    assert.equal(native.stripeMode, "TEST");
+    const originalIntent = stripe.intents.get("pi_test");
+    stripe.intents.set("pi_test", {...originalIntent, metadata: {...originalIntent.metadata, senderId: "foreign"}});
+    await assert.rejects(call("sender", "checkout_native"), /Gift payment ownership mismatch/);
+    stripe.intents.set("pi_test", originalIntent);
+    const browser = await call("sender", "checkout");
+    assert.equal(browser.clientSecret, undefined);
+    assert.equal(browser.ephemeralKeySecret, undefined);
+    assert.equal(stripe.creates, 1);
+    await assert.rejects(call("sender", "finalize_native_payment"), /payment sheet first/);
+    assert.notEqual((await call("sender", "read")).paymentStatus, "paid");
+    assert.equal(stripe.confirms, 0);
+    await assert.rejects(call("admin", "finalize_native_payment"), /Wrong QA actor/);
     await assert.rejects(call("sender", "confirm_test_payment"), /Wrong QA actor/);
     const originalTransaction = raw.runTransaction.bind(raw); let failNotification = true;
     raw.runTransaction = (fn) => originalTransaction((tx) => fn(new Proxy(tx, {get(target, key) {
@@ -70,6 +86,7 @@ return (ref, ...args) => {
     assert.equal((await call("sender", "read")).paymentStatus, "paid");
     assert.equal((await call("admin", "confirm_test_payment")).paymentStatus, "paid");
     assert.equal((await call("admin", "confirm_test_payment")).idempotent, true);
+    assert.equal((await call("sender", "finalize_native_payment")).paymentStatus, "paid");
     await assert.rejects(call("admin", "advance", {status: "ready_for_gift_delivery"}), /Out-of-order/);
     for (const status of ["approved", "curation_started", "ready_for_gift_delivery"]) {
 await call("admin", "advance", {status}); await call("admin", "advance", {status});

@@ -126,6 +126,7 @@ await processEmailQueueRecord({db, emailId: row.id, eventId: `qa_consume_${row.i
   }
   async function handle(data, context) {
     const role = actor(context);
+    if (data.action === "identity") return {role, testOnly: true};
     if (data.action === "prepare") return prepare(data, context, role);
     const fid = data.fixtureId;
     if (!/^__codex_giftqa_[a-f0-9]{40}$/.test(fid || "")) fail("invalid-argument", "Private fixture identity required.");
@@ -141,21 +142,27 @@ await processEmailQueueRecord({db, emailId: row.id, eventId: `qa_consume_${row.i
     });
     const db = scopedDb(raw, fid); const provider = testProvider(stripe, fid);
     try {
-      if (data.action === "checkout") {
+      if (["checkout", "checkout_native"].includes(data.action)) {
         own(role, "sender");
         const paid = await db.collection("giftRequests").doc(fid).get();
         if (paid.exists && paid.data().paymentStatus === "paid") return {giftRequestId: fid, paymentStatus: "paid", idempotent: true};
         const result = await payment.createGiftPaymentHandler(provider, db)({giftDraftId: fid, checkoutMode: "payment_intent", applyRoth: false, paymentMethod: "card", giftDraft: {grossGiftBudget: 50, giftMode: "someone", recipientName: "TEST Recipient", recipientEmail: "recipient@example.test", deliveryAddress: "TEST private address", relationship: "friend", occasion: "TEST certification", giftMessage: "TEST only"}}, context);
+        if (data.action === "checkout_native") {
+          const intent = await provider.paymentIntents.retrieve(result.paymentIntentId);
+          if (intent.metadata.type !== ROUTING || intent.metadata.senderId !== ids.sender.uid || intent.metadata.giftDraftId !== fid || intent.amount !== 5000 || intent.currency !== "gbp" || typeof intent.client_secret !== "string" || !intent.client_secret.startsWith(`${intent.id}_secret_`)) fail("failed-precondition", "Bound native TEST checkout required.");
+          return {giftDraftId: fid, paymentIntentId: intent.id, clientSecret: intent.client_secret, amountPence: 5000, stripeMode: "TEST"};
+        }
         return {giftDraftId: fid, paymentIntentId: result.paymentIntentId, amountPence: 5000, stripeMode: "TEST"};
       }
-      if (data.action === "confirm_test_payment") {
-        own(role, "admin");
+      if (["confirm_test_payment", "finalize_native_payment"].includes(data.action)) {
+        own(role, data.action === "finalize_native_payment" ? "sender" : "admin");
         const ref = db.collection("giftRequests").doc(fid); const existing = await ref.get();
         const draft = await db.collection("giftPaymentDrafts").doc(fid).get();
         const id = draft.data()?.stripePaymentIntentId || existing.data()?.stripePaymentIntentId;
         if (!id) fail("failed-precondition", "Checkout required.");
         let intent = await provider.paymentIntents.retrieve(id);
         if (intent.metadata.type !== ROUTING || intent.metadata.senderId !== ids.sender.uid || intent.metadata.giftDraftId !== fid || intent.amount !== 5000 || intent.currency !== "gbp") fail("failed-precondition", "TEST Gift binding mismatch.");
+        if (data.action === "finalize_native_payment" && intent.status !== "succeeded") fail("failed-precondition", "Complete the native TEST payment sheet first.");
         if (intent.status !== "succeeded") intent = await stripe.paymentIntents.confirm(id, {payment_method_data: {type: "card", card: {token: "tok_visa"}}, return_url: "https://example.invalid/qa"}, {idempotencyKey: `qa_confirm_${fid}`});
         if (intent.livemode !== false || intent.status !== "succeeded" || intent.amount_received !== 5000) fail("failed-precondition", "Confirmed matching TEST payment required.");
         const result = await payment.finalizeGiftPaymentAuthority({db, stripe: provider, giftDraftId: fid, actorUid: ids.sender.uid, eventId: `qa_${intent.id}`, verifiedVoiceNote: null, payment: {provider: "payment_intent", providerId: intent.id, paymentIntentId: intent.id, amountPence: intent.amount_received, currency: intent.currency, status: intent.status, metadata: intent.metadata, customerId: intent.customer}});
