@@ -16,10 +16,13 @@ const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
 const rothLedger = require("./roth-ledger");
 
+const {createVerificationEmailHandler} = require("./verification-email");
+
 const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
+  sendCircumVerificationEmail: {handler: {run: createVerificationEmailHandler()}, appCheckRequired: true},
   createSenderSetupIntent: {handler: null, appCheckRequired: true},
   detachSenderPaymentMethod: {handler: null, appCheckRequired: true},
   setDefaultSenderPaymentMethod: {handler: null, appCheckRequired: true},
@@ -80,7 +83,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy|updateSenderLocation|recordIrisLearningCandidate|closeCircumAccount|updateSenderNotificationStateLegacy)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(sendCircumVerificationEmail|createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy|updateSenderLocation|recordIrisLearningCandidate|closeCircumAccount|updateSenderNotificationStateLegacy)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 

@@ -42,6 +42,7 @@ function dependencies(overrides = {}) {
         updateSenderPreferences: {...handler("updateSenderPreferences"), appCheckRequired: false},
         revokeSenderSessions: {...handler("revokeSenderSessions"), appCheckRequired: false},
         ensureSenderAccount: handler("ensureSenderAccount"),
+        sendCircumVerificationEmail: handler("sendCircumVerificationEmail"),
         updateSenderNotificationState: handler("updateSenderNotificationState"),
         getSenderWallet: handler("getSenderWallet"),
         getSenderWalletTransactions: handler("getSenderWalletTransactions"),
@@ -69,13 +70,13 @@ test("routes only the supported account operations", () => {
   assert.equal(routeName("/searchFreeUkAddresses"), null);
 });
 
-for (const name of ["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"]) {
-  test(`${name} preserves Auth and App Check before delegating financial logic`, async () => {
+for (const name of ["sendCircumVerificationEmail", "createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"]) {
+  test(`${name} preserves Auth and App Check before delegating`, async () => {
     const deps = dependencies();
     await withServer(deps.factory, async (base) => {
       for (const headers of [{}, {authorization: "Bearer auth"}]) {
         const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", ...headers}, body: JSON.stringify({data: {fixture: true}})});
-        assert.equal(response.status, 401);
+        assert.equal(response.status, name === "sendCircumVerificationEmail" && headers.authorization ? 400 : 401);
         assert.equal(deps.calls.length, 0);
       }
       const response = await fetch(`${base}/v1/callable/${name}`, {method: "POST", headers: {"content-type": "application/json", authorization: "Bearer auth", "x-firebase-appcheck": "valid"}, body: JSON.stringify({data: {fixture: true}})});
