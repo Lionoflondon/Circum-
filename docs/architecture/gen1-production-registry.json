@@ -4860,9 +4860,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -6833,9 +6831,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -7120,9 +7116,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -8623,9 +8617,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",

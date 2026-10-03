@@ -2,7 +2,7 @@
 /* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
-const {buildCustodyEvent, buildHealthPlusPlanFields} = require("./health-plus-core");
+const {buildHealthPlusPlanFields} = require("./health-plus-core");
 const {createEmailQueueRecord} = require("./email-queue");
 const transactionalEmailTemplates = require("./transactional-email-templates");
 
@@ -150,69 +150,16 @@ async function queueHealthAdminNotification(db, pickup, type, title, body) {
 
 exports.onHealthPlusPickupOperationalWrite = functions.firestore
     .document("prescriptionPickups/{pickupId}")
-    .onWrite(async (change, context) => {
-      if (!change.after.exists) return null;
-      const before = change.before.exists ? change.before.data() : {};
-      const pickup = {...change.after.data(), id: context.params.pickupId};
-      const status = pickup.status || "scheduled";
-      if (change.before.exists && before.status === status && before.assignedDriverId === pickup.assignedDriverId) return null;
-      const db = getFirestore();
-      try {
-        const descriptor = STATUS_EVENTS[status];
-        if (descriptor) {
-          const eventId = `${context.params.pickupId}_${descriptor[0]}_${status}`;
-          await db.collection("healthPlusCustodyArchive").doc(eventId).set({
-            pickupId: context.params.pickupId,
-            profileId: pickup.profileId || null,
-            scheduleId: pickup.scheduleId || null,
-            userId: pickup.userId || pickup.senderId || null,
-            ...buildCustodyEvent({
-              eventType: descriptor[0],
-              actorType: pickup.lastAdminId ? "admin" : pickup.assignedDriverId ? "rider" : "system",
-              actorId: pickup.lastAdminId || pickup.assignedDriverId || null,
-              actorName: pickup.assignedDriverName || null,
-              publicMessage: descriptor[1],
-              internalNote: pickup.adminNote || null,
-              statusAfterEvent: descriptor[2],
-            }),
-            createdAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (["assigned", "collected", "out_for_delivery", "delivered", "rescheduled", "escalated"].includes(status)) {
-            await queueHealthNotification(db, pickup, descriptor[0], "Health+ update", descriptor[1]);
-          }
-        }
-
-        if (status === "delivered" && pickup.scheduleId) {
-          const scheduleRef = db.collection("recurringPickupSchedules").doc(pickup.scheduleId);
-          await db.runTransaction(async (transaction) => {
-            const scheduleSnap = await transaction.get(scheduleRef);
-            if (!scheduleSnap.exists) return;
-            const schedule = scheduleSnap.data();
-            const planFields = buildHealthPlusPlanFields(schedule.planType || schedule.subscriptionPlan, schedule);
-            const used = Number(schedule.usedDeliveriesThisCycle || 0) + 1;
-            const preferredRiderId = schedule.preferredRiderId || pickup.assignedDriverId || null;
-            transaction.set(scheduleRef, {
-              ...planFields,
-              usedDeliveriesThisCycle: used,
-              remainingDeliveriesThisCycle: planFields.includedDeliveries == null ? null : Math.max(0, planFields.includedDeliveries - used),
-              preferredRiderId,
-              preferredRiderName: schedule.preferredRiderName || pickup.assignedDriverName || null,
-              updatedAt: FieldValue.serverTimestamp(),
-            }, {merge: true});
-          });
-        }
-      } catch (error) {
-        console.error("Health+ operational projection failed", context.params.pickupId, error);
-        await db.collection("healthPlusOperationalErrors").add({
-          pickupId: context.params.pickupId,
-          status,
-          error: `${error.message || error}`,
-          retryable: true,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      }
-      return null;
-    });
+    .onWrite(async (change, context) => require("./health-operational-recovery").projectOperational({
+      db: getFirestore(),
+      event: {
+        deliveryId: context.params.pickupId,
+        eventId: context.eventId,
+        time: context.timestamp,
+        before: change.before.exists ? change.before.data() : null,
+        after: change.after.exists ? change.after.data() : null,
+      },
+    }));
 
 async function processHealthPlusRemindersCore(db = getFirestore(), now = new Date()) {
   const horizon = new Date(now.getTime() + 7 * DAY_MS);
