@@ -199,8 +199,7 @@ exports.updateSupportConversationStatus =
 exports.reportCircumMessage = communicationEngine.reportCircumMessage;
 exports.sendCircumAnnouncement = communicationEngine.sendCircumAnnouncement;
 exports.retryNotificationDelivery = communicationEngine.retryNotificationDelivery;
-exports.onHealthPlusPickupOperationalWrite =
-  healthPlusOperations.onHealthPlusPickupOperationalWrite;
+exports.onHealthPlusPickupOperationalWrite = cloudRunOnly(healthPlusOperations.onHealthPlusPickupOperationalWrite, "circum-gift-movement", false, "firestore");
 exports.processHealthPlusReminders =
   healthPlusOperations.processHealthPlusReminders;
 exports.resetHealthPlusMonthlyUsage =

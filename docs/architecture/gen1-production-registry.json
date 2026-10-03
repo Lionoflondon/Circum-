@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 234,
+  "gen1ExportCount": 233,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -4860,9 +4860,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -6820,26 +6818,20 @@
     {
       "functionName": "onHealthPlusPickupOperationalWrite",
       "sourceFile": "server/functions/health-plus-operations.js",
-      "triggerType": "firestore-event",
-      "triggerDefinition": {
-        "eventType": "providers/cloud.firestore/eventTypes/document.write",
-        "eventFilters": {
-          "resource": "projects/circum-registry-audit/databases/(default)/documents/prescriptionPickups/{pickupId}"
-        },
-        "retry": false
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "healthPlusOperations.onHealthPlusPickupOperationalWrite",
-      "callers": [],
+      "triggerType": "firestore",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(healthPlusOperations.onHealthPlusPickupOperationalWrite, \"circum-gift-movement\", false, \"firestore\")",
+      "callers": [
+        "server/functions/cloud-run-runtime-only.test.js"
+      ],
       "criticality": "review-required",
       "authRequired": false,
       "appCheckRequired": false,
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -6847,10 +6839,12 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING EVENTARC",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "onMovementTimelineWrite",
@@ -7122,9 +7116,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
@@ -8625,9 +8617,7 @@
       "secrets": [],
       "firestoreCollections": [
         "emailQueue",
-        "healthPlusCustodyArchive",
         "healthPlusNotifications",
-        "healthPlusOperationalErrors",
         "healthPlusUsageEvents",
         "notifications",
         "prescriptionPickups",
