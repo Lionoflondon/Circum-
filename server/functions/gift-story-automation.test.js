@@ -674,3 +674,13 @@ test("Gift Story thank-you message is preserved and requires a Circum account", 
   assert.match(source, /account_required/);
   assert.match(source, /Sign in to keep this Gift Story/);
 });
+
+test("malformed Gift video identifiers fail as callable arguments before database or signer access", async () => {
+ const db = {collection: () => {
+throw new Error("database must not be read");
+}};
+ for (const giftRequestId of ["", "nested/path"]) {
+  await assert.rejects(story.createStoryVideoUpload({db, bucket: {}, data: {giftRequestId}, context: {}}), {code: "invalid-argument"});
+  await assert.rejects(story.finalizeGiftStoryVideoUpload.run({giftRequestId}, {}), {code: "invalid-argument"});
+ }
+});
