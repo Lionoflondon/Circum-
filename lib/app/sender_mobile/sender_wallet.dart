@@ -510,6 +510,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   bool _paymentActionLoading = false;
   String? _paymentMethodsError;
   DateTime? _cachedAt;
+  DateTime? _balanceCheckedAt;
   bool _openedInitialSection = false;
   int _loadGeneration = 0;
 
@@ -616,6 +617,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       ];
       setState(() {
         _wallet = wallet;
+        _balanceCheckedAt = DateTime.now();
         if (methods != null) {
           _paymentMethods = methods!;
           _paymentMethodsError = null;
@@ -653,6 +655,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         if (!mounted || !_acceptWalletUpdate(value)) return;
         setState(() {
           _wallet = value;
+          _balanceCheckedAt = DateTime.now();
           _showingCachedWallet = false;
           _cachedAt = null;
         });
@@ -1037,7 +1040,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               ),
               const SizedBox(height: 14),
             ],
-            _AvailableRothCard(wallet: wallet),
+            _AvailableRothCard(
+              wallet: wallet,
+              checkedAt: _showingCachedWallet ? null : _balanceCheckedAt,
+            ),
             if (wallet.frozen) ...[
               const SizedBox(height: 12),
               const _WalletGlass(
@@ -3273,13 +3279,15 @@ class _WalletPageShell extends StatelessWidget {
 class _AvailableRothCard extends StatelessWidget {
   final SenderWalletData wallet;
 
-  const _AvailableRothCard({required this.wallet});
+  final DateTime? checkedAt;
+
+  const _AvailableRothCard({required this.wallet, this.checkedAt});
 
   @override
   Widget build(BuildContext context) {
-    final updated = wallet.updatedAt == null
-        ? 'Updated'
-        : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}';
+    final updated = checkedAt == null
+        ? 'Saved balance'
+        : 'Checked ${DateFormat('d MMM, HH:mm').format(checkedAt!.toLocal())}';
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return DecoratedBox(
       decoration: BoxDecoration(
