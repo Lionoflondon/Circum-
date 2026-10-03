@@ -2924,6 +2924,7 @@
         "closedAccounts",
         "deliveryRequests",
         "disputes",
+        "emailQueue",
         "payments",
         "payoutRequests"
       ],
