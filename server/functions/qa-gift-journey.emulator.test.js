@@ -54,6 +54,20 @@ test("authenticated private Gift checkout, canonical admin and Story lifecycle, 
     await assert.rejects(db.runTransaction((tx) => tx.set(raw.collection("giftRequests").doc("foreign"), {})), /scope/);
     await call("sender", "checkout"); await call("sender", "checkout"); assert.equal(stripe.creates, 1);
     await assert.rejects(call("sender", "confirm_test_payment"), /Wrong QA actor/);
+    const originalTransaction = raw.runTransaction.bind(raw); let failNotification = true;
+    raw.runTransaction = (fn) => originalTransaction((tx) => fn(new Proxy(tx, {get(target, key) {
+      if (key === "set") {
+return (ref, ...args) => {
+        if (failNotification && ref.path.includes("/state/notifications/records/")) {
+          failNotification = false; throw new Error("simulated notification failure after payment");
+        }
+        return target.set(ref, ...args);
+      };
+}
+      const value = target[key]; return typeof value === "function" ? value.bind(target) : value;
+    }})));
+    await assert.rejects(call("admin", "confirm_test_payment"), /simulated notification failure/);
+    assert.equal((await call("sender", "read")).paymentStatus, "paid");
     assert.equal((await call("admin", "confirm_test_payment")).paymentStatus, "paid");
     assert.equal((await call("admin", "confirm_test_payment")).idempotent, true);
     await assert.rejects(call("admin", "advance", {status: "ready_for_gift_delivery"}), /Out-of-order/);
@@ -62,7 +76,7 @@ await call("admin", "advance", {status}); await call("admin", "advance", {status
 }
     await assert.rejects(call("sender", "complete_delivery"), /Wrong QA actor/);
     assert.equal((await call("rider", "complete_delivery")).storyUnlocked, true); await call("rider", "complete_delivery");
-    const result = await call("sender", "read"); assert.equal(result.storyUnlocked, true); assert.ok(result.emailCount >= 5); assert.ok(result.notificationCount >= 6); assert.ok(result.emailStates.every((e) => e.status === "sent"));
+    const result = await call("sender", "read"); assert.equal(result.storyUnlocked, true); assert.equal(result.emailCount, 5); assert.equal(result.notificationCount, 6); assert.ok(result.emailStates.every((e) => e.status === "sent"));
     assert.ok((await call("sender", "story")).story); await assert.rejects(call("rider", "story"), /access denied|not found/);
     assert.equal((await raw.collection("giftRequests").get()).size, 0); assert.equal((await raw.collection("emailQueue").get()).size, 0);
   } finally {

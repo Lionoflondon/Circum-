@@ -159,7 +159,7 @@ await processEmailQueueRecord({db, emailId: row.id, eventId: `qa_consume_${row.i
         if (intent.status !== "succeeded") intent = await stripe.paymentIntents.confirm(id, {payment_method_data: {type: "card", card: {token: "tok_visa"}}, return_url: "https://example.invalid/qa"}, {idempotencyKey: `qa_confirm_${fid}`});
         if (intent.livemode !== false || intent.status !== "succeeded" || intent.amount_received !== 5000) fail("failed-precondition", "Confirmed matching TEST payment required.");
         const result = await payment.finalizeGiftPaymentAuthority({db, stripe: provider, giftDraftId: fid, actorUid: ids.sender.uid, eventId: `qa_${intent.id}`, verifiedVoiceNote: null, payment: {provider: "payment_intent", providerId: intent.id, paymentIntentId: intent.id, amountPence: intent.amount_received, currency: intent.currency, status: intent.status, metadata: intent.metadata, customerId: intent.customer}});
-        if (!existing.exists) {
+        if (!existing.exists || existing.data().status === "submitted_for_review") {
  await effects(db, fid, null, (await ref.get()).data()); await drain(db);
 }
         return {...result, livemode: false};
