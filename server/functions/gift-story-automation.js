@@ -1312,6 +1312,7 @@ async function participantAuthorized(context, gift, suppliedToken, db = getFires
 
 async function createStoryVideoUpload({db, bucket, data, context}) {
   const giftId = text(data.giftRequestId);
+  if (!giftId || giftId.includes("/")) throw new functions.https.HttpsError("invalid-argument", "A valid Gift Story identifier is required.");
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
   const gift = {...(giftSnap.data() || {}), id: giftId};
@@ -1339,6 +1340,7 @@ exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context
 
 exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
   const giftId = text(data.giftRequestId);
+  if (!giftId || giftId.includes("/")) throw new functions.https.HttpsError("invalid-argument", "A valid Gift Story identifier is required.");
   const db = await videoDownloadDb(getFirestore(), giftId);
   const giftRef = db.collection("giftRequests").doc(giftId);
   const giftSnap = await giftRef.get();
