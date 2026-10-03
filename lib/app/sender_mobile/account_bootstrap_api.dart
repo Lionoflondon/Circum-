@@ -32,7 +32,8 @@ Future<Map<String, dynamic>> updateSenderNotificationStateViaCloudRun({
       'Sign in to continue.',
     );
   }
-  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance).getToken();
+  final appCheckToken =
+      await (appCheck ?? FirebaseAppCheck.instance).getToken();
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw const SenderAccountBootstrapException(
       'FAILED_PRECONDITION',
@@ -135,5 +136,56 @@ Future<Map<String, dynamic>> invokeSenderAccountBootstrap({
     return Map<String, dynamic>.from(payload['result'] as Map);
   } finally {
     if (ownsClient) transport.close();
+  }
+}
+
+Future<Map<String, dynamic>> sendSenderVerificationEmailViaCloudRun({
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+}) async {
+  final idToken =
+      await (auth ?? FirebaseAuth.instance).currentUser?.getIdToken();
+  if (idToken == null || idToken.isEmpty) {
+    throw const SenderAccountBootstrapException(
+        'UNAUTHENTICATED', 'Sign in to continue.');
+  }
+  final appCheckToken =
+      await (appCheck ?? FirebaseAppCheck.instance).getToken();
+  if (appCheckToken == null || appCheckToken.isEmpty) {
+    throw const SenderAccountBootstrapException(
+        'FAILED_PRECONDITION', 'Circum security verification is required.');
+  }
+  return invokeSenderVerificationEmailViaCloudRun(
+      idToken: idToken, appCheckToken: appCheckToken, client: client);
+}
+
+Future<Map<String, dynamic>> invokeSenderVerificationEmailViaCloudRun({
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) async {
+  final transport = client ?? http.Client();
+  try {
+    final response = await transport
+        .post(
+            Uri.parse(
+                '$senderAccountBootstrapServiceUrl/sendCircumVerificationEmail'),
+            headers: {
+              'content-type': 'application/json',
+              'authorization': 'Bearer $idToken',
+              'x-firebase-appcheck': appCheckToken,
+            },
+            body: jsonEncode({'data': {}}))
+        .timeout(const Duration(seconds: 15));
+    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final error = payload['error'] as Map?;
+      throw SenderAccountBootstrapException('${error?['status'] ?? 'INTERNAL'}',
+          '${error?['message'] ?? 'Verification email could not be sent.'}');
+    }
+    return Map<String, dynamic>.from(payload['result'] as Map);
+  } finally {
+    if (client == null) transport.close();
   }
 }
