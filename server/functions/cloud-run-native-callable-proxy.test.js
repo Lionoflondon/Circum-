@@ -103,3 +103,18 @@ test("Gift landing preflight permits its GET and HEAD contract while callables r
     });
   }
 });
+
+test("native Wallet URLs retain the original payment SDK missing-App-Check error without invoking business logic", async () => {
+ for (const operation of ["getSenderWalletTransactions", "completeSenderWalletOnboarding"]) {
+  let calls = 0; const server = createServer({operation, fetchImpl: async () => {
+calls++; throw new Error("business handler must not run");
+}});
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+   const response = await fetch(`http://127.0.0.1:${server.address().port}/`, {method: "POST", headers: {"Content-Type": "application/json", Authorization: "Bearer native-sdk-shaped-token"}, body: JSON.stringify({data: {}})});
+   assert.equal(response.status, 401); assert.equal((await response.json()).error.status, "UNAUTHENTICATED"); assert.equal(calls, 0);
+  } finally {
+   await new Promise((resolve) => server.close(resolve));
+  }
+ }
+});

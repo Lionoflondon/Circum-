@@ -19,7 +19,7 @@ async function processCompletion(db, eventId) {
  const event = snapshot.data() || {};
  if (!snapshot.exists || event.eventId !== eventId || event.eventId !== `delivery_completed_${event.deliveryId}` || event.eventType !== completion.EVENT_TYPE || event.version !== completion.EVENT_VERSION) throw Object.assign(new Error("invalid_canonical_completion"), {statusCode: 400});
  // Read canonical Firestore timestamps and subscriber keys. Transport IDs never become new business event IDs.
- const results = await Promise.all(Object.entries(completion._private.subscribers).map(([name, handler]) => completion._private.runSubscriber(db, event, name, handler)));
+ const results = await completion._private.runSubscribers(db, event);
  return {eventId, results};
 }
 function handle(req, res, options = {}) {
