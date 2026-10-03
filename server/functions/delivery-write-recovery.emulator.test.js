@@ -130,3 +130,47 @@ test("partial completion referral rewards remain retryable rather than being mar
 });
  assert.equal(attempts, 2); assert.equal((await ref.get()).data().status, "done");
 }));
+
+test("founding recognition recovers missing helpers but preserves current approval and unique numbers on replay", () => fixture("recognition", async (db) => {
+ const {awardRecognition} = require("./legends")._private;
+ const ref = db.doc("riderProfiles/test_rider"); await ref.set({approvalStatus: "pending"});
+ const run = () => awardRecognition({db, type: "foundingRider", subjectRef: ref, subjectId: "test_rider", subjectCollection: "riderProfiles", source: "rider_application_accepted"});
+ assert.equal((await run()).reason, "current_approval_required"); assert.equal((await db.collection("recognitionCounters").get()).size, 0);
+ await ref.update({approvalStatus: "approved"}); const results = await Promise.all([run(), run(), run()]);
+ assert.equal(results.filter((r) => r.awarded).length, 1); assert.equal((await ref.get()).data().foundingRiderNumber, 1);
+ assert.equal((await db.collection("recognitionAwards").get()).size, 1); assert.equal((await db.collection("recognitionNumbers").get()).size, 1);
+ assert.equal((await db.doc("recognitionCounters/foundingRider").get()).data().totalAwarded, 1);
+ assert.equal((await db.collection("walletTransactions").get()).size, 0);
+}));
+
+test("completion Legend helper preserves the canonical counter and awards a paid completion only once", () => fixture("legend-helper", async (db) => {
+ const {handleDeliveryCompleted} = require("./legends");
+ await db.doc("users/test_sender").set({isLegend: false}); await db.doc("deliveryRequests/job").set({status: "completed", paymentStatus: "paid", senderId: "test_sender"});
+ await Promise.all([handleDeliveryCompleted({db, deliveryId: "job"}), handleDeliveryCompleted({db, deliveryId: "job"})]);
+ assert.equal((await db.doc("platformStats/legends").get()).data().totalAwarded, 1);
+ assert.equal((await db.doc("platformStats/legends").get()).data().limit, 1500);
+ assert.equal((await db.doc("users/test_sender").get()).data().legendNumber, 1);
+ assert.equal((await db.doc("deliveryRequests/job").get()).data().legendAwarded, true);
+ assert.equal((await db.collection("recognitionCounters").get()).size, 0);
+ await db.doc("deliveryRequests/job").update({refundStatus: "partially_refunded"}); await handleDeliveryCompleted({db, deliveryId: "job"});
+ assert.equal((await db.doc("platformStats/legends").get()).data().totalAwarded, 1);
+}));
+test("completion bus records notification provenance through the existing owner without customer notification writes", () => fixture("notification-owner", async (db) => {
+ const {_private} = require("./delivery-completed-event");
+ const result = await _private.subscribers.notifications(db, {eventId: "test_completed", deliveryId: "test_delivery", senderId: "test_sender", riderId: null, recipientId: null});
+ assert.equal(result.reason, "platform_event_not_canonical_notification_owner");
+ assert.equal((await db.doc("platformNotifications/test_completed").get()).data().canonicalNotificationOwner, "circum-sender-notification-events");
+ assert.equal((await db.collection("notifications").get()).size, 0);
+}));
+
+test("manual and automatic Legend awards share the existing counter instead of assigning duplicate numbers", () => fixture("legend-counter", async (db) => {
+ const {handleDeliveryCompleted, _private} = require("./legends");
+ await db.doc("users/automatic").set({}); await db.doc("users/manual").set({});
+ await db.doc("deliveryRequests/job").set({status: "completed", paymentStatus: "paid", senderId: "automatic"});
+ await handleDeliveryCompleted({db, deliveryId: "job"});
+ await _private.awardRecognition({db, type: "legend", subjectRef: db.doc("users/manual"), subjectId: "manual", subjectCollection: "users", source: "admin"});
+ assert.equal((await db.doc("users/automatic").get()).data().legendNumber, 1);
+ assert.equal((await db.doc("users/manual").get()).data().legendNumber, 2);
+ assert.equal((await db.doc("platformStats/legends").get()).data().totalAwarded, 2);
+ assert.equal((await db.doc("recognitionCounters/legend").get()).exists, false);
+}));

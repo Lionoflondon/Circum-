@@ -2301,6 +2301,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
@@ -2336,6 +2337,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
@@ -2371,6 +2373,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
@@ -2406,6 +2409,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
@@ -5710,6 +5714,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
@@ -8978,6 +8983,7 @@
       "firestoreCollections": [
         "adminAuditLogs",
         "businessAccounts",
+        "deliveryRequests",
         "platformStats",
         "recognitionAuditLogs",
         "recognitionAwards",
