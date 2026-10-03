@@ -6309,16 +6309,15 @@
       "appCheckRequired": false,
       "secrets": [],
       "firestoreCollections": [
-        "businessOrders",
         "deliveryActivity",
         "deliveryAnalytics",
         "deliveryAuditEvents",
+        "deliveryRequests",
         "healthPlusNotifications",
         "irisCompletionRecords",
         "platformEventSubscribers",
         "platformEvents",
         "platformNotifications",
-        "prescriptionPickups",
         "recipientNotifications",
         "riderCompletionEvents",
         "vanguardCompletionEvents"
