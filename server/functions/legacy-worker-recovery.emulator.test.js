@@ -187,3 +187,28 @@ test("a failed voice object deletion cannot advance the scan cursor past its ret
   await runLegacyWorker({db, worker: "cleanupExpiredGiftVoiceDrafts", bucket, now, limit: 1});
   assert.deepEqual(deleted, [path]);
 }));
+
+test("expired delivery cleanup rechecks current custody and paid state before archiving", () => fixture("archive-race", async (db) => {
+ const {archiveExpired} = require("./archive-expired-delivery-recovery"); const now = Date.now(); const ref = db.doc("deliveryRequests/job");
+ await ref.set({status: "requested", createdAt: Timestamp.fromMillis(now - 2 * 86400000)});
+ const raced = {collection: db.collection.bind(db), runTransaction: async (run) => {
+  await ref.update({status: "accepted", riderId: "current", paymentStatus: "paid"}); return db.runTransaction(run);
+ }};
+ assert.equal((await archiveExpired({db: raced, now, limit: 5, worker: "archiveExpiredDeliveries"})).archived, 0);
+ assert.equal((await ref.get()).data().status, "accepted"); assert.equal((await db.collection("adminAuditLogs").get()).size, 0);
+}));
+test("expired delivery cleanup pages past protected records and archives once without financial writes", () => fixture("archive-page", async (db) => {
+ const {archiveExpired} = require("./archive-expired-delivery-recovery"); const now = Date.now();
+ const old = Timestamp.fromMillis(now - 2 * 86400000);
+ await db.doc("deliveryRequests/a_paid").set({status: "requested", paymentStatus: "succeeded", createdAt: old});
+ await db.doc("deliveryRequests/b_reserved").set({status: "requested", rothReservationId: "keep", createdAt: old});
+ await db.doc("deliveryRequests/c_safe").set({status: "requested", createdAt: old});
+ const run = () => archiveExpired({db, now, limit: 2, worker: "archiveExpiredDeliveries"});
+ assert.equal((await run()).archived, 0); assert.equal((await run()).archived, 1);
+ await run(); await run();
+ assert.equal((await db.doc("deliveryRequests/c_safe").get()).data().status, "archived_expired");
+ assert.equal((await db.doc("deliveryRequests/a_paid").get()).data().status, "requested");
+ assert.equal((await db.doc("deliveryRequests/b_reserved").get()).data().rothReservationId, "keep");
+ assert.equal((await db.collection("adminAuditLogs").get()).size, 1);
+ for (const collection of ["walletTransactions", "riderEarningTransactions", "platformSettlementTransactions"]) assert.equal((await db.collection(collection).get()).size, 0);
+}));

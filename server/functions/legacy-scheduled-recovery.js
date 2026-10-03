@@ -4,6 +4,7 @@ const {FieldPath, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {reconcileStaleLocks} = require("./stale-lock-recovery");
 const {processPendingNoShowSettlements} = require("./legacy-no-show-settlement");
 const CONFIG = Object.freeze({
+  archiveExpiredDeliveries: {interval: 86400000, collections: ["deliveryRequests", "adminAuditLogs"]},
   processNoShowSettlementRetries: {interval: 300000, collections: ["noShowSettlements", "deliveryRequests", "senderPaymentSessions", "riderEarningTransactions", "platformSettlementTransactions"]},
   reconcileStaleDeliveryLocks: {interval: 900000, collections: ["riderPresence", "staleDeliveryQueue"]},
   migrateBusinessMembershipAuthority: {interval: 600000, collections: ["systemMigrationState", "businessAccounts", "businessMemberships"]},
@@ -69,6 +70,7 @@ async function riderReconciliation({db, limit, worker, now: optionsNow = Date.no
 async function runLegacyWorker(options) {
   const {worker, db, now = Date.now(), limit = 20, stripe, bucket} = options;
   if (!CONFIG[worker]) throw new Error("unknown_worker");
+  if (worker === "archiveExpiredDeliveries") return require("./archive-expired-delivery-recovery").archiveExpired({...options, now, limit});
   if (worker === "processNoShowSettlementRetries") return processPendingNoShowSettlements({db, stripe, limit});
   if (worker === "reconcileStaleDeliveryLocks") return reconcileStaleLocks({db, now, limit});
   if (worker === "migrateBusinessMembershipAuthority") return membershipCompletion({db});
