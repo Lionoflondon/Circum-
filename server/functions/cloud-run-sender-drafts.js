@@ -41,8 +41,8 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(saveSenderDraft|loadSenderDraft|deleteSenderDraft)$/.exec(pathname);
-  return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
+  const match = /^(?:\/v1\/callable)?\/((?:saveSenderDraft|loadSenderDraft|deleteSenderDraft)(?:Legacy)?)$/.exec(pathname);
+  return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1].replace(/Legacy$/, "")) ? match[1] : null;
 }
 
 function createRateLimiter(options = {}) {
@@ -111,20 +111,21 @@ function createServer(options = {}) {
         const idToken = bearer(request);
         if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
         const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
-        if (!appCheckToken) throw callableError("failed-precondition", "Circum security verification is required.");
+        if (!appCheckToken && !name.endsWith("Legacy")) throw callableError("failed-precondition", "Circum security verification is required.");
         const [decoded, app] = await Promise.all([
           dependencies.verifyIdToken(idToken),
-          dependencies.verifyAppCheck(appCheckToken),
+          appCheckToken ? dependencies.verifyAppCheck(appCheckToken) : null,
         ]);
         const uid = decoded && (decoded.uid || decoded.sub);
         if (!uid) throw callableError("unauthenticated", "Invalid authentication token.");
         if (!allowRequest(`${uid}:${name}`)) throw callableError("resource-exhausted", "Too many draft requests. Try again shortly.");
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-        if (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
+        const noArguments = payload.data === null && ["loadSenderDraftLegacy", "deleteSenderDraftLegacy"].includes(name);
+        if (!noArguments && (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data))) {
           throw callableError("invalid-argument", "Callable request must contain data.");
         }
-        const handler = dependencies.operations[name];
-        const result = await handler.run(payload.data, {
+        const handler = dependencies.operations[name.replace(/Legacy$/, "")];
+        const result = await handler.run(noArguments ? {} : payload.data, {
           auth: {uid, token: decoded},
           app,
           rawRequest: request,

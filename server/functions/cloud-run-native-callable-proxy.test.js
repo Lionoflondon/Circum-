@@ -118,3 +118,20 @@ calls++; throw new Error("business handler must not run");
   }
  }
 });
+
+for (const [operation, data] of [["saveSenderDraft", {draft: {fixture: "x".repeat(24 * 1024)}}], ["analyseParcelPhotoForIris", {photoBase64: "A".repeat(256 * 1024)}]]) {
+  test(`${operation} compatibility forwards payloads beyond the generic account cap without truncation or a second attempt`, async () => {
+    const body = JSON.stringify({data});
+    let calls = 0;
+    await withServer(operation, async (_url, options) => {
+      calls++;
+      assert.equal(options.body.toString(), body);
+      return {status: 400, arrayBuffer: async () => Buffer.from(JSON.stringify({error: {status: "INVALID_ARGUMENT"}}))};
+    }, async (base) => {
+      const response = await fetch(base, {method: "POST", headers: {authorization: "Bearer verified-by-owner", "content-type": "application/json"}, body});
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), {error: {status: "INVALID_ARGUMENT"}});
+      assert.equal(calls, 1);
+    });
+  });
+}

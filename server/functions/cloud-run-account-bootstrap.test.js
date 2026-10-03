@@ -34,7 +34,7 @@ function dependencies(overrides = {}) {
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
         ...Object.fromEntries(["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"].map((name) => [name, handler(name)])),
-        ...Object.fromEntries(["updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation"].map((name) => [name, {...handler(name), appCheckRequired: false}])),
+        ...Object.fromEntries(["updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation", "updateSenderLocation", "recordIrisLearningCandidate", "closeCircumAccount", "updateSenderNotificationStateLegacy"].map((name) => [name, {...handler(name), appCheckRequired: false}])),
         getSenderWalletLegacy: handler("getSenderWalletLegacy"),
         listSenderPaymentMethodsLegacy: handler("listSenderPaymentMethodsLegacy"),
         getSenderAccountActivity: {...handler("getSenderAccountActivity"), appCheckRequired: false},
@@ -370,7 +370,7 @@ test("Rider application submission rejects invalid App Check before invoking the
   });
 });
 
-for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation"]) {
+for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation", "updateSenderLocation", "recordIrisLearningCandidate", "closeCircumAccount", "updateSenderNotificationStateLegacy"]) {
   test(`${name} preserves the installed Sender callable envelope and auth policy`, async () => {
     const deps = dependencies();
     await withServer(deps.factory, async (base) => {
@@ -447,3 +447,18 @@ for (const name of ["getSenderWalletLegacy", "listSenderPaymentMethodsLegacy"]) 
     });
   });
 }
+
+test("authenticated closure retains original recent-auth/blocker error details without running other account mutations", async () => {
+  const sdkError = new (require("firebase-functions/v1").https.HttpsError)("failed-precondition", "Finish the active delivery before closing this account.", {blocker: "active_delivery"});
+  const deps = dependencies({operations: {closeCircumAccount: {appCheckRequired: false, handler: {run: async (_data, context) => {
+    assert.equal(context.auth.uid, "user-1");
+    throw sdkError;
+  }}}}});
+  await withServer(deps.factory, async (base) => {
+    const denied = await fetch(`${base}/closeCircumAccount`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: {accountType: "sender"}})});
+    assert.equal(denied.status, 401);
+    const response = await fetch(`${base}/closeCircumAccount`, {method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: {accountType: "sender"}})});
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {error: {status: "FAILED_PRECONDITION", message: sdkError.message, details: {blocker: "active_delivery"}}});
+  });
+});

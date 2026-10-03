@@ -2,6 +2,8 @@
 "use strict";
 
 const http = require("node:http");
+const functions = require("firebase-functions/v1");
+const accountClosure = require("./account-closure");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
@@ -24,6 +26,10 @@ const OPERATIONS = Object.freeze({
   saveSenderCheckoutPreference: {handler: senderFinance.saveSenderCheckoutPreference, appCheckRequired: true},
   requestSenderWalletDebit: {handler: rothLedger.requestSenderWalletDebit, appCheckRequired: true},
   redeemGiftCard: {handler: rothLedger.redeemGiftCard, appCheckRequired: true},
+  updateSenderLocation: {handler: senderAccount.updateSenderLocation, appCheckRequired: false},
+  recordIrisLearningCandidate: {handler: senderAccount.recordIrisLearningCandidate, appCheckRequired: false},
+  closeCircumAccount: {handler: accountClosure.closeAccount, appCheckRequired: false},
+  updateSenderNotificationStateLegacy: {handler: {run: senderNotificationState.updateSenderNotificationState}, appCheckRequired: false},
   updateSenderProfile: {handler: senderAccount.updateSenderProfile, appCheckRequired: false},
   updateSenderProfilePhoto: {handler: senderAccount.updateSenderProfilePhoto, appCheckRequired: false},
   saveSenderSavedAddress: {handler: senderSavedAddresses.saveSenderSavedAddress, appCheckRequired: false},
@@ -74,7 +80,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy|updateSenderLocation|recordIrisLearningCandidate|closeCircumAccount|updateSenderNotificationStateLegacy)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -210,7 +216,10 @@ function createServer(options = {}) {
           "deadline-exceeded": "The account service took too long to respond.",
           "not-found": "The requested resource was not found.",
         }[code] || "Account request failed.";
-        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message}});
+        // The installed closure UI uses the original, authenticated blocker details.
+        // Preserve only reviewed SDK errors from that handler, never infrastructure errors.
+        const closureError = name === "closeCircumAccount" && error instanceof functions.https.HttpsError && status < 500;
+        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: closureError ? error.message : message, ...(closureError && error.details !== undefined ? {details: error.details} : {})}});
       }
     });
   });

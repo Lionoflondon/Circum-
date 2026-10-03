@@ -127,7 +127,7 @@ exports.updateSenderHealthPlusBooking =
   healthPlus.updateSenderHealthPlusBooking;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
-exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
+exports.analyseParcelPhotoForIris = cloudRunOnly(irisPhotoAnalysis.analyseParcelPhotoForIris, "circum-iris");
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
 exports.reviewDeliveryAdjustment = deliveryAdjustments.reviewDeliveryAdjustment;
@@ -241,7 +241,7 @@ exports.finalizeIrisReferenceImage =
   adminIrisReferenceImages.finalizeIrisReferenceImage;
 exports.deleteIrisReferenceImage =
   adminIrisReferenceImages.deleteIrisReferenceImage;
-exports.closeCircumAccount = accountClosure.closeAccount;
+exports.closeCircumAccount = cloudRunOnly(accountClosure.closeAccount, "circum-account-bootstrap");
 exports.createBusinessRothCheckout =
   businessPayments.createBusinessRothCheckout(stripe);
 exports.listBusinessRothTransactions =
@@ -418,9 +418,9 @@ exports.createSenderPaidDelivery =
   senderBooking.createSenderPaidDelivery(stripe);
 exports.finalizeSenderWebCheckout =
   senderBooking.finalizeSenderWebCheckout(stripe);
-exports.saveSenderDraft = senderBooking.saveSenderDraft;
-exports.loadSenderDraft = senderBooking.loadSenderDraft;
-exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
+exports.saveSenderDraft = cloudRunOnly(senderBooking.saveSenderDraft, "circum-sender-drafts");
+exports.loadSenderDraft = cloudRunOnly(senderBooking.loadSenderDraft, "circum-sender-drafts");
+exports.deleteSenderDraft = cloudRunOnly(senderBooking.deleteSenderDraft, "circum-sender-drafts");
 exports.cleanupExpiredSenderDrafts = cloudRunOnly(senderBooking.cleanupExpiredSenderDrafts, "circum-payment-schedulers", false, "schedule");
 exports.listSenderPaymentMethods = cloudRunOnly(senderFinance.listSenderPaymentMethods(stripe), "circum-account-bootstrap", true);
 exports.createSenderSetupIntent = cloudRunOnly(senderFinance.createSenderSetupIntent(stripe), "circum-account-bootstrap", true);
@@ -436,14 +436,13 @@ exports.revokeSenderSessions = cloudRunOnly(senderAccount.revokeSenderSessions, 
 exports.getSenderAccountActivity = cloudRunOnly(senderAccount.getSenderAccountActivity, "circum-account-bootstrap");
 exports.exportSenderData = cloudRunOnly(senderAccount.exportSenderData, "circum-account-bootstrap");
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
-exports.updateSenderNotificationState =
-  senderAccount.updateSenderNotificationState;
+exports.updateSenderNotificationState = cloudRunOnly(senderAccount.updateSenderNotificationState, "circum-account-bootstrap");
 exports.markSenderLegendCelebrationSeen =
   senderAccount.markSenderLegendCelebrationSeen;
 exports.recordWebsiteVisit = senderAccount.recordWebsiteVisit;
 exports.requestSenderEmailChange = senderAccount.requestSenderEmailChange;
-exports.updateSenderLocation = senderAccount.updateSenderLocation;
-exports.recordIrisLearningCandidate = senderAccount.recordIrisLearningCandidate;
+exports.updateSenderLocation = cloudRunOnly(senderAccount.updateSenderLocation, "circum-account-bootstrap");
+exports.recordIrisLearningCandidate = cloudRunOnly(senderAccount.recordIrisLearningCandidate, "circum-account-bootstrap");
 exports.recordIrisLearningOutlier = senderAccount.recordIrisLearningOutlier;
 exports.cleanupRiderDocumentChunks = riderAccount.cleanupRiderDocumentChunks;
 exports.ensurePublicRiderId = riderAccount.ensurePublicRiderId;

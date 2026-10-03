@@ -142,3 +142,23 @@ test("maps invalid App Check and stale draft conflicts safely", async () => {
     assert.equal((await response.json()).error.status, "ABORTED");
   });
 });
+
+for (const operation of ["saveSenderDraft", "loadSenderDraft", "deleteSenderDraft"]) {
+  test(`${operation} legacy SDK route verifies Auth and uses the same canonical draft core while primary App Check remains required`, async () => {
+    const deps = dependencies();
+    await withServer(deps.factory, async (base) => {
+      const invoke = (name, auth, data) => fetch(`${base}/${name}`, {method: "POST", headers: {"content-type": "application/json", ...(auth ? {authorization: "Bearer valid"} : {})}, body: JSON.stringify({data})});
+      assert.equal((await invoke(operation + "Legacy", false, {})).status, 401);
+      assert.equal(deps.calls.length, 0);
+      assert.equal((await invoke(operation, true, {})).status, 400);
+      assert.equal(deps.calls.length, 0);
+      const allowed = await invoke(operation + "Legacy", true, operation === "saveSenderDraft" ? {draft: {}} : null);
+      assert.equal(allowed.status, 200);
+      assert.equal(deps.calls[0].name, operation);
+      assert.equal(deps.calls[0].context.auth.uid, "sender-1");
+      assert.equal(deps.calls[0].context.app, null);
+      assert.equal((await invoke("saveSenderDraftLegacy", true, null)).status, 400);
+      assert.equal(deps.calls.length, 1);
+    });
+  });
+}
