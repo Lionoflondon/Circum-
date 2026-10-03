@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 235,
+  "gen1ExportCount": 234,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -6288,18 +6288,13 @@
     {
       "functionName": "onDeliveryCompletedEvent",
       "sourceFile": "server/functions/delivery-completed-event.js",
-      "triggerType": "firestore-event",
-      "triggerDefinition": {
-        "eventType": "providers/cloud.firestore/eventTypes/document.create",
-        "eventFilters": {
-          "resource": "projects/circum-registry-audit/databases/(default)/documents/platformEvents/{eventId}"
-        },
-        "retry": true
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "deliveryCompletedEvent.onDeliveryCompletedEvent",
+      "triggerType": "firestore",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(deliveryCompletedEvent.onDeliveryCompletedEvent, \"circum-referral-events\", false, \"firestore\")",
       "callers": [
-        "docs/BACKEND_REMEDIATION_2026-09-21.md"
+        "docs/BACKEND_REMEDIATION_2026-09-21.md",
+        "server/functions/cloud-run-runtime-only.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": false,
@@ -6323,10 +6318,12 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING EVENTARC",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "onDeliveryCreated",
