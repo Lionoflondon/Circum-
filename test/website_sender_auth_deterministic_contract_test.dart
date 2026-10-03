@@ -92,7 +92,8 @@ void main() {
     expect(authBloc, contains('SenderProfileAuthority'));
     expect(authBloc, contains('signInWithEmailAndPassword'));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
-    expect(authBloc, contains('sendEmailVerification()'));
+    expect(authBloc, contains('sendSenderVerificationEmailViaCloudRun(auth: auth)'));
+    expect(authBloc, isNot(contains('sendEmailVerification()')));
     expect(authBloc, contains('sendPasswordResetEmail'));
     expect(authBloc, contains('.timeout(_authOperationTimeout)'));
     expect(

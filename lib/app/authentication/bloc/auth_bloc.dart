@@ -22,6 +22,7 @@ import 'package:permission_handler/permission_handler.dart'
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../sender_mobile/sender_profile_authority.dart';
+import '../../sender_mobile/account_bootstrap_api.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -196,7 +197,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<bool> _sendVerificationEmail(User user, String phase) async {
     try {
-      await user.sendEmailVerification().timeout(_authOperationTimeout);
+      if (user.emailVerified) return true;
+      await sendSenderVerificationEmailViaCloudRun(auth: auth)
+          .timeout(_authOperationTimeout);
       return true;
     } catch (error, stack) {
       _logRecoverableAuthError(phase, error, stack);
