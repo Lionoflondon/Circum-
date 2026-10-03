@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
+const {tokenRoles, hasPermission} = require("./admin-permissions");
 
 const appBaseUrl = process.env.APP_BASE_URL || "https://circumuk.com";
 const adminBaseUrl = process.env.ADMIN_BASE_URL || "https://admin.circumuk.com";
@@ -354,6 +355,19 @@ async function assertActor(context, riderId, {adminOnly = false} = {}) {
   return {uid, admin};
 }
 
+async function riderConnectTarget(data, context) {
+  const riderId = text(data && data.riderId) || text(context.auth && context.auth.uid);
+  const actor = await assertActor(context, riderId);
+  if (actor.uid !== riderId && !hasPermission(tokenRoles(context.auth.token || {}), "riders.review")) {
+    throw new functions.https.HttpsError("permission-denied", "Rider manager access is required.");
+  }
+  return riderId;
+}
+
+function riderConnectEmail(profile, context, riderId) {
+  return text(profile.email || (riderId === context.auth.uid ? context.auth.token.email : "")) || undefined;
+}
+
 async function loadRider(riderId) {
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(riderId);
@@ -489,11 +503,10 @@ async function retrieveUsableAccount(stripe, riderId, accountId) {
 }
 
 function createStripeConnectAccountForRider(stripeOrFactory) {
-  return riderStripeCallable(async (_data, context) => {
+  return riderStripeCallable(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text(context.auth && context.auth.uid);
-    await assertActor(context, riderId);
+    const riderId = await riderConnectTarget(data, context);
     const {profile} = await loadRider(riderId);
     const existingAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     if (existingAccountId) {
@@ -513,7 +526,7 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
     const account = await stripe.accounts.create({
       type: "express",
       country: "GB",
-      email: text(profile.email || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
+      email: riderConnectEmail(profile, context, riderId),
       business_type: "individual",
       capabilities: {
         transfers: {requested: true},
@@ -556,11 +569,10 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
 }
 
 function createStripeOnboardingLink(stripeOrFactory) {
-  return riderStripeCallable(async (_data, context) => {
+  return riderStripeCallable(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text(context.auth && context.auth.uid);
-    await assertActor(context, riderId);
+    const riderId = await riderConnectTarget(data, context);
     const {profile} = await loadRider(riderId);
     let accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     if (accountId) {
@@ -575,7 +587,7 @@ function createStripeOnboardingLink(stripeOrFactory) {
       const created = await stripe.accounts.create({
         type: "express",
         country: "GB",
-        email: text(profile.email || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
+        email: riderConnectEmail(profile, context, riderId),
         business_type: "individual",
         capabilities: {transfers: {requested: true}},
         metadata: {riderId, payoutFeePayer: "rider", platform: "circum"},
@@ -626,11 +638,10 @@ function refreshStripeOnboardingLink(stripe) {
 }
 
 function syncStripeConnectStatus(stripeOrFactory) {
-  return riderStripeCallable(async (_data, context) => {
+  return riderStripeCallable(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text(context.auth && context.auth.uid);
-    await assertActor(context, riderId);
+    const riderId = await riderConnectTarget(data, context);
     const {profile} = await loadRider(riderId);
     const accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     if (!accountId) {
@@ -716,8 +727,7 @@ function syncStripeConnectStatus(stripeOrFactory) {
 function createStripeAccountManagementLink(stripeOrFactory) {
   return riderStripeCallable(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
-    const riderId = text(context.auth && context.auth.uid);
-    await assertActor(context, riderId);
+    const riderId = await riderConnectTarget(data, context);
     const {profile} = await loadRider(riderId);
     const accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     const account = await retrieveUsableAccount(stripe, riderId, accountId);

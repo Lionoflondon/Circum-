@@ -23,6 +23,9 @@ return {
     requestRiderWithdrawal: rider.requestRiderWithdrawal(),
     cancelRiderWithdrawal: rider.cancelRiderWithdrawal(),
     adminReviewRiderWithdrawal: rider.adminReviewRiderWithdrawal(),
+    adminReviewRider: require("./admin-rider-authority").adminReviewRider,
+    adminReconcileRiderEarnings: earnings.adminReconcileRiderEarnings(),
+    adminRecordRiderEvent: require("./admin-operations-authority").adminRecordRiderEvent,
   };
 }
   if (family === "rider_connect_accounts") {

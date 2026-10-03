@@ -102,3 +102,12 @@ test("summary readiness preserves authoritative false over legacy flags and stat
   assert.equal(connectReadiness({stripeChargesEnabled: false, chargesEnabled: true, payoutsEnabled: true}), "restricted");
   assert.equal(connectReadiness({stripePayoutsEnabled: true, stripeChargesEnabled: true}), "ready");
 });
+
+
+test("materialized activity count preserves authoritative zero over stale legacy count", () => {
+  const recentRows = [{id: "legacy-visible"}];
+  const empty = materializedSummary({wallet: {activityCount: 0, transactionCount: 99}, recentRows});
+  assert.equal(empty.activityCount, 0);
+  assert.equal(materializedSummary({wallet: {transactionCount: 12}, recentRows}).activityCount, 12);
+  assert.equal(materializedSummary({wallet: {}, recentRows}).activityCount, 1);
+});
