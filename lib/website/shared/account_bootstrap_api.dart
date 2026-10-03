@@ -29,7 +29,10 @@ Future<Map<String, dynamic>> callAccountBootstrap(
     'updateRiderProfile',
     'submitRiderApplication',
   };
-  const senderAppCheckOperations = {'updateSenderNotificationState'};
+  const senderAppCheckOperations = {
+    'updateSenderNotificationState',
+    'sendCircumVerificationEmail',
+  };
   const senderWalletReadOperations = {
     'getSenderWallet',
     'listSenderPaymentMethods',
