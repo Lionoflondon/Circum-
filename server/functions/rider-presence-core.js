@@ -112,7 +112,7 @@ function dispatchRequirementsDecision({profile = {}, presence = {}, now = Date.n
 
 function computeRiderOperationalState({profile = {}, presence = {}, now = Date.now()}) {
   const terminal = terminalBlockedReason(profile);
-  const onlineIntent = terminal ? false : presence.onlineIntent === true || presence.isOnline === true;
+  const onlineIntent = terminal ? false : (presence.onlineIntent ?? presence.isOnline) === true;
   const candidate = {
     ...presence,
     onlineIntent,

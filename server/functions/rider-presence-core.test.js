@@ -350,3 +350,18 @@ test("delivery write marks rider busy, then available", () => {
       "available",
   );
 });
+
+
+test("explicit offline intent wins over stale online status during operational recomputation", () => {
+  const now = Date.now();
+  const profile = {approvalStatus: "approved", vehicleApproved: true, eligibilityState: "eligible"};
+  const presence = {onlineIntent: false, isOnline: true, availabilityStatus: "available", connectionStatus: "connected", lastHeartbeatAt: now, currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, updatedAt: now}};
+  const state = core.computeRiderOperationalState({profile, presence, now});
+  assert.equal(state.onlineIntent, false);
+  assert.equal(state.isOnline, false);
+  assert.equal(state.dispatchEligible, false);
+  assert.equal(state.presenceState, core.PRESENCE_STATES.OFFLINE);
+  const legacyOnly = {...presence};
+  delete legacyOnly.onlineIntent;
+  assert.equal(core.computeRiderOperationalState({profile, presence: legacyOnly, now}).dispatchEligible, true);
+});
