@@ -100,6 +100,7 @@
         "test/special_handling_engine_test.dart",
         "test/vanguard_protection_test.dart",
         "scripts/build_sender_app_web.sh",
+        "scripts/build_sender_ios.sh",
         "scripts/deploy_sender_app_web.sh",
         "scripts/validate_sender_mobile_artifacts.js",
         "android/",
@@ -247,6 +248,11 @@
         "docs/private-gifts-native-test.md"
       ],
       "reason": "The explicitly enabled private Gifts native TEST harness uses the approved-actor isolated QA checkout/finalization contract. Published app entrypoints and LIVE payment ownership are unchanged."
+    },
+    {
+      "products": ["sender-app", "backend"],
+      "files": ["deploy-manifest.json", "ios/Podfile.lock", "scripts/build_sender_ios.sh", "pubspec.yaml"],
+      "reason": "Sender-only native release inputs accompany their ownership metadata; this exact build-file exception does not permit backend runtime changes."
     },
     {
       "products": [

@@ -30,34 +30,40 @@ final NotificationService _notificationService = NotificationService();
 
 const AndroidNotificationChannel _senderNotificationChannel =
     AndroidNotificationChannel(
-      'circum_general',
-      'Circum updates',
-      description: 'Delivery, account, and service updates from Circum.',
-      importance: Importance.high,
-    );
+  'circum_general',
+  'Circum updates',
+  description: 'Delivery, account, and service updates from Circum.',
+  importance: Importance.high,
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await runSenderStartup(
-    renderBoot: () =>
-        runApp(const CircumStartupBlocked(message: 'Starting Circum...')),
+    renderBoot: () => runApp(const CircumStartupBlocked()),
     initialize: () async {
-      await _configureStripe();
-      await Firebase.initializeApp();
-      final appCheckStartup = await initializeCircumAppCheck();
-      if (appCheckStartup.blockStartup) {
-        developer.log(
-          'Service protection unavailable; continuing after boot render.',
-        );
-      }
-      if (!kIsWeb) {
-        await _configureNotifications();
-        FirebaseMessaging.onBackgroundMessage(
-          _firebaseMessagingBackgroundHandler,
-        );
-        foregoundMessage();
-        configureNotificationOpenRouting();
-      }
+      await Future.wait<void>([
+        _configureStripe(),
+        Firebase.initializeApp().then((_) {}),
+      ]);
+      await Future.wait<void>([
+        () async {
+          final appCheckStartup = await initializeCircumAppCheck();
+          if (appCheckStartup.blockStartup) {
+            developer.log(
+              'Service protection unavailable; continuing after boot render.',
+            );
+          }
+        }(),
+        if (!kIsWeb)
+          () async {
+            await _configureNotifications();
+            FirebaseMessaging.onBackgroundMessage(
+              _firebaseMessagingBackgroundHandler,
+            );
+            foregoundMessage();
+            configureNotificationOpenRouting();
+          }(),
+      ]);
     },
     renderApp: () => runApp(const App()),
     renderRecovery: () => runApp(
@@ -80,9 +86,9 @@ Future<void> _configureStripe() async {
 }
 
 class CircumStartupBlocked extends StatelessWidget {
-  const CircumStartupBlocked({required this.message, super.key});
+  const CircumStartupBlocked({this.message, super.key});
 
-  final String message;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -94,15 +100,20 @@ class CircumStartupBlocked extends StatelessWidget {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              child: message == null
+                  ? const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF93C5FD),
+                    )
+                  : Text(
+                      message!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
             ),
           ),
         ),
@@ -145,10 +156,9 @@ Future<void> _configureNotifications() async {
       }
     },
   );
-  final android = flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >();
+  final android =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
   await android?.createNotificationChannel(_senderNotificationChannel);
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
