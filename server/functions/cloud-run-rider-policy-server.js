@@ -2,7 +2,7 @@
 "use strict";
 
 const http = require("node:http");
-const {initializeApp} = require("firebase-admin/app");
+const {initializeApp, getApps} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {createProcessor} = require("./rider-policy-worker-core");
 const {parseFirestoreProfileEvent} = require("./rider-policy-firestore-event");
@@ -10,10 +10,18 @@ const {parseFirestoreProfileEvent} = require("./rider-policy-firestore-event");
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_EVENT_BODY_BYTES = 2 * 1024 * 1024;
 
+let database;
+function configuredDb() {
+  if (!database) {
+    if (!getApps().length) initializeApp();
+    database = getFirestore();
+    database.settings({ignoreUndefinedProperties: true});
+  }
+  return database;
+}
+
 function productionProcessor() {
-  initializeApp();
-  const db = getFirestore();
-  db.settings({ignoreUndefinedProperties: true});
+  const db = configuredDb();
   const apply = require("./rider-presence")._test.applyRiderOperationalState;
   return createProcessor({db, applyRiderOperationalState: apply});
 }
@@ -27,6 +35,7 @@ function createServer(options = {}) {
   const processorFactory = options.processorFactory || productionProcessor;
   let processor;
   return http.createServer((request, response) => {
+    if (require("./recognition-recovery-http").handle(request, response, {dbFactory: options.dbFactory || configuredDb, award: options.recognitionAward})) return;
     if (request.method === "GET" && request.url === "/health") return json(response, 200, {status: "ok", runtime: "node22", version: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     const eventarcRequest = request.url === "/v1/events/firestore/rider-profile";
     if (request.url !== "/v1/recompute" && !eventarcRequest) return json(response, 404, {error: "not_found"});
