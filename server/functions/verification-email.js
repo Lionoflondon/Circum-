@@ -5,13 +5,13 @@ const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const template = require("./templates/verify-email.json");
 function fail(code, message) {
- return Object.assign(new Error(message), {code});
+  return Object.assign(new Error(message), {code});
 }
 function buildVerificationEmail(link) {
   const url = new URL(link);
   if (url.protocol !== "https:" || !["circum-2797c.firebaseapp.com", "circumuk.com"].includes(url.hostname) || url.pathname !== "/__/auth/action" || url.searchParams.get("mode") !== "verifyEmail") throw fail("internal", "Invalid verification link.");
   const safeLink = link.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("'", "&#39;").replaceAll("<", "&lt;");
-  return {subject: template.subject, html: template.body.replaceAll("%DISPLAY_NAME%", "").replaceAll("%LINK%", safeLink), text: "Verify your email to continue with Circum. Open the Verify email button in the HTML version of this message. If you did not create a Circum account, ignore this email. The Circum team"};
+  return {subject: template.subject, html: template.body.replaceAll("%DISPLAY_NAME%", "there").replaceAll("%LINK%", safeLink), text: "Verify your email to continue with Circum. Open the Verify email button in the HTML version of this message. If you did not create a Circum account, ignore this email. The Circum team"};
 }
 function createVerificationEmailHandler({auth = () => getAuth(), db = () => getFirestore(), now = Date.now, randomId = () => crypto.randomUUID()} = {}) {
   return async (_data, context) => {
