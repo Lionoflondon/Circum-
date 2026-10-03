@@ -5,6 +5,7 @@ const {
   FieldValue,
   getFirestore,
 } = require("firebase-admin/firestore");
+const {accountClosedEmail} = require("./account-closed-email");
 const giftVoiceMedia = require("./gift-voice-media");
 const {enqueueRiderPolicyRecompute} = require("./rider-policy-dispatch");
 
@@ -172,6 +173,9 @@ async function closeAccount(data, context) {
     );
   }
 
+  // Resolve email from Auth before anonymization; never trust a client recipient.
+  const identity = await getAuth().getUser(uid);
+  const closureEmail = accountClosedEmail({uid, email: identity.email, accountType});
   const batch = db.batch();
   const timestamp = FieldValue.serverTimestamp();
   const closure = {
@@ -184,6 +188,8 @@ async function closeAccount(data, context) {
       "Financial, fraud-prevention, compliance and completed-delivery records may be retained where required.",
   };
 
+  // Atomically queue with closure; the email owner waits for identity deletion.
+  if (closureEmail) batch.create(db.collection("emailQueue").doc(closureEmail.notificationId), closureEmail);
   batch.set(db.collection("accountClosureAudit").doc(), closure);
   batch.set(db.collection("closedAccounts").doc(uid), closure, {merge: true});
 

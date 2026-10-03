@@ -2,6 +2,8 @@
 "use strict";
 
 const http = require("node:http");
+const {getAuth} = require("firebase-admin/auth");
+const {verifyAccountClosed} = require("./account-closed-email");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {decodeEventarcPayload} = require("./cloud-run-notification-events");
@@ -202,6 +204,9 @@ function balanceDue(data = {}) {
 }
 
 async function revalidateSource(db, record) {
+  if (text(record.eventType).toLowerCase() === "account_closed") {
+    return verifyAccountClosed({db, record, auth: getAuth()});
+  }
   const eventType = text(record.eventType || record.type).toLowerCase();
   const legacyGiftDelivery = eventType === "gift_delivered" &&
     (text(record.sourceStoryRole) || /\/story\//.test(text(record.ctaUrl)) || !text(record.communicationClassification));
@@ -486,7 +491,7 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
       leaseOwner: null,
       leaseExpiresAt: Timestamp.fromMillis(nowMs),
     });
-    throw Object.assign(new Error("gift_story_not_ready"), {statusCode: 503});
+    throw Object.assign(new Error(source.reason || "email_source_not_ready"), {statusCode: 503});
   }
   if (source.status !== "valid") {
     await updateQueue(db, emailId, {status: "suppressed", failureReason: source.reason, leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
