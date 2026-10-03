@@ -47,7 +47,7 @@ test("Business backend exports the canonical workspace, team, and payment callab
     "recordBusinessIrisMoment",
   ]) {
     assert.match(businessAccessSource, new RegExp(`exports\\.${name}\\s*=`));
-    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*businessAccess\\.${name}`));
+    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*(?:cloudRunOnly\\()?businessAccess\\.${name}`));
   }
   for (const name of [
     "adminCreateBusinessInvoice",

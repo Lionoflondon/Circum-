@@ -42,6 +42,7 @@ function dependencies(overrides = {}) {
         updateSenderNotificationState: handler("updateSenderNotificationState"),
         getSenderWallet: handler("getSenderWallet"),
         getSenderWalletTransactions: handler("getSenderWalletTransactions"),
+        completeSenderWalletOnboarding: handler("completeSenderWalletOnboarding"),
         listSenderPaymentMethods: handler("listSenderPaymentMethods"),
         verifyRiderAccountAccess: handler("verifyRiderAccountAccess"),
         advanceRiderOnboarding: handler("advanceRiderOnboarding"),
@@ -418,3 +419,13 @@ test("no-argument read compatibility does not change mutation envelope validatio
     assert.equal(deps.calls.length, 0);
   });
 });
+
+ test("Wallet onboarding compatibility requires verified Auth and App Check before delegation", async () => {
+  const deps = dependencies();
+  await withServer(deps.factory, async (base) => {
+   const missing = await fetch(`${base}/completeSenderWalletOnboarding`, {method: "POST", headers: {authorization: "Bearer auth", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+   assert.equal(missing.status, 400); assert.equal(deps.calls.length, 0);
+   const response = await fetch(`${base}/completeSenderWalletOnboarding`, {method: "POST", headers: {authorization: "Bearer auth", "x-firebase-appcheck": "app", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+   assert.equal(response.status, 200); assert.equal(deps.calls.length, 1); assert.equal(deps.calls[0].context.auth.uid, "user-1"); assert.equal(deps.calls[0].context.app.appId, "circum");
+  });
+ });

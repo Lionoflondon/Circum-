@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 239,
+  "gen1ExportCount": 236,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -2964,11 +2964,15 @@
       "functionName": "completeSenderWalletOnboarding",
       "sourceFile": "server/functions/roth-ledger.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "rothLedger.completeSenderWalletOnboarding",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(rothLedger.completeSenderWalletOnboarding, \"circum-account-bootstrap\", true)",
       "callers": [
         "lib/app/sender_mobile/sender_wallet.dart",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/sender-payment-app-check.test.js"
       ],
       "criticality": "P0/P1-review-required",
@@ -2990,10 +2994,15 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-account-bootstrap.js",
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "confirmRiderIrisAssessment",
@@ -3026,14 +3035,17 @@
       "functionName": "createBusinessAccount",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.createBusinessAccount",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.createBusinessAccount, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_access_view.dart",
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/cloud-run-runtime-only.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -3054,10 +3066,14 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js",
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "createBusinessGiftOrder",
@@ -4714,7 +4730,8 @@
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/cloud-run-native-callable-proxy.js",
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "server/functions/gift-story-automation.test.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5576,14 +5593,16 @@
       "functionName": "getSenderWalletTransactions",
       "sourceFile": "server/functions/roth-ledger.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "rothLedger.getSenderWalletTransactions",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(rothLedger.getSenderWalletTransactions, \"circum-account-bootstrap\", true)",
       "callers": [
         "docs/SENDER_ACTIVITY_CANONICAL_MODEL.md",
         "lib/app/sender_mobile/sender_wallet_cloud_run_api.dart",
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-account-bootstrap.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/sender-payment-app-check.test.js",
         "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
       ],
@@ -5606,13 +5625,15 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-account-bootstrap.js",
-        "cloud-run-account-bootstrap.test.js"
+        "cloud-run-account-bootstrap.test.js",
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-runtime-only.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "giftStoryLanding",
@@ -6288,16 +6309,15 @@
       "appCheckRequired": false,
       "secrets": [],
       "firestoreCollections": [
-        "businessOrders",
         "deliveryActivity",
         "deliveryAnalytics",
         "deliveryAuditEvents",
+        "deliveryRequests",
         "healthPlusNotifications",
         "irisCompletionRecords",
         "platformEventSubscribers",
         "platformEvents",
         "platformNotifications",
-        "prescriptionPickups",
         "recipientNotifications",
         "riderCompletionEvents",
         "vanguardCompletionEvents"
