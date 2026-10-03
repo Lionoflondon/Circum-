@@ -2242,7 +2242,10 @@
       },
       "generation": "Gen 1",
       "productionPurpose": "deliveryCleanup.archiveExpiredDeliveries",
-      "callers": [],
+      "callers": [
+        "server/functions/legacy-scheduled-recovery.js",
+        "server/functions/legacy-worker-recovery.emulator.test.js"
+      ],
       "criticality": "review-required",
       "authRequired": true,
       "appCheckRequired": false,
