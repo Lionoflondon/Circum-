@@ -2240,6 +2240,7 @@
       "generation": "Cloud Run",
       "productionPurpose": "cloudRunOnly(deliveryCleanup.archiveExpiredDeliveries, \"circum-payment-schedulers\", false, \"schedule\")",
       "callers": [
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/legacy-scheduled-recovery.js",
         "server/functions/legacy-worker-recovery.emulator.test.js"
       ],
@@ -2255,7 +2256,9 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
-      "cloudRunReplacement": [],
+      "cloudRunReplacement": [
+        "cloud-run-runtime-only.test.js"
+      ],
       "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
       "retirementStatus": "managed-deployment-disabled"
     },
