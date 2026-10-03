@@ -2,6 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
+const {randomUUID} = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const legends = require("./legends");
 const referrals = require("./referrals");
@@ -165,6 +166,7 @@ function subscriberRef(db, eventId, subscriber) {
 async function claimSubscriber(db, eventId, subscriber) {
   const ref = subscriberRef(db, eventId, subscriber);
   const now = Date.now();
+  const claimId = randomUUID();
   let claimed = false;
   let busy = false;
   await db.runTransaction(async (transaction) => {
@@ -188,6 +190,7 @@ async function claimSubscriber(db, eventId, subscriber) {
         eventId,
         subscriber,
         status: "processing",
+        claimId,
         startedAt: now,
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -195,14 +198,15 @@ async function claimSubscriber(db, eventId, subscriber) {
     );
     claimed = true;
   });
-  return {claimed, busy, ref};
+  return {claimed, busy, ref, claimId};
 }
 
-async function completeSubscriber(ref) {
-  await ref.set(
-    {status: "done", completedAt: FieldValue.serverTimestamp()},
-    {merge: true},
-  );
+async function settleSubscriber(db, claim, patch) {
+  await db.runTransaction(async (tx) => {
+    const current = await tx.get(claim.ref);
+    if (current.data()?.claimId !== claim.claimId) throw Object.assign(new Error("completion_subscriber_lease_lost"), {code: "aborted"});
+    tx.set(claim.ref, patch, {merge: true});
+  });
 }
 
 async function runSubscriber(db, event, subscriber, handler) {
@@ -212,10 +216,10 @@ async function runSubscriber(db, event, subscriber, handler) {
   try {
     const result = await handler(db, event);
     if (completionNeedsRetry(result)) throw Object.assign(new Error("completion_subscriber_requires_retry"), {code: "aborted"});
-    await completeSubscriber(claim.ref);
+    await settleSubscriber(db, claim, {status: "done", completedAt: FieldValue.serverTimestamp()});
     return {subscriber, skipped: false};
   } catch (error) {
-    await claim.ref.set(
+    await settleSubscriber(db, claim,
       {
         status: "failed",
         error: `${error && error.message ? error.message : error}`.slice(
@@ -224,7 +228,6 @@ async function runSubscriber(db, event, subscriber, handler) {
         ),
         failedAt: FieldValue.serverTimestamp(),
       },
-      {merge: true},
     );
     throw error;
   }
@@ -233,6 +236,22 @@ async function runSubscriber(db, event, subscriber, handler) {
 function completionNeedsRetry(result) {
   if (!result || typeof result !== "object") return false;
   return String(result.status || "").toLowerCase() === "review" || result.needsReview === true || Object.values(result).some((value) => value && typeof value === "object" && completionNeedsRetry(value));
+}
+
+async function projectLinkedCompletion(db, event, collection, id) {
+  if (!id) return {status: "ignored"};
+  return db.runTransaction(async (tx) => {
+    const sourceRef = db.collection("deliveryRequests").doc(event.deliveryId);
+    const targetRef = db.collection(collection).doc(id);
+    const [source, target] = await Promise.all([tx.get(sourceRef), tx.get(targetRef)]);
+    const current = source.data() || {}; const linked = target.data() || {};
+    if (!source.exists || !target.exists || !["completed", "delivered"].includes(String(current.status || current.deliveryStatus).toLowerCase())) return {status: "ignored", reason: "current_completion_required"};
+    const binding = collection === "prescriptionPickups" ? current.healthPlusPickupId || current.healthOrderId || current.healthPickupId || current.prescriptionPickupId : current.businessOrderId || current.businessDeliveryId || current.orderId;
+    if (String(binding || "") !== String(id) || (linked.deliveryId && linked.deliveryId !== event.deliveryId) || (linked.riderId && linked.riderId !== current.riderId) || (event.riderId && event.riderId !== current.riderId) || ["cancelled", "canceled", "refunded", "archived", "archived_expired"].includes(String(linked.status || "").toLowerCase())) return {status: "ignored", reason: "current_binding_required"};
+    tx.set(targetRef, {deliveryCompletedEventId: event.eventId, status: "delivered", completedAt: event.completedAt, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    if (collection === "prescriptionPickups") tx.set(db.collection("healthPlusNotifications").doc(event.eventId), {eventId: event.eventId, pickupId: id, type: "delivered", read: false, createdAt: FieldValue.serverTimestamp()}, {merge: true});
+    return {status: "projected"};
+  });
 }
 
 const subscribers = {
@@ -285,40 +304,8 @@ const subscribers = {
     status: "ignored",
     reason: "platform_event_not_canonical",
   }),
-  healthPlus: async (db, event) => {
-    if (!event.healthOrderId) return;
-    await db.collection("prescriptionPickups").doc(event.healthOrderId).set(
-      {
-        deliveryCompletedEventId: event.eventId,
-        status: "delivered",
-        completedAt: event.completedAt,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
-    await db.collection("healthPlusNotifications").doc(event.eventId).set(
-      {
-        eventId: event.eventId,
-        pickupId: event.healthOrderId,
-        type: "delivered",
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
-  },
-  business: async (db, event) => {
-    if (!event.businessOrderId) return;
-    await db.collection("businessOrders").doc(event.businessOrderId).set(
-      {
-        deliveryCompletedEventId: event.eventId,
-        status: "delivered",
-        completedAt: event.completedAt,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
-  },
+  healthPlus: async (db, event) => projectLinkedCompletion(db, event, "prescriptionPickups", event.healthOrderId),
+  business: async (db, event) => projectLinkedCompletion(db, event, "businessOrders", event.businessOrderId),
   notifications: async (db, event) => {
     // Existing deliveryRequests Eventarc notifications own customer delivery messages.
     // This bus records completion metadata; it must not create a second sender.
@@ -392,14 +379,16 @@ const subscribers = {
   legends: async (db, event) => {
     await legends.handleDeliveryCompleted({db, deliveryId: event.deliveryId});
   },
-  referrals: async (_db, event) => {
+  referrals: async (db, event) => {
     const deliveryResult = await referrals.handleDeliveryCompletedReferral({
+      db,
       delivery: event,
       deliveryId: event.deliveryId,
     });
     if (completionNeedsRetry(deliveryResult)) return deliveryResult;
     if (event.giftId) {
       const giftResult = await referrals.handleGiftCompletedReferral({
+        db,
         giftId: event.giftId,
         senderId: event.senderId,
         senderEmail: event.senderEmail,
@@ -409,6 +398,7 @@ const subscribers = {
     }
     if (event.healthOrderId) {
       return referrals.handleHealthPlusCompletedReferral({
+        db,
         pickupId: event.healthOrderId,
         userId: event.senderId,
         email: event.senderEmail,
@@ -440,6 +430,8 @@ exports.onDeliveryCompletedEvent = functions
   });
 exports._private = {
   subscribers,
+  projectLinkedCompletion,
+  settleSubscriber,
   claimSubscriber,
   eventRef,
   subscriberRef,

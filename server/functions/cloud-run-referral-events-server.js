@@ -32,6 +32,10 @@ function createServer(options = {}) {
   const handlersFactory = options.handlersFactory || productionHandlers;
   let handlers;
   return http.createServer((request, response) => {
+    if (require("./completion-recovery-http").handle(request, response, {dbFactory: () => {
+      if (!getApps().length) initializeApp();
+      return options.dbFactory ? options.dbFactory() : require("firebase-admin/firestore").getFirestore();
+    }})) return;
     if (request.method === "GET" && request.url === "/health") return writeJson(response, 200, {status: "ok", runtime: "node22", source: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (request.url !== "/v1/events/firestore/referral-completion") return writeJson(response, 404, {error: "not_found"});
     if (request.method !== "POST") return writeJson(response, 405, {error: "method_not_allowed"});

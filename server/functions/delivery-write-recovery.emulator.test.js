@@ -174,3 +174,54 @@ test("manual and automatic Legend awards share the existing counter instead of a
  assert.equal((await db.doc("platformStats/legends").get()).data().totalAwarded, 2);
  assert.equal((await db.doc("recognitionCounters/legend").get()).exists, false);
 }));
+
+test("completion linked projections preserve fresh reassignment, cancellations and missing records", () => fixture("completion-links", async (db) => {
+ const {projectLinkedCompletion} = require("./delivery-completed-event")._private;
+ const event = {eventId: "delivery_completed_job", deliveryId: "job", riderId: "old", completedAt: new Date(), healthOrderId: "pickup"};
+ await db.doc("deliveryRequests/job").set({status: "accepted", riderId: "new", healthOrderId: "pickup"});
+ await db.doc("prescriptionPickups/pickup").set({status: "requested", deliveryId: "job", riderId: "new"});
+ await projectLinkedCompletion(db, event, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "requested");
+ await db.doc("deliveryRequests/job").update({status: "delivered"}); await projectLinkedCompletion(db, event, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "requested");
+ await db.doc("prescriptionPickups/pickup").update({status: "cancelled"}); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "cancelled");
+ await db.doc("prescriptionPickups/pickup").delete(); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).exists, false);
+ await db.doc("prescriptionPickups/pickup").set({status: "requested", deliveryId: "job", riderId: "new"}); await projectLinkedCompletion(db, {...event, riderId: "new"}, "prescriptionPickups", "pickup"); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "delivered"); assert.equal((await db.collection("healthPlusNotifications").get()).size, 1);
+}));
+test("a replaced completion lease cannot be marked done by its stale worker", () => fixture("completion-fence", async (db) => {
+ const {claimSubscriber, settleSubscriber} = require("./delivery-completed-event")._private;
+ const old = await claimSubscriber(db, "delivery_completed_job", "sender"); await old.ref.update({startedAt: 0}); const fresh = await claimSubscriber(db, "delivery_completed_job", "sender");
+ assert.equal(fresh.claimed, true); await assert.rejects(settleSubscriber(db, old, {status: "done"}), /lease_lost/); assert.equal((await fresh.ref.get()).data().status, "processing"); await settleSubscriber(db, fresh, {status: "done"});
+}));
+test("partial referral completion retries the existing deterministic Roth movements once", () => fixture("completion-referral-ledger", async (db) => {
+ const referrals = require("./referrals"); const ledger = require("./roth-ledger"); const original = ledger.recordRothMovement; let fail = true;
+ await db.doc("deliveryRequests/job").set({status: "delivered", paymentStatus: "paid", senderId: "fixture_referred"});
+ await db.doc("referrals/fixture_referred").set({status: "signed_up", referrerUserId: "fixture_inviter", rewardAmount: 5});
+ ledger.recordRothMovement = async (args) => {
+  if (args.transactionId.endsWith("_referred") && fail) {
+fail = false; throw new Error("test_crash_after_inviter_movement");
+} return original(args);
+ };
+ try {
+  const args = {db, deliveryId: "job", delivery: {senderId: "fixture_referred"}};
+  assert.equal((await referrals.handleDeliveryCompletedReferral(args)).sender.status, "review");
+  assert.equal((await db.collection("walletTransactions").get()).size, 1);
+  assert.equal((await referrals.handleDeliveryCompletedReferral(args)).sender.status, "ROTH_AWARDED");
+  await referrals.handleDeliveryCompletedReferral(args);
+  assert.equal((await db.collection("walletTransactions").get()).size, 2);
+  assert.equal((await db.doc("wallets/fixture_inviter").get()).data().rothCredit, 5); assert.equal((await db.doc("wallets/fixture_referred").get()).data().rothCredit, 5);
+ } finally {
+ledger.recordRothMovement = original;
+}
+}));
+test("Cloud Run completion reloads canonical timestamps and deduplicates all subscribers across transport retries", () => fixture("completion-canonical", async (db) => {
+ const {processCompletion} = require("./completion-recovery-http"); const {buildDeliveryCompletedEvent} = require("./delivery-completed-event");
+ await db.doc("deliveryRequests/job").set({status: "delivered", paymentStatus: "paid", senderId: "fixture_sender"}); await db.doc("users/fixture_sender").set({role: "fixture_only"});
+ const event = buildDeliveryCompletedEvent({deliveryId: "job", delivery: {status: "delivered", paymentStatus: "paid", senderId: "fixture_sender", createdAt: new Date()}, completedAt: new Date()});
+ await db.doc(`platformEvents/${event.eventId}`).set(event);
+ const before = (await db.doc(`platformEvents/${event.eventId}`).get()).data();
+ const first = await processCompletion(db, event.eventId); const retry = await processCompletion(db, event.eventId);
+ assert.ok(first.results.every((r) => r.skipped === false)); assert.ok(retry.results.every((r) => r.skipped === true));
+ assert.equal((await db.collection("platformEventSubscribers").get()).size, first.results.length);
+ const projected = (await db.doc(`deliveryActivity/${event.eventId}`).get()).data(); assert.equal(projected.completedAt.toMillis(), before.completedAt.toMillis());
+ assert.equal((await db.collection("walletTransactions").get()).size, 0); assert.equal((await db.collection("notifications").get()).size, 0);
+ await assert.rejects(processCompletion(db, "delivery_completed_missing"), /invalid_canonical_completion/);
+}));
