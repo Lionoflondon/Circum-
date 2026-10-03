@@ -57,6 +57,8 @@
         "pubspec.yaml",
         "windows/",
         "lib/main.dart",
+        "lib/gifts_test_main.dart",
+        "test/gifts_private_build_test.dart",
         "lib/app.dart",
         "lib/messaging.dart",
         "lib/firebase_options.dart",
@@ -235,6 +237,17 @@
   },
   "sharedFiles": [],
   "allowedDependencyIntersections": [
+    {
+      "products": ["sender-app", "backend"],
+      "files": [
+        "lib/gifts_test_main.dart",
+        "test/gifts_private_build_test.dart",
+        "server/functions/qa-gift-journey.js",
+        "server/functions/qa-gift-journey.emulator.test.js",
+        "docs/private-gifts-native-test.md"
+      ],
+      "reason": "The explicitly enabled private Gifts native TEST harness uses the approved-actor isolated QA checkout/finalization contract. Published app entrypoints and LIVE payment ownership are unchanged."
+    },
     {
       "products": [
         "sender-app",
