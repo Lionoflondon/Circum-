@@ -3787,7 +3787,6 @@
       "generation": "Gen 1",
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeAccountManagementLink\")",
       "callers": [
-        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -3818,7 +3817,6 @@
       "generation": "Gen 1",
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeConnectAccountForRider\")",
       "callers": [
-        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -3850,7 +3848,6 @@
       "productionPurpose": "riderBackendCompat.createCompat(\"createStripeOnboardingLink\")",
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
-        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
@@ -7976,7 +7973,6 @@
       "productionPurpose": "riderBackendCompat.createCompat(\"refreshStripeOnboardingLink\")",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
-        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js"
@@ -10117,7 +10113,6 @@
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
-        "lib/app/admin/admin_production_payment_api.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
