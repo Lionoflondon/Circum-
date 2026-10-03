@@ -251,7 +251,7 @@
     },
     {
       "products": ["sender-app", "backend"],
-      "files": ["deploy-manifest.json", "ios/Podfile.lock", "scripts/build_sender_ios.sh"],
+      "files": ["deploy-manifest.json", "ios/Podfile.lock", "scripts/build_sender_ios.sh", "pubspec.yaml"],
       "reason": "Sender-only native release inputs accompany their ownership metadata; this exact build-file exception does not permit backend runtime changes."
     },
     {
