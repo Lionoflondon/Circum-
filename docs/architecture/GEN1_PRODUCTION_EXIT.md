@@ -3,16 +3,16 @@
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
 - Source exports: 283
-- Gen 1 exports: 235
+- Gen 1 exports: 234
 - Files importing Firebase Functions v1: 69
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 91
 - CLOUD RUN ONLY — LEGACY URL RETAINED: 32
-- REPLACE WITH CLOUD RUN + EVENTARC: 15
+- REPLACE WITH CLOUD RUN + EVENTARC: 14
 - MIGRATE TO CLOUD RUN: 126
 - CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED: 11
 - RETIRE — no legitimate production dependency: 3
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 2
-- CLOUD RUN ONLY — EXISTING EVENTARC: 3
+- CLOUD RUN ONLY — EXISTING EVENTARC: 4
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
 |---|---|---|---|---|---|
@@ -173,7 +173,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | markSenderLegendCelebrationSeen | server/functions/sender-account.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/website/shared/circum_website_app.dart |
 | markStaleRiderPresenceOffline | server/functions/rider-presence.js | Cloud Run | schedule | CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED | server/functions/cloud-run-rider-availability-server.js<br>server/functions/cloud-run-runtime-only.test.js<br>server/functions/delivery-maintenance-core.js<br>server/functions/delivery-maintenance-http.js<br>server/functions/scoped_functions_deploy_list.test.js |
 | onChatMessageCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/firestore-chat-notification-rules.test.js<br>server/functions/platform-notifications.test.js<br>server/functions/production-functions-inventory.json |
-| onDeliveryCompletedEvent | server/functions/delivery-completed-event.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md |
+| onDeliveryCompletedEvent | server/functions/delivery-completed-event.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/cloud-run-runtime-only.test.js |
 | onDeliveryCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | docs/BACKEND_REMEDIATION_2026-09-21.md<br>server/functions/production-functions-inventory.json |
 | onDeliveryLiveLocationWrite | server/functions/movement-timeline.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | none found |
 | onDeliveryPresenceWrite | server/functions/rider-presence.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | server/functions/rider-presence-core.test.js |
