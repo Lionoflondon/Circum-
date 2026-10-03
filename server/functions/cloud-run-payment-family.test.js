@@ -55,3 +55,24 @@ test("payment family wrapper preserves callable body and bearer header", async (
     assert.deepEqual(await response.json(), {data: {accepted: true}});
   });
 });
+
+test("Sender cancellation preview delegates to the original SDK wrapper without changing finance or accepting other families", async () => {
+  let calls = 0;
+  const handlers = Object.fromEntries(FAMILY_ROUTES.sender_cancellation.map((name) => [name, (req, res) => {
+    assert.equal(name, "previewSenderCancellation");
+    assert.equal(req.header("Authorization"), "Bearer fixture");
+    assert.equal(req.header("X-Firebase-AppCheck"), "app-fixture");
+    assert.deepEqual(req.body, {data: {deliveryId: "test-only"}});
+    calls++;
+    res.status(401).send({error: {status: "UNAUTHENTICATED"}});
+  }]));
+  await withServer("sender_cancellation", handlers, async (base) => {
+    const response = await fetch(`${base}/previewSenderCancellation`, {method: "POST", headers: {authorization: "Bearer fixture", "x-firebase-appcheck": "app-fixture", "content-type": "application/json"}, body: JSON.stringify({data: {deliveryId: "test-only"}})});
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {error: {status: "UNAUTHENTICATED"}});
+    assert.equal(calls, 1);
+    const foreign = await fetch(`${base}/createGiftPayment`, {method: "POST"});
+    assert.equal(foreign.status, 404);
+    assert.equal(calls, 1);
+  });
+});

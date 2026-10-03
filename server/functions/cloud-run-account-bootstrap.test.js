@@ -34,6 +34,9 @@ function dependencies(overrides = {}) {
       verifyAppCheck: async () => ({appId: "circum"}),
       operations: {
         ...Object.fromEntries(["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"].map((name) => [name, handler(name)])),
+        ...Object.fromEntries(["updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation"].map((name) => [name, {...handler(name), appCheckRequired: false}])),
+        getSenderWalletLegacy: handler("getSenderWalletLegacy"),
+        listSenderPaymentMethodsLegacy: handler("listSenderPaymentMethodsLegacy"),
         getSenderAccountActivity: {...handler("getSenderAccountActivity"), appCheckRequired: false},
         exportSenderData: {...handler("exportSenderData"), appCheckRequired: false},
         updateSenderPreferences: {...handler("updateSenderPreferences"), appCheckRequired: false},
@@ -367,7 +370,7 @@ test("Rider application submission rejects invalid App Check before invoking the
   });
 });
 
-for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions"]) {
+for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSenderPreferences", "revokeSenderSessions", "updateSenderProfile", "updateSenderProfilePhoto", "saveSenderSavedAddress", "deleteSenderSavedAddress", "getOrCreateSupportConversation"]) {
   test(`${name} preserves the installed Sender callable envelope and auth policy`, async () => {
     const deps = dependencies();
     await withServer(deps.factory, async (base) => {
@@ -388,7 +391,7 @@ for (const name of ["getSenderAccountActivity", "exportSenderData", "updateSende
   });
 }
 
-for (const name of ["getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"]) {
+for (const name of ["getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess", "getSenderWalletLegacy", "listSenderPaymentMethodsLegacy"]) {
   test(`${name} accepts the installed SDK's no-argument data:null envelope`, async () => {
     const deps = dependencies();
     await withServer(deps.factory, async (base) => {
@@ -429,3 +432,18 @@ test("no-argument read compatibility does not change mutation envelope validatio
    assert.equal(response.status, 200); assert.equal(deps.calls.length, 1); assert.equal(deps.calls[0].context.auth.uid, "user-1"); assert.equal(deps.calls[0].context.app.appId, "circum");
   });
  });
+
+for (const name of ["getSenderWalletLegacy", "listSenderPaymentMethodsLegacy"]) {
+  test(`${name} cannot initialise finance before App Check and does not replace read-only routes`, async () => {
+    const deps = dependencies();
+    await withServer(deps.factory, async (base) => {
+      const denied = await fetch(`${base}/${name}`, {method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: null})});
+      assert.equal(denied.status, 400);
+      assert.equal(deps.calls.length, 0);
+      const readName = name.replace("Legacy", "");
+      const read = await fetch(`${base}/${readName}`, {method: "POST", headers: {authorization: "Bearer valid", "x-firebase-appcheck": "valid", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+      assert.equal(read.status, 200);
+      assert.equal(deps.calls[0].name, readName);
+    });
+  });
+}

@@ -190,8 +190,7 @@ exports.getGooglePlayReviewFixture = founderReviewFixture.getReviewFixture();
 exports.setGooglePlayReviewPresence = founderReviewFixture.setReviewPresence();
 exports.updateGooglePlayReviewFixtureLocation = founderReviewFixture.updateReviewFixtureLocation();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
-exports.getOrCreateSupportConversation =
-  communicationEngine.getOrCreateSupportConversation;
+exports.getOrCreateSupportConversation = cloudRunOnly(communicationEngine.getOrCreateSupportConversation, "circum-account-bootstrap");
 exports.submitWebsiteSupportRequest =
   communicationEngine.submitWebsiteSupportRequest;
 exports.updateSupportConversationStatus =
@@ -229,7 +228,7 @@ exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 exports.initialiseSenderWallet = rothLedger.initialiseSenderWallet;
-exports.getSenderWallet = rothLedger.getSenderWallet;
+exports.getSenderWallet = cloudRunOnly(rothLedger.getSenderWallet, "circum-account-bootstrap", true);
 exports.getSenderWalletTransactions = cloudRunOnly(rothLedger.getSenderWalletTransactions, "circum-account-bootstrap", true);
 exports.completeSenderWalletOnboarding = cloudRunOnly(rothLedger.completeSenderWalletOnboarding, "circum-account-bootstrap", true);
 exports.requestSenderWalletDebit = cloudRunOnly(rothLedger.requestSenderWalletDebit, "circum-account-bootstrap", true);
@@ -350,7 +349,7 @@ exports.redactLegacyPayoutBankFields =
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = cloudRunOnly(referrals.ensureReferralCode, "circum-referral-callables", false);
-exports.attachReferralCode = referrals.attachReferralCode;
+exports.attachReferralCode = cloudRunOnly(referrals.attachReferralCode, "circum-referral-callables");
 exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted =
   referrals.activateReferralOnDeliveryCompleted;
@@ -385,8 +384,8 @@ exports.saveGiftStoryToVault = cloudRunOnly(giftStoryAutomation.saveGiftStoryToV
 exports.getGiftStoryActionState = cloudRunOnly(giftStoryAutomation.getGiftStoryActionState, "circum-gift-payments", false);
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
 exports.cleanupExpiredGiftStories = cloudRunOnly(giftStoryAutomation.cleanupExpiredGiftStories, "circum-payment-schedulers", false, "schedule");
-exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation(stripe);
-exports.previewSenderCancellation = deliveryPolicy.previewSenderCancellation;
+exports.requestSenderCancellation = cloudRunOnly(deliveryPolicy.requestSenderCancellation(stripe), "circum-sender-cancellation-requests", true);
+exports.previewSenderCancellation = cloudRunOnly(deliveryPolicy.previewSenderCancellation, "circum-sender-cancellation-requests", true);
 exports.reconcilePendingSenderCancellations =
   deliveryPolicy.reconcilePendingSenderCancellations(stripe);
 exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
@@ -423,17 +422,15 @@ exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
 exports.cleanupExpiredSenderDrafts = cloudRunOnly(senderBooking.cleanupExpiredSenderDrafts, "circum-payment-schedulers", false, "schedule");
-exports.listSenderPaymentMethods =
-  senderFinance.listSenderPaymentMethods(stripe);
+exports.listSenderPaymentMethods = cloudRunOnly(senderFinance.listSenderPaymentMethods(stripe), "circum-account-bootstrap", true);
 exports.createSenderSetupIntent = cloudRunOnly(senderFinance.createSenderSetupIntent(stripe), "circum-account-bootstrap", true);
 exports.detachSenderPaymentMethod = cloudRunOnly(senderFinance.detachSenderPaymentMethod(stripe), "circum-account-bootstrap", true);
 exports.setDefaultSenderPaymentMethod = cloudRunOnly(senderFinance.setDefaultSenderPaymentMethod(stripe), "circum-account-bootstrap", true);
 exports.saveSenderCheckoutPreference = cloudRunOnly(senderFinance.saveSenderCheckoutPreference, "circum-account-bootstrap", true);
-exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
-exports.deleteSenderSavedAddress =
-  senderSavedAddresses.deleteSenderSavedAddress;
-exports.updateSenderProfile = senderAccount.updateSenderProfile;
-exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
+exports.saveSenderSavedAddress = cloudRunOnly(senderSavedAddresses.saveSenderSavedAddress, "circum-account-bootstrap");
+exports.deleteSenderSavedAddress = cloudRunOnly(senderSavedAddresses.deleteSenderSavedAddress, "circum-account-bootstrap");
+exports.updateSenderProfile = cloudRunOnly(senderAccount.updateSenderProfile, "circum-account-bootstrap");
+exports.updateSenderProfilePhoto = cloudRunOnly(senderAccount.updateSenderProfilePhoto, "circum-account-bootstrap");
 exports.updateSenderPreferences = cloudRunOnly(senderAccount.updateSenderPreferences, "circum-account-bootstrap");
 exports.revokeSenderSessions = cloudRunOnly(senderAccount.revokeSenderSessions, "circum-account-bootstrap");
 exports.getSenderAccountActivity = cloudRunOnly(senderAccount.getSenderAccountActivity, "circum-account-bootstrap");

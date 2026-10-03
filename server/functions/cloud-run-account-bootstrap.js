@@ -7,6 +7,8 @@ const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 const senderAccount = require("./sender-account");
+const senderSavedAddresses = require("./sender-saved-addresses");
+const communication = require("./communication-engine");
 const senderFinance = require("./sender-finance");
 const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
@@ -22,6 +24,13 @@ const OPERATIONS = Object.freeze({
   saveSenderCheckoutPreference: {handler: senderFinance.saveSenderCheckoutPreference, appCheckRequired: true},
   requestSenderWalletDebit: {handler: rothLedger.requestSenderWalletDebit, appCheckRequired: true},
   redeemGiftCard: {handler: rothLedger.redeemGiftCard, appCheckRequired: true},
+  updateSenderProfile: {handler: senderAccount.updateSenderProfile, appCheckRequired: false},
+  updateSenderProfilePhoto: {handler: senderAccount.updateSenderProfilePhoto, appCheckRequired: false},
+  saveSenderSavedAddress: {handler: senderSavedAddresses.saveSenderSavedAddress, appCheckRequired: false},
+  deleteSenderSavedAddress: {handler: senderSavedAddresses.deleteSenderSavedAddress, appCheckRequired: false},
+  getOrCreateSupportConversation: {handler: communication.getOrCreateSupportConversation, appCheckRequired: false},
+  getSenderWalletLegacy: {handler: rothLedger.getSenderWallet, appCheckRequired: true},
+  listSenderPaymentMethodsLegacy: {handler: null, appCheckRequired: true},
   getSenderAccountActivity: {handler: senderAccount.getSenderAccountActivity, appCheckRequired: false},
   exportSenderData: {handler: senderAccount.exportSenderData, appCheckRequired: false},
   updateSenderPreferences: {handler: senderAccount.updateSenderPreferences, appCheckRequired: false},
@@ -65,7 +74,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -94,6 +103,7 @@ function productionDependencies() {
       createSenderSetupIntent: {handler: senderFinance.createSenderSetupIntent(stripe), appCheckRequired: true},
       detachSenderPaymentMethod: {handler: senderFinance.detachSenderPaymentMethod(stripe), appCheckRequired: true},
       setDefaultSenderPaymentMethod: {handler: senderFinance.setDefaultSenderPaymentMethod(stripe), appCheckRequired: true},
+      listSenderPaymentMethodsLegacy: {handler: senderFinance.listSenderPaymentMethods(stripe), appCheckRequired: true},
       listSenderPaymentMethods: {
         handler: {run: senderFinance.readSenderPaymentMethods(stripe)},
         appCheckRequired: true,
@@ -171,7 +181,7 @@ function createServer(options = {}) {
         // Firebase's installed callable SDK sends data:null for call() with no arguments.
         const data = payload && payload.data;
         const noArguments = data === null &&
-          ["createSenderSetupIntent", "getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess"].includes(name);
+          ["createSenderSetupIntent", "getSenderAccountActivity", "exportSenderData", "verifyRiderAccountAccess", "getSenderWalletLegacy", "listSenderPaymentMethodsLegacy"].includes(name);
         if (!payload || Array.isArray(payload) || !Object.hasOwn(payload, "data") ||
           (!noArguments && (!data || typeof data !== "object" || Array.isArray(data)))) {
           throw callableError("invalid-argument", "Callable request must contain data.");
