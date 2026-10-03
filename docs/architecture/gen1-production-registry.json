@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 239,
+  "gen1ExportCount": 238,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -2236,20 +2236,11 @@
       "functionName": "archiveExpiredDeliveries",
       "sourceFile": "server/functions/delivery-cleanup.js",
       "triggerType": "schedule",
-      "triggerDefinition": {
-        "schedule": "every 24 hours",
-        "retryConfig": {
-          "retryCount": null,
-          "maxDoublings": null,
-          "maxRetryDuration": null,
-          "maxBackoffDuration": null,
-          "minBackoffDuration": null
-        },
-        "timeZone": "Europe/London"
-      },
-      "generation": "Gen 1",
-      "productionPurpose": "deliveryCleanup.archiveExpiredDeliveries",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(deliveryCleanup.archiveExpiredDeliveries, \"circum-payment-schedulers\", false, \"schedule\")",
       "callers": [
+        "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/legacy-scheduled-recovery.js",
         "server/functions/legacy-worker-recovery.emulator.test.js"
       ],
@@ -2264,10 +2255,12 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "REPLACE WITH CLOUD RUN + CLOUD SCHEDULER",
-      "retirementStatus": "not-retired"
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
+      "cloudRunReplacement": [
+        "cloud-run-runtime-only.test.js"
+      ],
+      "migrationStatus": "CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "attachReferralCode",

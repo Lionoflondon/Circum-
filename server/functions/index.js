@@ -465,7 +465,7 @@ exports.submitRiderApplication = riderAccount.submitRiderApplication;
 exports.updateRiderApplicationSection =
   riderAccount.updateRiderApplicationSection;
 exports.submitRiderDocument = riderAccount.submitRiderDocument;
-exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
+exports.archiveExpiredDeliveries = cloudRunOnly(deliveryCleanup.archiveExpiredDeliveries, "circum-payment-schedulers", false, "schedule");
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = cloudRunOnly(staleDelivery.reconcileStaleDeliveryLocks, "circum-payment-schedulers", false, "schedule");
 

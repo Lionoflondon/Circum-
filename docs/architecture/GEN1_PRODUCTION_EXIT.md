@@ -3,15 +3,15 @@
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
 - Source exports: 283
-- Gen 1 exports: 239
+- Gen 1 exports: 238
 - Files importing Firebase Functions v1: 69
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 92
 - CLOUD RUN ONLY — LEGACY URL RETAINED: 29
 - REPLACE WITH CLOUD RUN + EVENTARC: 15
 - MIGRATE TO CLOUD RUN: 128
-- REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 3
+- CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED: 11
 - RETIRE — no legitimate production dependency: 3
-- CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED: 10
+- REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 2
 - CLOUD RUN ONLY — EXISTING EVENTARC: 3
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
@@ -68,7 +68,7 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | analyseParcelPhotoForIris | server/functions/iris-photo-analysis.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/send_package/repo/iris_api.dart<br>lib/app/sender_mobile/sender_booking_canvas.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-iris.js<br>server/functions/cloud-run-iris.test.js |
 | applyCheckoutRoth | server/functions/roth-ledger.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | server/functions/sender-payment-app-check.test.js |
 | approveRothGrantCampaign | server/functions/roth-grant-campaigns.js | Gen 1 | callable | MIGRATE TO CLOUD RUN | lib/app/admin/roth_grant_campaigns.dart |
-| archiveExpiredDeliveries | server/functions/delivery-cleanup.js | Gen 1 | schedule | REPLACE WITH CLOUD RUN + CLOUD SCHEDULER | server/functions/legacy-scheduled-recovery.js<br>server/functions/legacy-worker-recovery.emulator.test.js |
+| archiveExpiredDeliveries | server/functions/delivery-cleanup.js | Cloud Run | schedule | CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED | server/functions/cloud-run-runtime-only.test.js<br>server/functions/legacy-scheduled-recovery.js<br>server/functions/legacy-worker-recovery.emulator.test.js |
 | attachReferralCode | server/functions/referrals.js | Gen 1 | callable | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | lib/app/sender_mobile/sender_mobile_home.dart<br>lib/website/shared/circum_website_app.dart<br>server/functions/cloud-run-referral-callable-server.js<br>server/functions/cloud-run-referral-servers.test.js<br>server/functions/firestore-signup-referral-rules.test.js<br>test/authentication/sender_email_auth_test.dart<br>test/website_sender_auth_deterministic_contract_test.dart |
 | awardFoundingRiderOnApproval | server/functions/legends.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
 | awardFoundingRiderOnRiderApproval | server/functions/legends.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
