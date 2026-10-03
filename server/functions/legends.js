@@ -13,6 +13,7 @@ const {
 } = require("./legends-core");
 
 function recognitionCounterRef(db, type) {
+  if (type === "legend") return db.collection("platformStats").doc("legends");
   return db.collection("recognitionCounters").doc(type);
 }
 
@@ -60,6 +61,8 @@ async function awardRecognition({
       transaction.get(recognitionAwardRef(db, type, subjectId)),
     ]);
     if (!subjectSnapshot.exists) return {awarded: false, reason: "subject_not_found"};
+    const currentSubject = subjectSnapshot.data() || {};
+    if (source === "rider_application_accepted" && !statusApproved(currentSubject.accountStatus || currentSubject.approvalStatus || currentSubject.onboardingStatus || currentSubject.verificationStatus)) return {awarded: false, reason: "current_approval_required"};
     if (existingAwardSnapshot.exists && existingAwardSnapshot.data().awarded === true) {
       return {awarded: false, reason: "already_awarded", number: existingAwardSnapshot.data().number || null};
     }
@@ -160,10 +163,8 @@ async function revokeRecognition({
   });
 }
 
-exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change, context) => {
-  if (isEligibleLegendDelivery(change.before.data()) || !isEligibleLegendDelivery(change.after.data())) return null;
-  const db = getFirestore();
-  const deliveryRef = change.after.ref;
+async function handleDeliveryCompleted({db = getFirestore(), deliveryId}) {
+  const deliveryRef = db.collection("deliveryRequests").doc(deliveryId);
   const counterRef = db.collection("platformStats").doc("legends");
 
   return db.runTransaction(async (transaction) => {
@@ -192,7 +193,7 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
       legendNumber,
       legendAwardedAt: FieldValue.serverTimestamp(),
       legendSource: "first_completed_delivery",
-      legendDeliveryId: context.params.deliveryId,
+      legendDeliveryId: deliveryId,
       legendCelebrationSeenAt: null,
     }, {merge: true});
     transaction.set(counterRef, {
@@ -206,6 +207,12 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
       legendAwardedTo: userId,
     }, {merge: true});
   });
+}
+
+exports.handleDeliveryCompleted = handleDeliveryCompleted;
+exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change, context) => {
+  if (isEligibleLegendDelivery(change.before.data()) || !isEligibleLegendDelivery(change.after.data())) return null;
+  return handleDeliveryCompleted({deliveryId: context.params.deliveryId});
 });
 
 function statusApproved(value) {

@@ -5,7 +5,6 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const legends = require("./legends");
 const referrals = require("./referrals");
-const platformNotifications = require("./platform-notifications");
 const {
   createDeliveryCore,
   DELIVERY_DOMAIN_VERSION,
@@ -321,7 +320,8 @@ const subscribers = {
     );
   },
   notifications: async (db, event) => {
-    await platformNotifications.handleDeliveryCompletedNotification({event});
+    // Existing deliveryRequests Eventarc notifications own customer delivery messages.
+    // This bus records completion metadata; it must not create a second sender.
     await db.collection("platformNotifications").doc(event.eventId).set(
       {
         eventId: event.eventId,
@@ -331,10 +331,12 @@ const subscribers = {
         riderId: event.riderId,
         recipientId: event.recipientId,
         template: "delivery_completed",
+        canonicalNotificationOwner: "circum-sender-notification-events",
         createdAt: FieldValue.serverTimestamp(),
       },
       {merge: true},
     );
+    return {status: "ignored", reason: "platform_event_not_canonical_notification_owner"};
   },
   analytics: async (db, event) => {
     await db.collection("deliveryAnalytics").doc(event.eventId).set(

@@ -30,3 +30,16 @@ test("sequential awards produce distinct numbers", () => {
   const second = legendAwardDecision({delivery: {status: "completed", paymentStatus: "paid"}, counter: {totalAwarded: first}});
   assert.deepEqual([first, second], [21, 22]);
 });
+
+test("recovered recognition helpers preserve published founding/patron fields and the current Legend cap", () => {
+ const {RECOGNITION_CONFIG, recognitionConfig, recognitionAwardDecision, buildRecognitionPatch, buildRecognitionRevokePatch} = require("./legends-core");
+ assert.equal(RECOGNITION_CONFIG.legend.limit, 1500); assert.equal(recognitionConfig("foundingRider").limit, 1000); assert.equal(recognitionConfig("patron").limit, 100);
+ assert.equal(recognitionAwardDecision({type: "foundingRider", counter: {totalAwarded: 999}}), 1000);
+ assert.equal(recognitionAwardDecision({type: "foundingRider", counter: {totalAwarded: 1000}}), null);
+ assert.equal(recognitionAwardDecision({type: "patron", counter: {totalAwarded: 100}}), null);
+ assert.equal(recognitionAwardDecision({type: "foundingRider", subject: {isFoundingRider: true}}), null);
+ const patch = buildRecognitionPatch({type: "foundingRider", number: 42, awardedBy: "system", source: "rider_application_accepted", timestampValue: "test-time"});
+ assert.equal(patch.isFoundingRider, true); assert.equal(patch.foundingRiderNumber, 42); assert.equal(patch.recognitions.foundingRider.numberLabel, "0042");
+ assert.equal(buildRecognitionRevokePatch({type: "patron"}).isPatron, false);
+ assert.throws(() => recognitionConfig("unknown"), /Unsupported/);
+});
