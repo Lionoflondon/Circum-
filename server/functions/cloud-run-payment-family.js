@@ -38,7 +38,7 @@ const FAMILY_ROUTES = Object.freeze({
     "createDeliveryAdjustmentPayment",
     "finalizeDeliveryAdjustmentPayment",
   ],
-  sender_cancellation: ["requestSenderCancellation", "cancelDelivery"],
+  sender_cancellation: ["requestSenderCancellation", "cancelDelivery", "previewSenderCancellation"],
   rider_connect_accounts: [
     "createStripeConnectAccountForRider",
     "createStripeOnboardingLink",

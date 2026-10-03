@@ -679,8 +679,9 @@ test("malformed Gift video identifiers fail as callable arguments before databas
  const db = {collection: () => {
 throw new Error("database must not be read");
 }};
- for (const giftRequestId of ["", "nested/path"]) {
+ for (const giftRequestId of [undefined, "", "   ", "nested/path"]) {
   await assert.rejects(story.createStoryVideoUpload({db, bucket: {}, data: {giftRequestId}, context: {}}), {code: "invalid-argument"});
   await assert.rejects(story.finalizeGiftStoryVideoUpload.run({giftRequestId}, {}), {code: "invalid-argument"});
+  await assert.rejects(story.getGiftStoryVideoDownload.run({giftRequestId}, {}), {code: "invalid-argument"});
  }
 });
