@@ -99,3 +99,34 @@ test("Health recovery preserves an existing alternate source delivery binding", 
  const result = await projectHealth({db, event: {deliveryId: "pickup", eventId: "old-binding"}});
  assert.equal(result.reason, "source_identity_conflict"); assert.equal((await db.doc("deliveryRequests/health_pickup").get()).exists, false); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().deliveryId, "newer-canonical");
 }));
+
+test("completion redelivery stays retryable during an active lease and recovers after a crashed attempt", () => fixture("completion-lease", async (db) => {
+ const {runSubscriber} = require("./delivery-completed-event")._private;
+ const event = {eventId: "delivery_completed_test"}; const ref = db.doc("platformEventSubscribers/delivery_completed_test_sender"); let calls = 0;
+ await ref.set({status: "processing", startedAt: Date.now()});
+ await assert.rejects(runSubscriber(db, event, "sender", async () => {
+ calls++;
+}), {code: "aborted"});
+ assert.equal(calls, 0); assert.equal((await ref.get()).data().status, "processing");
+ await ref.update({startedAt: Date.now() - 11 * 60 * 1000});
+ const recovered = await runSubscriber(db, event, "sender", async () => {
+ calls++;
+});
+ assert.equal(recovered.skipped, false); assert.equal(calls, 1); assert.equal((await ref.get()).data().status, "done");
+ const duplicate = await runSubscriber(db, event, "sender", async () => {
+ calls++;
+});
+ assert.equal(duplicate.skipped, true); assert.equal(calls, 1);
+}));
+test("partial completion referral rewards remain retryable rather than being marked complete", () => fixture("completion-review", async (db) => {
+ const {runSubscriber} = require("./delivery-completed-event")._private;
+ const event = {eventId: "delivery_completed_review"}; const ref = db.doc("platformEventSubscribers/delivery_completed_review_referrals"); let attempts = 0;
+ await assert.rejects(runSubscriber(db, event, "referrals", async () => {
+ attempts++; return {sender: {status: "rothAwarded"}, rider: {status: "review"}};
+}), {code: "aborted"});
+ assert.equal((await ref.get()).data().status, "failed");
+ await runSubscriber(db, event, "referrals", async () => {
+ attempts++; return {sender: {status: "rothAwarded"}, rider: {status: "rothAwarded"}};
+});
+ assert.equal(attempts, 2); assert.equal((await ref.get()).data().status, "done");
+}));

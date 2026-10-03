@@ -167,14 +167,20 @@ async function claimSubscriber(db, eventId, subscriber) {
   const ref = subscriberRef(db, eventId, subscriber);
   const now = Date.now();
   let claimed = false;
+  let busy = false;
   await db.runTransaction(async (transaction) => {
+    claimed = false;
+    busy = false;
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists ? snapshot.data() || {} : {};
     const startedAt = Number(current.startedAt || 0);
     if (
-      current.status === "done" ||
-      (current.status === "processing" && now - startedAt < PROCESSING_LEASE_MS)
+      current.status === "done"
     ) {
+      return;
+    }
+    if (current.status === "processing" && now - startedAt < PROCESSING_LEASE_MS) {
+      busy = true;
       return;
     }
     transaction.set(
@@ -190,7 +196,7 @@ async function claimSubscriber(db, eventId, subscriber) {
     );
     claimed = true;
   });
-  return {claimed, ref};
+  return {claimed, busy, ref};
 }
 
 async function completeSubscriber(ref) {
@@ -202,9 +208,11 @@ async function completeSubscriber(ref) {
 
 async function runSubscriber(db, event, subscriber, handler) {
   const claim = await claimSubscriber(db, event.eventId, subscriber);
+  if (claim.busy) throw Object.assign(new Error("completion_subscriber_busy"), {code: "aborted"});
   if (!claim.claimed) return {subscriber, skipped: true};
   try {
-    await handler(db, event);
+    const result = await handler(db, event);
+    if (completionNeedsRetry(result)) throw Object.assign(new Error("completion_subscriber_requires_retry"), {code: "aborted"});
     await completeSubscriber(claim.ref);
     return {subscriber, skipped: false};
   } catch (error) {
@@ -221,6 +229,11 @@ async function runSubscriber(db, event, subscriber, handler) {
     );
     throw error;
   }
+}
+
+function completionNeedsRetry(result) {
+  if (!result || typeof result !== "object") return false;
+  return String(result.status || "").toLowerCase() === "review" || result.needsReview === true || Object.values(result).some((value) => value && typeof value === "object" && completionNeedsRetry(value));
 }
 
 const subscribers = {
@@ -378,20 +391,22 @@ const subscribers = {
     await legends.handleDeliveryCompleted({db, deliveryId: event.deliveryId});
   },
   referrals: async (_db, event) => {
-    await referrals.handleDeliveryCompletedReferral({
+    const deliveryResult = await referrals.handleDeliveryCompletedReferral({
       delivery: event,
       deliveryId: event.deliveryId,
     });
+    if (completionNeedsRetry(deliveryResult)) return deliveryResult;
     if (event.giftId) {
-      await referrals.handleGiftCompletedReferral({
+      const giftResult = await referrals.handleGiftCompletedReferral({
         giftId: event.giftId,
         senderId: event.senderId,
         senderEmail: event.senderEmail,
         paymentStatus: event.paymentStatus,
       });
+      if (completionNeedsRetry(giftResult)) return giftResult;
     }
     if (event.healthOrderId) {
-      await referrals.handleHealthPlusCompletedReferral({
+      return referrals.handleHealthPlusCompletedReferral({
         pickupId: event.healthOrderId,
         userId: event.senderId,
         email: event.senderEmail,
@@ -427,4 +442,5 @@ exports._private = {
   eventRef,
   subscriberRef,
   runSubscriber,
+  completionNeedsRetry,
 };
