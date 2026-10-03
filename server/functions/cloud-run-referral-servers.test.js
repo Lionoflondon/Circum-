@@ -53,7 +53,7 @@ test("private event adapter routes each completion once and ignores non-terminal
     handleHealthPlusCompletedReferral: async (value) => (calls.push(["health", value.pickupId]), {status: "ROTH_AWARDED"}),
   })});
   await listen(server, async (url) => {
-    const request = (collection, id, before, after, eventId) => fetch(`${url}/v1/events/firestore/referral-completion`, {method: "POST", headers: {"content-type": "application/protobuf", "ce-type": EVENT_TYPE, "ce-id": eventId, "ce-document": `${collection}/${id}`}, body: encodedEvent(collection, id, before, after)});
+    const request = (collection, id, before, after, eventId) => fetch(`${url}/v1/events/firestore/referral-completion`, {method: "POST", headers: {"content-type": "application/protobuf", "ce-source": "//firestore.googleapis.com/projects/circum-2797c/databases/(default)", "ce-type": EVENT_TYPE, "ce-id": eventId, "ce-document": `${collection}/${id}`}, body: encodedEvent(collection, id, before, after)});
     let response = await request("deliveryRequests", "delivery-1", {status: {stringValue: "pending"}}, {status: {stringValue: "completed"}, senderId: {stringValue: "sender-1"}}, "event-1");
     assert.equal(response.status, 200);
     response = await request("giftRequests", "gift-1", {status: {stringValue: "completed"}}, {status: {stringValue: "completed"}}, "event-2");
@@ -70,4 +70,30 @@ test("health endpoints start without Firebase or secret access", async () => {
 }})]) {
     await listen(server, async (url) => assert.equal((await fetch(`${url}/health`)).status, 200));
   }
+});
+
+test("referral completion leaves partial financial review unacknowledged until an idempotent retry succeeds", async () => {
+  let attempts = 0;
+  const server = createEventServer({handlersFactory: () => ({
+    becameCompleted: () => true,
+    handleDeliveryCompletedReferral: async () => ++attempts === 1 ? {sender: {status: "review"}, rider: {status: "ROTH_AWARDED"}} : {sender: {status: "ROTH_AWARDED"}, rider: {status: "ROTH_AWARDED"}},
+  })});
+  await listen(server, async (url) => {
+    const request = () => fetch(`${url}/v1/events/firestore/referral-completion`, {method: "POST", headers: {"content-type": "application/protobuf", "ce-source": "//firestore.googleapis.com/projects/circum-2797c/databases/(default)", "ce-type": EVENT_TYPE, "ce-id": "same-event"}, body: encodedEvent("deliveryRequests", "job", {}, {status: {stringValue: "completed"}})});
+    assert.equal((await request()).status, 503);
+    assert.equal((await request()).status, 200);
+    assert.equal(attempts, 2);
+  });
+});
+
+
+test("referral event transport rejects a foreign Firestore source before financial handlers load", async () => {
+  let loaded = false;
+  const server = createEventServer({handlersFactory: () => {
+    loaded = true; throw new Error("must not load");
+  }});
+  await listen(server, async (url) => {
+    const response = await fetch(`${url}/v1/events/firestore/referral-completion`, {method: "POST", headers: {"content-type": "application/protobuf", "ce-source": "//firestore.googleapis.com/projects/foreign/databases/(default)", "ce-type": EVENT_TYPE, "ce-id": "foreign"}, body: encodedEvent("deliveryRequests", "job", {}, {status: {stringValue: "completed"}})});
+    assert.equal(response.status, 400); assert.equal(loaded, false);
+  });
 });

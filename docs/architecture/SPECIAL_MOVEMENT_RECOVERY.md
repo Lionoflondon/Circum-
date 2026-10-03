@@ -1,0 +1,7 @@
+# Special movement and referral recovery gates
+
+The remaining deployed legacy Health+ and terminal movement callbacks consume delayed snapshots. Their private replacement routes reuse the existing Gift movement owner and read canonical source, payment, and linked delivery state in one Firestore transaction. Event IDs fence concurrent retries. Unpaid pickups stay held; accepted custody, terminal outcomes, identity conflicts, and newer linked assignments are preserved. No charges, refunds, payouts, Roth movements, or notifications are issued by these projection routines.
+
+The existing referral event owner must return a retryable failure when any nested participant reward reports review. A successful sibling reward remains protected by the existing deterministic Roth movement IDs. Firestore events must identify this project and the default database before handlers load. This transport change does not alter reward eligibility, amounts, ledger signatures, or account roles.
+
+These additions alone do not authorize a production trigger cutover. First certify isolated TEST state and private IAM; reconcile every affected materialized source; establish safe disposition of the old provider-managed pending events. Preserve the existing healthy Gift movement route, source image, runtime resources, service account, secrets, and IAM. A trigger must not create a second financial or delivery authority. Referral financial processing also requires explicit runtime proof of ledger idempotency before enabling new transport.

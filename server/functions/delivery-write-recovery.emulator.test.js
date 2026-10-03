@@ -59,3 +59,43 @@ test("Gift Story TEST scope requires server-owned markers and cannot redirect or
  await scoped.collection("giftRequests").doc(id).set({status: "test"}); assert.equal((await db.doc(`giftRequests/${id}`).get()).exists, false);
  assert.equal(await storyRuntimeDb(db, {giftRequestId: "ordinary", token: "opaque"}), db);
 }));
+
+test("Health movement retries read fresh payment and hold unpaid pickups without financial writes", () => fixture("health-unpaid", async (db) => {
+ const {projectHealth} = require("./special-movement-recovery");
+ await db.doc("prescriptionPickups/pickup").set({status: "requested", senderId: "sender", readyForCollection: true});
+ const event = {deliveryId: "pickup", eventId: "stale-paid", after: {paymentStatus: "paid"}};
+ await Promise.all(Array.from({length: 3}, () => projectHealth({db, event})));
+ let delivery = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(delivery.matchingStatus, "held"); assert.equal(delivery.healthDispatchReady, false);
+ await db.doc("healthPlusPayments/pickup").set({status: "paid", amount: 12});
+ await projectHealth({db, event: {...event, eventId: "fresh-paid"}}); delivery = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(delivery.matchingStatus, "available"); assert.equal(delivery.paymentStatus, "paid");
+ assert.equal((await db.collection("walletTransactions").get()).size, 0); assert.equal((await db.collection("riderEarningTransactions").get()).size, 0);
+}));
+test("Health projection cannot overwrite accepted custody or terminal state from a delayed source event", () => fixture("health-custody", async (db) => {
+ const {projectHealth} = require("./special-movement-recovery");
+ await db.doc("prescriptionPickups/pickup").set({status: "requested", riderId: "old", paymentStatus: "paid"});
+ await db.doc("deliveryRequests/health_pickup").set({status: "in_transit", riderId: "new", paymentStatus: "paid", sourceModule: "health_plus", healthPlusPickupId: "pickup"});
+ await projectHealth({db, event: {deliveryId: "pickup", eventId: "old"}});
+ let d = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(d.status, "in_transit"); assert.equal(d.riderId, "new");
+ await db.doc("deliveryRequests/health_pickup").update({status: "delivered"}); await projectHealth({db, event: {deliveryId: "pickup", eventId: "later"}}); d = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(d.status, "delivered");
+}));
+test("terminal movement retries use current delivery and preserve a newer linked assignment", () => fixture("terminal-fresh", async (db) => {
+ const {projectTerminal} = require("./special-movement-recovery");
+ await db.doc("deliveryRequests/job").set({status: "accepted", riderId: "new", sourceModule: "gifts", giftRequestId: "gift"}); await db.doc("giftRequests/gift").set({status: "preparing", riderId: "new", deliveryId: "job"});
+ const event = {deliveryId: "job", eventId: "old-completed", after: {status: "delivered", riderId: "old"}};
+ await projectTerminal({db, event}); assert.equal((await db.doc("giftRequests/gift").get()).data().status, "preparing");
+ await db.doc("deliveryRequests/job").update({status: "delivered", riderId: "old"}); await projectTerminal({db, event: {...event, eventId: "conflict"}}); assert.equal((await db.doc("giftRequests/gift").get()).data().riderId, "new");
+ await db.doc("deliveryRequests/job").update({riderId: "new"}); await Promise.all(Array.from({length: 3}, () => projectTerminal({db, event: {...event, eventId: "current"}}))); assert.equal((await db.doc("giftRequests/gift").get()).data().status, "delivered"); assert.equal((await db.collection("eventHandlerClaims").get()).size, 3);
+}));
+test("terminal projections preserve cancellation and never recreate deleted linked records", () => fixture("terminal-cancel", async (db) => {
+ const {projectTerminal} = require("./special-movement-recovery");
+ await db.doc("deliveryRequests/job").set({status: "delivered", sourceModule: "health_plus", healthPlusPickupId: "pickup"}); await db.doc("prescriptionPickups/pickup").set({status: "cancelled"});
+ await projectTerminal({db, event: {deliveryId: "job", eventId: "conflict"}}); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().status, "cancelled");
+ await db.doc("prescriptionPickups/pickup").delete(); await projectTerminal({db, event: {deliveryId: "job", eventId: "deleted"}}); assert.equal((await db.doc("prescriptionPickups/pickup").get()).exists, false);
+}));
+
+test("Health recovery preserves an existing alternate source delivery binding", () => fixture("health-binding", async (db) => {
+ const {projectHealth} = require("./special-movement-recovery");
+ await db.doc("prescriptionPickups/pickup").set({status: "requested", deliveryId: "newer-canonical", sourceModule: "health_plus"});
+ const result = await projectHealth({db, event: {deliveryId: "pickup", eventId: "old-binding"}});
+ assert.equal(result.reason, "source_identity_conflict"); assert.equal((await db.doc("deliveryRequests/health_pickup").get()).exists, false); assert.equal((await db.doc("prescriptionPickups/pickup").get()).data().deliveryId, "newer-canonical");
+}));
