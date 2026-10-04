@@ -264,6 +264,11 @@ body = value; return this;
     assert.equal((await db.doc(`prescriptionPickups/${pickupId}`).get()).data().status, "scheduled");
   }
   token = {uid, role: "operations_admin"};
+  for (const malformed of [{status: "unknown-status"}, {pickupId: "invalid/path"}, {driverId: 123}]) {
+    await health.updateHealthPlusPickupStatus({...req, body: {...req.body, ...malformed}}, res);
+    assert.equal(body.code, "invalid-argument");
+    assert.equal((await db.doc(`prescriptionPickups/${pickupId}`).get()).data().status, "scheduled");
+  }
   await health.updateHealthPlusPickupStatus({...req, body: {...req.body, pickupId: "missing-clinical-control"}}, res);
   assert.equal(body.code, "not-found");
   assert.equal((await db.doc("prescriptionPickups/missing-clinical-control").get()).exists, false);

@@ -1055,7 +1055,16 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
       return res.status(400).send({error: "pickupId and status are required"});
     }
 
-    const update = buildAdminStatusUpdate(status, driverId);
+    if (typeof pickupId !== "string" || safeDocId(pickupId) !== pickupId ||
+        (driverId != null && (typeof driverId !== "string" || safeDocId(driverId) !== driverId))) {
+      throw new functions.https.HttpsError("invalid-argument", "Choose valid Health+ pickup and Rider identifiers.");
+    }
+    let update;
+    try {
+      update = buildAdminStatusUpdate(status, driverId);
+    } catch (error) {
+      throw new functions.https.HttpsError("invalid-argument", error.message);
+    }
     update.lastAdminId = admin.uid;
     update.lastAdminRole = admin.role;
     if (note) update.adminNote = note;
