@@ -122,9 +122,8 @@ exports.createHealthPlusCheckoutSession =
   healthPlus.createHealthPlusCheckoutSession;
 exports.createHealthPlusBillingPortalSession =
   healthPlus.createHealthPlusBillingPortalSession;
-exports.createHealthPlusBooking = healthPlus.createHealthPlusBooking;
-exports.updateSenderHealthPlusBooking =
-  healthPlus.updateSenderHealthPlusBooking;
+exports.createHealthPlusBooking = cloudRunOnly(healthPlus.createHealthPlusBooking, "circum-health-plus-payments");
+exports.updateSenderHealthPlusBooking = cloudRunOnly(healthPlus.updateSenderHealthPlusBooking, "circum-health-plus-payments");
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
 exports.analyseParcelPhotoForIris = cloudRunOnly(irisPhotoAnalysis.analyseParcelPhotoForIris, "circum-iris");
@@ -242,29 +241,25 @@ exports.finalizeIrisReferenceImage =
 exports.deleteIrisReferenceImage =
   adminIrisReferenceImages.deleteIrisReferenceImage;
 exports.closeCircumAccount = cloudRunOnly(accountClosure.closeAccount, "circum-account-bootstrap");
-exports.createBusinessRothCheckout =
-  businessPayments.createBusinessRothCheckout(stripe);
+exports.createBusinessRothCheckout = cloudRunOnly(businessPayments.createBusinessRothCheckout(stripe), "circum-business-roth-checkout", true);
 exports.listBusinessRothTransactions =
   businessPayments.listBusinessRothTransactions;
 exports.adminCreateBusinessInvoice =
   businessPayments.adminCreateBusinessInvoice;
-exports.createBusinessInvoiceCheckout =
-  businessPayments.createBusinessInvoiceCheckout(stripe);
+exports.createBusinessInvoiceCheckout = cloudRunOnly(businessPayments.createBusinessInvoiceCheckout(stripe), "circum-business-invoice-payments");
 exports.createBusinessGiftOrder = cloudRunOnly(businessGifts.createBusinessGiftOrder(stripe), "circum-business-invoice-payments", true);
-exports.cancelBusinessInvoiceCheckout = businessPayments.cancelBusinessInvoiceCheckout(stripe);
+exports.cancelBusinessInvoiceCheckout = cloudRunOnly(businessPayments.cancelBusinessInvoiceCheckout(stripe), "circum-business-invoice-payments");
 exports.createBusinessAccount = cloudRunOnly(businessAccess.createBusinessAccount, "circum-business-invoice-payments");
-exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
-exports.lookupBusinessByCompanyCode =
-  businessAccess.lookupBusinessByCompanyCode;
-exports.requestBusinessAccess = businessAccess.requestBusinessAccess;
-exports.reviewBusinessAccessRequest =
-  businessAccess.reviewBusinessAccessRequest;
-exports.updateBusinessProfile = businessAccess.updateBusinessProfile;
-exports.inviteBusinessMember = businessAccess.inviteBusinessMember;
-exports.updateBusinessMemberRole = businessAccess.updateBusinessMemberRole;
-exports.updateBusinessMemberStatus = businessAccess.updateBusinessMemberStatus;
-exports.removeBusinessMember = businessAccess.removeBusinessMember;
-exports.recordBusinessIrisMoment = businessAccess.recordBusinessIrisMoment;
+exports.ensureBusinessCompanyCode = cloudRunOnly(businessAccess.ensureBusinessCompanyCode, "circum-business-invoice-payments");
+exports.lookupBusinessByCompanyCode = cloudRunOnly(businessAccess.lookupBusinessByCompanyCode, "circum-business-invoice-payments");
+exports.requestBusinessAccess = cloudRunOnly(businessAccess.requestBusinessAccess, "circum-business-invoice-payments");
+exports.reviewBusinessAccessRequest = cloudRunOnly(businessAccess.reviewBusinessAccessRequest, "circum-business-invoice-payments");
+exports.updateBusinessProfile = cloudRunOnly(businessAccess.updateBusinessProfile, "circum-business-invoice-payments");
+exports.inviteBusinessMember = cloudRunOnly(businessAccess.inviteBusinessMember, "circum-business-invoice-payments");
+exports.updateBusinessMemberRole = cloudRunOnly(businessAccess.updateBusinessMemberRole, "circum-business-invoice-payments");
+exports.updateBusinessMemberStatus = cloudRunOnly(businessAccess.updateBusinessMemberStatus, "circum-business-invoice-payments");
+exports.removeBusinessMember = cloudRunOnly(businessAccess.removeBusinessMember, "circum-business-invoice-payments");
+exports.recordBusinessIrisMoment = cloudRunOnly(businessAccess.recordBusinessIrisMoment, "circum-business-invoice-payments");
 exports.createStripeConnectAccountForRider = riderBackendCompat.createCompat("createStripeConnectAccountForRider");
 exports.createStripeOnboardingLink = riderBackendCompat.createCompat("createStripeOnboardingLink");
 exports.refreshStripeOnboardingLink = riderBackendCompat.createCompat("refreshStripeOnboardingLink");
@@ -299,8 +294,7 @@ exports.adminUpdateBusinessAccountStatus =
   adminOperationsAuthority.adminUpdateBusinessAccountStatus;
 exports.adminUpdateBusinessOperation =
   adminOperationsAuthority.adminUpdateBusinessOperation;
-exports.adminUpdateBusinessMember =
-  adminOperationsAuthority.adminUpdateBusinessMember;
+exports.adminUpdateBusinessMember = cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessMember, "circum-business-invoice-payments", true);
 exports.adminUpdateHealthPlusPickup =
   adminOperationsAuthority.adminUpdateHealthPlusPickup;
 exports.adminUpdateHealthPlusSchedule =

@@ -56,7 +56,10 @@ test("Business backend exports the canonical workspace, team, and payment callab
     "listBusinessRothTransactions",
   ]) {
     assert.match(businessPaymentsSource, new RegExp(`exports\\.${name}\\s*=`));
-    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*businessPayments\\.${name}`));
+    const owner = name === "createBusinessRothCheckout" ? "circum-business-roth-checkout" :
+      name === "createBusinessInvoiceCheckout" ? "circum-business-invoice-payments" : null;
+    const exportedHandler = owner ? `cloudRunOnly\\(businessPayments\\.${name}\\(stripe\\), "${owner}"` : `businessPayments\\.${name}`;
+    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*${exportedHandler}`));
   }
 });
 

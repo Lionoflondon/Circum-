@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
   "sourceExportCount": 283,
-  "gen1ExportCount": 215,
+  "gen1ExportCount": 199,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -1369,9 +1369,9 @@
       "functionName": "adminUpdateBusinessMember",
       "sourceFile": "server/functions/admin-operations-authority.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "adminOperationsAuthority.adminUpdateBusinessMember",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessMember, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/business-health-audit.emulator.test.js",
@@ -1380,7 +1380,7 @@
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": false,
+      "appCheckRequired": true,
       "secrets": [],
       "firestoreCollections": [
         "accountMergeReviews",
@@ -1409,13 +1409,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "adminUpdateBusinessOperation",
@@ -2555,9 +2555,9 @@
       "functionName": "cancelBusinessInvoiceCheckout",
       "sourceFile": "server/functions/business-payments.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessPayments.cancelBusinessInvoiceCheckout(stripe)",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessPayments.cancelBusinessInvoiceCheckout(stripe), \"circum-business-invoice-payments\")",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
@@ -2567,7 +2567,7 @@
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [
         "STRIPE_SECRET_KEY"
       ],
@@ -2588,13 +2588,13 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "cancelDelivery",
@@ -3180,9 +3180,9 @@
       "functionName": "createBusinessInvoiceCheckout",
       "sourceFile": "server/functions/business-payments.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessPayments.createBusinessInvoiceCheckout(stripe)",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessPayments.createBusinessInvoiceCheckout(stripe), \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -3196,7 +3196,7 @@
       ],
       "criticality": "review-required",
       "authRequired": true,
-      "appCheckRequired": true,
+      "appCheckRequired": false,
       "secrets": [
         "STRIPE_SECRET_KEY"
       ],
@@ -3217,22 +3217,22 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js",
         "cloud-run-payment-schedulers.test.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "createBusinessRothCheckout",
       "sourceFile": "server/functions/business-payments.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessPayments.createBusinessRothCheckout(stripe)",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessPayments.createBusinessRothCheckout(stripe), \"circum-business-roth-checkout\", true)",
       "callers": [
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-business-roth.js",
@@ -3264,13 +3264,13 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-business-roth.js",
         "cloud-run-native-callable-proxy.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "createDeliveryAdjustmentPayment",
@@ -3509,9 +3509,9 @@
       "functionName": "createHealthPlusBooking",
       "sourceFile": "server/functions/health-plus.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "healthPlus.createHealthPlusBooking",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(healthPlus.createHealthPlusBooking, \"circum-health-plus-payments\")",
       "callers": [
         "lib/app/health_plus/view/health_plus.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -3526,7 +3526,6 @@
       "authRequired": true,
       "appCheckRequired": false,
       "secrets": [
-        "GOOGLE_MAPS_DIRECTIONS_API_KEY",
         "STRIPE_SECRET_KEY"
       ],
       "firestoreCollections": [
@@ -3548,13 +3547,13 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "createHealthPlusCheckoutSession",
@@ -4320,9 +4319,9 @@
       "functionName": "ensureBusinessCompanyCode",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.ensureBusinessCompanyCode",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.ensureBusinessCompanyCode, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -4348,13 +4347,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "ensurePublicRiderId",
@@ -5962,9 +5961,9 @@
       "functionName": "inviteBusinessMember",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.inviteBusinessMember",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.inviteBusinessMember, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "server/functions/business-centre-contract.test.js",
@@ -5990,13 +5989,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "listBusinessRothTransactions",
@@ -6137,9 +6136,9 @@
       "functionName": "lookupBusinessByCompanyCode",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.lookupBusinessByCompanyCode",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.lookupBusinessByCompanyCode, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -6166,13 +6165,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "manageGiftStoryAccess",
@@ -7652,9 +7651,9 @@
       "functionName": "recordBusinessIrisMoment",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.recordBusinessIrisMoment",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.recordBusinessIrisMoment, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "server/functions/business-centre-contract.test.js",
@@ -7681,13 +7680,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "recordCustomerArrivalResponse",
@@ -8213,9 +8212,9 @@
       "functionName": "removeBusinessMember",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.removeBusinessMember",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.removeBusinessMember, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -8242,13 +8241,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "repairRiderRatingFeedback",
@@ -8447,9 +8446,9 @@
       "functionName": "requestBusinessAccess",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.requestBusinessAccess",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.requestBusinessAccess, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_access_view.dart",
         "lib/app/business/business_repository.dart",
@@ -8478,13 +8477,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "requestRiderCancellation",
@@ -9064,9 +9063,9 @@
       "functionName": "reviewBusinessAccessRequest",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.reviewBusinessAccessRequest",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.reviewBusinessAccessRequest, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -9094,13 +9093,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "reviewDeliveryAdjustment",
@@ -10376,9 +10375,9 @@
       "functionName": "updateBusinessMemberRole",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.updateBusinessMemberRole",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessMemberRole, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -10405,21 +10404,21 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "updateBusinessMemberStatus",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.updateBusinessMemberStatus",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessMemberStatus, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "server/functions/business-centre-contract.test.js",
@@ -10446,21 +10445,21 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "updateBusinessProfile",
       "sourceFile": "server/functions/business-access.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "businessAccess.updateBusinessProfile",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessProfile, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -10488,13 +10487,13 @@
       ],
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "updateDeliveryLiveLocation",
@@ -10926,9 +10925,9 @@
       "functionName": "updateSenderHealthPlusBooking",
       "sourceFile": "server/functions/health-plus.js",
       "triggerType": "callable",
-      "triggerDefinition": {},
-      "generation": "Gen 1",
-      "productionPurpose": "healthPlus.updateSenderHealthPlusBooking",
+      "triggerDefinition": null,
+      "generation": "Cloud Run",
+      "productionPurpose": "cloudRunOnly(healthPlus.updateSenderHealthPlusBooking, \"circum-health-plus-payments\")",
       "callers": [
         "lib/app/health_plus/view/health_plus.dart",
         "lib/website/shared/circum_website_app.dart",
@@ -10963,13 +10962,13 @@
         "Stripe"
       ],
       "idempotencyProtectionDetected": true,
-      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "currentProductionRuntime": "Runtime-only Cloud Run handler export; managed deployment disabled",
       "cloudRunReplacement": [
         "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
-      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
-      "retirementStatus": "not-retired"
+      "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
+      "retirementStatus": "managed-deployment-disabled"
     },
     {
       "functionName": "updateSenderLocation",
