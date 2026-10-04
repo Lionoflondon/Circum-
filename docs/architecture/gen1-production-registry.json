@@ -2763,6 +2763,7 @@
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-rider-finance-handlers.js",
         "server/functions/rider-connect.js",
+        "server/functions/rider-payout-allocation.emulator.test.js",
         "server/functions/rider-withdrawal-cancel.test.js"
       ],
       "criticality": "review-required",
@@ -3110,6 +3111,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderIrisAcknowledgement.confirmRiderIrisAssessment",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-app-check-http.test.js",
         "server/functions/rider-cancellation.emulator.test.js"
       ],
@@ -3125,8 +3127,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -4411,7 +4415,9 @@
       "triggerDefinition": {},
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.ensurePublicRiderId",
-      "callers": [],
+      "callers": [
+        "server/functions/cloud-run-rider-operations.js"
+      ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
       "appCheckRequired": true,
@@ -4435,8 +4441,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -4483,6 +4491,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.ensureRiderRothWallet",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-onboarding-flow.emulator.test.js"
       ],
       "criticality": "P0/P1-review-required",
@@ -4508,8 +4517,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -5243,6 +5254,7 @@
       "generation": "Gen 1",
       "productionPurpose": "founderReviewFixture.getReviewFixture()",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/founder-review-fixture.test.js"
       ],
       "criticality": "review-required",
@@ -5257,8 +5269,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6282,6 +6296,7 @@
       "productionPurpose": "communicationEngine.markConversationRead",
       "callers": [
         "lib/app/send_package/view/ride_chats.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-chat-notification-rules.test.js"
       ],
       "criticality": "review-required",
@@ -6301,8 +6316,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6313,6 +6330,7 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryPolicy.markRiderNoShow",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/delivery-cancellation.emulator.test.js",
         "server/functions/dispatch-completion-spine.test.js"
       ],
@@ -6339,8 +6357,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8285,6 +8305,7 @@
       "productionPurpose": "ratingsTipping.repairRiderRatingFeedback",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-ratings-authority-rules.test.js"
       ],
       "criticality": "review-required",
@@ -8318,8 +8339,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8361,6 +8384,7 @@
       "callers": [
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-app-check-http.test.js",
         "server/functions/weight-authority.emulator.test.js"
       ],
@@ -8379,8 +8403,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8394,6 +8420,7 @@
         "docs/HISTORICAL_ADMIN_PARITY_REPORT.md",
         "lib/app/admin/admin_phase1_shell.dart",
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-ratings-authority-rules.test.js"
       ],
       "criticality": "review-required",
@@ -8427,8 +8454,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8439,6 +8468,7 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryPolicy.reportWaitingContext",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/delivery-policy-core.test.js",
         "server/functions/dispatch-completion-spine.test.js"
       ],
@@ -8465,8 +8495,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8521,6 +8553,7 @@
       "generation": "Gen 1",
       "productionPurpose": "require(\"./rider-cancellation\").requestRiderCancellation",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-app-check-http.test.js",
         "server/functions/rider-cancellation.emulator.test.js",
         "server/functions/rider-cancellation.js"
@@ -8538,8 +8571,10 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9653,6 +9688,7 @@
         "lib/app/send_package/bloc/send_package_bloc.dart",
         "lib/app/send_package/view/ride_chats.dart",
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-chat-notification-rules.test.js",
         "test/admin_operations_test.dart",
         "test/sender_mobile/ratings_tipping_v2_test.dart"
@@ -9674,8 +9710,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9747,6 +9785,7 @@
         "docs/project_memory.md",
         "lib/app/send_package/repo/token_callable_api.dart",
         "lib/website/shared/token_callable_api.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/cloud-run-token-callables.js",
         "server/functions/cloud-run-token-callables.test.js",
         "test/sender_token_callable_api_test.dart",
@@ -9761,6 +9800,7 @@
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-rider-operations.js",
         "cloud-run-token-callables.js",
         "cloud-run-token-callables.test.js"
       ],
@@ -9776,6 +9816,7 @@
       "productionPurpose": "communicationEngine.setConversationTyping",
       "callers": [
         "lib/app/send_package/view/ride_chats.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-chat-notification-rules.test.js"
       ],
       "criticality": "review-required",
@@ -9795,8 +9836,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9870,6 +9913,7 @@
       "generation": "Gen 1",
       "productionPurpose": "founderReviewFixture.setReviewPresence()",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/founder-review-fixture.test.js"
       ],
       "criticality": "review-required",
@@ -9884,8 +9928,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": false,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10237,6 +10283,7 @@
       "productionPurpose": "riderAccount.submitRiderDocument",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-account.test.js",
         "server/functions/rider-certification-security.test.js",
         "server/functions/rider-document-emulator-integration.test.js",
@@ -10265,8 +10312,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10764,6 +10813,7 @@
       "generation": "Gen 1",
       "productionPurpose": "riderAccount.updateRiderApplicationSection",
       "callers": [
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/rider-account.test.js",
         "server/functions/rider-document-emulator-integration.test.js",
         "server/functions/rider-onboarding-flow.emulator.test.js"
@@ -10791,8 +10841,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10804,6 +10856,7 @@
       "productionPurpose": "riderAccount.updateRiderNotificationState",
       "callers": [
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-rider-operations.js",
         "server/functions/firestore-chat-notification-rules.test.js"
       ],
       "criticality": "P0/P1-review-required",
@@ -10829,8 +10882,10 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-rider-operations.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10916,6 +10971,8 @@
         "lib/app/send_package/repo/token_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "lib/website/shared/token_callable_api.dart",
+        "server/functions/cloud-run-rider-operations.js",
+        "server/functions/cloud-run-rider-operations.test.js",
         "server/functions/cloud-run-token-callables.js",
         "server/functions/cloud-run-token-callables.test.js",
         "test/website_token_callable_api_test.dart"
@@ -10944,6 +11001,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-rider-operations.js",
+        "cloud-run-rider-operations.test.js",
         "cloud-run-token-callables.js",
         "cloud-run-token-callables.test.js"
       ],

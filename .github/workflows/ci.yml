@@ -87,3 +87,5 @@ jobs:
       - run: npm --prefix server/functions run check:gen1-architecture
       - run: npm install -g firebase-tools
       - run: npm --prefix server/functions run test:rules
+      - name: Rider verified onboarding and document integration
+        run: firebase emulators:exec --project demo-circum-rider-ci --only auth,firestore,storage "node --test --test-concurrency=1 server/functions/rider-onboarding-flow.emulator.test.js server/functions/rider-online-intent.emulator.test.js server/functions/rider-document-emulator-integration.test.js server/functions/storage-rider-document-rules.test.js"

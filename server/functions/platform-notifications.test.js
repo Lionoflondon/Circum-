@@ -209,3 +209,32 @@ test("arrival notification uses persisted phase clock without inventing a timest
   assert.deepEqual(context({waiting: {phase: "pickup", startedAt: 1234}}, "arrived_at_dropoff"), {phase: "dropoff", data: {arrivalPhase: "dropoff"}});
   assert.equal(context({}, "completed"), null);
 });
+
+
+test("job alerts wait for paid dispatch readiness and publish only its opening transition", () => {
+  const {classifyIris} = require("./iris-core");
+  const ready = {status: "requested", matchingStatus: "available", paymentStatus: "paid",
+    packageDescription: "laptop in sleeve", iris: {...classifyIris({description: "laptop in sleeve"}), serverAuthored: true, authority: "backend"}};
+  assert.equal(_private.becameDispatchable({...ready, paymentStatus: "unpaid"}, ready), true);
+  assert.equal(_private.becameDispatchable(ready, {...ready, updatedAt: Date.now()}), false);
+  assert.equal(_private.becameDispatchable({...ready, paymentStatus: "unpaid"}, {...ready, status: "cancelled"}), false);
+  assert.equal(_private.becameDispatchable({...ready, paymentStatus: "unpaid"}, {...ready, riderId: "assigned"}), false);
+});
+
+test("job publisher selects only approved online fresh available compatible Riders", () => {
+  const {classifyIris} = require("./iris-core");
+  const now = Date.now();
+  const delivery = {status: "requested", matchingStatus: "available", paymentStatus: "paid",
+    packageDescription: "laptop in sleeve", iris: {...classifyIris({description: "laptop in sleeve"}), serverAuthored: true, authority: "backend"}};
+  const record = {id: "eligible-rider", profile: {onboardingStatus: "approved", vehicleStatus: "approved", vehicleType: "van"},
+    presence: {isOnline: true, dispatchEligible: true, availabilityStatus: "available", busy: false,
+      lastHeartbeatAt: now, gpsStatus: "active", currentLocation: {latitude: 51.5072, longitude: -0.1276, accuracyMeters: 18, updatedAt: now}}};
+  assert.equal(_private.dispatchCandidateDecision(record, delivery, now).eligible, true);
+  for (const presence of [{...record.presence, isOnline: false}, {...record.presence, busy: true},
+    {...record.presence, lastHeartbeatAt: now - 3600000}, {...record.presence, availabilityStatus: "busy"}]) {
+    assert.equal(_private.dispatchCandidateDecision({...record, presence}, delivery, now).eligible, false);
+  }
+  assert.equal(_private.dispatchCandidateDecision({...record, profile: {...record.profile, onboardingStatus: "pending"}}, delivery, now).eligible, false);
+  assert.equal(_private.dispatchCandidateDecision(record, {...delivery, paymentStatus: "unpaid"}, now).eligible, false);
+  assert.equal(_private.dispatchCandidateDecision(record, {...delivery, riderId: "another-rider"}, now).eligible, false);
+});

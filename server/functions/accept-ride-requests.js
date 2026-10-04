@@ -350,3 +350,4 @@ const acceptRideRequests = riderCallable(async (data, context) => {
 });
 
 module.exports = acceptRideRequests;
+module.exports.offerExclusionReason = offerExclusionReason;

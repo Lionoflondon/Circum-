@@ -78,6 +78,8 @@ function canonicalDeepLink(type, data = {}, recipientRole = "sender") {
   if (route === "business" && businessId) link.businessId = businessId;
   if (route === "business" && invoiceId) link.invoiceId = invoiceId;
   if (route === "business" && orderId) link.orderId = orderId;
+  if (recipientRole === "rider" && route === "wallet" && safeId(data.payoutRequestId)) link.payoutRequestId = safeId(data.payoutRequestId);
+  if (recipientRole === "rider" && route === "profile" && safeId(data.applicationId)) link.applicationId = safeId(data.applicationId);
   if (route === "wallet" && transactionId) link.transactionId = transactionId;
   if (route === "wallet" && referralId) link.referralId = referralId;
   if (route === "support" && ticketId) link.ticketId = ticketId;
