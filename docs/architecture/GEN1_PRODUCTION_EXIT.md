@@ -3,16 +3,16 @@
 This source-derived registry is the reviewed baseline. CI fails if an export or a file importing `firebase-functions/v1` is added without regenerating and reviewing this artifact. Runtime deployment state must be certified separately before retirement. A source classification never authorizes retirement by itself; live routing, replacement health, and rollback ownership remain mandatory gates.
 
 - Source exports: 283
-- Gen 1 exports: 189
+- Gen 1 exports: 187
 - Files importing Firebase Functions v1: 71
 - ALREADY MIGRATED — CUT OVER REMAINING CALLERS: 77
 - CLOUD RUN ONLY — LEGACY URL RETAINED: 74
-- REPLACE WITH CLOUD RUN + EVENTARC: 13
+- REPLACE WITH CLOUD RUN + EVENTARC: 11
 - MIGRATE TO CLOUD RUN: 96
 - CLOUD RUN ONLY — EXISTING PUB/SUB RETAINED: 13
 - RETIRE — no legitimate production dependency: 3
 - REPLACE WITH CLOUD RUN + CLOUD SCHEDULER: 2
-- CLOUD RUN ONLY — EXISTING EVENTARC: 5
+- CLOUD RUN ONLY — EXISTING EVENTARC: 7
 
 | Function | Source | Runtime | Trigger | Classification | Callers |
 |---|---|---|---|---|---|
@@ -185,8 +185,8 @@ This source-derived registry is the reviewed baseline. CI fails if an export or 
 | onGiftRequestCreated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
 | onGiftRequestUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |
 | onGiftRequestVoiceMediaDeleted | server/functions/gifts-payment.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | server/functions/gift-voice-media.js<br>server/functions/gifts-payment-finalization-contract.test.js |
-| onHealthMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
-| onHealthPaymentMovementWrite | server/functions/movement-ledger.js | Gen 1 | firestore-event | REPLACE WITH CLOUD RUN + EVENTARC | none found |
+| onHealthMovementWrite | server/functions/movement-ledger.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | none found |
+| onHealthPaymentMovementWrite | server/functions/movement-ledger.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | none found |
 | onHealthPlusPickupOperationalWrite | server/functions/health-plus-operations.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | server/functions/cloud-run-runtime-only.test.js |
 | onMovementTimelineWrite | server/functions/movement-timeline.js | Cloud Run | firestore | CLOUD RUN ONLY — EXISTING EVENTARC | none found |
 | onPayoutUpdated | server/functions/platform-notifications.js | Gen 1 | firestore-event | ALREADY MIGRATED — CUT OVER REMAINING CALLERS | docs/SENDER_NOTIFICATION_CLOUD_RUN.md<br>server/functions/cloud-run-notification-events.js<br>server/functions/production-functions-inventory.json |

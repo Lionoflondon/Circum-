@@ -7,7 +7,7 @@ const TYPES = new Set(["google.cloud.firestore.document.v1.written", "google.clo
 function target(headers, decoded, kind) {
  if (headers["ce-source"] !== "//firestore.googleapis.com/projects/circum-2797c/databases/(default)" || (decoded.documentName && !decoded.documentName.startsWith("projects/circum-2797c/databases/(default)/documents/"))) throw Object.assign(new Error("invalid_event_source"), {statusCode: 400});
  if (!TYPES.has(headers["ce-type"])) throw Object.assign(new Error("invalid_event_type"), {statusCode: 400});
- const collection = ["health", "health-operational"].includes(kind) ? "prescriptionPickups" : kind === "tracking" ? "deliveryLiveLocations" : "deliveryRequests";
+ const collection = kind === "health-payment" ? "healthPlusPayments" : ["health", "health-operational"].includes(kind) ? "prescriptionPickups" : kind === "tracking" ? "deliveryLiveLocations" : "deliveryRequests";
  const path = String(decoded.documentName || headers["ce-subject"] || "").replace(/^.*\/documents\//, "").replace(/^documents\//, "");
  const fixture = new RegExp(`^giftStoryRuntimeFixtures/(__codex_[A-Za-z0-9_-]{1,100})/state/${collection}/records/([A-Za-z0-9_-]{1,128})$`).exec(path);
  const production = new RegExp(`^${collection}/([A-Za-z0-9_-]{1,128})$`).exec(path);
@@ -39,7 +39,7 @@ size += chunk.length; if (size <= 2097152) chunks.push(chunk);
     db = fixtureDb(rawDb, event.fixtureId);
    }
    const special = require("./special-movement-recovery");
-   const result = kind === "health-operational" ? await require("./health-operational-recovery").projectOperational({db, event}) : kind === "health" ? await special.projectHealth({db, event}) : kind === "terminal" ? await special.projectTerminal({db, event}) : kind === "presence" ? await projectPresence({db, event}) : await projectTimeline({db, event, live: kind === "tracking"});
+   const result = kind === "health-operational" ? await require("./health-operational-recovery").projectOperational({db, event}) : ["health", "health-payment"].includes(kind) ? await special.projectHealth({db, event}) : kind === "terminal" ? await special.projectTerminal({db, event}) : kind === "presence" ? await projectPresence({db, event}) : await projectTimeline({db, event, live: kind === "tracking"});
    console.info("delivery_write_recovered", {kind, fixture: Boolean(event.fixtureId), outcome: result.outcome, changed: result.changed, events: result.events}); send(200, result);
   } catch (error) {
    console.warn("delivery_write_recovery_failed", {kind, code: error.code || error.message}); send(error.statusCode || 503, {error: error.statusCode ? error.message : "worker_failed"});

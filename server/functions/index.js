@@ -344,9 +344,8 @@ exports.activateReferralOnGiftCompleted =
 exports.activateReferralOnHealthPlusCompleted =
   referrals.activateReferralOnHealthPlusCompleted;
 exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
-exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
-exports.onHealthPaymentMovementWrite =
-  movementLedger.onHealthPaymentMovementWrite;
+exports.onHealthMovementWrite = cloudRunOnly(movementLedger.onHealthMovementWrite, "circum-gift-movement", false, "firestore");
+exports.onHealthPaymentMovementWrite = cloudRunOnly(movementLedger.onHealthPaymentMovementWrite, "circum-gift-movement", false, "firestore");
 exports.onMovementTimelineWrite = cloudRunOnly(movementTimeline.onMovementTimelineWrite, "circum-gift-movement", false, "firestore");
 exports.onDeliveryLiveLocationWrite = cloudRunOnly(movementTimeline.onDeliveryLiveLocationWrite, "circum-gift-movement", false, "firestore");
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
