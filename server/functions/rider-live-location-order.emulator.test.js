@@ -33,3 +33,23 @@ test("concurrent delayed locations cannot move live tracking backwards", async (
   assert.equal(stale.reason, "stale");
   await assert.rejects(endpoint.run(input(now + 1, 51.8), {auth: {uid: "other"}, app: {appId: "emulator"}}));
 });
+
+test("Rider push receipts are owned, separate from read state, and idempotent", async () => {
+  const endpoint = require("./rider-account").updateRiderNotificationState;
+  const ref = db.doc("notifications/rider-receipt");
+  await ref.set({recipientId: "rider", recipientRole: "rider", read: false});
+  const context = {auth: {uid: "rider", token: {}}, app: {appId: "emulator"}};
+  const input = {notificationId: ref.id, action: "mark_received"};
+  await Promise.all([endpoint.run(input, context), endpoint.run(input, context)]);
+  const first = (await ref.get()).data();
+  assert.ok(first.clientReceivedAt);
+  assert.equal(first.read, false);
+  assert.equal(first.clientOpenedAt, undefined);
+  assert.equal((await db.collection("riderNotificationEvents").get()).size, 1);
+  await endpoint.run(input, context);
+  assert.equal((await ref.get()).data().clientReceivedAt.toMillis(), first.clientReceivedAt.toMillis());
+  assert.equal((await db.collection("riderNotificationEvents").get()).size, 1);
+  await endpoint.run({...input, action: "mark_opened"}, context);
+  assert.ok((await ref.get()).data().clientOpenedAt);
+  await assert.rejects(endpoint.run(input, {...context, auth: {uid: "other", token: {}}}));
+});

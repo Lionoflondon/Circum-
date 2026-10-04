@@ -642,7 +642,7 @@ exports.updateRiderNotificationState = riderCallable(async (data, context) => {
   if (!ids.length) {
     throw new functions.https.HttpsError("invalid-argument", "Notification id is required.");
   }
-  const allowed = new Set(["mark_read", "archive", "delete"]);
+  const allowed = new Set(["mark_read", "archive", "delete", "mark_received", "mark_opened"]);
   if (!allowed.has(action)) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported notification action.");
   }
@@ -651,6 +651,7 @@ exports.updateRiderNotificationState = riderCallable(async (data, context) => {
   await db.runTransaction(async (transaction) => {
     const refs = ids.map((id) => db.collection("notifications").doc(id));
     const snaps = await Promise.all(refs.map((ref) => transaction.get(ref)));
+    let changed = false;
     snaps.forEach((snap, index) => {
       if (!snap.exists) {
         throw new functions.https.HttpsError("not-found", "Notification not found.");
@@ -661,13 +662,17 @@ exports.updateRiderNotificationState = riderCallable(async (data, context) => {
       if (recipient !== rider.uid || (recipientRole && recipientRole !== "rider")) {
         throw new functions.https.HttpsError("permission-denied", "Notification does not belong to this Rider.");
       }
-      const patch = action === "mark_read" ?
+      const receiptField = action === "mark_received" ? "clientReceivedAt" : action === "mark_opened" ? "clientOpenedAt" : "";
+      if (receiptField && notification[receiptField]) return;
+      const patch = receiptField ? {[receiptField]: now} : action === "mark_read" ?
         {read: true, isRead: true, readAt: now} :
         action === "archive" ?
           {archived: true, archivedAt: now} :
           {deletedAt: now};
+      changed = true;
       transaction.set(refs[index], patch, {merge: true});
     });
+    if (!changed) return;
     transaction.set(db.collection("riderNotificationEvents").doc(), audit("rider_notification_state_updated", rider, {
       action,
       notificationIds: ids,

@@ -10858,7 +10858,8 @@
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-rider-operations.js",
-        "server/functions/firestore-chat-notification-rules.test.js"
+        "server/functions/firestore-chat-notification-rules.test.js",
+        "server/functions/rider-live-location-order.emulator.test.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
