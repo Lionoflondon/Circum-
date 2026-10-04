@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "health-plus-operations.js")
 const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 
 test("Health+ reminder processor is exported and scheduled in London", () => {
-  assert.match(indexSource, /exports\.processHealthPlusReminders\s*=\s*healthPlusOperations\.processHealthPlusReminders/);
+  assert.match(indexSource, /exports\.processHealthPlusReminders\s*=\s*cloudRunOnly\(healthPlusOperations\.processHealthPlusReminders, "circum-payment-schedulers", false, "schedule"\)/);
   assert.match(source, /exports\.processHealthPlusReminders\s*=\s*functions\.pubsub/);
   assert.match(source, /\.schedule\("every 30 minutes"\)/);
   assert.match(source, /\.timeZone\("Europe\/London"\)/);

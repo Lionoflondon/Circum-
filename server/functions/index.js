@@ -198,8 +198,7 @@ exports.reportCircumMessage = communicationEngine.reportCircumMessage;
 exports.sendCircumAnnouncement = communicationEngine.sendCircumAnnouncement;
 exports.retryNotificationDelivery = communicationEngine.retryNotificationDelivery;
 exports.onHealthPlusPickupOperationalWrite = cloudRunOnly(healthPlusOperations.onHealthPlusPickupOperationalWrite, "circum-gift-movement", false, "firestore");
-exports.processHealthPlusReminders =
-  healthPlusOperations.processHealthPlusReminders;
+exports.processHealthPlusReminders = cloudRunOnly(healthPlusOperations.processHealthPlusReminders, "circum-payment-schedulers", false, "schedule");
 exports.resetHealthPlusMonthlyUsage =
   healthPlusOperations.resetHealthPlusMonthlyUsage;
 exports.generateHealthPlusRecurringBookings = cloudRunOnly(healthPlusOperations.generateHealthPlusRecurringBookings, "circum-payment-schedulers", false, "schedule");
