@@ -178,3 +178,66 @@ test("zero Business invoice totals cannot fall back to stale amounts or debit a 
   const admin = {auth: {uid: "admin", token: {admin: true, role: "super_admin"}}, app: {appId: "audit"}};
   await assert.rejects(payments.adminCreateBusinessInvoice.run({businessId: invoiceId, total: 0, amount: 10, reason: "Zero validation"}, admin), {code: "invalid-argument"});
 });
+
+
+test("cancelled Health+ membership resists equal/later stale activation but permits a paid replacement subscription", async () => {
+  const lifecycle = require("./health-membership-lifecycle");
+  const senderId = "terminal-membership-owner";
+  const event = (id, type, created, object) => ({id, type, created, data: {object}});
+  const old = {id: "sub_terminal_old", customer: "cus_terminal", status: "active", metadata: {userId: senderId}};
+  await lifecycle.handleHealthSubscriptionEvent({db, event: event("evt_terminal_active", "customer.subscription.updated", 100, old)});
+  await lifecycle.handleHealthSubscriptionEvent({db, event: event("evt_terminal_deleted", "customer.subscription.deleted", 200, {...old, status: "canceled"})});
+  for (const created of [200, 201]) {
+    const result = await lifecycle.handleHealthSubscriptionEvent({db, event: event(`evt_terminal_late_${created}`, "customer.subscription.updated", created, old)});
+    assert.equal(result.suppressed, true);
+    assert.equal((await db.doc(`healthPlusMemberships/${senderId}`).get()).data().status, "canceled");
+  }
+  const session = {id: "cs_terminal_new", mode: "subscription", subscription: "sub_terminal_new", customer: "cus_terminal", payment_status: "paid", metadata: {type: "health_plus_payment", userId: senderId}};
+  const replacement = await lifecycle.handleHealthMembershipCheckoutSession({db, session, event: event("evt_terminal_replacement", "checkout.session.completed", 202, session)});
+  assert.equal(replacement.suppressed, undefined);
+  const current = {...old, id: "sub_terminal_new"};
+  await lifecycle.handleHealthSubscriptionEvent({db, event: event("evt_terminal_new_active", "customer.subscription.updated", 203, current)});
+  const membership = (await db.doc(`healthPlusMemberships/${senderId}`).get()).data();
+  assert.equal(membership.status, "active");
+  assert.equal(membership.stripeSubscriptionId, "sub_terminal_new");
+});
+
+
+test("Health+ checkout blocks an existing subscription before charging and reuses the cancelled member's customer", async (t) => {
+  const uid = "resubscribe-owner";
+  const auth = require("firebase-admin/auth").getAuth();
+  t.mock.method(auth, "verifyIdToken", async () => ({uid, email: "qa@example.invalid"}));
+  process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-test";
+  t.mock.method(global, "fetch", async () => ({ok: true, json: async () => ({routes: [{distanceMeters: 3218.688}]})}));
+  const bookingId = "resubscribe-booking";
+  await db.doc(`prescriptionPickups/${bookingId}`).set({senderId: uid, profileId: uid, status: "scheduled", frequency: "monthly", subscriptionPlan: "core", pricingInputs: {medicationWeightKg: 1}, pharmacyAddress: "Pharmacy", deliveryAddress: "Home", routeAuthorityVersion: 2});
+  await db.doc(`healthPlusProfiles/${uid}`).set({senderId: uid});
+  const ref = db.doc(`healthPlusMemberships/${uid}`);
+  await ref.set({senderId: uid, status: "active", stripeCustomerId: "cus_existing", stripeSubscriptionId: "sub_existing"});
+  let calls = 0; let params; let code; let body;
+  const stripe = {checkout: {sessions: {create: async (input) => {
+    calls++; params = input; return {id: "cs_resubscribe", url: "https://example.invalid/checkout"};
+  }, retrieve: async () => ({id: "cs_resubscribe", status: "open", payment_status: "unpaid"})}}};
+  const res = {set() {}, status(value) {
+code = value; return this;
+}, send(value) {
+body = value; return this;
+}};
+  const req = {method: "POST", headers: {authorization: "Bearer emulator-test"}, body: {bookingId, profileId: uid}};
+  await health._qaHandlers.createHealthPlusCheckoutHandler(req, res, {db, stripe});
+  assert.equal(code, 403);
+  assert.equal(body.code, "failed-precondition");
+  assert.equal(calls, 0);
+  assert.equal((await db.doc(`healthPlusPayments/${bookingId}`).get()).exists, false);
+  await ref.set({status: "canceled"}, {merge: true});
+  code = 200;
+  await health._qaHandlers.createHealthPlusCheckoutHandler(req, res, {db, stripe});
+  assert.equal(code, 200);
+  assert.equal(calls, 1);
+  assert.equal(params.customer, "cus_existing");
+  assert.equal(params.customer_email, undefined);
+  assert.equal(params.metadata.userId, uid);
+  await health._qaHandlers.createHealthPlusCheckoutHandler(req, res, {db, stripe});
+  assert.equal(body.idempotent, true);
+  assert.equal(calls, 1);
+});

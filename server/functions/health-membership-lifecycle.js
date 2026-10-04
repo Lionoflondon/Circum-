@@ -43,11 +43,11 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
     const eventCreated = Number(event.created || 0);
     const previousCreated = Number(existing.lastStripeEventCreated || 0);
     const stale = eventCreated > 0 && previousCreated > eventCreated;
-    const cancelledInvoice = existing.status === "canceled" && text(event.type).startsWith("invoice.");
     const session = event.data && event.data.object || {};
     const replacementCheckout = existing.status === "canceled" && event.type === "checkout.session.completed" &&
       ["paid", "no_payment_required"].includes(session.payment_status) &&
       text(patch.checkoutSessionId) && text(existing.checkoutSessionId) !== text(patch.checkoutSessionId);
+    const cancelledTransition = existing.status === "canceled" && patch.status !== "canceled" && !replacementCheckout;
     if (!stale) {
 for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
       if (text(existing[field]) && text(patch[field]) && text(existing[field]) !== text(patch[field])) {
@@ -56,16 +56,16 @@ for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
       }
     }
 }
-    if (!stale && !cancelledInvoice) {
+    if (!stale && !cancelledTransition) {
       transaction.set(membershipRef, {...patch,
         ...(eventCreated > 0 ? {lastStripeEventCreated: eventCreated} : {}),
       }, {merge: true});
     }
     transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id,
-      suppressed: stale || cancelledInvoice,
-      ...(stale || cancelledInvoice ? {reason: stale ? "stale_event" : "cancelled_membership"} : {}),
+      suppressed: stale || cancelledTransition,
+      ...(stale || cancelledTransition ? {reason: stale ? "stale_event" : "cancelled_membership"} : {}),
       createdAt: FieldValue.serverTimestamp()});
-    if (stale || cancelledInvoice) return {duplicate: false, suppressed: true, eventId};
+    if (stale || cancelledTransition) return {duplicate: false, suppressed: true, eventId};
     return {duplicate: false, eventId};
   });
 }

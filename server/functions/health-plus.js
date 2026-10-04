@@ -756,6 +756,18 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
     let amountPence = authoritative.amountPence;
     let orderTotalGbp = money(amountPence / 100);
     let recurring = authoritative.recurring;
+    let subscriptionCustomer = null;
+    if (recurring) {
+      const membershipSnap = await db.collection("healthPlusMemberships").doc(sender.uid).get();
+      const membership = membershipSnap.exists ? membershipSnap.data() || {} : {};
+      if (membership.senderId && membership.senderId !== sender.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Health+ membership ownership does not match this Sender.");
+      }
+      if (membership.stripeSubscriptionId && membership.status !== "canceled") {
+        throw new functions.https.HttpsError("failed-precondition", "Manage your existing Health+ subscription before starting another.");
+      }
+      subscriptionCustomer = membership.stripeCustomerId || null;
+    }
     const submittedPence = submittedAmountPence(priceBreakdown || {});
     const discrepancyPence = submittedPence == null ? null : submittedPence - amountPence;
     const rothRequested = useRoth === true;
@@ -848,6 +860,11 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
       },
     });
     params.client_reference_id = sender.uid;
+    if (subscriptionCustomer) {
+      params.customer = subscriptionCustomer;
+      delete params.customer_email;
+    }
+
 
     params.expires_at = checkoutAuthority.expiresAt;
     const session = await healthCheckoutAuthority.create({db, stripe: provider, paymentRef, booking, params, record: {
