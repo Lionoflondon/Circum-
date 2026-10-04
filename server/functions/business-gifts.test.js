@@ -123,3 +123,9 @@ test("a paid Business Gift order materializes exactly one protected Gift", async
   assert.equal(db.read(`giftRequests/${gifts.giftIdFor(orderId)}`).recipientValueVisibility, "sender_only");
   assert.equal(db.read(`businessGiftOrders/${orderId}`).giftRequestId, gifts.giftIdFor(orderId));
 });
+
+test("suspended Business members cannot fall back to stale membership IDs", async () => {
+  const db = fakeDb({"businessAccounts/business-1": {status: "approved", teamMemberIds: ["member-1"], teamMembers: [{userId: "member-1", role: "admin", status: "suspended"}]}});
+  await assert.rejects(gifts.createBusinessGiftOrderHandler(null, input(), context(), {db}), {code: "permission-denied"});
+  assert.equal(db.count("businessGiftOrders/"), 0);
+});

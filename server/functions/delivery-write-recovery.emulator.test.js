@@ -104,7 +104,7 @@ test("Health projection cannot overwrite accepted custody or terminal state from
  await db.doc("prescriptionPickups/pickup").set({status: "requested", riderId: "old", paymentStatus: "paid"});
  await db.doc("deliveryRequests/health_pickup").set({status: "in_transit", riderId: "new", paymentStatus: "paid", sourceModule: "health_plus", healthPlusPickupId: "pickup"});
  await projectHealth({db, event: {deliveryId: "pickup", eventId: "old"}});
- let d = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(d.status, "in_transit"); assert.equal(d.riderId, "new");
+ let d = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(d.status, "in_transit"); assert.equal(d.riderId, "new"); assert.equal(d.paymentStatus, "paid"); assert.equal(d.healthOrderId, "pickup");
  await db.doc("deliveryRequests/health_pickup").update({status: "delivered"}); await projectHealth({db, event: {deliveryId: "pickup", eventId: "later"}}); d = (await db.doc("deliveryRequests/health_pickup").get()).data(); assert.equal(d.status, "delivered");
 }));
 test("terminal movement retries use current delivery and preserve a newer linked assignment", () => fixture("terminal-fresh", async (db) => {

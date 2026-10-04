@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "health-plus-operations.js")
 const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 
 test("Health+ reminder processor is exported and scheduled in London", () => {
-  assert.match(indexSource, /exports\.processHealthPlusReminders\s*=\s*healthPlusOperations\.processHealthPlusReminders/);
+  assert.match(indexSource, /exports\.processHealthPlusReminders\s*=\s*cloudRunOnly\(healthPlusOperations\.processHealthPlusReminders, "circum-payment-schedulers", false, "schedule"\)/);
   assert.match(source, /exports\.processHealthPlusReminders\s*=\s*functions\.pubsub/);
   assert.match(source, /\.schedule\("every 30 minutes"\)/);
   assert.match(source, /\.timeZone\("Europe\/London"\)/);
@@ -22,12 +22,14 @@ test("Health+ reminders notify admin one day before actual pickup", () => {
   assert.match(source, /notificationId = `health_admin_\$\{pickup\.id\}_\$\{type\}`/);
   assert.match(source, /recipientRole: "admin"/);
   assert.match(source, /destination: \{[\s\S]*?route: "admin_health_plus"[\s\S]*?healthPickupId: pickup\.id/);
-  assert.match(source, /healthPlusUsageEvents"\)\.doc\(notificationId\)\.set/);
+  assert.match(source, /ref: db\.collection\("healthPlusUsageEvents"\)\.doc\(notificationId\), payload:/);
 });
 
 test("Health+ reminders remain backend-owned and idempotent", () => {
-  assert.match(source, /db\.collection\("notifications"\)\.doc\(notificationId\)\.set\(/);
-  assert.match(source, /\}, \{merge: true\}\);/);
+  assert.match(source, /ref: db\.collection\("notifications"\)\.doc\(notificationId\), payload:/);
+  assert.match(source, /return writeCurrentReminder\(db, pickup, writes\)/);
+  assert.match(source, /if \(!existing\[index\]\.exists\) transaction\.create\(ref, payload\)/);
+  assert.match(source, /currentAt\.getTime\(\) !== expectedAt\.getTime\(\)/);
   assert.doesNotMatch(source, /context\.auth/);
 });
 

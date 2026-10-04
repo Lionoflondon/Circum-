@@ -20,17 +20,19 @@ function membershipStatus(subscription) {
   }
 }
 function membershipPatch({subscription = {}, invoice = null, status = null}) {
-  return {
-    status: status || membershipStatus(subscription),
+  const patch = {status: status || membershipStatus(subscription), updatedAt: FieldValue.serverTimestamp()};
+  for (const [field, value] of Object.entries({
     currentPeriodStart: dateFromUnix(subscription.current_period_start),
     currentPeriodEnd: dateFromUnix(subscription.current_period_end),
-    stripeCustomerId: text(subscription.customer) || null,
-    stripeSubscriptionId: text(subscription.id) || null,
-    latestInvoiceId: text((invoice && invoice.id) || subscription.latest_invoice) || null,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
-    planId: text(subscription.items && subscription.items.data && subscription.items.data[0] && subscription.items.data[0].price && subscription.items.data[0].price.id) || null,
-    updatedAt: FieldValue.serverTimestamp(),
-  };
+    stripeCustomerId: text(subscription.customer),
+    stripeSubscriptionId: text(subscription.id),
+    latestInvoiceId: text((invoice && invoice.id) || subscription.latest_invoice),
+    planId: text(subscription.items && subscription.items.data && subscription.items.data[0] && subscription.items.data[0].price && subscription.items.data[0].price.id),
+  })) {
+    if (value) patch[field] = value;
+  }
+  if (typeof subscription.cancel_at_period_end === "boolean") patch.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+  return patch;
 }
 async function claimMembershipEvent(db, event, membershipRef, patch) {
   const eventId = text(event && event.id);
@@ -40,13 +42,43 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
     if ((await transaction.get(eventRef)).exists) return {duplicate: true, eventId};
     const membershipSnap = await transaction.get(membershipRef);
     const existing = membershipSnap.exists ? membershipSnap.data() || {} : {};
+    const eventCreated = Number(event.created || 0);
+    const previousCreated = Number(existing.lastStripeEventCreated || 0);
+    const checkout = event.type === "checkout.session.completed";
+    const session = event.data && event.data.object || {};
+    const replacementCheckout = existing.status === "canceled" && checkout &&
+      ["paid", "no_payment_required"].includes(session.payment_status) &&
+      text(patch.stripeSubscriptionId) !== text(existing.stripeSubscriptionId) &&
+      text(patch.checkoutSessionId) && text(existing.checkoutSessionId) !== text(patch.checkoutSessionId);
+    const retired = (existing.retiredStripeSubscriptionIds || []).includes(text(patch.stripeSubscriptionId));
+    const stale = !checkout && eventCreated > 0 && previousCreated > eventCreated;
+    const cancelledTransition = existing.status === "canceled" && patch.status !== "canceled" && !replacementCheckout;
     for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
       if (text(existing[field]) && text(patch[field]) && text(existing[field]) !== text(patch[field])) {
+        if (field === "stripeSubscriptionId" && (replacementCheckout || retired || stale)) continue;
         throw new Error(`Health+ membership ${field} does not match its existing binding.`);
       }
     }
-    transaction.set(membershipRef, patch, {merge: true});
-    transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id, createdAt: FieldValue.serverTimestamp()});
+    if (!stale && !cancelledTransition && !retired) {
+      const appliedPatch = {...patch, ...(checkout ? {pendingCheckoutBookingId: null} : {})};
+      if (checkout && existing.status && !replacementCheckout) appliedPatch.status = existing.status;
+      if (event.type.startsWith("invoice.")) {
+        appliedPatch.lastInvoiceStatus = patch.status;
+        if (existing.status === "paused") appliedPatch.status = "paused";
+      }
+      if (replacementCheckout) {
+        appliedPatch.lastStripeEventCreated = 0;
+        appliedPatch.retiredStripeSubscriptionIds = [...new Set([...(existing.retiredStripeSubscriptionIds || []), existing.stripeSubscriptionId].filter(Boolean))];
+      } else if (!checkout && eventCreated > 0) {
+        appliedPatch.lastStripeEventCreated = eventCreated;
+      }
+      transaction.set(membershipRef, appliedPatch, {merge: true});
+    }
+    transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id,
+      suppressed: stale || cancelledTransition || retired,
+      ...(stale || cancelledTransition || retired ? {reason: retired ? "retired_subscription" : stale ? "stale_event" : "cancelled_membership"} : {}),
+      createdAt: FieldValue.serverTimestamp()});
+    if (stale || cancelledTransition || retired) return {duplicate: false, suppressed: true, eventId};
     return {duplicate: false, eventId};
   });
 }
@@ -63,7 +95,9 @@ async function membershipRefForSubscription(db, subscriptionId) {
 }
 
 async function handleHealthMembershipCheckoutSession({db, session, event}) {
-  if (session.mode !== "subscription" || !text(session.subscription)) return {handled: false};
+  const metadata = session.metadata || {};
+  if (session.mode !== "subscription" || !text(session.subscription) ||
+      (metadata.type !== "health_plus_payment" && metadata.feature !== "health_plus")) return {handled: false};
   const senderId = text(session.metadata && session.metadata.userId);
   if (!senderId) throw new Error("Health+ subscription checkout is missing its Sender identity.");
   const subscription = {id: session.subscription, customer: session.customer, status: "incomplete"};

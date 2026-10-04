@@ -41,17 +41,7 @@ function allowCors(res) {
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
-const ADMIN_ROLES = [
-  "super_admin",
-  "operations_admin",
-  "support_agent",
-  "finance_admin",
-  "driver_manager",
-  "owner",
-  "admin",
-  "support",
-  "operations",
-];
+const {tokenRoles: healthAdminRoles, hasPermission: healthAdminPermission} = require("./admin-permissions");
 
 async function verifyAdminRequest(req) {
   const header = req.headers.authorization || "";
@@ -64,12 +54,9 @@ async function verifyAdminRequest(req) {
 
   const token = header.substring("Bearer ".length);
   const decoded = await getAuth().verifyIdToken(token);
-  const claimsRoles = Array.isArray(decoded.roles) ? decoded.roles : [];
-  const claimRole = decoded.role || decoded.adminRole;
-  const roles = claimRole ? claimsRoles.concat([claimRole]) : claimsRoles;
-  const hasClaimRole = decoded.admin === true ||
-    roles.some((role) => ADMIN_ROLES.includes(role));
-
+  const roles = healthAdminRoles(decoded);
+  const claimRole = roles[0];
+  const hasClaimRole = healthAdminPermission(roles, "health.manage");
   if (hasClaimRole) {
     return {
       uid: decoded.uid,
@@ -92,7 +79,7 @@ async function verifyAdminRequest(req) {
   const adminData = adminDoc.data();
   const status = adminData.status || "inactive";
   const role = adminData.role;
-  if (status !== "active" || !ADMIN_ROLES.includes(role)) {
+  if (status !== "active" || !healthAdminPermission(healthAdminRoles(adminData), "health.manage")) {
     throw new functions.https.HttpsError(
         "permission-denied",
         "Active admin access is required.",
@@ -184,63 +171,79 @@ async function markHealthPlusPaid({
 }) {
   const bookingRef = db.collection("prescriptionPickups").doc(bookingId);
   const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
-  const paymentSnap = await paymentRef.get();
-  const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
-  if (payment.status === "paid" || payment.paymentStatus === "paid") {
-    return {paid: true, duplicate: true};
-  }
-  const now = FieldValue.serverTimestamp();
-  await paymentRef.set({
-    bookingId,
-    profileId,
-    senderId,
-    userId: senderId,
-    userEmail,
-    paymentId: paymentId || payment.paymentId || bookingId,
-    amountPence,
-    amount: amountPence / 100,
-    cardAmount,
-    rothAmount,
-    currency: "GBP",
-    frequency,
-    recurring,
-    method,
-    paymentMethod: method,
-    status: "paid",
-    paymentStatus: "paid",
-    stripeSessionId,
-    checkoutSessionId: stripeSessionId,
-    stripePaymentIntentId,
-    stripeEventId,
-    authoritativePricing: authoritativePricing || payment.authoritativePricing || null,
-    paidAt: now,
-    updatedAt: now,
-    createdAt: payment.createdAt || now,
-  }, {merge: true});
-  await bookingRef.set({
-    paymentStatus: "paid",
-    ...healthPlusVanguardFields(),
-    paidAt: now,
-    updatedAt: now,
-  }, {merge: true});
-  await db.collection("healthPlusUsageEvents").add({
-    type: "checkout_paid",
-    senderId,
-    userId: senderId,
-    profileId,
-    pickupId: bookingId,
-    amountPence,
-    cardAmount,
-    rothAmount,
-    currency: "GBP",
-    method,
-    stripeSessionId,
-    stripePaymentIntentId,
-    stripeEventId,
-    source: "cloud-functions",
-    createdAt: Date.now(),
+  return db.runTransaction(async (transaction) => {
+    const usageRef = db.collection("healthPlusUsageEvents").doc(`checkout_paid_${bookingId}`);
+    const [paymentSnap, bookingSnap, usageSnap] = await Promise.all([
+      transaction.get(paymentRef), transaction.get(bookingRef), transaction.get(usageRef),
+    ]);
+    if (!bookingSnap.exists || !paymentSnap.exists ||
+      (bookingSnap.data().senderId || bookingSnap.data().userId) !== senderId ||
+      paymentSnap.data().senderId !== senderId || paymentSnap.data().profileId !== profileId) {
+      throw new functions.https.HttpsError("failed-precondition", "Health+ payment ownership or booking changed.");
+    }
+    const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
+    if (payment.status === "paid" || payment.paymentStatus === "paid") {
+      if (bookingSnap.data().paymentStatus !== "paid") {
+        transaction.set(bookingRef, {paymentStatus: "paid", ...healthPlusVanguardFields(),
+          paidAt: payment.paidAt || FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      }
+      return {paid: true, duplicate: true};
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.set(paymentRef, {
+      bookingId,
+      profileId,
+      senderId,
+      userId: senderId,
+      userEmail,
+      paymentId: paymentId || payment.paymentId || bookingId,
+      amountPence,
+      amount: amountPence / 100,
+      cardAmount,
+      rothAmount,
+      currency: "GBP",
+      frequency,
+      recurring,
+      method,
+      paymentMethod: method,
+      status: "paid",
+      paymentStatus: "paid",
+      stripeSessionId,
+      checkoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      stripeEventId,
+      authoritativePricing: authoritativePricing || payment.authoritativePricing || null,
+      paidAt: now,
+      updatedAt: now,
+      createdAt: payment.createdAt || now,
+    }, {merge: true});
+    transaction.set(bookingRef, {
+      paymentStatus: "paid",
+      ...healthPlusVanguardFields(),
+      paidAt: now,
+      updatedAt: now,
+    }, {merge: true});
+    if (!usageSnap.exists) {
+      transaction.create(usageRef, {
+      type: "checkout_paid",
+      senderId,
+      userId: senderId,
+      profileId,
+      pickupId: bookingId,
+      amountPence,
+      cardAmount,
+      rothAmount,
+      currency: "GBP",
+      method,
+      stripeSessionId,
+      stripePaymentIntentId,
+      stripeEventId,
+      source: "cloud-functions",
+      createdAt: Date.now(),
   });
+}
   return {paid: true, duplicate: false};
+  });
 }
 
 function text(value) {
@@ -352,6 +355,7 @@ async function createHealthPlusBookingHandler(data, context, dependencies = {}) 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
     if (replay.exists) {
+      if (replay.data().senderId !== sender.uid) throw new functions.https.HttpsError("permission-denied", "Health+ request belongs to another Sender.");
       return {...replay.data(), idempotent: true};
     }
 
@@ -572,7 +576,12 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
-    if (replay.exists) return {...replay.data(), idempotent: true};
+    if (replay.exists && (replay.data().senderId !== sender.uid ||
+      (replay.data().action && replay.data().action !== action) ||
+      (replay.data().scheduleId && replay.data().scheduleId !== text(data.scheduleId)) ||
+      (replay.data().pickupId && replay.data().pickupId !== text(data.pickupId)))) {
+      throw new functions.https.HttpsError("permission-denied", "Health+ request does not match this Sender and action.");
+    }
 
     const now = FieldValue.serverTimestamp();
     if (action === "pause_schedule" || action === "resume_schedule" || action === "cancel_schedule") {
@@ -583,8 +592,13 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
       if (!scheduleSnap.exists || !senderOwnsHealthRecord(sender, scheduleSnap.data())) {
         throw new functions.https.HttpsError("permission-denied", "Health+ schedule not found.");
       }
+      const schedule = scheduleSnap.data();
+      if (schedule.status === "cancelled" && action !== "cancel_schedule") {
+        throw new functions.https.HttpsError("failed-precondition", "A cancelled Health+ schedule cannot be resumed or paused.");
+      }
       const paused = action === "pause_schedule" || action === "cancel_schedule";
       const status = action === "cancel_schedule" ? "cancelled" : paused ? "paused" : "active";
+      if (replay.exists && schedule.status === status) return {...replay.data(), idempotent: true};
       const eventType = action === "cancel_schedule" ? "recurring_pickup_cancelled" :
         paused ? "recurring_pickup_paused" : "recurring_pickup_resumed";
       transaction.set(scheduleRef, {
@@ -601,7 +615,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         scheduleId,
         status,
       }));
-      transaction.set(idempotencyRef, {status, scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
+      transaction.set(idempotencyRef, {action, status, scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
       return {status, scheduleId, idempotent: false};
     }
 
@@ -614,6 +628,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         throw new functions.https.HttpsError("permission-denied", "Health+ pickup not found.");
       }
       const pickup = pickupSnap.data();
+      if (replay.exists && pickup.status === "cancelled") return {...replay.data(), idempotent: true};
       if (["collected", "out_for_delivery", "delivered"].includes(`${pickup.status || ""}`)) {
         throw new functions.https.HttpsError("failed-precondition", "This Health+ pickup can no longer be cancelled here.");
       }
@@ -628,7 +643,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         scheduleId: pickup.scheduleId || null,
         status: "cancelled",
       }));
-      transaction.set(idempotencyRef, {status: "cancelled", pickupId, senderId: sender.uid, createdAt: now}, {merge: true});
+      transaction.set(idempotencyRef, {action, status: "cancelled", pickupId, senderId: sender.uid, createdAt: now}, {merge: true});
       return {status: "cancelled", pickupId, idempotent: false};
     }
 
@@ -728,6 +743,19 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
     let amountPence = authoritative.amountPence;
     let orderTotalGbp = money(amountPence / 100);
     let recurring = authoritative.recurring;
+    let subscriptionCustomer = null;
+    if (recurring) {
+      await healthCheckoutAuthority.resolvePendingSubscriptionCheckout({db, stripe: provider, senderId: sender.uid, bookingId});
+      const membershipSnap = await db.collection("healthPlusMemberships").doc(sender.uid).get();
+      const membership = membershipSnap.exists ? membershipSnap.data() || {} : {};
+      if (membership.senderId && membership.senderId !== sender.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Health+ membership ownership does not match this Sender.");
+      }
+      if (membership.stripeSubscriptionId && membership.status !== "canceled") {
+        throw new functions.https.HttpsError("failed-precondition", "Manage your existing Health+ subscription before starting another.");
+      }
+      subscriptionCustomer = membership.stripeCustomerId || null;
+    }
     const submittedPence = submittedAmountPence(priceBreakdown || {});
     const discrepancyPence = submittedPence == null ? null : submittedPence - amountPence;
     const rothRequested = useRoth === true;
@@ -820,6 +848,11 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
       },
     });
     params.client_reference_id = sender.uid;
+    if (subscriptionCustomer) {
+      params.customer = subscriptionCustomer;
+      delete params.customer_email;
+    }
+
 
     params.expires_at = checkoutAuthority.expiresAt;
     const session = await healthCheckoutAuthority.create({db, stripe: provider, paymentRef, booking, params, record: {
@@ -964,7 +997,6 @@ async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = nul
     throw new Error("Health+ payment record is missing.");
   }
   const payment = paymentSnap.data() || {};
-  if (payment.status === "paid" || payment.paymentStatus === "paid") return;
   if (payment.pricingAuthorityVersion !== 2 || payment.checkoutSessionId !== sessionData.id || payment.senderId !== senderId || payment.profileId !== profileId) {
     await db.doc(`paymentArtifactReconciliations/health_${bookingId}`).set({service: "health_plus", bookingId, sessionId: sessionData.id, status: "review_required", reason: "legacy_or_unbound_paid_checkout", updatedAt: Date.now()}, {merge: true});
     throw new Error("Health+ legacy or unbound checkout requires payment reconciliation before dispatch.");
@@ -1001,7 +1033,7 @@ async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = nul
     stripeSessionId: sessionData.id,
     stripePaymentIntentId: sessionData.payment_intent || null,
     stripeEventId: eventId,
-    amountPence: Number(payment.amountPence || Math.round((cardAmount + rothAmount) * 100)),
+    amountPence: Number(payment.amountPence ?? Math.round((cardAmount + rothAmount) * 100)),
     cardAmount,
     rothAmount,
     method: rothAmount > 0 ? "roth_card" : "card",
@@ -1024,25 +1056,42 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
       return res.status(400).send({error: "pickupId and status are required"});
     }
 
-    const update = buildAdminStatusUpdate(status, driverId);
+    if (typeof pickupId !== "string" || safeDocId(pickupId) !== pickupId ||
+        (driverId != null && (typeof driverId !== "string" || safeDocId(driverId) !== driverId))) {
+      throw new functions.https.HttpsError("invalid-argument", "Choose valid Health+ pickup and Rider identifiers.");
+    }
+    let update;
+    try {
+      update = buildAdminStatusUpdate(status, driverId);
+    } catch (error) {
+      throw new functions.https.HttpsError("invalid-argument", error.message);
+    }
     update.lastAdminId = admin.uid;
     update.lastAdminRole = admin.role;
     if (note) update.adminNote = note;
 
+    if (!text(note)) throw new functions.https.HttpsError("invalid-argument", "Add an Operations note before changing Health+ status.");
     const db = getFirestore();
-    await db.collection("prescriptionPickups").doc(pickupId).set(update, {merge: true});
-    await db.collection("healthPlusUsageEvents").add({
-      type: "pickup_status_updated",
-      pickupId,
-      status,
-      driverId: driverId || null,
-      adminId: admin.uid,
-      adminEmail: admin.email,
-      adminRole: admin.role,
-      requestedAdminId: adminId || null,
-      note: note || null,
-      source: "cloud-functions",
-      createdAt: Date.now(),
+    const pickupRef = db.collection("prescriptionPickups").doc(pickupId);
+    const usageRef = db.collection("healthPlusUsageEvents").doc();
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(pickupRef);
+      if (!existing.exists) throw new functions.https.HttpsError("not-found", "Health+ pickup not found.");
+      transaction.set(pickupRef, update, {merge: true});
+      transaction.create(usageRef, {
+        type: "pickup_status_updated",
+        pickupId,
+        status,
+        previousStatus: existing.data().status || null,
+        driverId: driverId || null,
+        adminId: admin.uid,
+        adminEmail: admin.email,
+        adminRole: admin.role,
+        requestedAdminId: adminId || null,
+        note,
+        source: "cloud-functions",
+        createdAt: Date.now(),
+      });
     });
     return res.send({success: true, pickupId, update});
   } catch (error) {

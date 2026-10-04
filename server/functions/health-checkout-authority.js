@@ -64,9 +64,31 @@ async function legacyGate({stripe, db, bookingId, booking, payment}) {
     "health_booking_regeneration_required",
   );
 }
+async function resolvePendingSubscriptionCheckout({db, stripe, senderId, bookingId}) {
+  const ref = db.doc(`healthPlusMemberships/${senderId}`);
+  const snap = await ref.get();
+  const membership = snap.data() || {};
+  const pendingId = membership.pendingCheckoutBookingId;
+  if (!pendingId || pendingId === bookingId) return;
+  const payment = (await db.doc(`healthPlusPayments/${pendingId}`).get()).data() || {};
+  if (!payment.checkoutSessionId) {
+    throw blocked("Your previous Health+ checkout needs reconciliation before starting another.", "pending_health_checkout");
+  }
+  const session = await stripe.checkout.sessions.retrieve(payment.checkoutSessionId);
+  if (session.status !== "expired" || session.payment_status === "paid" || session.subscription) {
+    throw blocked("Complete or expire your existing Health+ checkout before starting another.", "pending_health_checkout");
+  }
+  await db.runTransaction(async (tx) => {
+    const current = (await tx.get(ref)).data() || {};
+    if (current.pendingCheckoutBookingId === pendingId && (!current.stripeSubscriptionId || current.status === "canceled")) {
+      tx.set(ref, {pendingCheckoutBookingId: null}, {merge: true});
+    }
+  });
+}
 async function reserve({db, paymentRef, candidate, booking}) {
   return db.runTransaction(async (tx) => {
-    const [snap, bookingSnap] = await tx.getAll(paymentRef, db.doc(`prescriptionPickups/${paymentRef.id}`));
+    const membershipRef = db.doc(`healthPlusMemberships/${booking.senderId || booking.userId}`);
+    const [snap, bookingSnap, membershipSnap] = await tx.getAll(paymentRef, db.doc(`prescriptionPickups/${paymentRef.id}`), membershipRef);
     assertCurrentBooking(bookingSnap, booking);
     const current = snap.data() || {};
     if (["paid", "succeeded", "checkout_completed"].includes(current.status)) {
@@ -74,6 +96,15 @@ async function reserve({db, paymentRef, candidate, booking}) {
         "This Health+ booking has already been paid.",
         "already_paid",
       );
+    }
+    const recurring = current.checkoutAuthority ? current.checkoutAuthority.recurring : candidate.recurring;
+    if (recurring) {
+      const membership = membershipSnap.data() || {};
+      if ((membership.stripeSubscriptionId && membership.status !== "canceled") ||
+          (membership.pendingCheckoutBookingId && membership.pendingCheckoutBookingId !== paymentRef.id)) {
+        throw blocked("Manage your existing Health+ subscription or pending checkout before starting another.", "existing_health_subscription");
+      }
+      tx.set(membershipRef, {senderId: booking.senderId || booking.userId, pendingCheckoutBookingId: paymentRef.id}, {merge: true});
     }
     if (current.checkoutAuthority) {
       if (current.checkoutAuthority.bookingBinding !== bookingBinding(booking)) {
@@ -138,4 +169,4 @@ async function create({db, stripe, paymentRef, params, record, booking}) {
   });
   return session;
 }
-module.exports = {VERSION, bookingBinding, assertCurrentBooking, legacyGate, reserve, create};
+module.exports = {resolvePendingSubscriptionCheckout, VERSION, bookingBinding, assertCurrentBooking, legacyGate, reserve, create};

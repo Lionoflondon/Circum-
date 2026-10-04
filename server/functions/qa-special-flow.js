@@ -19,7 +19,7 @@ const senderBooking = require("./sender-booking")._qa;
 const cancellationPolicy = require("./delivery-policy-core");
 const ROOT = "qaSpecialFlowFixtures";
 const QA_STRIPE_SECRET = defineSecret("CIRCUM_QA_STRIPE_SECRET_KEY");
-const COLLECTIONS = ["healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
+const COLLECTIONS = ["healthPlusMemberships", "healthPlusMembershipEvents", "healthPlusProfiles", "prescriptionPickups", "healthPlusPayments", "healthPlusBookingIdempotency", "healthPlusUsageEvents", "healthPlusNotifications", "notifications", "businessAccounts", "businessInvoices", "businessCheckoutReservations", "businessInvoicePayments", "business_wallets", "adminAuditLogs", "wallets", "senderWallets", "walletTransactions", "giftPaymentDrafts", "giftCheckoutOrigins", "giftCheckoutReservations", "giftRequests", "giftPaymentEvents", "giftRecurringSeries", "giftRecurringRenewals", "paymentArtifactReconciliations", "deliveryRequests", "irisPhotoAnalyses"];
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
 };
@@ -626,7 +626,7 @@ function factory({db, env = process.env, stripe}) {
     }
     const uid = authorize(context, lists);
     const lifecycleActions = new Set(["book", "pay", "read", "accept", "seed_legacy_status", "publish_location", "start_heading_to_pickup", "arrived_at_pickup", "verify_collection_pin", "confirm_collected", "start_delivery", "near_dropoff", "arrived_at_dropoff", "verify_receiver_pin", "capture_tip", "send_message", "cancel"]);
-    if (!data || !["prepare", "health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action) && !activityActions.has(data.action) && !certificationActions.has(data.action)) fail("Unknown QA action.");
+    if (!data || !["prepare", "health", "health_finalize", "health_membership_certify", "business", "business_finalize", "public_delivery", "roth", "iris", "cleanup"].includes(data.action) && !lifecycleActions.has(data.action) && !senderActions.has(data.action) && !activityActions.has(data.action) && !certificationActions.has(data.action)) fail("Unknown QA action.");
     if (data.action === "sender_capability") {
       if (!lists.senders.includes(uid)) return {enabled: false};
       const active = await activeSenderFixture(uid);
@@ -640,7 +640,7 @@ function factory({db, env = process.env, stripe}) {
     }
     // Fixed participant-scoped identity prevents an operator from accumulating live fixtures.
     if (["prepare", "cleanup"].includes(data.action) && !lists.operators.includes(uid)) fail("QA operator required.", "permission-denied");
-    if (["health", "health_finalize", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions, ...activityActions, ...certificationActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
+    if (["health", "health_finalize", "health_membership_certify", "business", "business_finalize", "public_delivery", "roth", "iris", ...senderActions, ...activityActions, ...certificationActions].includes(data.action) && !lists.senders.includes(uid)) fail("QA Sender required.", "permission-denied");
     const id = data.action === "prepare" ?
       fixtureIdForRequest(uid, data.requestId) : requiredFixtureId(data.fixtureId);
     const ref = db.collection(ROOT).doc(id);
@@ -782,6 +782,9 @@ function factory({db, env = process.env, stripe}) {
         const safePhoto = {...result.photo};
         delete safePhoto.imageHash; delete safePhoto.descriptionHash;
         return {scenario: result.scenario, iris: result.iris, photo: safePhoto, idempotent};
+      }
+      if (data.action === "health_membership_certify") {
+        return require("./qa-health-membership-certification").certify({db: qa, senderId: fixture.senderId});
       }
       if (data.action === "health_finalize") {
         const payments = await qa.collection("healthPlusPayments").limit(2).get();

@@ -89,7 +89,7 @@ service cloud.firestore {
           resource.data.teamMemberIds is list &&
           (
             request.auth.uid in resource.data.teamMemberIds ||
-            authEmail() in resource.data.teamMemberIds
+            (request.auth.token.get("email_verified", false) == true && authEmail() in resource.data.teamMemberIds)
           )
         )
       );
@@ -107,7 +107,7 @@ service cloud.firestore {
             get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds is list &&
             (
               request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
-              authEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+              (request.auth.token.get("email_verified", false) == true && authEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds)
             )
           )
         );

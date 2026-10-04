@@ -84,8 +84,8 @@ function healthPlusPlanContract(plan) {
 function buildHealthPlusPlanFields(plan, current = {}) {
   const contract = healthPlusPlanContract(plan);
   const used = Math.max(0, Number(
-      current.usedDeliveriesThisCycle ||
-      current.usedPickupsThisCycle ||
+      current.usedDeliveriesThisCycle ??
+      current.usedPickupsThisCycle ??
       0,
   ));
   const remaining = contract.includedDeliveries == null ?

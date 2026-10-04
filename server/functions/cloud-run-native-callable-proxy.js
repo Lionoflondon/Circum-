@@ -46,6 +46,30 @@ const OPERATIONS = Object.freeze({
   previewSenderCancellation: {owner: "circum-sender-cancellation-requests", appCheck: true, sdkEnforced: true},
   getSenderWalletTransactions: {owner: "circum-account-bootstrap", appCheck: true, sdkAuthFailure: true},
   completeSenderWalletOnboarding: {owner: "circum-account-bootstrap", appCheck: true, sdkAuthFailure: true},
+  adminCreateBusinessInvoice: {owner: "circum-business-invoice-payments", appCheck: true, sdkEnforced: true},
+  listBusinessRothTransactions: {owner: "circum-business-invoice-payments", appCheck: true, sdkEnforced: true},
+  adminUpdateBusinessAccountStatus: {owner: "circum-business-invoice-payments", appCheck: true, sdkEnforced: true},
+  adminUpdateBusinessOperation: {owner: "circum-business-invoice-payments", appCheck: true, sdkEnforced: true},
+  adminUpdateHealthPlusPickup: {owner: "circum-health-plus-payments", appCheck: true, sdkEnforced: true},
+  adminUpdateHealthPlusProfile: {owner: "circum-health-plus-payments", appCheck: true, sdkEnforced: true},
+  adminUpdateHealthPlusSchedule: {owner: "circum-health-plus-payments", appCheck: true, sdkEnforced: true},
+  updateHealthPlusPickupStatus: {owner: "circum-health-plus-payments", appCheck: false, http: true},
+  ensureBusinessCompanyCode: {owner: "circum-business-invoice-payments", appCheck: false},
+  lookupBusinessByCompanyCode: {owner: "circum-business-invoice-payments", appCheck: false},
+  requestBusinessAccess: {owner: "circum-business-invoice-payments", appCheck: false},
+  reviewBusinessAccessRequest: {owner: "circum-business-invoice-payments", appCheck: false},
+  updateBusinessProfile: {owner: "circum-business-invoice-payments", appCheck: false},
+  inviteBusinessMember: {owner: "circum-business-invoice-payments", appCheck: false},
+  updateBusinessMemberRole: {owner: "circum-business-invoice-payments", appCheck: false},
+  updateBusinessMemberStatus: {owner: "circum-business-invoice-payments", appCheck: false},
+  removeBusinessMember: {owner: "circum-business-invoice-payments", appCheck: false},
+  recordBusinessIrisMoment: {owner: "circum-business-invoice-payments", appCheck: false},
+  createHealthPlusBooking: {owner: "circum-health-plus-payments", appCheck: false},
+  updateSenderHealthPlusBooking: {owner: "circum-health-plus-payments", appCheck: false},
+  adminUpdateBusinessMember: {owner: "circum-business-invoice-payments", appCheck: true, sdkEnforced: true},
+  createBusinessInvoiceCheckout: {owner: "circum-business-invoice-payments", appCheck: false},
+  cancelBusinessInvoiceCheckout: {owner: "circum-business-invoice-payments", appCheck: false},
+  createBusinessRothCheckout: {owner: "circum-business-roth-checkout", appCheck: true, sdkEnforced: true, path: ""},
   createBusinessAccount: {owner: "circum-business-invoice-payments", appCheck: false},
   getSenderAccountActivity: {owner: "circum-account-bootstrap", appCheck: false},
   exportSenderData: {owner: "circum-account-bootstrap", appCheck: false},
@@ -57,7 +81,7 @@ const OPERATIONS = Object.freeze({
 function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchImpl = fetch} = {}) {
   const policy = OPERATIONS[operation];
   if (!policy) throw new Error("Unsupported callable operation.");
-  const endpoint = `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path || operation}`;
+  const endpoint = `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path !== undefined ? policy.path : operation}`;
   const maxBody = policy.maxBody || (["createBusinessGiftOrder", "createGiftPayment", "finalizeGiftPayment"].includes(operation) ? 1024 * 1024 : operation === "createSenderBookingQuote" ? 64 * 1024 : operation === "goOnline" ? 32 * 1024 : 16 * 1024);
   const cors = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*", "access-control-allow-headers": "Authorization, Content-Type, X-Firebase-AppCheck", "access-control-allow-methods": operation === "giftStoryLanding" ? "GET, HEAD, POST, OPTIONS" : "POST, OPTIONS"};
   function send(res, status, payload) {
@@ -71,7 +95,7 @@ function createServer({operation = process.env.CIRCUM_CALLABLE_OPERATION, fetchI
     const path = new URL(req.url, "http://localhost").pathname;
     if (req.method === "GET" && path === "/health") return send(res, 200, {status: "ok", operation, owner: policy.owner, source: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (!policy.http && !["/", `/${operation}`, `/v1/callable/${operation}`].includes(path)) return error(res, 404, "NOT_FOUND", "Not found.");
-    if (policy.http && operation === "recordGiftStoryGuestEvent" && !["/", `/${operation}`].includes(path)) return error(res, 404, "NOT_FOUND", "Not found.");
+    if (policy.http && operation !== "giftStoryLanding" && !["/", `/${operation}`].includes(path)) return error(res, 404, "NOT_FOUND", "Not found.");
     const landingSuffix = path.replace(new RegExp(`^/${operation}(?=/|$)`), "");
     if (policy.http && operation === "giftStoryLanding" && !/^\/(?:[A-Za-z0-9_.-]{1,512})?$/.test(landingSuffix || "/")) return error(res, 400, "INVALID_ARGUMENT", "Invalid story path.");
     if (req.method === "OPTIONS") return send(res, 204, "");

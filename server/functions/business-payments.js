@@ -121,7 +121,10 @@ function normaliseLineItems(items, fallbackDescription, total) {
 
 function isMember(account, context) {
   const uid = context.auth && context.auth.uid;
-  const email = `${context.auth && context.auth.token && context.auth.token.email || ""}`.toLowerCase();
+  const email = context.auth && context.auth.token && context.auth.token.email_verified === true ? text(context.auth.token.email).toLowerCase() : "";
+  const member = (Array.isArray(account.teamMembers) ? account.teamMembers : []).find((item) =>
+    item.userId === uid || (email && text(item.email).toLowerCase() === email));
+  if (member && ["removed", "rejected", "inactive", "suspended"].includes(text(member.status).toLowerCase())) return false;
   const members = Array.isArray(account.teamMemberIds) ? account.teamMemberIds.map((item) => `${item}`.toLowerCase()) : [];
   return account.ownerUid === uid || account.createdByUserId === uid || members.includes(`${uid}`.toLowerCase()) || (email && members.includes(email));
 }
@@ -244,7 +247,8 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
       throw new functions.https.HttpsError("permission-denied", "Invoice Business ownership does not match the payment.");
     }
     if (`${invoice.status || ""}` === "paid" || `${invoice.status || ""}` === "paid_manually") return;
-    const total = money(invoice.total || invoice.subtotal || invoice.balanceDue || amount + rothAmount);
+    const total = money(invoice.total ?? invoice.subtotal ?? invoice.balanceDue ?? (amount + rothAmount));
+    if (total <= 0) throw new functions.https.HttpsError("failed-precondition", "Business invoice has no payable total.");
     const previousPaid = money(invoice.amountPaid);
     const paymentTotal = money(amount + rothAmount);
     const nextPaid = money(Math.min(total, previousPaid + paymentTotal));
@@ -364,8 +368,9 @@ async function payBusinessInvoiceAtomically({
     if (invoice.activeCheckoutReservationId) throw new functions.https.HttpsError("failed-precondition", "An active invoice checkout must settle through its reservation.");
     const normalizedCardAmount = money(cardAmount);
     const normalizedRothAmount = money(rothAmount);
-    const total = money(invoice.total || invoice.subtotal || invoice.balanceDue ||
-      normalizedCardAmount + normalizedRothAmount);
+    const total = money(invoice.total ?? invoice.subtotal ?? invoice.balanceDue ??
+      (normalizedCardAmount + normalizedRothAmount));
+    if (total <= 0) throw new functions.https.HttpsError("failed-precondition", "Business invoice has no payable total.");
     const previousPaid = money(invoice.amountPaid);
     const paymentTotal = money(normalizedCardAmount + normalizedRothAmount);
     const nextPaid = money(Math.min(total, previousPaid + paymentTotal));
@@ -381,7 +386,7 @@ async function payBusinessInvoiceAtomically({
         );
       }
       const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
-      previousWalletBalance = money(wallet.balance || wallet.availableBalance);
+      previousWalletBalance = money(wallet.balance ?? wallet.availableBalance);
       resultingWalletBalance = money(previousWalletBalance - normalizedRothAmount);
       if (resultingWalletBalance < money(wallet.reservedBalance || 0)) {
         throw new functions.https.HttpsError("failed-precondition", "Business Roth balance is too low.");
@@ -473,7 +478,7 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   const data = payload || {};
   const db = getFirestore();
   const businessId = text(data.businessId, 120);
-  const total = money(data.total || data.amount || data.balanceDue);
+  const total = money(data.total ?? data.amount ?? data.balanceDue);
   const reason = text(data.reason, 500);
   if (!businessId || total <= 0) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a Business account and invoice amount.");

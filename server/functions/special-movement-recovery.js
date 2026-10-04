@@ -21,8 +21,12 @@ async function projectHealth({db, event}) {
    // A projection never owns an accepted assignment or a terminal delivery.
    // Source/payment reads participate in the same transaction as the target.
    const custody = target.exists && (active(previous) || terminal(previous) || riderId(previous));
-   if (custody) reason = "canonical_delivery_preserved";
-   else if (target.exists && (previous.sourceModule !== "health_plus" || previous.healthPlusPickupId !== event.deliveryId)) reason = "target_identity_conflict";
+   if (custody) {
+    reason = "canonical_delivery_preserved";
+    if (previous.sourceModule === "health_plus" && previous.healthPlusPickupId === event.deliveryId && !previous.healthOrderId) {
+     tx.set(delivery, {healthOrderId: event.deliveryId}, {merge: true}); changed = 1;
+    }
+   } else if (target.exists && (previous.sourceModule !== "health_plus" || previous.healthPlusPickupId !== event.deliveryId)) reason = "target_identity_conflict";
    else {
     const movement = Object.fromEntries(Object.entries(healthMovement(event.deliveryId, current, money)).filter(([, v]) => v !== undefined));
     const paid = normalized(money.paymentStatus || money.status || current.paymentStatus) === "paid" && !["refunded", "partially_refunded", "cancelled", "canceled", "failed"].includes(normalized(money.refundStatus || current.refundStatus));

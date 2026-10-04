@@ -5,10 +5,34 @@ const http = require("node:http");
 const MAX_BODY_BYTES = 1024 * 1024;
 const FAMILY_ROUTES = Object.freeze({
   health_plus: [
+    "adminUpdateHealthPlusPickup",
+    "adminUpdateHealthPlusProfile",
+    "adminUpdateHealthPlusSchedule",
+    "updateHealthPlusPickupStatus",
+
+    "createHealthPlusBooking",
+    "updateSenderHealthPlusBooking",
+
     "createHealthPlusBillingPortalSession",
     "createHealthPlusCheckoutSession",
   ],
   business_invoices: [
+    "adminCreateBusinessInvoice",
+    "listBusinessRothTransactions",
+    "adminUpdateBusinessAccountStatus",
+    "adminUpdateBusinessOperation",
+
+    "ensureBusinessCompanyCode",
+    "lookupBusinessByCompanyCode",
+    "requestBusinessAccess",
+    "reviewBusinessAccessRequest",
+    "updateBusinessProfile",
+    "inviteBusinessMember",
+    "updateBusinessMemberRole",
+    "updateBusinessMemberStatus",
+    "removeBusinessMember",
+    "recordBusinessIrisMoment",
+    "adminUpdateBusinessMember",
     "createBusinessAccount",
     "createBusinessInvoiceCheckout",
     "cancelBusinessInvoiceCheckout",

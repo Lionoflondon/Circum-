@@ -33,6 +33,9 @@ test("Health+ movement remains held until collection details are ready", () => {
   assert.equal(ready.healthDispatchReady, true);
   assert.equal(ready.requiresVanguard, true);
   assert.equal(ready.trustPoints, 6);
+  const zero = movement.healthMovement("zero", {price: 99, riderEarning: 0, riderPay: 19}, {amount: 0});
+  assert.equal(zero.price, 0);
+  assert.equal(zero.riderEarning, 0);
 });
 
 test("movement delivery ids are deterministic", () => {
@@ -108,6 +111,8 @@ test("Health+ projection preserves classification route and payout", () => {
     specialInstructions: "Temperature controlled",
   });
   assert.equal(projected.isHealthPlus, true);
+  const completion = require("./delivery-completed-event").buildDeliveryCompletedEvent({deliveryId: projected.deliveryId, delivery: {...projected, senderId: "sender", createdAt: new Date()}});
+  assert.equal(completion.healthOrderId, "h2");
   assert.equal(projected.riderEarning, 13);
   assert.equal(projected.riderPayout, 13);
   assert.equal(projected.driverPayout, 13);

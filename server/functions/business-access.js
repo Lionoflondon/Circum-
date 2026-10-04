@@ -48,7 +48,9 @@ function memberRole(account = {}, uid, email) {
         (member.userId === uid ||
         (email && `${member.email || ""}`.toLowerCase() === email)) &&
         member.status !== "removed" &&
-        member.status !== "rejected",
+        member.status !== "rejected" &&
+        member.status !== "suspended" &&
+        member.status !== "inactive",
   );
   if (match) return clean(match.role || "member");
   if (account.createdByUserId === uid || account.ownerUid === uid) {
@@ -59,7 +61,8 @@ function memberRole(account = {}, uid, email) {
 
 async function requireBusinessAdmin(db, businessId, context) {
   const uid = requireAuth(context);
-  const email = cleanEmail(context.auth.token.email);
+  if (!clean(businessId)) throw new functions.https.HttpsError("invalid-argument", "Business workspace is required.");
+  const email = context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "";
   const ref = db.collection("businessAccounts").doc(businessId);
   const snap = await ref.get();
   if (!snap.exists) {
@@ -315,7 +318,7 @@ exports.ensureBusinessCompanyCode = functions
           businessId,
           context,
       );
-      const role = memberRole(account, uid, cleanEmail(context.auth.token.email));
+      const role = memberRole(account, uid, context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "");
       if (!new Set(["owner", "admin"]).has(role)) {
         throw new functions.https.HttpsError(
             "permission-denied",
@@ -450,6 +453,7 @@ exports.requestBusinessAccess = functions
       const uid = requireAuth(context);
       const db = getFirestore();
       const businessId = clean(data.businessId);
+      if (!businessId) throw new functions.https.HttpsError("invalid-argument", "Business workspace is required.");
       const role = BUSINESS_ROLES.has(clean(data.role || "member")) ?
       clean(data.role || "member") :
       "member";
@@ -471,6 +475,9 @@ exports.requestBusinessAccess = functions
         return {status: "already_member", businessId};
       }
       const joinPolicy = business.joinPolicy || "approval_required";
+      if (joinPolicy === "immediate" && role !== "member") {
+        throw new functions.https.HttpsError("permission-denied", "Privileged roles require a Business administrator invitation or approval.");
+      }
       if (joinPolicy === "immediate") {
         const member = {
           userId: uid,
@@ -553,6 +560,7 @@ exports.reviewBusinessAccessRequest = functions
       const uid = requireAuth(context);
       const db = getFirestore();
       const requestId = clean(data.requestId);
+      if (!requestId) throw new functions.https.HttpsError("invalid-argument", "Access request is required.");
       const approved = data.approved === true;
       const requestRef = db.collection("businessJoinRequests").doc(requestId);
       const requestSnap = await requestRef.get();
@@ -574,8 +582,8 @@ exports.reviewBusinessAccessRequest = functions
         );
       }
       const business = businessSnap.data();
-      const managers = business.managerIds || [];
-      if (business.createdByUserId !== uid && !managers.includes(uid)) {
+      const reviewerRole = memberRole(business, uid, context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "");
+      if (!["owner", "admin"].includes(reviewerRole)) {
         throw new functions.https.HttpsError(
             "permission-denied",
             "Only Business owners or admins can review access requests.",
@@ -770,14 +778,14 @@ exports.inviteBusinessMember = functions
         invitedByUserId: uid,
       };
       const members = [...active, invited];
-      const ids = members.flatMap((member) =>
+      const ids = members.filter((member) => !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status))).flatMap((member) =>
         [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
       );
       const managers = members
           .filter(
               (member) =>
                 BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          clean(member.status) !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status)),
           )
           .flatMap((member) =>
             [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
@@ -832,11 +840,18 @@ exports.updateBusinessMemberStatus = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref} = await requireBusinessAdmin(
           db,
           businessId,
           context,
       );
+      return db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(ref);
+      const account = currentSnap.data() || {};
+      const email = context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "";
+      if (!currentSnap.exists || !BUSINESS_ADMIN_ROLES.has(memberRole(account, uid, email))) {
+        throw new functions.https.HttpsError("permission-denied", "Business administration access changed.");
+      }
       const members = Array.isArray(account.teamMembers) ?
       account.teamMembers :
       [];
@@ -864,20 +879,28 @@ exports.updateBusinessMemberStatus = functions
         updatedByUserId: uid,
       };
       const activeIds = members
-          .filter((item) => clean(item.status) !== "removed")
+          .filter((item) => !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
           .flatMap((item) =>
             [clean(item.userId), cleanEmail(item.email)].filter(Boolean),
           );
-      await ref.set(
+      transaction.set(ref,
           {
             teamMembers: members,
             teamMemberIds: [...new Set(activeIds)],
+            managerIds: members.filter((item) => BUSINESS_ADMIN_ROLES.has(clean(item.role)) &&
+              !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
+                .flatMap((item) => [clean(item.userId), cleanEmail(item.email)].filter(Boolean)),
             updatedAt: FieldValue.serverTimestamp(),
             updatedByUserId: uid,
           },
           {merge: true},
       );
-      await db.collection("businessAuditLogs").add({
+      const membershipUserId = clean(members[index].userId) || memberUserId;
+      transaction.set(db.collection("businessMemberships").doc(`${businessId}_${membershipUserId}`), {
+        businessId, userId: membershipUserId, status: nextStatus,
+        updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid,
+      }, {merge: true});
+      transaction.create(db.collection("businessAuditLogs").doc(), {
         businessId,
         actorUserId: uid,
         targetUserId: memberUserId,
@@ -886,6 +909,7 @@ exports.updateBusinessMemberStatus = functions
         createdAt: FieldValue.serverTimestamp(),
       });
       return {status: nextStatus, businessId, memberUserId};
+      });
     });
 
 exports.recordBusinessIrisMoment = functions
@@ -966,7 +990,7 @@ exports.updateBusinessMemberRole = functions
           .filter(
               (member) =>
                 BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          member.status !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status)),
           )
           .flatMap((member) =>
             [member.userId, cleanEmail(member.email)].filter(Boolean),
@@ -1042,13 +1066,13 @@ exports.removeBusinessMember = functions
         item,
       );
       const activeIds = remaining
-          .filter((item) => item.status !== "removed" && item.status !== "rejected")
+          .filter((item) => !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
           .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
       const managerIds = remaining
           .filter(
               (item) =>
                 BUSINESS_ADMIN_ROLES.has(clean(item.role)) &&
-          item.status !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)),
           )
           .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
       await ref.set(

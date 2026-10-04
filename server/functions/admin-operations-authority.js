@@ -817,6 +817,7 @@ exports.adminUpdateBusinessOperation = adminCallable(async (data, context) => {
 exports.adminUpdateBusinessMember = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
+  const reason = requireReason(data);
   const businessId = clean(data.businessId);
   const index = Number(data.memberIndex);
   if (!businessId || !Number.isInteger(index) || index < 0) {
@@ -833,13 +834,20 @@ exports.adminUpdateBusinessMember = adminCallable(async (data, context) => {
     const members = Array.isArray(account.teamMembers) ? account.teamMembers.map((member) => ({...member})) : [];
     if (index >= members.length) throw new functions.https.HttpsError("not-found", "Business member was not found.");
     beforeMember = {...members[index]};
+    if (beforeMember.role === "owner" || beforeMember.userId === account.ownerUid || beforeMember.userId === account.createdByUserId) {
+      throw new functions.https.HttpsError("failed-precondition", "The Business owner cannot be changed here.");
+    }
+    const role = clean(data.role || beforeMember.role || "member");
+    if (data.remove !== true && !["admin", "manager", "dispatcher", "finance", "viewer", "member"].includes(role)) {
+      throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business member role.");
+    }
     if (data.remove === true) {
       afterMember = {memberRemoved: true, member: beforeMember.email || beforeMember.userId || null};
       members.splice(index, 1);
     } else {
       members[index] = {
         ...members[index],
-        role: clean(data.role || members[index].role || "member"),
+        role,
         updatedAt: Timestamp.now(),
         updatedByAdmin: actor.label,
       };
@@ -847,34 +855,48 @@ exports.adminUpdateBusinessMember = adminCallable(async (data, context) => {
     }
     tx.set(ref, {
       teamMembers: members,
+      teamMemberIds: members.filter((member) => !["removed", "rejected", "suspended", "inactive"].includes(lower(member.status)))
+          .flatMap((member) => [clean(member.userId), lower(member.email)].filter(Boolean)),
+      managerIds: members.filter((member) => ["owner", "admin", "manager"].includes(lower(member.role)) &&
+          !["removed", "rejected", "suspended", "inactive"].includes(lower(member.status)))
+          .flatMap((member) => [clean(member.userId), lower(member.email)].filter(Boolean)),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: actor.uid,
       updatedByEmail: actor.email || null,
     }, {merge: true});
+    if (beforeMember.userId) {
+tx.set(db.collection("businessMemberships").doc(`${businessId}_${beforeMember.userId}`), {
+      businessId, userId: beforeMember.userId,
+      ...(data.remove === true ? {status: "removed"} : {role}),
+      updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.uid,
+    }, {merge: true});
+}
   });
   await writeAudit(db, actor, {
     actionType: data.remove === true ? "business_member_removed" : "business_member_role_updated",
     recordType: "businessAccounts",
     recordId: businessId,
-    reason: requireReason(data),
+    reason,
   }, beforeMember, afterMember);
   return {ok: true};
 });
 
 exports.adminUpdateHealthPlusPickup = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.pickupId);
   const status = lower(data.status);
   const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ pickup and status are required.");
   const db = getFirestore();
   const ref = db.collection("prescriptionPickups").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = healthStatusPatch(status, actor, reason);
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusUsageEvents").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusUsageEvents").doc(), {
     type: "admin_status_updated",
     pickupId: id,
     status,
@@ -882,25 +904,28 @@ exports.adminUpdateHealthPlusPickup = adminCallable(async (data, context) => {
     adminUserId: actor.uid,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: "health_plus_status_update",
     recordType: "prescriptionPickups",
     recordId: id,
     reason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.scheduleId);
   const status = lower(data.status);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ schedule and status are required.");
   const db = getFirestore();
   const ref = db.collection("recurringPickupSchedules").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = {
     status,
     adminReviewStatus: status,
@@ -908,8 +933,8 @@ exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
     adminUpdatedBy: actor.label,
     adminReason: requireReason(data),
   };
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusCustodyArchive").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusCustodyArchive").doc(), {
     scheduleId: id,
     profileId: before.profileId || null,
     userId: before.userId || before.senderId || null,
@@ -923,25 +948,28 @@ exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
     statusAfterEvent: status,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: `health_plus_schedule_${status}`,
     recordType: "recurringPickupSchedules",
     recordId: id,
     reason: patch.adminReason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.profileId);
   const status = lower(data.status);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ profile and status are required.");
   const db = getFirestore();
   const ref = db.collection("healthPlusProfiles").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = {
     status,
     adminReviewStatus: status,
@@ -949,8 +977,8 @@ exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
     adminUpdatedBy: actor.label,
     adminReason: requireReason(data),
   };
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusCustodyArchive").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusCustodyArchive").doc(), {
     profileId: id,
     userId: before.userId || before.senderId || null,
     eventType: `profile_${status}`,
@@ -962,13 +990,14 @@ exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
     statusAfterEvent: status,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: `health_plus_profile_${status}`,
     recordType: "healthPlusProfiles",
     recordId: id,
     reason: patch.adminReason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateFinanceWorkflow = adminCallable(async (data, context) => {

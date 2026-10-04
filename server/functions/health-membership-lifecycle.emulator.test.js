@@ -11,7 +11,7 @@ after(async () => deleteApp(app));
 const event = (type, id, object) => ({type, id, data: {object}});
 
 test("Health+ membership starts and invoice renewals are exactly once", async () => {
-  const session = {id: "cs_health_member", mode: "subscription", subscription: "sub_health", customer: "cus_health", metadata: {userId: "sender-health", profileId: "profile-health"}};
+  const session = {id: "cs_health_member", mode: "subscription", subscription: "sub_health", customer: "cus_health", metadata: {type: "health_plus_payment", userId: "sender-health", profileId: "profile-health"}};
   const started = await lifecycle.handleHealthMembershipCheckoutSession({db, session, event: event("checkout.session.completed", "evt_checkout", session)});
   assert.equal(started.handled, true);
   assert.equal((await db.doc("healthPlusMemberships/sender-health").get()).data().status, "unpaid");

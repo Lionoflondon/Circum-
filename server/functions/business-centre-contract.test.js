@@ -56,7 +56,12 @@ test("Business backend exports the canonical workspace, team, and payment callab
     "listBusinessRothTransactions",
   ]) {
     assert.match(businessPaymentsSource, new RegExp(`exports\\.${name}\\s*=`));
-    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*businessPayments\\.${name}`));
+    const owner = name === "adminCreateBusinessInvoice" || name === "listBusinessRothTransactions" ? "circum-business-invoice-payments" :
+      name === "createBusinessRothCheckout" ? "circum-business-roth-checkout" :
+      name === "createBusinessInvoiceCheckout" ? "circum-business-invoice-payments" : null;
+    const paymentFactory = ["createBusinessRothCheckout", "createBusinessInvoiceCheckout"].includes(name) ? "\\(stripe\\)" : "";
+    const exportedHandler = owner ? `cloudRunOnly\\(businessPayments\\.${name}${paymentFactory}, "${owner}"` : `businessPayments\\.${name}`;
+    assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=\\s*${exportedHandler}`));
   }
 });
 
@@ -72,7 +77,7 @@ test("Admin can create audited Business invoices through backend authority", () 
   assert.match(businessPaymentsSource, /business_invoice_created/);
   assert.match(businessPaymentsSource, /collection\("businessAuditLogs"\)\.doc\(\)/);
   assert.match(businessPaymentsSource, /collection\("adminAuditLogs"\)\.doc\(\)/);
-  assert.match(indexSource, /exports\.adminCreateBusinessInvoice\s*=\s*businessPayments\.adminCreateBusinessInvoice/);
+  assert.match(indexSource, /exports\.adminCreateBusinessInvoice\s*=\s*cloudRunOnly\(businessPayments\.adminCreateBusinessInvoice, "circum-business-invoice-payments", true\)/);
 });
 
 test("Business administration is role-gated and audited", () => {
