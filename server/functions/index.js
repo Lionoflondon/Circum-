@@ -124,7 +124,7 @@ exports.createHealthPlusBillingPortalSession =
   healthPlus.createHealthPlusBillingPortalSession;
 exports.createHealthPlusBooking = cloudRunOnly(healthPlus.createHealthPlusBooking, "circum-health-plus-payments");
 exports.updateSenderHealthPlusBooking = cloudRunOnly(healthPlus.updateSenderHealthPlusBooking, "circum-health-plus-payments");
-exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
+exports.updateHealthPlusPickupStatus = cloudRunHttpOnly(healthPlus.updateHealthPlusPickupStatus, "circum-health-plus-payments");
 exports.analyseIris = iris.analyseIris;
 exports.analyseParcelPhotoForIris = cloudRunOnly(irisPhotoAnalysis.analyseParcelPhotoForIris, "circum-iris");
 exports.adjudicateIris = iris.adjudicateIris;
@@ -242,10 +242,8 @@ exports.deleteIrisReferenceImage =
   adminIrisReferenceImages.deleteIrisReferenceImage;
 exports.closeCircumAccount = cloudRunOnly(accountClosure.closeAccount, "circum-account-bootstrap");
 exports.createBusinessRothCheckout = cloudRunOnly(businessPayments.createBusinessRothCheckout(stripe), "circum-business-roth-checkout", true);
-exports.listBusinessRothTransactions =
-  businessPayments.listBusinessRothTransactions;
-exports.adminCreateBusinessInvoice =
-  businessPayments.adminCreateBusinessInvoice;
+exports.listBusinessRothTransactions = cloudRunOnly(businessPayments.listBusinessRothTransactions, "circum-business-invoice-payments", true);
+exports.adminCreateBusinessInvoice = cloudRunOnly(businessPayments.adminCreateBusinessInvoice, "circum-business-invoice-payments", true);
 exports.createBusinessInvoiceCheckout = cloudRunOnly(businessPayments.createBusinessInvoiceCheckout(stripe), "circum-business-invoice-payments");
 exports.createBusinessGiftOrder = cloudRunOnly(businessGifts.createBusinessGiftOrder(stripe), "circum-business-invoice-payments", true);
 exports.cancelBusinessInvoiceCheckout = cloudRunOnly(businessPayments.cancelBusinessInvoiceCheckout(stripe), "circum-business-invoice-payments");
@@ -290,17 +288,12 @@ exports.adminArchiveDelivery = adminOperationsAuthority.adminArchiveDelivery;
 exports.adminUpdateIrisReview = adminOperationsAuthority.adminUpdateIrisReview;
 exports.adminUpdateSenderAccountStatus =
   adminOperationsAuthority.adminUpdateSenderAccountStatus;
-exports.adminUpdateBusinessAccountStatus =
-  adminOperationsAuthority.adminUpdateBusinessAccountStatus;
-exports.adminUpdateBusinessOperation =
-  adminOperationsAuthority.adminUpdateBusinessOperation;
+exports.adminUpdateBusinessAccountStatus = cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessAccountStatus, "circum-business-invoice-payments", true);
+exports.adminUpdateBusinessOperation = cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessOperation, "circum-business-invoice-payments", true);
 exports.adminUpdateBusinessMember = cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessMember, "circum-business-invoice-payments", true);
-exports.adminUpdateHealthPlusPickup =
-  adminOperationsAuthority.adminUpdateHealthPlusPickup;
-exports.adminUpdateHealthPlusSchedule =
-  adminOperationsAuthority.adminUpdateHealthPlusSchedule;
-exports.adminUpdateHealthPlusProfile =
-  adminOperationsAuthority.adminUpdateHealthPlusProfile;
+exports.adminUpdateHealthPlusPickup = cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusPickup, "circum-health-plus-payments", true);
+exports.adminUpdateHealthPlusSchedule = cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusSchedule, "circum-health-plus-payments", true);
+exports.adminUpdateHealthPlusProfile = cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusProfile, "circum-health-plus-payments", true);
 exports.adminUpdateFinanceWorkflow =
   adminOperationsAuthority.adminUpdateFinanceWorkflow;
 exports.adminRequestAccountMergeReview =
