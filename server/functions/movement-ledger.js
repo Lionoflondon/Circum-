@@ -152,6 +152,7 @@ function healthMovement(pickupId, data, payment = {}) {
     sourceModule: "health_plus",
     healthPlusOrderId: pickupId,
     healthPlusPickupId: pickupId,
+    healthOrderId: pickupId,
     profileId: data.profileId || payment.profileId || null,
     status: healthDeliveryStatus(data),
     matchingStatus: ready ? "available" : "held",

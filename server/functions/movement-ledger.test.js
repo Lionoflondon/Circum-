@@ -111,6 +111,8 @@ test("Health+ projection preserves classification route and payout", () => {
     specialInstructions: "Temperature controlled",
   });
   assert.equal(projected.isHealthPlus, true);
+  const completion = require("./delivery-completed-event").buildDeliveryCompletedEvent({deliveryId: projected.deliveryId, delivery: {...projected, senderId: "sender", createdAt: new Date()}});
+  assert.equal(completion.healthOrderId, "h2");
   assert.equal(projected.riderEarning, 13);
   assert.equal(projected.riderPayout, 13);
   assert.equal(projected.driverPayout, 13);
