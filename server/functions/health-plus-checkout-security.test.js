@@ -102,8 +102,8 @@ test("Health+ booking and Sender actions are backend-authoritative callables", (
 });
 
 test("Sender Health+ UI does not write authoritative Health+ records directly", () => {
-  assert.match(senderHealthSource, /httpsCallable\('createHealthPlusBooking'\)/);
-  assert.match(senderHealthSource, /httpsCallable\('updateSenderHealthPlusBooking'\)/);
+  assert.match(senderHealthSource, /businessHealthCallable\('createHealthPlusBooking'\)/);
+  assert.match(senderHealthSource, /businessHealthCallable\('updateSenderHealthPlusBooking'\)/);
   assert.match(senderHealthSource, /httpsCallable\('getSenderRothBalance'\)/);
   assert.match(senderHealthSource, /'useRoth': _useRoth/);
   assert.doesNotMatch(senderHealthSource, /collection\('healthPlusProfiles'\)/);

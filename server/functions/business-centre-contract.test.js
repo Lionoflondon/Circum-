@@ -102,7 +102,7 @@ test("Sender Business client routes authoritative mutations through callables", 
     "removeBusinessMember",
     "recordBusinessIrisMoment",
   ]) {
-    assert.match(senderBusinessSource, new RegExp(`httpsCallable\\('${callable}'\\)`));
+    assert.match(senderBusinessSource, new RegExp(`businessHealthCallable\\('${callable}'\\)`));
   }
   assert.doesNotMatch(senderBusinessSource, /collection\('businessAccounts'\)\.doc\(account\.id\)\.set/);
   assert.doesNotMatch(senderBusinessSource, /FieldValue\.arrayUnion/);
