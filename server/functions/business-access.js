@@ -778,14 +778,14 @@ exports.inviteBusinessMember = functions
         invitedByUserId: uid,
       };
       const members = [...active, invited];
-      const ids = members.flatMap((member) =>
+      const ids = members.filter((member) => !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status))).flatMap((member) =>
         [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
       );
       const managers = members
           .filter(
               (member) =>
                 BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          clean(member.status) !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status)),
           )
           .flatMap((member) =>
             [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
@@ -840,11 +840,18 @@ exports.updateBusinessMemberStatus = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref} = await requireBusinessAdmin(
           db,
           businessId,
           context,
       );
+      return db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(ref);
+      const account = currentSnap.data() || {};
+      const email = context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "";
+      if (!currentSnap.exists || !BUSINESS_ADMIN_ROLES.has(memberRole(account, uid, email))) {
+        throw new functions.https.HttpsError("permission-denied", "Business administration access changed.");
+      }
       const members = Array.isArray(account.teamMembers) ?
       account.teamMembers :
       [];
@@ -876,7 +883,7 @@ exports.updateBusinessMemberStatus = functions
           .flatMap((item) =>
             [clean(item.userId), cleanEmail(item.email)].filter(Boolean),
           );
-      await ref.set(
+      transaction.set(ref,
           {
             teamMembers: members,
             teamMemberIds: [...new Set(activeIds)],
@@ -888,11 +895,12 @@ exports.updateBusinessMemberStatus = functions
           },
           {merge: true},
       );
-      await db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`).set({
-        businessId, userId: memberUserId, status: nextStatus,
+      const membershipUserId = clean(members[index].userId) || memberUserId;
+      transaction.set(db.collection("businessMemberships").doc(`${businessId}_${membershipUserId}`), {
+        businessId, userId: membershipUserId, status: nextStatus,
         updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid,
       }, {merge: true});
-      await db.collection("businessAuditLogs").add({
+      transaction.create(db.collection("businessAuditLogs").doc(), {
         businessId,
         actorUserId: uid,
         targetUserId: memberUserId,
@@ -901,6 +909,7 @@ exports.updateBusinessMemberStatus = functions
         createdAt: FieldValue.serverTimestamp(),
       });
       return {status: nextStatus, businessId, memberUserId};
+      });
     });
 
 exports.recordBusinessIrisMoment = functions
@@ -1057,7 +1066,7 @@ exports.removeBusinessMember = functions
         item,
       );
       const activeIds = remaining
-          .filter((item) => item.status !== "removed" && item.status !== "rejected")
+          .filter((item) => !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
           .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
       const managerIds = remaining
           .filter(
