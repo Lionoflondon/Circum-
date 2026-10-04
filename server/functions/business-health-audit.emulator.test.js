@@ -138,3 +138,27 @@ test("missing Business targets return a validation error before Firestore access
     await assert.rejects(business[operation].run({}, context("owner")), {code: "invalid-argument"});
   }
 });
+
+test("a stale reminder snapshot cannot rewind a completed pickup", async () => {
+  await db.doc("prescriptionPickups/zz-race").set({senderId: "owner", status: "scheduled", scheduledAt: Timestamp.fromDate(new Date("2026-10-04T11:00:00Z"))});
+  const wrap = (query) => new Proxy(query, {get(target, key) {
+    if (key === "get") return async () => {
+      const snapshot = await target.get();
+      if (snapshot.docs.some((record) => record.id === "zz-race")) await db.doc("prescriptionPickups/zz-race").set({status: "delivered"}, {merge: true});
+      return snapshot;
+    };
+    if (["where", "orderBy", "limit", "startAfter"].includes(key)) return (...args) => wrap(target[key](...args));
+    return typeof target[key] === "function" ? target[key].bind(target) : target[key];
+  }});
+  const racingDb = {collection: (name) => name === "prescriptionPickups" ? wrap(db.collection(name)) : db.collection(name), runTransaction: db.runTransaction.bind(db)};
+  assert.equal((await reminders(racingDb, new Date("2026-10-04T12:00:00Z"))).escalated, 0);
+  assert.equal((await db.doc("prescriptionPickups/zz-race").get()).data().status, "delivered");
+});
+
+test("a Health+ booking replay cannot return another Sender's record", async (t) => {
+  process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-test";
+  t.mock.method(global, "fetch", async () => ({ok: true, json: async () => ({routes: [{distanceMeters: 3218.688}]})}));
+  const input = {consentConfirmed: true, fullName: "Synthetic Sender", phoneNumber: "07000000000", pharmacyAddress: "Pharmacy", deliveryAddress: "Home", preferredPickupTime: "2026-10-05T10:00:00Z", frequency: "one_off", pricingInputs: {medicationWeightKg: 1}, idempotencyKey: "shared-booking-key"};
+  await health.createHealthPlusBooking.run(input, context("owner"));
+  await assert.rejects(health.createHealthPlusBooking.run(input, context("stranger")), {code: "permission-denied"});
+});
