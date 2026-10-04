@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:circum/app/sender_mobile/sender_startup.dart';
 
 void main() {
   test('Sender host keeps production viewport sizing unlocked', () {
@@ -31,15 +32,21 @@ void main() {
     expect(appNav, contains('SenderMobileHome(senderAuthEnabled: true)'));
   });
 
-  test('Sender startup has a visible recovery boundary before runApp', () {
-    final main = File('lib/main.dart').readAsStringSync();
-    final startup =
-        File('lib/app/sender_mobile/sender_startup.dart').readAsStringSync();
-
-    expect(main, contains('runSenderStartup('));
-    expect(startup, contains('renderRecovery();'));
-    expect(startup, contains('catch (_)'));
-    expect(startup, contains("timeout(const Duration(seconds: 20))"));
+  test(
+      'Sender startup renders boot then recovery when core initialization fails',
+      () async {
+    final frames = <String>[];
+    final failure = StateError('required service unavailable');
+    Object? recordedError;
+    await runSenderStartup(
+      renderBoot: () => frames.add('boot'),
+      initialize: () async => throw failure,
+      renderApp: () => frames.add('app'),
+      renderRecovery: () => frames.add('recovery'),
+      onFailure: (_, error, stack) => recordedError = error,
+    );
+    expect(frames, ['boot', 'recovery']);
+    expect(recordedError, same(failure));
   });
 
   test('Sender unresolved startup does not reuse the branded splash', () {
