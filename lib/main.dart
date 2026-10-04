@@ -103,7 +103,11 @@ Future<void> _initializeNotificationsAfterRender() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     foregoundMessage();
     _notificationHandlersRegistered = true;
-    await configureNotificationOpenRouting();
+    unawaited(configureNotificationOpenRouting().catchError(
+      (Object error, StackTrace stackTrace) {
+        _recordStartupFailure('notification-open-routing', error, stackTrace);
+      },
+    ));
   }
   // Only FCM requests permission, after login has rendered. Local-notification
   // setup must not create a second permission prompt during application boot.
