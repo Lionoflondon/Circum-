@@ -142,11 +142,13 @@ test("missing Business targets return a validation error before Firestore access
 test("a stale reminder snapshot cannot rewind a completed pickup", async () => {
   await db.doc("prescriptionPickups/zz-race").set({senderId: "owner", status: "scheduled", scheduledAt: Timestamp.fromDate(new Date("2026-10-04T11:00:00Z"))});
   const wrap = (query) => new Proxy(query, {get(target, key) {
-    if (key === "get") return async () => {
+    if (key === "get") {
+return async () => {
       const snapshot = await target.get();
       if (snapshot.docs.some((record) => record.id === "zz-race")) await db.doc("prescriptionPickups/zz-race").set({status: "delivered"}, {merge: true});
       return snapshot;
     };
+}
     if (["where", "orderBy", "limit", "startAfter"].includes(key)) return (...args) => wrap(target[key](...args));
     return typeof target[key] === "function" ? target[key].bind(target) : target[key];
   }});
