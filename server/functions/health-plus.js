@@ -41,17 +41,7 @@ function allowCors(res) {
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
-const ADMIN_ROLES = [
-  "super_admin",
-  "operations_admin",
-  "support_agent",
-  "finance_admin",
-  "driver_manager",
-  "owner",
-  "admin",
-  "support",
-  "operations",
-];
+const {tokenRoles: healthAdminRoles, hasPermission: healthAdminPermission} = require("./admin-permissions");
 
 async function verifyAdminRequest(req) {
   const header = req.headers.authorization || "";
@@ -64,12 +54,9 @@ async function verifyAdminRequest(req) {
 
   const token = header.substring("Bearer ".length);
   const decoded = await getAuth().verifyIdToken(token);
-  const claimsRoles = Array.isArray(decoded.roles) ? decoded.roles : [];
-  const claimRole = decoded.role || decoded.adminRole;
-  const roles = claimRole ? claimsRoles.concat([claimRole]) : claimsRoles;
-  const hasClaimRole = decoded.admin === true ||
-    roles.some((role) => ADMIN_ROLES.includes(role));
-
+  const roles = healthAdminRoles(decoded);
+  const claimRole = roles[0];
+  const hasClaimRole = healthAdminPermission(roles, "health.manage");
   if (hasClaimRole) {
     return {
       uid: decoded.uid,
@@ -92,7 +79,7 @@ async function verifyAdminRequest(req) {
   const adminData = adminDoc.data();
   const status = adminData.status || "inactive";
   const role = adminData.role;
-  if (status !== "active" || !ADMIN_ROLES.includes(role)) {
+  if (status !== "active" || !healthAdminPermission(healthAdminRoles(adminData), "health.manage")) {
     throw new functions.https.HttpsError(
         "permission-denied",
         "Active admin access is required.",
@@ -1073,20 +1060,28 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
     update.lastAdminRole = admin.role;
     if (note) update.adminNote = note;
 
+    if (!text(note)) throw new functions.https.HttpsError("invalid-argument", "Add an Operations note before changing Health+ status.");
     const db = getFirestore();
-    await db.collection("prescriptionPickups").doc(pickupId).set(update, {merge: true});
-    await db.collection("healthPlusUsageEvents").add({
-      type: "pickup_status_updated",
-      pickupId,
-      status,
-      driverId: driverId || null,
-      adminId: admin.uid,
-      adminEmail: admin.email,
-      adminRole: admin.role,
-      requestedAdminId: adminId || null,
-      note: note || null,
-      source: "cloud-functions",
-      createdAt: Date.now(),
+    const pickupRef = db.collection("prescriptionPickups").doc(pickupId);
+    const usageRef = db.collection("healthPlusUsageEvents").doc();
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(pickupRef);
+      if (!existing.exists) throw new functions.https.HttpsError("not-found", "Health+ pickup not found.");
+      transaction.set(pickupRef, update, {merge: true});
+      transaction.create(usageRef, {
+        type: "pickup_status_updated",
+        pickupId,
+        status,
+        previousStatus: existing.data().status || null,
+        driverId: driverId || null,
+        adminId: admin.uid,
+        adminEmail: admin.email,
+        adminRole: admin.role,
+        requestedAdminId: adminId || null,
+        note,
+        source: "cloud-functions",
+        createdAt: Date.now(),
+      });
     });
     return res.send({success: true, pickupId, update});
   } catch (error) {

@@ -241,3 +241,40 @@ body = value; return this;
   assert.equal(body.idempotent, true);
   assert.equal(calls, 1);
 });
+
+
+test("legacy Health+ status control enforces clinical Operations permissions and atomic audited updates", async (t) => {
+  const uid = "health-operations-admin";
+  let token = {uid, role: "finance_admin"};
+  t.mock.method(require("firebase-admin/auth").getAuth(), "verifyIdToken", async () => token);
+  const pickupId = "clinical-control";
+  await db.doc(`prescriptionPickups/${pickupId}`).set({status: "scheduled"});
+  let code; let body;
+  const res = {set() {}, status(value) {
+code = value; return this;
+}, send(value) {
+body = value; return this;
+}};
+  const req = {method: "POST", headers: {authorization: "Bearer emulator-test"}, body: {pickupId, status: "assigned", adminId: "spoofed", note: "Controlled Operations check"}};
+  for (const role of ["finance_admin", "support_agent", "driver_manager", "owner"]) {
+    token = {uid, role};
+    await health.updateHealthPlusPickupStatus(req, res);
+    assert.equal(code, 403);
+    assert.equal(body.code, "permission-denied");
+    assert.equal((await db.doc(`prescriptionPickups/${pickupId}`).get()).data().status, "scheduled");
+  }
+  token = {uid, role: "operations_admin"};
+  await health.updateHealthPlusPickupStatus({...req, body: {...req.body, pickupId: "missing-clinical-control"}}, res);
+  assert.equal(body.code, "not-found");
+  assert.equal((await db.doc("prescriptionPickups/missing-clinical-control").get()).exists, false);
+  code = 200;
+  await health.updateHealthPlusPickupStatus(req, res);
+  assert.equal(code, 200);
+  const pickup = (await db.doc(`prescriptionPickups/${pickupId}`).get()).data();
+  assert.equal(pickup.status, "assigned");
+  assert.equal(pickup.lastAdminId, uid);
+  const events = await db.collection("healthPlusUsageEvents").where("pickupId", "==", pickupId).get();
+  assert.equal(events.size, 1);
+  assert.equal(events.docs[0].data().adminId, uid);
+  assert.equal(events.docs[0].data().previousStatus, "scheduled");
+});
