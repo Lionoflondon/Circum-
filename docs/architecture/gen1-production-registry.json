@@ -2561,6 +2561,7 @@
       "callers": [
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js"
       ],
@@ -2589,6 +2590,7 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
@@ -3186,6 +3188,7 @@
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-checkout-reservations.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-payment-schedulers.test.js",
         "server/functions/delivery-lifecycle.emulator.test.js",
@@ -3216,6 +3219,7 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
         "cloud-run-payment-family.js",
         "cloud-run-payment-schedulers.test.js"
       ],
@@ -3232,6 +3236,7 @@
       "callers": [
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-business-roth.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/payment-runtime-bindings.test.js",
         "test/sender_mobile/sender_final_p1_hardening_test.dart",
         "test/website_business_roth_checkout_contract_test.dart"
@@ -3261,7 +3266,8 @@
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [
-        "cloud-run-business-roth.js"
+        "cloud-run-business-roth.js",
+        "cloud-run-native-callable-proxy.js"
       ],
       "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"

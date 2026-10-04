@@ -20,7 +20,7 @@ for (const [operation, policy] of Object.entries(OPERATIONS)) {
     const requestBody = JSON.stringify({data: {idempotencyKey: "qa-replay", scope: "all_other_devices"}});
     const reply = JSON.stringify({result: {ok: true, idempotent: true}});
     const fakeFetch = async (url, options) => {
-      assert.equal(url, `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path || operation}`);
+      assert.equal(url, `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path !== undefined ? policy.path : operation}`);
       assert.equal(options.body.toString(), requestBody);
       assert.equal(options.headers.authorization, "Bearer qa-token");
       assert.equal(options.headers["x-firebase-appcheck"], "qa-app-check");
