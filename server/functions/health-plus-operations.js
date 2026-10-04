@@ -3,7 +3,6 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {buildHealthPlusPlanFields} = require("./health-plus-core");
-const {createEmailQueueRecord} = require("./email-queue");
 const transactionalEmailTemplates = require("./transactional-email-templates");
 
 const text = (value) => `${value || ""}`.trim();
@@ -37,6 +36,24 @@ function pickupLabel(pickup) {
   return pickup.pharmacyName || pickup.pharmacyAddress || pickup.deliveryAddress || pickup.id || "Health+ pickup";
 }
 
+async function writeCurrentReminder(db, pickup, writes) {
+  return db.runTransaction(async (transaction) => {
+    const source = await transaction.get(db.collection("prescriptionPickups").doc(pickup.id));
+    if (!source.exists) return false;
+    const current = source.data();
+    const expectedAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
+    const currentAt = asDate(current.scheduledAt || current.preferredPickupAt || current.scheduledPickupDate);
+    if (!["scheduled", "assigned", "awaiting_pharmacy_collection"].includes(current.status) ||
+      current.status !== pickup.status || !expectedAt || !currentAt || currentAt.getTime() !== expectedAt.getTime() ||
+      ["senderId", "userId", "email"].some((field) => text(current[field]) !== text(pickup[field]))) return false;
+    const existing = await Promise.all(writes.map(({ref}) => transaction.get(ref)));
+    writes.forEach(({ref, payload}, index) => {
+      if (!existing[index].exists) transaction.create(ref, payload);
+    });
+    return existing.some((snapshot) => !snapshot.exists);
+  });
+}
+
 async function queueHealthNotification(db, pickup, type, title, body) {
   const notificationId = `health_${pickup.id}_${type}`;
   const payload = {
@@ -52,7 +69,7 @@ async function queueHealthNotification(db, pickup, type, title, body) {
     read: false,
     createdAt: FieldValue.serverTimestamp(),
   };
-  await db.collection("healthPlusNotifications").doc(notificationId).set(payload, {merge: true});
+  const writes = [{ref: db.collection("healthPlusNotifications").doc(notificationId), payload}];
   if (pickup.email) {
     const templateType = {
       booking_created: "scheduled",
@@ -71,7 +88,7 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       reminder_2h: "reminder_2h",
     }[type] || type;
     const template = transactionalEmailTemplates.healthUpdate({type: templateType});
-    await createEmailQueueRecord(db, notificationId, {
+    writes.push({ref: db.collection("emailQueue").doc(notificationId), payload: {
       notificationId,
       to: pickup.email,
       subject: template.subject,
@@ -95,8 +112,9 @@ async function queueHealthNotification(db, pickup, type, title, body) {
       createdAt: FieldValue.serverTimestamp(),
       sourceRecipientField: "email",
       updatedAt: FieldValue.serverTimestamp(),
-    }, db.collection("emailQueue"));
+    }});
   }
+  return writeCurrentReminder(db, pickup, writes);
 }
 
 async function queueHealthAdminNotification(db, pickup, type, title, body) {
@@ -106,7 +124,7 @@ async function queueHealthAdminNotification(db, pickup, type, title, body) {
       pickup.preferredPickupAt ||
       pickup.scheduledPickupDate,
   );
-  await db.collection("notifications").doc(notificationId).set({
+  const writes = [{ref: db.collection("notifications").doc(notificationId), payload: {
     notificationId,
     recipientId: "circum-operations",
     recipientRole: "admin",
@@ -137,15 +155,15 @@ async function queueHealthAdminNotification(db, pickup, type, title, body) {
     source: "health_plus",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
-  await db.collection("healthPlusUsageEvents").doc(notificationId).set({
+  }}, {ref: db.collection("healthPlusUsageEvents").doc(notificationId), payload: {
     type: `admin_${type}_queued`,
     pickupId: pickup.id,
     profileId: pickup.profileId || null,
     senderId: pickup.senderId || pickup.userId || null,
     source: "health_plus",
     createdAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  }}];
+  return writeCurrentReminder(db, pickup, writes);
 }
 
 exports.onHealthPlusPickupOperationalWrite = functions.firestore
@@ -182,13 +200,11 @@ async function processHealthPlusRemindersCore(db = getFirestore(), now = new Dat
     if (!scheduledAt || scheduledAt > horizon) return;
     const msUntil = scheduledAt.getTime() - now.getTime();
     if (msUntil <= DAY_MS && msUntil > 23 * HOUR_MS) {
-      await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
+      queued += Number(await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`));
       await queueHealthAdminNotification(db, pickup, "pickup_tomorrow", "Health+ pickup tomorrow", `${pickupLabel(pickup)} is scheduled tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
-      queued++;
     }
     if (msUntil <= 2 * HOUR_MS && msUntil > 90 * 60 * 1000) {
-      await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
-      queued++;
+      queued += Number(await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours."));
     }
     if (msUntil <= DAY_MS) {
       escalated += await db.runTransaction(async (transaction) => {

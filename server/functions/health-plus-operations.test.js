@@ -22,12 +22,14 @@ test("Health+ reminders notify admin one day before actual pickup", () => {
   assert.match(source, /notificationId = `health_admin_\$\{pickup\.id\}_\$\{type\}`/);
   assert.match(source, /recipientRole: "admin"/);
   assert.match(source, /destination: \{[\s\S]*?route: "admin_health_plus"[\s\S]*?healthPickupId: pickup\.id/);
-  assert.match(source, /healthPlusUsageEvents"\)\.doc\(notificationId\)\.set/);
+  assert.match(source, /ref: db\.collection\("healthPlusUsageEvents"\)\.doc\(notificationId\), payload:/);
 });
 
 test("Health+ reminders remain backend-owned and idempotent", () => {
-  assert.match(source, /db\.collection\("notifications"\)\.doc\(notificationId\)\.set\(/);
-  assert.match(source, /\}, \{merge: true\}\);/);
+  assert.match(source, /ref: db\.collection\("notifications"\)\.doc\(notificationId\), payload:/);
+  assert.match(source, /return writeCurrentReminder\(db, pickup, writes\)/);
+  assert.match(source, /if \(!existing\[index\]\.exists\) transaction\.create\(ref, payload\)/);
+  assert.match(source, /currentAt\.getTime\(\) !== expectedAt\.getTime\(\)/);
   assert.doesNotMatch(source, /context\.auth/);
 });
 

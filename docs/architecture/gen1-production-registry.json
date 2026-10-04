@@ -1718,6 +1718,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusPickup, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
       ],
@@ -1769,6 +1770,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusProfile, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
       ],
@@ -1820,6 +1822,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusSchedule, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
       ],

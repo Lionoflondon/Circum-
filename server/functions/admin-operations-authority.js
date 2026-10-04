@@ -883,18 +883,20 @@ tx.set(db.collection("businessMemberships").doc(`${businessId}_${beforeMember.us
 
 exports.adminUpdateHealthPlusPickup = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.pickupId);
   const status = lower(data.status);
   const reason = requireReason(data);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ pickup and status are required.");
   const db = getFirestore();
   const ref = db.collection("prescriptionPickups").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = healthStatusPatch(status, actor, reason);
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusUsageEvents").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusUsageEvents").doc(), {
     type: "admin_status_updated",
     pickupId: id,
     status,
@@ -902,25 +904,28 @@ exports.adminUpdateHealthPlusPickup = adminCallable(async (data, context) => {
     adminUserId: actor.uid,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: "health_plus_status_update",
     recordType: "prescriptionPickups",
     recordId: id,
     reason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.scheduleId);
   const status = lower(data.status);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ schedule and status are required.");
   const db = getFirestore();
   const ref = db.collection("recurringPickupSchedules").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = {
     status,
     adminReviewStatus: status,
@@ -928,8 +933,8 @@ exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
     adminUpdatedBy: actor.label,
     adminReason: requireReason(data),
   };
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusCustodyArchive").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusCustodyArchive").doc(), {
     scheduleId: id,
     profileId: before.profileId || null,
     userId: before.userId || before.senderId || null,
@@ -943,25 +948,28 @@ exports.adminUpdateHealthPlusSchedule = adminCallable(async (data, context) => {
     statusAfterEvent: status,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: `health_plus_schedule_${status}`,
     recordType: "recurringPickupSchedules",
     recordId: id,
     reason: patch.adminReason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
   const actor = await resolveActor(context);
-  requireOperations(actor, "Health+ Operations Admin access is required.");
+  if (!hasPermission(actor.roles, "health.manage")) throw new functions.https.HttpsError("permission-denied", "Health+ Operations Admin access is required.");
   const id = clean(data.profileId);
   const status = lower(data.status);
   if (!id || !status) throw new functions.https.HttpsError("invalid-argument", "Health+ profile and status are required.");
   const db = getFirestore();
   const ref = db.collection("healthPlusProfiles").doc(id);
-  const snap = await ref.get();
-  const before = snap.exists ? snap.data() : {};
+  return db.runTransaction(async (transaction) => {
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Health+ record not found.");
+  const before = snap.data();
   const patch = {
     status,
     adminReviewStatus: status,
@@ -969,8 +977,8 @@ exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
     adminUpdatedBy: actor.label,
     adminReason: requireReason(data),
   };
-  await ref.set(patch, {merge: true});
-  await db.collection("healthPlusCustodyArchive").add({
+  transaction.set(ref, patch, {merge: true});
+  transaction.create(db.collection("healthPlusCustodyArchive").doc(), {
     profileId: id,
     userId: before.userId || before.senderId || null,
     eventType: `profile_${status}`,
@@ -982,13 +990,14 @@ exports.adminUpdateHealthPlusProfile = adminCallable(async (data, context) => {
     statusAfterEvent: status,
     createdAt: FieldValue.serverTimestamp(),
   });
-  await writeAudit(db, actor, {
+  transaction.create(db.collection("adminAuditLogs").doc(), auditPayload(actor, {
     actionType: `health_plus_profile_${status}`,
     recordType: "healthPlusProfiles",
     recordId: id,
     reason: patch.adminReason,
-  }, before, patch);
+  }, before, patch));
   return {ok: true};
+  });
 });
 
 exports.adminUpdateFinanceWorkflow = adminCallable(async (data, context) => {

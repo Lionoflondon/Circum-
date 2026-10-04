@@ -283,3 +283,69 @@ body = value; return this;
   assert.equal(events.docs[0].data().adminId, uid);
   assert.equal(events.docs[0].data().previousStatus, "scheduled");
 });
+
+
+test("reminders reject cancelled/rescheduled snapshots and preserve acknowledged notifications on replay", async () => {
+  const now = new Date("2026-10-04T12:00:00Z");
+  const scheduledAt = Timestamp.fromDate(new Date("2026-10-04T13:40:00Z"));
+  for (const mode of ["cancelled", "rescheduled"]) {
+    const id = `reminder-race-${mode}`;
+    await db.doc(`prescriptionPickups/${id}`).set({senderId: "reminder-owner", email: "reminder@example.invalid", status: "scheduled", scheduledAt});
+    const wrap = (query) => new Proxy(query, {get(target, key) {
+      if (key === "get") {
+return async () => {
+        const snapshot = await target.get();
+        if (snapshot.docs.some((doc) => doc.id === id)) {
+          await db.doc(`prescriptionPickups/${id}`).set(mode === "cancelled" ? {status: "cancelled"} : {scheduledAt: Timestamp.fromDate(new Date("2026-12-01T12:00:00Z"))}, {merge: true});
+        }
+        return snapshot;
+      };
+}
+      if (["where", "orderBy", "limit", "startAfter"].includes(key)) return (...args) => wrap(target[key](...args));
+      return typeof target[key] === "function" ? target[key].bind(target) : target[key];
+    }});
+    const racingDb = {collection: (name) => name === "prescriptionPickups" ? wrap(db.collection(name)) : db.collection(name), runTransaction: db.runTransaction.bind(db)};
+    await reminders(racingDb, now);
+    assert.equal((await db.doc(`healthPlusNotifications/health_${id}_reminder_2h`).get()).exists, false);
+    assert.equal((await db.doc(`emailQueue/health_${id}_reminder_2h`).get()).exists, false);
+  }
+  const id = "reminder-preserve-read";
+  await db.doc(`prescriptionPickups/${id}`).set({senderId: "reminder-owner", status: "scheduled", scheduledAt});
+  await reminders(db, now);
+  const notification = db.doc(`healthPlusNotifications/health_${id}_reminder_2h`);
+  await notification.update({read: true});
+  await reminders(db, now);
+  assert.equal((await notification.get()).data().read, true);
+  const tomorrowId = "reminder-admin-tomorrow";
+  await db.doc(`prescriptionPickups/${tomorrowId}`).set({senderId: "reminder-owner", status: "scheduled", scheduledAt: Timestamp.fromDate(new Date("2026-10-05T11:30:00Z"))});
+  await reminders(db, now);
+  const adminId = `health_admin_${tomorrowId}_pickup_tomorrow`;
+  const adminNotification = db.doc(`notifications/${adminId}`);
+  assert.equal((await adminNotification.get()).data().recipientRole, "admin");
+  assert.equal((await db.doc(`healthPlusUsageEvents/${adminId}`).get()).data().type, "admin_pickup_tomorrow_queued");
+  await adminNotification.update({read: true});
+  await reminders(db, now);
+  assert.equal((await adminNotification.get()).data().read, true);
+});
+
+
+test("modern Health+ controls require existing records and commit their clinical audit atomically", async () => {
+  const controls = require("./admin-operations-authority");
+  const admin = {auth: {uid: "clinical-operator", token: {adminRole: "operations_admin"}}, app: {appId: "audit"}};
+  const finance = {auth: {uid: "non-clinical", token: {adminRole: "finance_admin"}}, app: {appId: "audit"}};
+  for (const [operation, collection, field] of [["adminUpdateHealthPlusPickup", "prescriptionPickups", "pickupId"], ["adminUpdateHealthPlusSchedule", "recurringPickupSchedules", "scheduleId"], ["adminUpdateHealthPlusProfile", "healthPlusProfiles", "profileId"]]) {
+    const id = `modern-${field}`;
+    const data = {[field]: id, status: "paused", reason: "Synthetic clinical regression"};
+    await assert.rejects(controls[operation].run(data, finance), {code: "permission-denied"});
+    await assert.rejects(controls[operation].run(data, admin), {code: "not-found"});
+    assert.equal((await db.doc(`${collection}/${id}`).get()).exists, false);
+    await db.doc(`${collection}/${id}`).set({senderId: "clinical-fixture-owner", status: "active"});
+    await controls[operation].run(data, admin);
+    assert.equal((await db.doc(`${collection}/${id}`).get()).data().status, "paused");
+    const audit = await db.collection("adminAuditLogs").where("recordId", "==", id).get();
+    assert.equal(audit.size, 1);
+    assert.equal(audit.docs[0].data().oldValue.status, "active");
+    assert.equal(audit.docs[0].data().newValue.status, "paused");
+    assert.equal(audit.docs[0].data().actorId, "clinical-operator");
+  }
+});
