@@ -33,6 +33,9 @@ test("Health+ movement remains held until collection details are ready", () => {
   assert.equal(ready.healthDispatchReady, true);
   assert.equal(ready.requiresVanguard, true);
   assert.equal(ready.trustPoints, 6);
+  const zero = movement.healthMovement("zero", {price: 99, riderEarning: 0, riderPay: 19}, {amount: 0});
+  assert.equal(zero.price, 0);
+  assert.equal(zero.riderEarning, 0);
 });
 
 test("movement delivery ids are deterministic", () => {
