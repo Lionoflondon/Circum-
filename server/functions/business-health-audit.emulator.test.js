@@ -164,3 +164,17 @@ test("a Health+ booking replay cannot return another Sender's record", async (t)
   await health.createHealthPlusBooking.run(input, context("owner"));
   await assert.rejects(health.createHealthPlusBooking.run(input, context("stranger")), {code: "permission-denied"});
 });
+
+
+test("zero Business invoice totals cannot fall back to stale amounts or debit a wallet", async () => {
+  const payments = require("./business-payments");
+  const invoiceId = "zero-invoice-total";
+  await db.doc(`businessInvoices/${invoiceId}`).set({businessId: invoiceId, total: 0, subtotal: 99, balanceDue: 10, amountPaid: 0, status: "unpaid"});
+  await db.doc(`business_wallets/${invoiceId}`).set({balance: 20, availableBalance: 20, reservedBalance: 0});
+  await assert.rejects(payments._private.payBusinessInvoiceAtomically({db, businessId: invoiceId, invoiceId, rothAmount: 10, method: "roth"}), {code: "failed-precondition"});
+  await assert.rejects(payments._private.markInvoicePaid({businessId: invoiceId, invoiceId, amount: 10, method: "card"}), {code: "failed-precondition"});
+  assert.equal((await db.doc(`business_wallets/${invoiceId}`).get()).data().balance, 20);
+  assert.equal((await db.doc(`businessInvoices/${invoiceId}`).get()).data().status, "unpaid");
+  const admin = {auth: {uid: "admin", token: {admin: true, role: "super_admin"}}, app: {appId: "audit"}};
+  await assert.rejects(payments.adminCreateBusinessInvoice.run({businessId: invoiceId, total: 0, amount: 10, reason: "Zero validation"}, admin), {code: "invalid-argument"});
+});

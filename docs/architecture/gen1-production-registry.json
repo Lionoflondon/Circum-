@@ -523,6 +523,7 @@
         "lib/app/admin/admin_phase1_shell.dart",
         "server/functions/admin-hardening-contract.test.js",
         "server/functions/business-centre-contract.test.js",
+        "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
         "test/admin_operations_test.dart"
