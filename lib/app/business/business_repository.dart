@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/business_health_callable_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -257,7 +258,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
             .where('businessId', isEqualTo: account.id)
             .limit(25)
             .get(),
-        functions.httpsCallable('listBusinessRothTransactions').call({
+        functions.businessHealthCallable('listBusinessRothTransactions').call({
           'businessId': account.id,
         }),
       ]),
@@ -321,7 +322,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
   @override
   Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode) async {
     final result = await _bounded(
-      functions.httpsCallable('lookupBusinessByCompanyCode').call({
+      functions.businessHealthCallable('lookupBusinessByCompanyCode').call({
         'companyCode': companyCode,
       }),
     );
@@ -335,7 +336,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required BusinessCodeLookupResult business,
   }) async {
     final result = await _bounded(
-      functions.httpsCallable('requestBusinessAccess').call({
+      functions.businessHealthCallable('requestBusinessAccess').call({
         'businessId': business.businessId,
         'role': business.roleRequested,
       }),
@@ -350,7 +351,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     bool rotate = false,
   }) async {
     final result = await _bounded(
-      functions.httpsCallable('ensureBusinessCompanyCode').call({
+      functions.businessHealthCallable('ensureBusinessCompanyCode').call({
         'businessId': account.id,
         'rotate': rotate,
       }),
@@ -387,7 +388,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required bool approved,
   }) async {
     await _bounded(
-      functions.httpsCallable('reviewBusinessAccessRequest').call({
+      functions.businessHealthCallable('reviewBusinessAccessRequest').call({
         'requestId': request.id,
         'businessId': account.id,
         'approved': approved,
@@ -398,7 +399,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
   @override
   Future<void> saveAccount(BusinessAccount account) async {
     await _bounded(
-      functions.httpsCallable('updateBusinessProfile').call({
+      functions.businessHealthCallable('updateBusinessProfile').call({
         'businessId': account.id,
         'businessName': account.name,
         'contactName': account.contactName,
@@ -426,7 +427,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty) throw ArgumentError('Enter an email address.');
     await _bounded(
-      functions.httpsCallable('inviteBusinessMember').call({
+      functions.businessHealthCallable('inviteBusinessMember').call({
         'businessId': account.id,
         'email': normalized,
         'role': role,
@@ -445,7 +446,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     final memberId = '${member['userId'] ?? member['email'] ?? ''}'.trim();
     if (remove) {
       await _bounded(
-        functions.httpsCallable('removeBusinessMember').call({
+        functions.businessHealthCallable('removeBusinessMember').call({
           'businessId': account.id,
           'memberUserId': memberId,
         }),
@@ -454,7 +455,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     }
     if (role != null) {
       await _bounded(
-        functions.httpsCallable('updateBusinessMemberRole').call({
+        functions.businessHealthCallable('updateBusinessMemberRole').call({
           'businessId': account.id,
           'memberUserId': memberId,
           'role': role,
@@ -463,7 +464,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     }
     if (status != null) {
       await _bounded(
-        functions.httpsCallable('updateBusinessMemberStatus').call({
+        functions.businessHealthCallable('updateBusinessMemberStatus').call({
           'businessId': account.id,
           'memberUserId': memberId,
           'status': status,
@@ -478,7 +479,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required Map<String, dynamic> moment,
   }) async {
     await _bounded(
-      functions.httpsCallable('recordBusinessIrisMoment').call({
+      functions.businessHealthCallable('recordBusinessIrisMoment').call({
         'businessId': account.id,
         'moment': moment,
       }),

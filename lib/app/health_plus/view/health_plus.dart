@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/business_health_callable_api.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -268,7 +269,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('createHealthPlusBooking')
+          .businessHealthCallable('createHealthPlusBooking')
           .call<Map<String, dynamic>>({
             'fullName': _fullName.text.trim(),
             'phoneNumber': _phone.text.trim(),
@@ -434,7 +435,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     }
     await FirebaseFunctions.instanceFor(
       region: 'us-central1',
-    ).httpsCallable('updateSenderHealthPlusBooking').call({
+    ).businessHealthCallable('updateSenderHealthPlusBooking').call({
       'action': 'pause_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:pause:$_scheduleId',
@@ -449,7 +450,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     }
     await FirebaseFunctions.instanceFor(
       region: 'us-central1',
-    ).httpsCallable('updateSenderHealthPlusBooking').call({
+    ).businessHealthCallable('updateSenderHealthPlusBooking').call({
       'action': 'resume_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:resume:$_scheduleId',
@@ -462,7 +463,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     if (pickupId == null) return;
     await FirebaseFunctions.instanceFor(
       region: 'us-central1',
-    ).httpsCallable('updateSenderHealthPlusBooking').call({
+    ).businessHealthCallable('updateSenderHealthPlusBooking').call({
       'action': 'cancel_pickup',
       'pickupId': pickupId,
       'idempotencyKey': 'healthplus:cancel:$pickupId',
