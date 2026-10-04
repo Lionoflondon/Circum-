@@ -88,9 +88,11 @@ function normalizeBusinessDeliveryDate(value, {now = new Date(), timeZone = "Eur
 function memberRole(account = {}, uid, email) {
   const members = Array.isArray(account.teamMembers) ? account.teamMembers : [];
   const member = members.find((item) =>
-    (text(item.userId, 160) === uid || (email && text(item.email, 254).toLowerCase() === email)) &&
-    !["removed", "rejected", "inactive"].includes(text(item.status, 40).toLowerCase()));
-  if (member) return text(member.role || "member", 40).toLowerCase();
+    text(item.userId, 160) === uid || (email && text(item.email, 254).toLowerCase() === email));
+  if (member) {
+    if (["removed", "rejected", "inactive", "suspended"].includes(text(member.status, 40).toLowerCase())) return "";
+    return text(member.role || "member", 40).toLowerCase();
+  }
   const ids = Array.isArray(account.teamMemberIds) ? account.teamMemberIds.map((item) => text(item, 160).toLowerCase()) : [];
   if (text(account.ownerUid, 160) === uid || text(account.createdByUserId, 160) === uid || ids.includes(uid.toLowerCase()) || (email && ids.includes(email))) return "member";
   return "";
@@ -103,7 +105,7 @@ async function requireBusinessMember(db, businessId, context) {
   const snap = await db.collection("businessAccounts").doc(businessId).get();
   if (!snap.exists) throw new functions.https.HttpsError("not-found", "Business account not found.");
   const account = snap.data() || {};
-  const email = text(context.auth.token && context.auth.token.email, 254).toLowerCase();
+  const email = context.auth.token && context.auth.token.email_verified === true ? text(context.auth.token.email, 254).toLowerCase() : "";
   const role = memberRole(account, context.auth.uid, email);
   if (!role) throw new functions.https.HttpsError("permission-denied", "You do not have access to this Business account.");
   const approval = text(account.approvalStatus || account.status || account.businessStatus, 40).toLowerCase();

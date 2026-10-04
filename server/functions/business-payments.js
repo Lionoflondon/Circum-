@@ -121,7 +121,10 @@ function normaliseLineItems(items, fallbackDescription, total) {
 
 function isMember(account, context) {
   const uid = context.auth && context.auth.uid;
-  const email = `${context.auth && context.auth.token && context.auth.token.email || ""}`.toLowerCase();
+  const email = context.auth && context.auth.token && context.auth.token.email_verified === true ? text(context.auth.token.email).toLowerCase() : "";
+  const member = (Array.isArray(account.teamMembers) ? account.teamMembers : []).find((item) =>
+    item.userId === uid || (email && text(item.email).toLowerCase() === email));
+  if (member && ["removed", "rejected", "inactive", "suspended"].includes(text(member.status).toLowerCase())) return false;
   const members = Array.isArray(account.teamMemberIds) ? account.teamMemberIds.map((item) => `${item}`.toLowerCase()) : [];
   return account.ownerUid === uid || account.createdByUserId === uid || members.includes(`${uid}`.toLowerCase()) || (email && members.includes(email));
 }
@@ -381,7 +384,7 @@ async function payBusinessInvoiceAtomically({
         );
       }
       const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
-      previousWalletBalance = money(wallet.balance || wallet.availableBalance);
+      previousWalletBalance = money(wallet.balance ?? wallet.availableBalance);
       resultingWalletBalance = money(previousWalletBalance - normalizedRothAmount);
       if (resultingWalletBalance < money(wallet.reservedBalance || 0)) {
         throw new functions.https.HttpsError("failed-precondition", "Business Roth balance is too low.");

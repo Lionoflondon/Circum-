@@ -163,12 +163,19 @@ exports.onHealthPlusPickupOperationalWrite = functions.firestore
 
 async function processHealthPlusRemindersCore(db = getFirestore(), now = new Date()) {
   const horizon = new Date(now.getTime() + 7 * DAY_MS);
-  const snapshot = await db.collection("prescriptionPickups")
-      .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
-      .limit(300)
-      .get();
+  let scanned = 0;
+  let cursor = null;
   let queued = 0;
   let escalated = 0;
+  do {
+    let query = db.collection("prescriptionPickups")
+      .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
+      .orderBy("__name__")
+      .limit(300);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    scanned += snapshot.size;
   await Promise.all(snapshot.docs.map(async (doc) => {
     const pickup = {...doc.data(), id: doc.id};
     const scheduledAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
@@ -183,15 +190,27 @@ async function processHealthPlusRemindersCore(db = getFirestore(), now = new Dat
       await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
       queued++;
     }
-    if (msUntil <= DAY_MS && !pickup.assignedDriverId) {
-      await doc.ref.set({riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-    }
-    if (msUntil < 0 && !["collected", "out_for_delivery", "delivered"].includes(pickup.status)) {
-      await doc.ref.set({riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-      escalated++;
+    if (msUntil <= DAY_MS) {
+      escalated += await db.runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(doc.ref);
+        if (!currentSnap.exists) return 0;
+        const current = currentSnap.data();
+        if (!["scheduled", "assigned", "awaiting_pharmacy_collection"].includes(current.status)) return 0;
+        const currentScheduledAt = asDate(current.scheduledAt || current.preferredPickupAt || current.scheduledPickupDate);
+        if (!currentScheduledAt || currentScheduledAt.getTime() !== scheduledAt.getTime()) return 0;
+        if (msUntil < 0) {
+          transaction.set(doc.ref, {riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+          return 1;
+        }
+        if (!current.assignedDriverId) transaction.set(doc.ref, {riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+        return 0;
+      });
     }
   }));
-  return {scanned: snapshot.size, queued, escalated};
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 300) break;
+  } while (cursor);
+  return {scanned, queued, escalated};
 }
 
 exports.processHealthPlusReminders = functions.pubsub

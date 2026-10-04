@@ -144,3 +144,10 @@ test("admin status updates reject unknown pickup statuses", () => {
   assert.equal(update.assignedDriverId, "driver_1");
   assert.equal(typeof update.updatedAt, "number");
 });
+
+test("a current zero Health+ usage counter does not restore legacy usage", () => {
+  const {buildHealthPlusPlanFields} = require("./health-plus-core");
+  const value = buildHealthPlusPlanFields("priority", {usedDeliveriesThisCycle: 0, usedPickupsThisCycle: 4});
+  assert.equal(value.usedDeliveriesThisCycle, 0);
+  assert.equal(value.remainingDeliveriesThisCycle, 4);
+});

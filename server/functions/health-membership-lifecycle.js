@@ -45,8 +45,20 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
         throw new Error(`Health+ membership ${field} does not match its existing binding.`);
       }
     }
-    transaction.set(membershipRef, patch, {merge: true});
-    transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id, createdAt: FieldValue.serverTimestamp()});
+    const eventCreated = Number(event.created || 0);
+    const previousCreated = Number(existing.lastStripeEventCreated || 0);
+    const stale = eventCreated > 0 && previousCreated > eventCreated;
+    const cancelledInvoice = existing.status === "canceled" && text(event.type).startsWith("invoice.");
+    if (!stale && !cancelledInvoice) {
+      transaction.set(membershipRef, {...patch,
+        ...(eventCreated > 0 ? {lastStripeEventCreated: eventCreated} : {}),
+      }, {merge: true});
+    }
+    transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id,
+      suppressed: stale || cancelledInvoice,
+      ...(stale || cancelledInvoice ? {reason: stale ? "stale_event" : "cancelled_membership"} : {}),
+      createdAt: FieldValue.serverTimestamp()});
+    if (stale || cancelledInvoice) return {duplicate: false, suppressed: true, eventId};
     return {duplicate: false, eventId};
   });
 }

@@ -48,7 +48,9 @@ function memberRole(account = {}, uid, email) {
         (member.userId === uid ||
         (email && `${member.email || ""}`.toLowerCase() === email)) &&
         member.status !== "removed" &&
-        member.status !== "rejected",
+        member.status !== "rejected" &&
+        member.status !== "suspended" &&
+        member.status !== "inactive",
   );
   if (match) return clean(match.role || "member");
   if (account.createdByUserId === uid || account.ownerUid === uid) {
@@ -59,7 +61,7 @@ function memberRole(account = {}, uid, email) {
 
 async function requireBusinessAdmin(db, businessId, context) {
   const uid = requireAuth(context);
-  const email = cleanEmail(context.auth.token.email);
+  const email = context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "";
   const ref = db.collection("businessAccounts").doc(businessId);
   const snap = await ref.get();
   if (!snap.exists) {
@@ -315,7 +317,7 @@ exports.ensureBusinessCompanyCode = functions
           businessId,
           context,
       );
-      const role = memberRole(account, uid, cleanEmail(context.auth.token.email));
+      const role = memberRole(account, uid, context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "");
       if (!new Set(["owner", "admin"]).has(role)) {
         throw new functions.https.HttpsError(
             "permission-denied",
@@ -471,6 +473,9 @@ exports.requestBusinessAccess = functions
         return {status: "already_member", businessId};
       }
       const joinPolicy = business.joinPolicy || "approval_required";
+      if (joinPolicy === "immediate" && role !== "member") {
+        throw new functions.https.HttpsError("permission-denied", "Privileged roles require a Business administrator invitation or approval.");
+      }
       if (joinPolicy === "immediate") {
         const member = {
           userId: uid,
@@ -574,8 +579,8 @@ exports.reviewBusinessAccessRequest = functions
         );
       }
       const business = businessSnap.data();
-      const managers = business.managerIds || [];
-      if (business.createdByUserId !== uid && !managers.includes(uid)) {
+      const reviewerRole = memberRole(business, uid, context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "");
+      if (!["owner", "admin"].includes(reviewerRole)) {
         throw new functions.https.HttpsError(
             "permission-denied",
             "Only Business owners or admins can review access requests.",
@@ -864,7 +869,7 @@ exports.updateBusinessMemberStatus = functions
         updatedByUserId: uid,
       };
       const activeIds = members
-          .filter((item) => clean(item.status) !== "removed")
+          .filter((item) => !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
           .flatMap((item) =>
             [clean(item.userId), cleanEmail(item.email)].filter(Boolean),
           );
@@ -872,11 +877,18 @@ exports.updateBusinessMemberStatus = functions
           {
             teamMembers: members,
             teamMemberIds: [...new Set(activeIds)],
+            managerIds: members.filter((item) => BUSINESS_ADMIN_ROLES.has(clean(item.role)) &&
+              !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)))
+                .flatMap((item) => [clean(item.userId), cleanEmail(item.email)].filter(Boolean)),
             updatedAt: FieldValue.serverTimestamp(),
             updatedByUserId: uid,
           },
           {merge: true},
       );
+      await db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`).set({
+        businessId, userId: memberUserId, status: nextStatus,
+        updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid,
+      }, {merge: true});
       await db.collection("businessAuditLogs").add({
         businessId,
         actorUserId: uid,
@@ -966,7 +978,7 @@ exports.updateBusinessMemberRole = functions
           .filter(
               (member) =>
                 BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          member.status !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(member.status)),
           )
           .flatMap((member) =>
             [member.userId, cleanEmail(member.email)].filter(Boolean),
@@ -1048,7 +1060,7 @@ exports.removeBusinessMember = functions
           .filter(
               (item) =>
                 BUSINESS_ADMIN_ROLES.has(clean(item.role)) &&
-          item.status !== "removed",
+          !["removed", "rejected", "suspended", "inactive"].includes(clean(item.status)),
           )
           .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
       await ref.set(

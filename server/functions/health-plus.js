@@ -184,63 +184,79 @@ async function markHealthPlusPaid({
 }) {
   const bookingRef = db.collection("prescriptionPickups").doc(bookingId);
   const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
-  const paymentSnap = await paymentRef.get();
-  const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
-  if (payment.status === "paid" || payment.paymentStatus === "paid") {
-    return {paid: true, duplicate: true};
-  }
-  const now = FieldValue.serverTimestamp();
-  await paymentRef.set({
-    bookingId,
-    profileId,
-    senderId,
-    userId: senderId,
-    userEmail,
-    paymentId: paymentId || payment.paymentId || bookingId,
-    amountPence,
-    amount: amountPence / 100,
-    cardAmount,
-    rothAmount,
-    currency: "GBP",
-    frequency,
-    recurring,
-    method,
-    paymentMethod: method,
-    status: "paid",
-    paymentStatus: "paid",
-    stripeSessionId,
-    checkoutSessionId: stripeSessionId,
-    stripePaymentIntentId,
-    stripeEventId,
-    authoritativePricing: authoritativePricing || payment.authoritativePricing || null,
-    paidAt: now,
-    updatedAt: now,
-    createdAt: payment.createdAt || now,
-  }, {merge: true});
-  await bookingRef.set({
-    paymentStatus: "paid",
-    ...healthPlusVanguardFields(),
-    paidAt: now,
-    updatedAt: now,
-  }, {merge: true});
-  await db.collection("healthPlusUsageEvents").add({
-    type: "checkout_paid",
-    senderId,
-    userId: senderId,
-    profileId,
-    pickupId: bookingId,
-    amountPence,
-    cardAmount,
-    rothAmount,
-    currency: "GBP",
-    method,
-    stripeSessionId,
-    stripePaymentIntentId,
-    stripeEventId,
-    source: "cloud-functions",
-    createdAt: Date.now(),
+  return db.runTransaction(async (transaction) => {
+    const usageRef = db.collection("healthPlusUsageEvents").doc(`checkout_paid_${bookingId}`);
+    const [paymentSnap, bookingSnap, usageSnap] = await Promise.all([
+      transaction.get(paymentRef), transaction.get(bookingRef), transaction.get(usageRef),
+    ]);
+    if (!bookingSnap.exists || !paymentSnap.exists ||
+      (bookingSnap.data().senderId || bookingSnap.data().userId) !== senderId ||
+      paymentSnap.data().senderId !== senderId || paymentSnap.data().profileId !== profileId) {
+      throw new functions.https.HttpsError("failed-precondition", "Health+ payment ownership or booking changed.");
+    }
+    const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
+    if (payment.status === "paid" || payment.paymentStatus === "paid") {
+      if (bookingSnap.data().paymentStatus !== "paid") {
+        transaction.set(bookingRef, {paymentStatus: "paid", ...healthPlusVanguardFields(),
+          paidAt: payment.paidAt || FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      }
+      return {paid: true, duplicate: true};
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.set(paymentRef, {
+      bookingId,
+      profileId,
+      senderId,
+      userId: senderId,
+      userEmail,
+      paymentId: paymentId || payment.paymentId || bookingId,
+      amountPence,
+      amount: amountPence / 100,
+      cardAmount,
+      rothAmount,
+      currency: "GBP",
+      frequency,
+      recurring,
+      method,
+      paymentMethod: method,
+      status: "paid",
+      paymentStatus: "paid",
+      stripeSessionId,
+      checkoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      stripeEventId,
+      authoritativePricing: authoritativePricing || payment.authoritativePricing || null,
+      paidAt: now,
+      updatedAt: now,
+      createdAt: payment.createdAt || now,
+    }, {merge: true});
+    transaction.set(bookingRef, {
+      paymentStatus: "paid",
+      ...healthPlusVanguardFields(),
+      paidAt: now,
+      updatedAt: now,
+    }, {merge: true});
+    if (!usageSnap.exists) {
+      transaction.create(usageRef, {
+      type: "checkout_paid",
+      senderId,
+      userId: senderId,
+      profileId,
+      pickupId: bookingId,
+      amountPence,
+      cardAmount,
+      rothAmount,
+      currency: "GBP",
+      method,
+      stripeSessionId,
+      stripePaymentIntentId,
+      stripeEventId,
+      source: "cloud-functions",
+      createdAt: Date.now(),
   });
+}
   return {paid: true, duplicate: false};
+  });
 }
 
 function text(value) {
@@ -352,6 +368,7 @@ async function createHealthPlusBookingHandler(data, context, dependencies = {}) 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
     if (replay.exists) {
+      if (replay.data().senderId !== sender.uid) throw new functions.https.HttpsError("permission-denied", "Health+ request belongs to another Sender.");
       return {...replay.data(), idempotent: true};
     }
 
@@ -572,7 +589,12 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
-    if (replay.exists) return {...replay.data(), idempotent: true};
+    if (replay.exists && (replay.data().senderId !== sender.uid ||
+      (replay.data().action && replay.data().action !== action) ||
+      (replay.data().scheduleId && replay.data().scheduleId !== text(data.scheduleId)) ||
+      (replay.data().pickupId && replay.data().pickupId !== text(data.pickupId)))) {
+      throw new functions.https.HttpsError("permission-denied", "Health+ request does not match this Sender and action.");
+    }
 
     const now = FieldValue.serverTimestamp();
     if (action === "pause_schedule" || action === "resume_schedule" || action === "cancel_schedule") {
@@ -583,8 +605,13 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
       if (!scheduleSnap.exists || !senderOwnsHealthRecord(sender, scheduleSnap.data())) {
         throw new functions.https.HttpsError("permission-denied", "Health+ schedule not found.");
       }
+      const schedule = scheduleSnap.data();
+      if (schedule.status === "cancelled" && action !== "cancel_schedule") {
+        throw new functions.https.HttpsError("failed-precondition", "A cancelled Health+ schedule cannot be resumed or paused.");
+      }
       const paused = action === "pause_schedule" || action === "cancel_schedule";
       const status = action === "cancel_schedule" ? "cancelled" : paused ? "paused" : "active";
+      if (replay.exists && schedule.status === status) return {...replay.data(), idempotent: true};
       const eventType = action === "cancel_schedule" ? "recurring_pickup_cancelled" :
         paused ? "recurring_pickup_paused" : "recurring_pickup_resumed";
       transaction.set(scheduleRef, {
@@ -601,7 +628,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         scheduleId,
         status,
       }));
-      transaction.set(idempotencyRef, {status, scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
+      transaction.set(idempotencyRef, {action, status, scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
       return {status, scheduleId, idempotent: false};
     }
 
@@ -614,6 +641,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         throw new functions.https.HttpsError("permission-denied", "Health+ pickup not found.");
       }
       const pickup = pickupSnap.data();
+      if (replay.exists && pickup.status === "cancelled") return {...replay.data(), idempotent: true};
       if (["collected", "out_for_delivery", "delivered"].includes(`${pickup.status || ""}`)) {
         throw new functions.https.HttpsError("failed-precondition", "This Health+ pickup can no longer be cancelled here.");
       }
@@ -628,7 +656,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
         scheduleId: pickup.scheduleId || null,
         status: "cancelled",
       }));
-      transaction.set(idempotencyRef, {status: "cancelled", pickupId, senderId: sender.uid, createdAt: now}, {merge: true});
+      transaction.set(idempotencyRef, {action, status: "cancelled", pickupId, senderId: sender.uid, createdAt: now}, {merge: true});
       return {status: "cancelled", pickupId, idempotent: false};
     }
 
@@ -964,7 +992,6 @@ async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = nul
     throw new Error("Health+ payment record is missing.");
   }
   const payment = paymentSnap.data() || {};
-  if (payment.status === "paid" || payment.paymentStatus === "paid") return;
   if (payment.pricingAuthorityVersion !== 2 || payment.checkoutSessionId !== sessionData.id || payment.senderId !== senderId || payment.profileId !== profileId) {
     await db.doc(`paymentArtifactReconciliations/health_${bookingId}`).set({service: "health_plus", bookingId, sessionId: sessionData.id, status: "review_required", reason: "legacy_or_unbound_paid_checkout", updatedAt: Date.now()}, {merge: true});
     throw new Error("Health+ legacy or unbound checkout requires payment reconciliation before dispatch.");
@@ -1001,7 +1028,7 @@ async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = nul
     stripeSessionId: sessionData.id,
     stripePaymentIntentId: sessionData.payment_intent || null,
     stripeEventId: eventId,
-    amountPence: Number(payment.amountPence || Math.round((cardAmount + rothAmount) * 100)),
+    amountPence: Number(payment.amountPence ?? Math.round((cardAmount + rothAmount) * 100)),
     cardAmount,
     rothAmount,
     method: rothAmount > 0 ? "roth_card" : "card",
