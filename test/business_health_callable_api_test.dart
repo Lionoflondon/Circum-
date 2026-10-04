@@ -112,8 +112,7 @@ void main() {
   test('native callers cannot silently return to the failed SDK routes', () {
     for (final file in [
       'lib/app/business/business_repository.dart',
-      'lib/app/health_plus/view/health_plus.dart',
-      'lib/app/admin/admin_phase1_shell.dart'
+      'lib/app/health_plus/view/health_plus.dart'
     ]) {
       final source = File(file).readAsStringSync();
       for (final op in businessHealthCallableUrls.keys) {

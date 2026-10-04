@@ -1042,7 +1042,7 @@ void main() {
       ).readAsStringSync();
 
       expect(source, contains('Future<void> _createBusinessInvoice'));
-      expect(source, contains("businessHealthCallable('adminCreateBusinessInvoice')"));
+      expect(source, contains("httpsCallable('adminCreateBusinessInvoice')"));
       expect(source, contains('Generate invoice'));
       expect(source, contains('Reason'));
     });

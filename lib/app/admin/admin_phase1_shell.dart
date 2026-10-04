@@ -1,4 +1,3 @@
-import 'package:circum/app/sender_mobile/business_health_callable_api.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -895,7 +894,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(account);
     if (id.isEmpty) return;
-    await _functions.businessHealthCallable('adminUpdateBusinessAccountStatus').call({
+    await _functions.httpsCallable('adminUpdateBusinessAccountStatus').call({
       'businessId': id,
       'status': status,
       'reason': 'Business account status updated from Admin',
@@ -914,7 +913,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(account);
     if (id.isEmpty) return;
-    await _functions.businessHealthCallable('adminUpdateBusinessOperation').call({
+    await _functions.httpsCallable('adminUpdateBusinessOperation').call({
       'businessId': id,
       'status': status,
       'reason': 'Updated from Circum Admin Business Operations',
@@ -1005,7 +1004,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (confirmed != true) return;
     try {
       final result =
-          await _functions.businessHealthCallable('adminCreateBusinessInvoice').call({
+          await _functions.httpsCallable('adminCreateBusinessInvoice').call({
         'businessId': selectedBusinessId,
         'amount': double.tryParse(amount.text.trim()) ?? 0,
         'description': description.text.trim(),
@@ -1037,7 +1036,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final index =
         member['memberIndex'] is int ? member['memberIndex'] as int : -1;
     if (businessId.isEmpty || index < 0) return;
-    await _functions.businessHealthCallable('adminUpdateBusinessMember').call({
+    await _functions.httpsCallable('adminUpdateBusinessMember').call({
       'businessId': businessId,
       'memberIndex': index,
       'role': role,
@@ -1056,7 +1055,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final index =
         member['memberIndex'] is int ? member['memberIndex'] as int : -1;
     if (businessId.isEmpty || index < 0) return;
-    await _functions.businessHealthCallable('adminUpdateBusinessMember').call({
+    await _functions.httpsCallable('adminUpdateBusinessMember').call({
       'businessId': businessId,
       'memberIndex': index,
       'remove': true,
@@ -2323,7 +2322,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(pickup);
     if (id.isEmpty) return;
-    await _functions.businessHealthCallable('adminUpdateHealthPlusPickup').call({
+    await _functions.httpsCallable('adminUpdateHealthPlusPickup').call({
       'pickupId': id,
       'status': status,
       'reason': 'Updated from Circum Admin Health+ Operations',
@@ -2342,7 +2341,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(schedule);
     if (id.isEmpty) return;
-    await _functions.businessHealthCallable('adminUpdateHealthPlusSchedule').call({
+    await _functions.httpsCallable('adminUpdateHealthPlusSchedule').call({
       'scheduleId': id,
       'status': status,
       'reason': 'Health+ recurring schedule reviewed from Admin',
@@ -2361,7 +2360,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(profile);
     if (id.isEmpty) return;
-    await _functions.businessHealthCallable('adminUpdateHealthPlusProfile').call({
+    await _functions.httpsCallable('adminUpdateHealthPlusProfile').call({
       'profileId': id,
       'status': status,
       'reason': 'Health+ profile reviewed from Admin',

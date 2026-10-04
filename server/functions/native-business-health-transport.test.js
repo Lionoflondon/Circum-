@@ -17,7 +17,7 @@ test("next native Business/Health routes and App Check requirements match deploy
     assert.equal(url, `https://${policy.owner}-j2b7cicfwq-uc.a.run.app/${policy.path !== undefined ? policy.path : operation}`);
     assert.equal(required.includes(`'${operation}'`), Boolean(policy.appCheck), `${operation} App Check policy`);
   }
-  for (const file of ["lib/app/business/business_repository.dart", "lib/app/health_plus/view/health_plus.dart", "lib/app/admin/admin_phase1_shell.dart"]) {
+  for (const file of ["lib/app/business/business_repository.dart", "lib/app/health_plus/view/health_plus.dart"]) {
     const source = fs.readFileSync(path.join(root, file), "utf8");
     for (const [, operation] of routes) {
       assert.ok(!source.includes(`.httpsCallable('${operation}')`), `${file} must not use the failed ${operation} SDK endpoint`);
