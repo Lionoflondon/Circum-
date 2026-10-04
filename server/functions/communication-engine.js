@@ -81,6 +81,8 @@ function pushMessageFor({token, payload, destination}) {
     invoiceId: clean(destination.invoiceId),
     orderId: clean(destination.orderId),
     transactionId: clean(destination.transactionId),
+    payoutRequestId: clean(destination.payoutRequestId),
+    applicationId: clean(destination.applicationId),
     referralId: clean(destination.referralId),
     ticketId: clean(destination.ticketId),
     action: clean(destination.action),

@@ -223,3 +223,20 @@ test("failed transfer preserves authoritative zero and cannot release unreserved
     assert.equal(wallet.pendingWithdrawal, 0);
   }
 });
+
+
+test("exact withdrawal cancellation is concurrent-safe, idempotent and atomically audited", async () => {
+  const riderId = "cancellation-rider";
+  const context = {auth: {uid: riderId, token: {email_verified: true}}, app: {appId: "emulator-app"}};
+  const ref = db.doc("payoutRequests/selected-cancel");
+  await ref.set({riderId, status: "requested", amount: 5});
+  await db.doc("payoutRequests/historical-cancel").set({riderId, status: "paid", amount: 10});
+  const callable = require("./rider-connect").cancelRiderWithdrawal();
+  const results = await Promise.all([callable.run({requestId: "selected-cancel"}, context), callable.run({requestId: "selected-cancel"}, context)]);
+  assert.ok(results.every((result) => result.status === "cancelled"));
+  assert.equal((await ref.get()).data().status, "cancelled");
+  assert.equal((await db.doc("payoutRequests/historical-cancel").get()).data().status, "paid");
+  const audits = await db.collection("riderPayoutAudit").where("payoutRequestId", "==", "selected-cancel").get();
+  assert.equal(audits.size, 1);
+  await assert.rejects(() => callable.run({requestId: "selected-cancel"}, {...context, auth: {uid: "other-rider", token: {}}}), (error) => error.code === "permission-denied");
+});

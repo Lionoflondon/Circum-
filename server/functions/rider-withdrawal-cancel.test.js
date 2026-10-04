@@ -12,7 +12,7 @@ test("Rider withdrawal cancellation is callable and audited", () => {
   const index = fs.readFileSync(path.join(functionsDir, "index.js"), "utf8");
 
   assert.match(riderConnect, /function cancelRiderWithdrawal\(\)/);
-  assert.match(riderConnect, /collection\("riderPayoutAudit"\)\.add/);
+  assert.match(riderConnect, /transaction\.set\(db\.collection\("riderPayoutAudit"\)\.doc\(`cancel_\$\{requestId\}`\)/);
   assert.match(riderConnect, /action: "withdrawal_cancelled"/);
   assert.match(riderConnect, /status: "cancelled"/);
   assert.match(index, /exports\.cancelRiderWithdrawal/);

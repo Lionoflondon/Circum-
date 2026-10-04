@@ -5,31 +5,16 @@ const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
-const {getFirestore} = require("firebase-admin/firestore");
-const {completeDeliveryHandler} = require("./delivery-completion-reconciled")._private;
-const deliveryTracking = require("./delivery-tracking");
-const {getOffers} = require("./rider-offers");
-const riderPresence = require("./rider-presence");
 
-const MAX_BODY_BYTES = 32 * 1024;
-const ROUTES = new Set([
-  "completeDelivery",
-  "acceptRideRequests",
-  "recordRiderArrival",
-  "updateDeliveryTrackingStatus",
-  "updateDeliveryLiveLocation",
-  "getAvailableRequests",
-  "getAvaliableRequests",
-  "getNearbyRequests",
-  "goOnline",
-  "goOffline",
-  "updateRiderPresence",
-]);
+const MAX_BODY_BYTES = 6 * 1024 * 1024;
+const ROUTES = new Set(["ensurePublicRiderId", "ensureRiderRothWallet", "submitRiderDocument", "updateRiderApplicationSection", "updateRiderNotificationState", "updateRiderPushToken", "requestRiderCancellation", "reportLoadDiscrepancy", "markRiderNoShow", "reportWaitingContext", "confirmRiderIrisAssessment", "sendCircumMessage", "markConversationRead", "setConversationTyping", "reportRating", "repairRiderRatingFeedback", "sendRiderUpdate", "getGooglePlayReviewFixture", "setGooglePlayReviewPresence"]);
 const DEFAULT_ALLOWED_ORIGINS = Object.freeze(new Set([
   "https://circum-rider-2797c.web.app",
   "https://circum-rider-2797c.firebaseapp.com",
 ]));
 const STATUS = {
+  "already-exists": "ALREADY_EXISTS",
+  aborted: "ABORTED",
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
   "permission-denied": "PERMISSION_DENIED",
@@ -49,20 +34,27 @@ function clean(value, max = 4096) {
   return String(value || "").trim().slice(0, max);
 }
 
-function createHandlers(options = {}) {
-  const db = options.db || getFirestore();
+function createHandlers() {
   return {
-    completeDelivery: (data, context) => completeDeliveryHandler(data, context, db),
-    acceptRideRequests: (data, context) => require("./accept-ride-requests").run(data, context),
-    recordRiderArrival: (data, context) => require("./delivery-policy").recordRiderArrival.run(data, context),
-    updateDeliveryTrackingStatus: (data, context) => deliveryTracking.updateDeliveryTrackingStatus.run(data, context),
-    updateDeliveryLiveLocation: (data, context) => deliveryTracking.updateDeliveryLiveLocation.run(data, context),
-    getAvailableRequests: (data, context) => getOffers(data, context, db),
-    getAvaliableRequests: (data, context) => getOffers(data, context, db),
-    getNearbyRequests: (data, context) => getOffers(data, context, db),
-    goOnline: (data, context) => riderPresence.goOnline.run(data, context),
-    goOffline: (data, context) => riderPresence.goOffline.run(data, context),
-    updateRiderPresence: (data, context) => riderPresence.updateRiderPresence.run(data, context),
+    ensurePublicRiderId: (data, context) => require("./rider-account").ensurePublicRiderId.run(data, context),
+    ensureRiderRothWallet: (data, context) => require("./rider-account").ensureRiderRothWallet.run(data, context),
+    submitRiderDocument: (data, context) => require("./rider-account").submitRiderDocument.run(data, context),
+    updateRiderApplicationSection: (data, context) => require("./rider-account").updateRiderApplicationSection.run(data, context),
+    updateRiderPushToken: (data, context) => require("./rider-account").updateRiderPushToken.run(data, context),
+    updateRiderNotificationState: (data, context) => require("./rider-account").updateRiderNotificationState.run(data, context),
+    requestRiderCancellation: (data, context) => require("./rider-cancellation").requestRiderCancellation.run(data, context),
+    reportLoadDiscrepancy: (data, context) => require("./delivery-adjustments").reportLoadDiscrepancy.run(data, context),
+    markRiderNoShow: (data, context) => require("./delivery-policy").markRiderNoShow.run(data, context),
+    reportWaitingContext: (data, context) => require("./delivery-policy").reportWaitingContext.run(data, context),
+    confirmRiderIrisAssessment: (data, context) => require("./rider-iris-acknowledgement").confirmRiderIrisAssessment.run(data, context),
+    sendCircumMessage: (data, context) => require("./communication-engine").sendCircumMessage.run(data, context),
+    markConversationRead: (data, context) => require("./communication-engine").markConversationRead.run(data, context),
+    setConversationTyping: (data, context) => require("./communication-engine").setConversationTyping.run(data, context),
+    reportRating: (data, context) => require("./ratings-tipping").reportRating.run(data, context),
+    repairRiderRatingFeedback: (data, context) => require("./ratings-tipping").repairRiderRatingFeedback.run(data, context),
+    sendRiderUpdate: (data, context) => require("./send-rider-update").run(data, context),
+    getGooglePlayReviewFixture: (data, context) => require("./founder-review-fixture").getReviewFixture().run(data, context),
+    setGooglePlayReviewPresence: (data, context) => require("./founder-review-fixture").setReviewPresence().run(data, context),
   };
 }
 
@@ -106,14 +98,15 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(completeDelivery|acceptRideRequests|recordRiderArrival|updateDeliveryTrackingStatus|updateDeliveryLiveLocation|getAvailableRequests|getAvaliableRequests|getNearbyRequests|goOnline|goOffline|updateRiderPresence)$/.exec(pathname);
-  return match && ROUTES.has(match[1]) ? match[1] : null;
+  const name = pathname.replace(/^\/v1\/callable/, "").slice(1);
+  return ROUTES.has(name) ? name : null;
 }
 
 function statusCode(code) {
   if (code === "unauthenticated") return 401;
   if (code === "permission-denied") return 403;
   if (code === "not-found") return 404;
+  if (code === "already-exists" || code === "aborted") return 409;
   if (["invalid-argument", "failed-precondition"].includes(code)) return 400;
   if (code === "resource-exhausted") return 429;
   if (code === "unavailable") return 503;
@@ -159,7 +152,12 @@ function createServer(options = {}) {
           dependencies.verifyAppCheck(appCheckToken),
         ]);
         if (!decoded || !(decoded.uid || decoded.sub)) throw callableError("unauthenticated", "Invalid authentication token.");
-        const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        let payload;
+        try {
+          payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        } catch (_) {
+          throw callableError("invalid-argument", "Malformed JSON.");
+        }
         if (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
           throw callableError("invalid-argument", "Callable request must contain object data.");
         }
@@ -173,8 +171,8 @@ function createServer(options = {}) {
         const rawCode = String(error.code || "internal").replace(/^functions\//, "");
         const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
         const status = statusCode(code);
-        if (status === 500) console.error("rider_delivery_authority_failed", {callable: name, reason: code});
-        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Rider delivery request failed." : error.message}}, {origin, allowedOrigins});
+        if (status === 500) console.error("rider_operations_failed", {callable: name, reason: code});
+        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Rider request failed." : error.message, ...(error.details ? {details: error.details} : {})}}, {origin, allowedOrigins});
       }
     });
   });

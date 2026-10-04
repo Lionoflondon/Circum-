@@ -1256,6 +1256,7 @@ function cancelRiderWithdrawal() {
         );
       }
       const status = text(request.status || request.payoutStatus).toLowerCase();
+      if (status === "cancelled" && request.cancelledBy === riderId) return;
       if (!["requested", "pending"].includes(status)) {
         throw new functions.https.HttpsError(
             "failed-precondition",
@@ -1269,13 +1270,13 @@ function cancelRiderWithdrawal() {
         cancelledBy: riderId,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
-    });
-    await db.collection("riderPayoutAudit").add({
-      riderId,
-      payoutRequestId: requestId,
-      action: "withdrawal_cancelled",
-      actorId: riderId,
-      createdAt: FieldValue.serverTimestamp(),
+      transaction.set(db.collection("riderPayoutAudit").doc(`cancel_${requestId}`), {
+        riderId,
+        payoutRequestId: requestId,
+        action: "withdrawal_cancelled",
+        actorId: riderId,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
     return {
       requestId,

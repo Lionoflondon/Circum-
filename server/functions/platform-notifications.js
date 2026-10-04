@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {riderMatchesIris} = require("./iris-core");
+const {riderMatchesIris, isDispatchable} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
 const communicationEngine = require("./communication-engine");
 const {processOnce} = require("./cloud-run-notification-events");
@@ -294,6 +294,10 @@ function dispatchCandidateDecision(record, delivery, now = Date.now()) {
           presence.busy === true ? "busy" : "location_or_heartbeat_unhealthy");
     return {eligible: false, reason, profile, presence};
   }
+  const exclusion = require("./accept-ride-requests").offerExclusionReason(delivery, record.id, now);
+  if (exclusion || !isDispatchable(delivery)) {
+    return {eligible: false, reason: exclusion || "delivery_not_dispatchable", profile, presence};
+  }
   if (!riderMatchesIris(profile, delivery)) {
     return {eligible: false, reason: "vehicle_or_iris_mismatch", profile, presence};
   }
@@ -366,12 +370,17 @@ function customerWaitingCharge(data) {
   };
 }
 
-async function handleDeliveryCreated(snapshot, options = {}) {
+function becameDispatchable(before, after, now = Date.now()) {
+  const exclusion = require("./accept-ride-requests").offerExclusionReason;
+  return Boolean(exclusion(before, "", now) || !isDispatchable(before)) &&
+    !exclusion(after, "", now) && isDispatchable(after);
+}
+
+async function publishRiderJobOffers(snapshot, options = {}) {
   const delivery = snapshot.data();
   if (isTrustedSyntheticQaDelivery(delivery)) return {skipped: "synthetic_qa"};
   const ids = deliveryIds({...delivery, id: snapshot.id});
   const runEffect = options.effects && options.effects.run ? options.effects.run : async (_effectId, execute) => execute();
-  if (ids.senderId) await runEffect(`sender_notification:${ids.senderId}`, () => notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries", deliveryId: snapshot.id}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`}));
   const db = getFirestore();
   const riders = await onlineCandidateRiderRecords(db);
   const decisions = riders.map((record) => ({
@@ -429,6 +438,15 @@ async function handleDeliveryCreated(snapshot, options = {}) {
       })),
     });
   }
+}
+
+async function handleDeliveryCreated(snapshot, options = {}) {
+  const delivery = snapshot.data();
+  if (isTrustedSyntheticQaDelivery(delivery)) return {skipped: "synthetic_qa"};
+  const ids = deliveryIds({...delivery, id: snapshot.id});
+  const runEffect = options.effects && options.effects.run ? options.effects.run : async (_effectId, execute) => execute();
+  if (ids.senderId) await runEffect(`sender_notification:${ids.senderId}`, () => notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries", deliveryId: snapshot.id}, dedupeKey: `delivery_created_sender_notification:${snapshot.id}:${ids.senderId}`}));
+  await publishRiderJobOffers(snapshot, options);
   const highValue = delivery.vanguardEnabled === true || Number(delivery.declaredValue || 0) > 250;
   if (highValue) await runEffect("admin_high_value_notification", () => notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId, dedupeKey: `delivery_created_admin_high_value:${snapshot.id}`}));
 }
@@ -463,6 +481,7 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const before = change.before.data();
   const after = change.after.data();
   if (isTrustedSyntheticQaDelivery(after)) return;
+  if (becameDispatchable(before, after)) await publishRiderJobOffers(change.after);
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
   const statusChanged = status && status !== oldStatus;
@@ -577,7 +596,7 @@ exports.onRiderProfileUpdated = functions.firestore.document("riderProfiles/{rid
   const before = text(change.before.data().approvalStatus || change.before.data().verificationStatus);
   const after = text(change.after.data().approvalStatus || change.after.data().verificationStatus);
   if (!after || before === after) return;
-  if (["approved", "verified", "rejected"].includes(after.toLowerCase())) await notify({recipientId: context.params.riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved."});
+  if (["approved", "verified", "rejected"].includes(after.toLowerCase())) await notify({recipientId: context.params.riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved.", data: {route: "profile", applicationId: context.params.riderId}});
 });
 
 exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestId}").onUpdate(async (change) => {
@@ -585,7 +604,7 @@ exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestI
   const after = text(change.after.data().status).toLowerCase();
   if (before === after || !["paid", "approved", "rejected"].includes(after)) return;
   const data = change.after.data();
-  await notify({recipientId: text(data.riderId), recipientRole: "rider", type: "earnings_update", title: after === "paid" ? "Earnings paid" : "Withdrawal updated", body: `Your withdrawal is ${after}.`});
+  await notify({recipientId: text(data.riderId), recipientRole: "rider", type: "earnings_update", title: after === "paid" ? "Earnings paid" : "Withdrawal updated", body: `Your withdrawal is ${after}.`, data: {route: "wallet", payoutRequestId: change.after.id}, dedupeKey: `rider_payout:${change.after.id}:${after}`});
 });
 
 exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes").onRun(async () => {
@@ -624,6 +643,7 @@ exports._private = {
   onlineCandidateRiderProfileDocs,
   onlineCandidateRiderRecords,
   dispatchCandidateDecision,
+  becameDispatchable,
   escalationStage,
   scheduledPickupMillis,
   isTrustedSyntheticQaDelivery,

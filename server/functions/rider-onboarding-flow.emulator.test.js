@@ -34,7 +34,7 @@ const presence = require("./rider-presence");
 const account = require("./rider-account");
 const location = {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, permission: "always", gpsStatus: "active"};
 const profile = {fullName: "Test Rider", phoneNumber: "07700900123", postcode: "SW1A 1AA", homeAddress: "Test address", vehicleType: "car", vehicleRegistration: "AB12 CDE"};
-const context = (uid) => ({auth: {uid, token: {email: uid + "@example.test"}}});
+const context = (uid) => ({auth: {uid, token: {email: uid + "@example.test", email_verified: true}}});
 async function uploadRequiredRiderDocuments(uid, keyPrefix) {
   const riderContext = context(uid);
   const fixtures = [
@@ -67,7 +67,7 @@ async function uploadRequiredRiderDocuments(uid, keyPrefix) {
 
 test("full Auth/application/PDF/image/review flow preserves zero wallet and approved online authority", async () => {
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_STORAGE_EMULATOR_HOST, "emulators required");
-  const user = await getAuth().createUser({email: "flow@example.test", password: "Emulator-only-123!"});
+  const user = await getAuth().createUser({email: "flow@example.test", emailVerified: true, password: "Emulator-only-123!"});
   const ctx = context(user.uid);
   assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, false);
   await account.updateRiderProfile.run(profile, ctx);
@@ -203,4 +203,8 @@ test("abandoned chunk cleanup removes expired staging without deleting completed
   await chunks.cleanupExpired({bucket, now: Date.now() + 25 * 60 * 60 * 1000});
   assert.equal((await staging.exists())[0], false);
   assert.equal((await completed.exists())[0], true);
+});
+
+ test("unverified Firebase claim cannot submit despite a profile flag", async () => {
+  await assert.rejects(account.submitRiderApplication.run(profile, {auth: {uid: "unverified-audit", token: {email_verified: false}}}), /Verify your email/);
 });
