@@ -10591,6 +10591,7 @@
         "scripts/scoped_functions_deploy_list.test.js",
         "server/functions/cloud-run-rider-delivery-authority.js",
         "server/functions/cloud-run-rider-delivery-authority.test.js",
+        "server/functions/rider-live-location-order.emulator.test.js",
         "test/sender_mobile/ratings_tipping_v2_test.dart",
         "test/website_rider_delivery_authority_api_test.dart"
       ],
