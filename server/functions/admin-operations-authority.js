@@ -864,11 +864,13 @@ exports.adminUpdateBusinessMember = adminCallable(async (data, context) => {
       updatedBy: actor.uid,
       updatedByEmail: actor.email || null,
     }, {merge: true});
-    if (beforeMember.userId) tx.set(db.collection("businessMemberships").doc(`${businessId}_${beforeMember.userId}`), {
+    if (beforeMember.userId) {
+tx.set(db.collection("businessMemberships").doc(`${businessId}_${beforeMember.userId}`), {
       businessId, userId: beforeMember.userId,
       ...(data.remove === true ? {status: "removed"} : {role}),
       updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.uid,
     }, {merge: true});
+}
   });
   await writeAudit(db, actor, {
     actionType: data.remove === true ? "business_member_removed" : "business_member_role_updated",
