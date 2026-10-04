@@ -240,6 +240,24 @@
   "sharedFiles": [],
   "allowedDependencyIntersections": [
     {
+      "products": [
+        "sender-app",
+        "backend"
+      ],
+      "files": [
+        "deploy-manifest.json",
+        "docs/releases/business-health-native-cutover.md",
+        "lib/app/business/business_repository.dart",
+        "lib/app/health_plus/view/health_plus.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/health-plus-checkout-security.test.js",
+        "server/functions/native-business-health-transport.test.js",
+        "test/business_health_callable_api_test.dart"
+      ],
+      "reason": "Sender native Business and Health transport cutover and its exact backend contract tests form one reviewed change; no backend runtime, ownership, deployment or security policy is modified."
+    },
+    {
       "products": ["sender-app", "backend"],
       "files": [
         "lib/gifts_test_main.dart",
