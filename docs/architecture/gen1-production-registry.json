@@ -1374,7 +1374,9 @@
       "productionPurpose": "adminOperationsAuthority.adminUpdateBusinessMember",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
-        "server/functions/business-health-audit.emulator.test.js"
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -1408,8 +1410,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -3504,6 +3509,8 @@
       "callers": [
         "lib/app/health_plus/view/health_plus.dart",
         "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js",
         "server/functions/firestore-health-plus-authority-rules.test.js",
         "server/functions/health-plus-checkout-security.test.js",
         "server/functions/payment-runtime-bindings.test.js"
@@ -3535,8 +3542,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -4308,7 +4318,9 @@
       "productionPurpose": "businessAccess.ensureBusinessCompanyCode",
       "callers": [
         "lib/app/business/business_repository.dart",
-        "lib/website/shared/circum_website_app.dart"
+        "lib/website/shared/circum_website_app.dart",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -4330,8 +4342,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -5945,7 +5960,9 @@
       "productionPurpose": "businessAccess.inviteBusinessMember",
       "callers": [
         "lib/app/business/business_repository.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -5967,8 +5984,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -6116,7 +6136,9 @@
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -6138,8 +6160,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -7625,7 +7650,10 @@
       "productionPurpose": "businessAccess.recordBusinessIrisMoment",
       "callers": [
         "lib/app/business/business_repository.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -7647,8 +7675,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8181,7 +8212,9 @@
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -8203,8 +8236,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -8412,7 +8448,9 @@
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
-        "server/functions/business-health-audit.emulator.test.js"
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -8434,8 +8472,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -9023,7 +9064,9 @@
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
-        "server/functions/business-health-audit.emulator.test.js"
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -9045,8 +9088,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10329,7 +10375,9 @@
       "callers": [
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
-        "server/functions/business-centre-contract.test.js"
+        "server/functions/business-centre-contract.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -10351,8 +10399,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10365,7 +10416,9 @@
       "callers": [
         "lib/app/business/business_repository.dart",
         "server/functions/business-centre-contract.test.js",
-        "server/functions/business-health-audit.emulator.test.js"
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -10387,8 +10440,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10402,7 +10458,9 @@
         "lib/app/business/business_repository.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
-        "server/functions/business-health-audit.emulator.test.js"
+        "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -10424,8 +10482,11 @@
       "externalProviders": [],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
@@ -10865,6 +10926,8 @@
         "lib/app/health_plus/view/health_plus.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-health-audit.emulator.test.js",
+        "server/functions/cloud-run-native-callable-proxy.js",
+        "server/functions/cloud-run-payment-family.js",
         "server/functions/firestore-health-plus-authority-rules.test.js",
         "server/functions/health-plus-checkout-security.test.js"
       ],
@@ -10894,8 +10957,11 @@
       ],
       "idempotencyProtectionDetected": true,
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
-      "cloudRunReplacement": [],
-      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "cloudRunReplacement": [
+        "cloud-run-native-callable-proxy.js",
+        "cloud-run-payment-family.js"
+      ],
+      "migrationStatus": "ALREADY MIGRATED — CUT OVER REMAINING CALLERS",
       "retirementStatus": "not-retired"
     },
     {
