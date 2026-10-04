@@ -131,3 +131,10 @@ test("Operations member removal revokes IDs and canonical membership; missing re
   assert.deepEqual(record.managerIds, []);
   assert.equal((await db.doc("businessMemberships/admin-remove_member").get()).data().status, "removed");
 });
+
+
+test("missing Business targets return a validation error before Firestore access", async () => {
+  for (const operation of ["requestBusinessAccess", "reviewBusinessAccessRequest", "updateBusinessProfile", "recordBusinessIrisMoment"]) {
+    await assert.rejects(business[operation].run({}, context("owner")), {code: "invalid-argument"});
+  }
+});

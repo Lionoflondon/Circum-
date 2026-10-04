@@ -61,6 +61,7 @@ function memberRole(account = {}, uid, email) {
 
 async function requireBusinessAdmin(db, businessId, context) {
   const uid = requireAuth(context);
+  if (!clean(businessId)) throw new functions.https.HttpsError("invalid-argument", "Business workspace is required.");
   const email = context.auth.token.email_verified === true ? cleanEmail(context.auth.token.email) : "";
   const ref = db.collection("businessAccounts").doc(businessId);
   const snap = await ref.get();
@@ -452,6 +453,7 @@ exports.requestBusinessAccess = functions
       const uid = requireAuth(context);
       const db = getFirestore();
       const businessId = clean(data.businessId);
+      if (!businessId) throw new functions.https.HttpsError("invalid-argument", "Business workspace is required.");
       const role = BUSINESS_ROLES.has(clean(data.role || "member")) ?
       clean(data.role || "member") :
       "member";
@@ -558,6 +560,7 @@ exports.reviewBusinessAccessRequest = functions
       const uid = requireAuth(context);
       const db = getFirestore();
       const requestId = clean(data.requestId);
+      if (!requestId) throw new functions.https.HttpsError("invalid-argument", "Access request is required.");
       const approved = data.approved === true;
       const requestRef = db.collection("businessJoinRequests").doc(requestId);
       const requestSnap = await requestRef.get();
