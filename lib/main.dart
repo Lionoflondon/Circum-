@@ -44,8 +44,9 @@ Future<void> main() async {
 
 Future<FirebaseApp>? _firebaseInitialization;
 bool _notificationHandlersRegistered = false;
+final _senderStartupAttempt = SenderStartupAttempt();
 
-Future<void> _startSender() => runSenderStartup(
+Future<void> _startSender() => _senderStartupAttempt.run(() => runSenderStartup(
       renderBoot: () => runApp(const CircumStartupBlocked()),
       initialize: () async {
         await _runCoreStartupStep('firebase', () async {
@@ -58,28 +59,38 @@ Future<void> _startSender() => runSenderStartup(
           }
         });
         await _runCoreStartupStep('stripe', _configureStripe);
-        final appCheckStartup = await initializeCircumAppCheck();
-        if (appCheckStartup.blockStartup || !appCheckStartup.enabled) {
-          developer.log(appCheckStartup.message, name: 'circum.sender.startup');
-        }
+        await _runCoreStartupStep('app-check', () async {
+          final appCheckStartup = await initializeCircumAppCheck();
+          if (appCheckStartup.blockStartup || !appCheckStartup.enabled) {
+            developer.log(appCheckStartup.message,
+                name: 'circum.sender.startup');
+          }
+        });
       },
       renderApp: () => runApp(const App()),
       afterRenderApp: kIsWeb ? null : _initializeNotificationsAfterRender,
       onFailure: _recordStartupFailure,
+      renderSlow: () => runApp(const CircumStartupBlocked(
+        message: 'Circum is taking longer to start. Please wait.',
+      )),
       renderRecovery: () => runApp(
         CircumStartupBlocked(
           message: 'Circum could not start. Please try again.',
           onRetry: _startSender,
         ),
       ),
-    );
+    ));
 
 Future<void> _runCoreStartupStep(
   String stage,
   Future<void> Function() initialize,
 ) async {
+  final elapsed = Stopwatch()..start();
+  debugPrint('CIRCUM_STARTUP_STAGE stage=$stage status=started');
   try {
     await initialize();
+    debugPrint('CIRCUM_STARTUP_STAGE stage=$stage status=completed '
+        'elapsedMs=${elapsed.elapsedMilliseconds}');
   } catch (error, stackTrace) {
     _recordStartupFailure(stage, error, stackTrace);
     rethrow;
