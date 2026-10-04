@@ -521,12 +521,14 @@
       "productionPurpose": "cloudRunOnly(businessPayments.adminCreateBusinessInvoice, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/admin-hardening-contract.test.js",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
-        "test/admin_operations_test.dart"
+        "test/admin_operations_test.dart",
+        "test/business_health_callable_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -1334,6 +1336,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessAccountStatus, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
       ],
@@ -1385,6 +1388,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessMember, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -1437,6 +1441,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateBusinessOperation, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
       ],
@@ -1718,6 +1723,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusPickup, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -1770,6 +1776,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusProfile, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -1822,6 +1829,7 @@
       "productionPurpose": "cloudRunOnly(adminOperationsAuthority.adminUpdateHealthPlusSchedule, \"circum-health-plus-payments\", true)",
       "callers": [
         "lib/app/admin/admin_phase1_shell.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -2593,6 +2601,7 @@
       "generation": "Cloud Run",
       "productionPurpose": "cloudRunOnly(businessPayments.cancelBusinessInvoiceCheckout(stripe), \"circum-business-invoice-payments\")",
       "callers": [
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -3219,6 +3228,7 @@
       "productionPurpose": "cloudRunOnly(businessPayments.createBusinessInvoiceCheckout(stripe), \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-checkout-reservations.emulator.test.js",
@@ -3226,7 +3236,8 @@
         "server/functions/cloud-run-payment-family.js",
         "server/functions/cloud-run-payment-schedulers.test.js",
         "server/functions/delivery-lifecycle.emulator.test.js",
-        "server/functions/payment-runtime-bindings.test.js"
+        "server/functions/payment-runtime-bindings.test.js",
+        "test/business_health_callable_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -3268,6 +3279,7 @@
       "generation": "Cloud Run",
       "productionPurpose": "cloudRunOnly(businessPayments.createBusinessRothCheckout(stripe), \"circum-business-roth-checkout\", true)",
       "callers": [
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-business-roth.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -3548,13 +3560,15 @@
       "productionPurpose": "cloudRunOnly(healthPlus.createHealthPlusBooking, \"circum-health-plus-payments\")",
       "callers": [
         "lib/app/health_plus/view/health_plus.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/firestore-health-plus-authority-rules.test.js",
         "server/functions/health-plus-checkout-security.test.js",
-        "server/functions/payment-runtime-bindings.test.js"
+        "server/functions/payment-runtime-bindings.test.js",
+        "test/business_health_callable_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -4358,6 +4372,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.ensureBusinessCompanyCode, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -6000,6 +6015,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.inviteBusinessMember, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -6040,6 +6056,7 @@
       "productionPurpose": "cloudRunOnly(businessPayments.listBusinessRothTransactions, \"circum-business-invoice-payments\", true)",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js"
@@ -6180,6 +6197,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.lookupBusinessByCompanyCode, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -7663,6 +7681,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.recordBusinessIrisMoment, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -8224,6 +8243,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.removeBusinessMember, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -8459,6 +8479,7 @@
       "callers": [
         "lib/app/business/business_access_view.dart",
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
@@ -9075,6 +9096,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.reviewBusinessAccessRequest, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
@@ -10387,6 +10409,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessMemberRole, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -10428,6 +10451,7 @@
       "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessMemberStatus, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
@@ -10469,11 +10493,13 @@
       "productionPurpose": "cloudRunOnly(businessAccess.updateBusinessProfile, \"circum-business-invoice-payments\")",
       "callers": [
         "lib/app/business/business_repository.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-centre-contract.test.js",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
-        "server/functions/cloud-run-payment-family.js"
+        "server/functions/cloud-run-payment-family.js",
+        "test/business_health_callable_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -10667,12 +10693,14 @@
       "productionPurpose": "cloudRunHttpOnly(healthPlus.updateHealthPlusPickupStatus, \"circum-health-plus-payments\")",
       "callers": [
         "docs/project_memory.md",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/health-plus-checkout-security.test.js",
-        "server/functions/health-plus.js"
+        "server/functions/health-plus.js",
+        "test/business_health_callable_api_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -10931,6 +10959,7 @@
       "productionPurpose": "cloudRunOnly(healthPlus.updateSenderHealthPlusBooking, \"circum-health-plus-payments\")",
       "callers": [
         "lib/app/health_plus/view/health_plus.dart",
+        "lib/app/sender_mobile/business_health_callable_api.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/business-health-audit.emulator.test.js",
         "server/functions/cloud-run-native-callable-proxy.js",
