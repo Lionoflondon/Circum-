@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -38,39 +39,78 @@ const AndroidNotificationChannel _senderNotificationChannel =
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await runSenderStartup(
-    renderBoot: () => runApp(const CircumStartupBlocked()),
-    initialize: () async {
-      await Future.wait<void>([
-        _configureStripe(),
-        Firebase.initializeApp().then((_) {}),
-      ]);
-      await Future.wait<void>([
-        () async {
-          final appCheckStartup = await initializeCircumAppCheck();
-          if (appCheckStartup.blockStartup) {
-            developer.log(
-              'Service protection unavailable; continuing after boot render.',
-            );
+  await _startSender();
+}
+
+Future<FirebaseApp>? _firebaseInitialization;
+bool _notificationHandlersRegistered = false;
+
+Future<void> _startSender() => runSenderStartup(
+      renderBoot: () => runApp(const CircumStartupBlocked()),
+      initialize: () async {
+        await _runCoreStartupStep('firebase', () async {
+          if (Firebase.apps.isNotEmpty) return;
+          try {
+            await (_firebaseInitialization ??= Firebase.initializeApp());
+          } catch (_) {
+            _firebaseInitialization = null;
+            rethrow;
           }
-        }(),
-        if (!kIsWeb)
-          () async {
-            await _configureNotifications();
-            FirebaseMessaging.onBackgroundMessage(
-              _firebaseMessagingBackgroundHandler,
-            );
-            foregoundMessage();
-            configureNotificationOpenRouting();
-          }(),
-      ]);
-    },
-    renderApp: () => runApp(const App()),
-    renderRecovery: () => runApp(
-      const CircumStartupBlocked(
-        message: 'Circum could not start. Please try again.',
+        });
+        await _runCoreStartupStep('stripe', _configureStripe);
+        final appCheckStartup = await initializeCircumAppCheck();
+        if (appCheckStartup.blockStartup || !appCheckStartup.enabled) {
+          developer.log(appCheckStartup.message, name: 'circum.sender.startup');
+        }
+      },
+      renderApp: () => runApp(const App()),
+      afterRenderApp: kIsWeb ? null : _initializeNotificationsAfterRender,
+      onFailure: _recordStartupFailure,
+      renderRecovery: () => runApp(
+        CircumStartupBlocked(
+          message: 'Circum could not start. Please try again.',
+          onRetry: _startSender,
+        ),
       ),
-    ),
+    );
+
+Future<void> _runCoreStartupStep(
+  String stage,
+  Future<void> Function() initialize,
+) async {
+  try {
+    await initialize();
+  } catch (error, stackTrace) {
+    _recordStartupFailure(stage, error, stackTrace);
+    rethrow;
+  }
+}
+
+void _recordStartupFailure(String stage, Object error, StackTrace stackTrace) {
+  developer.log(
+    'Sender startup failed at $stage',
+    name: 'circum.sender.startup',
+    error: error,
+    stackTrace: stackTrace,
+  );
+  debugPrint('CIRCUM_STARTUP_FAILURE stage=$stage type=${error.runtimeType}');
+}
+
+Future<void> _initializeNotificationsAfterRender() async {
+  await WidgetsBinding.instance.endOfFrame;
+  await _configureNotifications();
+  if (!_notificationHandlersRegistered) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    foregoundMessage();
+    _notificationHandlersRegistered = true;
+    await configureNotificationOpenRouting();
+  }
+  // Only FCM requests permission, after login has rendered. Local-notification
+  // setup must not create a second permission prompt during application boot.
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
   );
 }
 
@@ -86,9 +126,10 @@ Future<void> _configureStripe() async {
 }
 
 class CircumStartupBlocked extends StatelessWidget {
-  const CircumStartupBlocked({this.message, super.key});
+  const CircumStartupBlocked({this.message, this.onRetry, super.key});
 
   final String? message;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -105,14 +146,26 @@ class CircumStartupBlocked extends StatelessWidget {
                       strokeWidth: 2,
                       color: Color(0xFF93C5FD),
                     )
-                  : Text(
-                      message!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          message!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (onRetry != null) ...[
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: onRetry,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ],
                     ),
             ),
           ),
@@ -126,7 +179,11 @@ Future<void> _configureNotifications() async {
   const androidSettings = AndroidInitializationSettings(
     '@mipmap/launcher_icon',
   );
-  const iOSSettings = DarwinInitializationSettings();
+  const iOSSettings = DarwinInitializationSettings(
+    requestAlertPermission: false,
+    requestBadgePermission: false,
+    requestSoundPermission: false,
+  );
   const settings = InitializationSettings(
     android: androidSettings,
     iOS: iOSSettings,
@@ -160,11 +217,6 @@ Future<void> _configureNotifications() async {
       flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
   await android?.createNotificationChannel(_senderNotificationChannel);
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true,
     badge: true,
