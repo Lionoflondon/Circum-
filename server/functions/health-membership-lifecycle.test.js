@@ -67,3 +67,15 @@ test("unbound Health+ subscription becomes durable action-required review instea
   assert.equal(result.reason, "unbound_health_membership_subscription");
   assert.equal(writes[0].data.status, "action_required");
 });
+
+
+test("a recurring Gift checkout cannot create a Health+ membership", async () => {
+  const result = await lifecycle.handleHealthMembershipCheckoutSession({
+    db: {collection() {
+throw new Error("Non-Health billing must not touch Health collections");
+}},
+    session: {mode: "subscription", subscription: "sub_gift", metadata: {type: "gift_recurring_subscription", userId: "sender"}},
+    event: {id: "evt_gift", type: "checkout.session.completed"},
+  });
+  assert.equal(result.handled, false);
+});

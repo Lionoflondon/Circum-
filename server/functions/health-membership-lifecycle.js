@@ -40,15 +40,22 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
     if ((await transaction.get(eventRef)).exists) return {duplicate: true, eventId};
     const membershipSnap = await transaction.get(membershipRef);
     const existing = membershipSnap.exists ? membershipSnap.data() || {} : {};
-    for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
-      if (text(existing[field]) && text(patch[field]) && text(existing[field]) !== text(patch[field])) {
-        throw new Error(`Health+ membership ${field} does not match its existing binding.`);
-      }
-    }
     const eventCreated = Number(event.created || 0);
     const previousCreated = Number(existing.lastStripeEventCreated || 0);
     const stale = eventCreated > 0 && previousCreated > eventCreated;
     const cancelledInvoice = existing.status === "canceled" && text(event.type).startsWith("invoice.");
+    const session = event.data && event.data.object || {};
+    const replacementCheckout = existing.status === "canceled" && event.type === "checkout.session.completed" &&
+      ["paid", "no_payment_required"].includes(session.payment_status) &&
+      text(patch.checkoutSessionId) && text(existing.checkoutSessionId) !== text(patch.checkoutSessionId);
+    if (!stale) {
+for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
+      if (text(existing[field]) && text(patch[field]) && text(existing[field]) !== text(patch[field])) {
+        if (field === "stripeSubscriptionId" && replacementCheckout) continue;
+        throw new Error(`Health+ membership ${field} does not match its existing binding.`);
+      }
+    }
+}
     if (!stale && !cancelledInvoice) {
       transaction.set(membershipRef, {...patch,
         ...(eventCreated > 0 ? {lastStripeEventCreated: eventCreated} : {}),
@@ -75,7 +82,9 @@ async function membershipRefForSubscription(db, subscriptionId) {
 }
 
 async function handleHealthMembershipCheckoutSession({db, session, event}) {
-  if (session.mode !== "subscription" || !text(session.subscription)) return {handled: false};
+  const metadata = session.metadata || {};
+  if (session.mode !== "subscription" || !text(session.subscription) ||
+      (metadata.type !== "health_plus_payment" && metadata.feature !== "health_plus")) return {handled: false};
   const senderId = text(session.metadata && session.metadata.userId);
   if (!senderId) throw new Error("Health+ subscription checkout is missing its Sender identity.");
   const subscription = {id: session.subscription, customer: session.customer, status: "incomplete"};
