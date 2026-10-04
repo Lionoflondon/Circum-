@@ -349,3 +349,63 @@ test("modern Health+ controls require existing records and commit their clinical
     assert.equal(audit.docs[0].data().actorId, "clinical-operator");
   }
 });
+
+test("Health+ delayed checkout and partial invoice retain authoritative active membership", async () => {
+  const lifecycle = require("./health-membership-lifecycle");
+  for (const checkoutFirst of [true, false]) {
+    const uid = `ordering-${checkoutFirst}`;
+    const sub = {id: `sub_${uid}`, customer: `cus_${uid}`, status: "active", metadata: {userId: uid}, current_period_start: 100, current_period_end: 1000, cancel_at_period_end: true, items: {data: [{price: {id: "price_core"}}]}};
+    const session = {id: `cs_${uid}`, mode: "subscription", subscription: sub.id, customer: sub.customer, payment_status: "paid", metadata: {type: "health_plus_payment", userId: uid}};
+    const event = (id, type, created, object) => ({id: `${id}_${uid}`, type, created, data: {object}});
+    const checkout = () => lifecycle.handleHealthMembershipCheckoutSession({db, session, event: event("checkout", "checkout.session.completed", 300, session)});
+    const activate = () => lifecycle.handleHealthSubscriptionEvent({db, event: event("active", "customer.subscription.updated", 200, sub)});
+    if (checkoutFirst) {
+ await checkout(); await activate();
+} else {
+ await activate(); await checkout();
+}
+    const ref = db.doc(`healthPlusMemberships/${uid}`);
+    assert.equal((await ref.get()).data().status, "active");
+    await lifecycle.handleHealthInvoiceEvent({db, event: event("invoice", "invoice.paid", 400, {id: `in_${uid}`, subscription: sub.id, customer: sub.customer})});
+    const current = (await ref.get()).data();
+    assert.equal(current.currentPeriodStart.toMillis(), 100000);
+    assert.equal(current.currentPeriodEnd.toMillis(), 1000000);
+    assert.equal(current.planId, "price_core");
+    assert.equal(current.cancelAtPeriodEnd, true);
+    await lifecycle.handleHealthSubscriptionEvent({db, event: event("cancel", "customer.subscription.deleted", 500, sub)});
+    const replacement = {...session, id: `cs_new_${uid}`, subscription: `sub_new_${uid}`};
+    await lifecycle.handleHealthMembershipCheckoutSession({db, session: replacement, event: event("replacement", "checkout.session.completed", 700, replacement)});
+    await lifecycle.handleHealthSubscriptionEvent({db, event: event("new_active", "customer.subscription.updated", 600, {...sub, id: replacement.subscription})});
+    const retired = event("retired", "customer.subscription.deleted", 800, sub);
+    assert.equal((await lifecycle.handleHealthSubscriptionEvent({db, event: retired})).suppressed, true);
+    assert.equal((await lifecycle.handleHealthSubscriptionEvent({db, event: retired})).duplicate, true);
+    assert.equal((await ref.get()).data().status, "active");
+  }
+});
+
+test("distinct simultaneous recurring Health+ bookings claim one Sender and release only confirmed expired checkout", async () => {
+  const authority = require("./health-checkout-authority");
+  const senderId = "one-health-subscription";
+  const bookings = ["claim-a", "claim-b"].map((id) => ({id, senderId, profileId: senderId, status: "scheduled", routeAuthorityVersion: 2}));
+  for (const booking of bookings) await db.doc(`prescriptionPickups/${booking.id}`).set(booking);
+  const results = await Promise.allSettled(bookings.map((booking) => authority.reserve({db, paymentRef: db.doc(`healthPlusPayments/${booking.id}`), booking, candidate: {recurring: true, amountPence: 100}})));
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  const winner = results[0].status === "fulfilled" ? bookings[0] : bookings[1];
+  const loser = bookings.find((b) => b.id !== winner.id);
+  assert.equal((await db.doc(`healthPlusPayments/${loser.id}`).get()).exists, false);
+  await assert.rejects(authority.resolvePendingSubscriptionCheckout({db, stripe: {}, senderId, bookingId: loser.id}));
+  await db.doc(`healthPlusPayments/${winner.id}`).set({checkoutSessionId: "cs_claim"}, {merge: true});
+  const stripe = {checkout: {sessions: {retrieve: async () => ({status: "complete", payment_status: "paid", subscription: "sub_claim"})}}};
+  await assert.rejects(authority.resolvePendingSubscriptionCheckout({db, stripe, senderId, bookingId: loser.id}));
+  stripe.checkout.sessions.retrieve = async () => ({status: "expired", payment_status: "unpaid", subscription: null});
+  await authority.resolvePendingSubscriptionCheckout({db, stripe, senderId, bookingId: loser.id});
+  await authority.reserve({db, paymentRef: db.doc(`healthPlusPayments/${loser.id}`), booking: loser, candidate: {recurring: true, amountPence: 100}});
+  assert.equal((await db.doc(`healthPlusMemberships/${senderId}`).get()).data().pendingCheckoutBookingId, loser.id);
+});
+
+test("private Health+ membership certification uses canonical handlers with no provider calls", async () => {
+  const result = await require("./qa-health-membership-certification").certify({db, senderId: "qa-membership-certification"});
+  assert.equal(result.passed, true);
+  assert.equal(result.providerCalls, 0);
+  assert.equal(result.checks.length, 6);
+});

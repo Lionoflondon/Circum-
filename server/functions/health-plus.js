@@ -745,6 +745,7 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
     let recurring = authoritative.recurring;
     let subscriptionCustomer = null;
     if (recurring) {
+      await healthCheckoutAuthority.resolvePendingSubscriptionCheckout({db, stripe: provider, senderId: sender.uid, bookingId});
       const membershipSnap = await db.collection("healthPlusMemberships").doc(sender.uid).get();
       const membership = membershipSnap.exists ? membershipSnap.data() || {} : {};
       if (membership.senderId && membership.senderId !== sender.uid) {

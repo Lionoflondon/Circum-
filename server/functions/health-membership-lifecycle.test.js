@@ -79,3 +79,12 @@ throw new Error("Non-Health billing must not touch Health collections");
   });
   assert.equal(result.handled, false);
 });
+
+test("partial billing objects omit unknown fields while explicit cancellation false is retained", () => {
+  const patch = lifecycle.membershipPatch({subscription: {id: "sub_partial"}, status: "active"});
+  for (const field of ["currentPeriodStart", "currentPeriodEnd", "stripeCustomerId", "latestInvoiceId", "cancelAtPeriodEnd", "planId"]) {
+    assert.equal(Object.hasOwn(patch, field), false);
+  }
+  assert.equal(patch.stripeSubscriptionId, "sub_partial");
+  assert.equal(lifecycle.membershipPatch({subscription: {cancel_at_period_end: false}}).cancelAtPeriodEnd, false);
+});

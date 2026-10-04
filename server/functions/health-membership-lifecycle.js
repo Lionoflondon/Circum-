@@ -20,17 +20,19 @@ function membershipStatus(subscription) {
   }
 }
 function membershipPatch({subscription = {}, invoice = null, status = null}) {
-  return {
-    status: status || membershipStatus(subscription),
+  const patch = {status: status || membershipStatus(subscription), updatedAt: FieldValue.serverTimestamp()};
+  for (const [field, value] of Object.entries({
     currentPeriodStart: dateFromUnix(subscription.current_period_start),
     currentPeriodEnd: dateFromUnix(subscription.current_period_end),
-    stripeCustomerId: text(subscription.customer) || null,
-    stripeSubscriptionId: text(subscription.id) || null,
-    latestInvoiceId: text((invoice && invoice.id) || subscription.latest_invoice) || null,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
-    planId: text(subscription.items && subscription.items.data && subscription.items.data[0] && subscription.items.data[0].price && subscription.items.data[0].price.id) || null,
-    updatedAt: FieldValue.serverTimestamp(),
-  };
+    stripeCustomerId: text(subscription.customer),
+    stripeSubscriptionId: text(subscription.id),
+    latestInvoiceId: text((invoice && invoice.id) || subscription.latest_invoice),
+    planId: text(subscription.items && subscription.items.data && subscription.items.data[0] && subscription.items.data[0].price && subscription.items.data[0].price.id),
+  })) {
+    if (value) patch[field] = value;
+  }
+  if (typeof subscription.cancel_at_period_end === "boolean") patch.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+  return patch;
 }
 async function claimMembershipEvent(db, event, membershipRef, patch) {
   const eventId = text(event && event.id);
@@ -42,30 +44,37 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
     const existing = membershipSnap.exists ? membershipSnap.data() || {} : {};
     const eventCreated = Number(event.created || 0);
     const previousCreated = Number(existing.lastStripeEventCreated || 0);
-    const stale = eventCreated > 0 && previousCreated > eventCreated;
+    const checkout = event.type === "checkout.session.completed";
     const session = event.data && event.data.object || {};
-    const replacementCheckout = existing.status === "canceled" && event.type === "checkout.session.completed" &&
+    const replacementCheckout = existing.status === "canceled" && checkout &&
       ["paid", "no_payment_required"].includes(session.payment_status) &&
+      text(patch.stripeSubscriptionId) !== text(existing.stripeSubscriptionId) &&
       text(patch.checkoutSessionId) && text(existing.checkoutSessionId) !== text(patch.checkoutSessionId);
+    const retired = (existing.retiredStripeSubscriptionIds || []).includes(text(patch.stripeSubscriptionId));
+    const stale = !checkout && eventCreated > 0 && previousCreated > eventCreated;
     const cancelledTransition = existing.status === "canceled" && patch.status !== "canceled" && !replacementCheckout;
-    if (!stale) {
-for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
+    for (const field of ["senderId", "stripeCustomerId", "stripeSubscriptionId"]) {
       if (text(existing[field]) && text(patch[field]) && text(existing[field]) !== text(patch[field])) {
-        if (field === "stripeSubscriptionId" && replacementCheckout) continue;
+        if (field === "stripeSubscriptionId" && (replacementCheckout || retired || stale)) continue;
         throw new Error(`Health+ membership ${field} does not match its existing binding.`);
       }
     }
-}
-    if (!stale && !cancelledTransition) {
-      transaction.set(membershipRef, {...patch,
-        ...(eventCreated > 0 ? {lastStripeEventCreated: eventCreated} : {}),
-      }, {merge: true});
+    if (!stale && !cancelledTransition && !retired) {
+      const appliedPatch = {...patch, ...(checkout ? {pendingCheckoutBookingId: null} : {})};
+      if (checkout && existing.status && !replacementCheckout) appliedPatch.status = existing.status;
+      if (replacementCheckout) {
+        appliedPatch.lastStripeEventCreated = 0;
+        appliedPatch.retiredStripeSubscriptionIds = [...new Set([...(existing.retiredStripeSubscriptionIds || []), existing.stripeSubscriptionId].filter(Boolean))];
+      } else if (!checkout && eventCreated > 0) {
+        appliedPatch.lastStripeEventCreated = eventCreated;
+      }
+      transaction.set(membershipRef, appliedPatch, {merge: true});
     }
     transaction.create(eventRef, {eventId, type: text(event.type), membershipId: membershipRef.id,
-      suppressed: stale || cancelledTransition,
-      ...(stale || cancelledTransition ? {reason: stale ? "stale_event" : "cancelled_membership"} : {}),
+      suppressed: stale || cancelledTransition || retired,
+      ...(stale || cancelledTransition || retired ? {reason: retired ? "retired_subscription" : stale ? "stale_event" : "cancelled_membership"} : {}),
       createdAt: FieldValue.serverTimestamp()});
-    if (stale || cancelledTransition) return {duplicate: false, suppressed: true, eventId};
+    if (stale || cancelledTransition || retired) return {duplicate: false, suppressed: true, eventId};
     return {duplicate: false, eventId};
   });
 }
