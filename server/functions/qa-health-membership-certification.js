@@ -17,6 +17,9 @@ async function certify({db, senderId}) {
   await lifecycle.handleHealthInvoiceEvent({db, event: event("evt_qa_invoice", "invoice.paid", 400, {id: "in_qa_health", subscription: sub.id, customer: sub.customer})});
   const current = (await ref.get()).data();
   check("partial_invoice_preserves_period_and_plan", current.currentPeriodEnd.toMillis() === 1000000 && current.planId === "price_qa_health" && current.cancelAtPeriodEnd === true);
+  await lifecycle.handleHealthSubscriptionEvent({db, event: event("evt_qa_pause", "customer.subscription.updated", 450, {...sub, pause_collection: {behavior: "void"}})});
+  await lifecycle.handleHealthInvoiceEvent({db, event: event("evt_qa_paused_invoice", "invoice.paid", 460, {id: "in_qa_paused", subscription: sub.id, customer: sub.customer})});
+  check("renewal_invoice_preserves_pause", (await ref.get()).data().status === "paused");
   await lifecycle.handleHealthSubscriptionEvent({db, event: event("evt_qa_cancel", "customer.subscription.deleted", 500, sub)});
   const replacement = {...session, id: "cs_qa_new", subscription: "sub_qa_new"};
   await lifecycle.handleHealthMembershipCheckoutSession({db, session: replacement, event: event("evt_qa_replace", "checkout.session.completed", 700, replacement)});

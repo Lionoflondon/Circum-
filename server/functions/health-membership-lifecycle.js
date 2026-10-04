@@ -62,6 +62,10 @@ async function claimMembershipEvent(db, event, membershipRef, patch) {
     if (!stale && !cancelledTransition && !retired) {
       const appliedPatch = {...patch, ...(checkout ? {pendingCheckoutBookingId: null} : {})};
       if (checkout && existing.status && !replacementCheckout) appliedPatch.status = existing.status;
+      if (event.type.startsWith("invoice.")) {
+        appliedPatch.lastInvoiceStatus = patch.status;
+        if (existing.status === "paused") appliedPatch.status = "paused";
+      }
       if (replacementCheckout) {
         appliedPatch.lastStripeEventCreated = 0;
         appliedPatch.retiredStripeSubscriptionIds = [...new Set([...(existing.retiredStripeSubscriptionIds || []), existing.stripeSubscriptionId].filter(Boolean))];

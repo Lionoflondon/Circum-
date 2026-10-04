@@ -372,6 +372,11 @@ test("Health+ delayed checkout and partial invoice retain authoritative active m
     assert.equal(current.currentPeriodEnd.toMillis(), 1000000);
     assert.equal(current.planId, "price_core");
     assert.equal(current.cancelAtPeriodEnd, true);
+    await lifecycle.handleHealthSubscriptionEvent({db, event: event("pause", "customer.subscription.updated", 450, {...sub, pause_collection: {behavior: "void"}})});
+    await lifecycle.handleHealthInvoiceEvent({db, event: event("paused_invoice", "invoice.paid", 460, {id: `in_paused_${uid}`, subscription: sub.id, customer: sub.customer})});
+    assert.equal((await ref.get()).data().status, "paused");
+    await lifecycle.handleHealthSubscriptionEvent({db, event: event("resume", "customer.subscription.updated", 470, sub)});
+    assert.equal((await ref.get()).data().status, "active");
     await lifecycle.handleHealthSubscriptionEvent({db, event: event("cancel", "customer.subscription.deleted", 500, sub)});
     const replacement = {...session, id: `cs_new_${uid}`, subscription: `sub_new_${uid}`};
     await lifecycle.handleHealthMembershipCheckoutSession({db, session: replacement, event: event("replacement", "checkout.session.completed", 700, replacement)});
@@ -407,5 +412,5 @@ test("private Health+ membership certification uses canonical handlers with no p
   const result = await require("./qa-health-membership-certification").certify({db, senderId: "qa-membership-certification"});
   assert.equal(result.passed, true);
   assert.equal(result.providerCalls, 0);
-  assert.equal(result.checks.length, 6);
+  assert.equal(result.checks.length, 7);
 });
