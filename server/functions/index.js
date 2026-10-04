@@ -518,7 +518,7 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
   });
 });
 
-exports.reconcileBusinessInvoiceCheckouts = businessPayments.reconcileBusinessInvoiceCheckouts(stripe);
+exports.reconcileBusinessInvoiceCheckouts = cloudRunOnly(businessPayments.reconcileBusinessInvoiceCheckouts(stripe), "circum-payment-schedulers", false, "schedule");
 
 // Private QA namespace only; no Stripe SDK, dispatch or notification side effects.
 const qaLifecycle = require("./qa-lifecycle");
