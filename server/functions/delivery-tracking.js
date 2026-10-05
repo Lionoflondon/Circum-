@@ -657,6 +657,13 @@ patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] 
   return result;
 });
 
+function liveLocationDisposition(incoming, previous, now = Date.now()) {
+  const at = Number(incoming);
+  if (!Number.isFinite(at) || at <= 0 || at > now + 30000 || now - at > 180000) return "stale";
+  if (Number(previous || 0) >= at) return "superseded";
+  return "accept";
+}
+
 exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
@@ -695,6 +702,13 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
     }
 
     const now = Date.now();
+    const locationRef = found.ref.collection("tracking").doc("liveLocation");
+    const previousLocation = await transaction.get(locationRef);
+    const disposition = liveLocationDisposition(location.clientRecordedAt,
+        previousLocation.data()?.clientRecordedAt, now);
+    if (disposition !== "accept") {
+      return {success: true, deliveryId: found.id, ignored: true, reason: disposition};
+    }
     const trackingHealth = {
       gpsStatus: location.gpsStatus,
       gpsSignalQuality: location.gpsSignalQuality,
@@ -953,4 +967,5 @@ exports._private = {
   scheduledPickupMillis,
   scheduledOperationalTransitionAllowed,
   authoritativeLiveLocationStatus,
+  liveLocationDisposition,
 };

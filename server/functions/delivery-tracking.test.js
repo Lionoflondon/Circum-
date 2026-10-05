@@ -362,3 +362,15 @@ test("authoritative zero Rider earning does not fall back to stale estimates", (
   assert.equal(value.amountSource, "explicit_rider_earning");
   assert.equal(value.requiresReview, false);
 });
+
+ test("live GPS updates reject stale, future and out-of-order fixes", () => {
+  const now = 2000000000000;
+  const check = deliveryTracking.liveLocationDisposition;
+  assert.equal(check(now, now - 10, now), "accept");
+  assert.equal(check(now - 10, now, now), "superseded");
+  assert.equal(check(now, now, now), "superseded");
+  assert.equal(check(now - 180001, 0, now), "stale");
+  assert.equal(check(now + 30001, 0, now), "stale");
+  assert.equal(check(NaN, 0, now), "stale");
+  assert.equal(check(Infinity, 0, now), "stale");
+});
