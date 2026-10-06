@@ -5,6 +5,40 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('diagnostics distinguish storage from credentials without leaking data',
+      () {
+    expect(
+        senderAuthFailureCode(FirebaseAuthException(
+          code: 'keychain-error',
+          message: 'private SDK details',
+          email: 'private@example.invalid',
+        )),
+        'keychain-error');
+    expect(
+        senderAuthFailureCode(FirebaseAuthException(
+          code: 'invalid-credential',
+        )),
+        'invalid-credential');
+    expect(
+        senderAuthFailureCode(FirebaseAuthException(
+          code: 'unexpected-private-content',
+          message: 'secret',
+        )),
+        'unknown');
+    expect(senderAuthFailureCode(StateError('secret')), 'unknown');
+    expect(senderAuthFailureCode(TimeoutException('secret')), 'timeout');
+  });
+
+  test('storage failure after remote signup directs recovery to sign-in', () {
+    final error = FirebaseAuthException(code: 'keychain-error');
+    expect(senderAuthErrorMessage(SenderAuthAction.createAccount, error),
+        contains('may have been created'));
+    expect(senderAuthErrorMessage(SenderAuthAction.createAccount, error),
+        contains('Sign in to continue'));
+    expect(senderAuthErrorMessage(SenderAuthAction.signIn, error),
+        contains('could not be saved on this device'));
+  });
+
   test('create-account failures never use sign-in wording', () {
     final message = senderAuthErrorMessage(
       SenderAuthAction.createAccount,
