@@ -17,6 +17,10 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
         : 'Sign in could not be completed. Please try again.';
   }
   switch (error.code) {
+    case 'keychain-error':
+      return creating
+          ? 'Your account may have been created, but access could not be saved on this device. Sign in to continue.'
+          : 'Sign in could not be saved on this device. Please restart Circum and try again.';
     case 'email-already-in-use':
       return 'An account already exists for this email. Sign in to continue.';
     case 'invalid-email':
@@ -46,4 +50,28 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
           ? 'Account creation could not be completed. Please try again.'
           : 'Sign in could not be completed. Please try again.';
   }
+}
+
+/// Record only a known code, never the SDK message, email, or credential.
+String senderAuthFailureCode(Object error) {
+  if (error is TimeoutException) return 'timeout';
+  if (error is! FirebaseAuthException) return 'unknown';
+  const codes = {
+    'keychain-error',
+    'invalid-app-credential',
+    'app-not-authorized',
+    'email-already-in-use',
+    'invalid-email',
+    'weak-password',
+    'invalid-credential',
+    'wrong-password',
+    'user-not-found',
+    'network-request-failed',
+    'too-many-requests',
+    'operation-not-allowed',
+    'wrong-surface',
+    'sender-no-user',
+    'internal-error',
+  };
+  return codes.contains(error.code) ? error.code : 'unknown';
 }

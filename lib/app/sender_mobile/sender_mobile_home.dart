@@ -1022,7 +1022,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       if (accountCreated) _queueSignupReferral(messenger);
       if (mounted) widget.onAuthenticated();
     } catch (error) {
-      debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
+      debugPrint('Sender Mobile auth failed: stage=email-auth '
+          'code=${senderAuthFailureCode(error)}');
       if (!mounted) return;
       final action =
           _isSignIn ? SenderAuthAction.signIn : SenderAuthAction.createAccount;
