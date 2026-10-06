@@ -7,7 +7,7 @@ void main() {
       () {
     final source = File('ios/Runner/Runner.entitlements').readAsStringSync();
     expect(source, contains('<key>keychain-access-groups</key>'));
-    expect(source, contains(r'$(AppIdentifierPrefix)$(CFBundleIdentifier)'));
+    expect(source, contains(r'$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)'));
     expect(source, isNot(contains('<string>*</string>')));
   });
 }
