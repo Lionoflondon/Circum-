@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_mobile_profile.dart';
 import 'package:circum/app/sender_mobile/sender_profile_authority.dart';
+import 'package:circum/app/sender_mobile/sender_profile_save_sequence.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -67,6 +68,24 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   Stream<SenderMobileProfileData> watch() => _controller.stream;
 
   Future<void> dispose() => _controller.close();
+}
+
+class _RefreshPendingProfileRepository extends _FakeProfileRepository {
+  _RefreshPendingProfileRepository(super.profile, {this.unconfirmed = false});
+
+  final bool unconfirmed;
+
+  @override
+  Future<SenderMobileProfileData> save({
+    required String displayName,
+    required String username,
+    required String phone,
+  }) async {
+    if (unconfirmed) throw const SenderProfileSaveUnconfirmed();
+    await super
+        .save(displayName: displayName, username: username, phone: phone);
+    throw const SenderProfileRefreshPending();
+  }
 }
 
 class _FailingProfileRepository implements SenderMobileProfileRepository {
@@ -139,6 +158,72 @@ void main() {
     expect(find.text('15 Jul 2026'), findsAtLeastNWidgets(1));
     expect(find.text('No recent trust activity.'), findsOneWidget);
     expect(find.text('Account trust baseline established'), findsNothing);
+  });
+
+  testWidgets('committed save with unavailable refresh has truthful feedback',
+      (tester) async {
+    final repository = _RefreshPendingProfileRepository(
+      const SenderMobileProfileData(
+        userId: 'sender-1',
+        displayName: 'QA Sender',
+        email: 'qa@example.test',
+        phone: '',
+        photoUrl: '',
+      ),
+    );
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: SenderMobileProfileView(repository: repository))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Profile'));
+    await tester.pumpAndSettle();
+    final name = find.descendant(
+        of: find.byKey(const Key('sender-profile-name-field')),
+        matching: find.byType(TextField));
+    await tester.enterText(name, 'Updated QA Sender');
+    await tester.pumpAndSettle();
+    final save = find.byKey(const Key('sender-profile-save'));
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('Profile saved. Refresh to load your latest details.'),
+        findsOneWidget);
+    expect(find.text('Your changes could not be saved. Please try again.'),
+        findsNothing);
+    expect(find.byKey(const Key('sender-profile-save')), findsNothing);
+  });
+
+  testWidgets('unconfirmed save directs refresh without claiming success',
+      (tester) async {
+    final repository = _RefreshPendingProfileRepository(
+      const SenderMobileProfileData(
+          userId: 'sender-1',
+          displayName: 'QA Sender',
+          email: 'qa@example.test',
+          phone: '',
+          photoUrl: ''),
+      unconfirmed: true,
+    );
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: SenderMobileProfileView(repository: repository))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Profile'));
+    await tester.pumpAndSettle();
+    final save = find.byKey(const Key('sender-profile-save'));
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(
+        find.text(
+            'We could not confirm this save. Refresh your profile before trying again.'),
+        findsOneWidget);
+    expect(find.text('Profile saved.'), findsNothing);
+    expect(find.text('Your changes could not be saved. Please try again.'),
+        findsNothing);
+    expect(find.byKey(const Key('sender-profile-save')), findsNothing);
   });
 
   testWidgets('Sender profile displays backend username and trust activity',
