@@ -4,7 +4,7 @@ Build a private debug artifact with signing enabled:
 
 ```sh
 flutter build ios --simulator --debug
-python3 scripts/verify_sender_simulator_keychain.py build/ios/iphonesimulator/Runner.app
+python3 ios/scripts/verify_simulator_keychain.py build/ios/iphonesimulator/Runner.app
 xcrun simctl install booted build/ios/iphonesimulator/Runner.app
 ```
 

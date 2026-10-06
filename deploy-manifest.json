@@ -102,8 +102,6 @@
         "test/vanguard_protection_test.dart",
         "scripts/build_sender_app_web.sh",
         "scripts/build_sender_ios.sh",
-        "scripts/verify_sender_simulator_keychain.py",
-        "test/security/sender_ios_keychain_contract_test.dart",
         "scripts/deploy_sender_app_web.sh",
         "scripts/validate_sender_mobile_artifacts.js",
         "android/",
