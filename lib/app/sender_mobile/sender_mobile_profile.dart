@@ -21,6 +21,7 @@ import 'sender_notifications.dart';
 import 'sender_notification_routing.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
+import 'sender_profile_save_sequence.dart';
 import 'sender_profile_preferences.dart';
 import 'sender_accessibility.dart';
 import 'sender_account_data.dart';
@@ -510,33 +511,47 @@ class FirebaseSenderMobileProfileRepository
       'profile.save.auth',
     );
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
-    await functions
-        .httpsCallable('updateSenderProfile')
-        .call({
-          'displayName': displayName.trim(),
-          'username': normalizedUsername,
-          'phone': phone.trim(),
-        })
-        .timeout(profileOperationTimeout);
-    if (user.displayName != displayName.trim()) {
-      await user
-          .updateDisplayName(displayName.trim())
-          .timeout(profileOperationTimeout);
-    }
-    final updated = await profileAuthority.readCanonicalProfile(
-      user,
-      'profile.save.read',
-    );
-    return SenderMobileProfileData.fromSources(
-      user: user,
-      data: {
-        ...?updated.data(),
-        'displayName': displayName.trim(),
-        'username': normalizedUsername,
-        'email': user.email?.trim() ?? '',
-        'phone': phone.trim(),
-        'photoURL': user.photoURL?.trim() ?? '',
+    return saveSenderProfileSequence<SenderMobileProfileData>(
+      isCurrentSession: () =>
+          profileAuthority.auth.currentUser?.uid == user.uid,
+      commitProfile: () async {
+        try {
+          final response =
+              await functions.httpsCallable('updateSenderProfile').call({
+            'displayName': displayName.trim(),
+            'username': normalizedUsername,
+            'phone': phone.trim(),
+          }).timeout(profileOperationTimeout);
+          requireSenderProfileAcknowledgement(response.data);
+        } on FirebaseFunctionsException catch (error) {
+          if (const {'deadline-exceeded', 'unavailable', 'internal', 'unknown'}
+              .contains(error.code)) {
+            throw const SenderProfileSaveUnconfirmed();
+          }
+          rethrow;
+        }
       },
+      readCommittedProfile: () async {
+        final updated = await profileAuthority.readCanonicalProfile(
+          user,
+          'profile.save.read',
+        );
+        return SenderMobileProfileData.fromSources(
+          user: user,
+          data: updated.data(),
+        );
+      },
+      mirrorDisplayName: () async {
+        if (user.displayName != displayName.trim()) {
+          await user.updateDisplayName(displayName.trim());
+        }
+      },
+      onMirrorDeferred: (error) => logSenderProfileStage(
+        uid: user.uid,
+        phase: 'profile.save.authMirror',
+        path: 'FirebaseAuth displayName',
+        event: 'mirror_deferred type=${error.runtimeType}',
+      ),
     );
   }
 
@@ -950,6 +965,32 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Profile saved.')));
+    } on SenderProfileRefreshPending {
+      if (!mounted) return;
+      setState(() {
+        _editing = false;
+        _saving = false;
+        _error = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile saved. Refresh to load your latest details.'),
+        ),
+      );
+    } on SenderProfileSaveUnconfirmed {
+      if (!mounted) return;
+      setState(() {
+        _editing = false;
+        _saving = false;
+        _error =
+            'We could not confirm this save. Refresh your profile before trying again.';
+      });
+    } on SenderProfileSaveSessionChanged {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Your account changed. Sign in again to refresh your profile.';
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
