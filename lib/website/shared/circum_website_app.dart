@@ -172,6 +172,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _openCanonicalPath(String path) async {
     final target = _canonicalWebUri(path);
+    if (kIsWeb) {
+      web.window.location.assign(target.toString());
+      return;
+    }
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
@@ -26730,7 +26734,9 @@ class _FooterServiceLink extends StatelessWidget {
       target: LinkTarget.self,
       builder: (context, followLink) {
         return TextButton(
-          onPressed: followLink ?? onPressed,
+          onPressed: kIsWeb
+              ? () => web.window.location.assign(uri.toString())
+              : onPressed,
           style: TextButton.styleFrom(
             foregroundColor: _landingInk,
             padding: EdgeInsets.zero,

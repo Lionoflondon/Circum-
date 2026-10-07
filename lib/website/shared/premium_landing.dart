@@ -3,7 +3,28 @@ part of 'circum_website_app.dart';
 const _landingInk = Color(0xff10231f);
 const _landingBlue = Color(0xff2455f5);
 const _landingVanguard = Color(0xff2563eb);
-const _landingHealth = Color(0xff22c55e);
+const _landingHealth = Color(0xff064e3b);
+const _landingGiftsSheen = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    Color(0xff176b9a),
+    Color(0xff248c78),
+    Color(0xff7851a9),
+    Color(0xffb24c82)
+  ],
+);
+const _landingGiftsPearl = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    Color(0xffe1f4ed),
+    Color(0xffe4efff),
+    Color(0xfff3e7fa),
+    Color(0xffffedf1)
+  ],
+  stops: [0, 0.34, 0.68, 1],
+);
 const _landingMuted = Color(0xff66706c);
 const _landingPaper = Color(0xfffafaf7);
 
@@ -30,7 +51,10 @@ class _PremiumLanding extends StatelessWidget {
       uri: _CircumWebsiteAppState._canonicalWebUri(path),
       target: LinkTarget.self,
       builder: (context, followLink) => TextButton(
-        onPressed: followLink ?? action,
+        onPressed: kIsWeb
+            ? () => web.window.location.assign(
+                _CircumWebsiteAppState._canonicalWebUri(path).toString())
+            : action,
         style: TextButton.styleFrom(
           backgroundColor: primary ? _landingBlue : Colors.transparent,
           foregroundColor: primary || inverse ? Colors.white : _landingInk,
@@ -413,10 +437,22 @@ class _PremiumLanding extends StatelessWidget {
       bool wide) {
     final iconColor = switch (path) {
       '/send/health' => _landingHealth,
-      '/gifts' => const Color(0xffe84373),
+      '/gifts' => const Color(0xff7851a9),
       '/send/business' => const Color(0xffb96508),
       _ => _landingBlue,
     };
+    final isGifts = path == '/gifts';
+    Widget serviceIcon(double size) {
+      final glyph = Icon(icon, color: iconColor, size: size);
+      return isGifts
+          ? ShaderMask(
+              shaderCallback: _landingGiftsSheen.createShader,
+              blendMode: BlendMode.srcIn,
+              child: glyph,
+            )
+          : glyph;
+    }
+
     final content =
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title,
@@ -432,16 +468,15 @@ class _PremiumLanding extends StatelessWidget {
       const SizedBox(height: 14),
       Text(coverage,
           style: TextStyle(
-              color: path == '/send/health'
-                  ? const Color(0xff15803d)
-                  : _landingBlue,
+              color: path == '/send/health' ? _landingHealth : _landingBlue,
               fontSize: 12,
               fontWeight: FontWeight.w600)),
     ]);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.06),
+          color: isGifts ? null : iconColor.withValues(alpha: 0.06),
+          gradient: isGifts ? _landingGiftsPearl : null,
           border: const Border(top: BorderSide(color: Color(0xffdce1dc)))),
       child: LayoutBuilder(builder: (_, box) {
         final actionLink = Link(
@@ -449,7 +484,10 @@ class _PremiumLanding extends StatelessWidget {
           target: LinkTarget.self,
           builder: (_, followLink) => IconButton(
             tooltip: 'Explore $title',
-            onPressed: followLink ?? action,
+            onPressed: kIsWeb
+                ? () => web.window.location.assign(
+                    _CircumWebsiteAppState._canonicalWebUri(path).toString())
+                : action,
             icon: const Icon(Icons.north_east, color: _landingInk),
           ),
         );
@@ -458,7 +496,7 @@ class _PremiumLanding extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Icon(icon, color: iconColor, size: 28),
+                  serviceIcon(28),
                   const Spacer(),
                   actionLink,
                 ]),
@@ -476,9 +514,10 @@ class _PremiumLanding extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
+                  color: isGifts ? null : iconColor.withValues(alpha: 0.12),
+                  gradient: isGifts ? _landingGiftsPearl : null,
                   borderRadius: BorderRadius.circular(16)),
-              child: Icon(icon, color: iconColor, size: 27)),
+              child: serviceIcon(27)),
           const SizedBox(width: 22),
           Expanded(child: content),
           const SizedBox(width: 12),
@@ -821,9 +860,8 @@ class _StoreDownloads extends StatelessWidget {
         builder: (_, followLink) => Semantics(
           label: 'Download $app on $store, opens in a new tab',
           child: TextButton(
-            onPressed: followLink ??
-                () => unawaited(launchUrl(Uri.parse(url),
-                    mode: LaunchMode.externalApplication)),
+            onPressed: () => unawaited(launchUrl(Uri.parse(url),
+                mode: LaunchMode.externalApplication)),
             style: TextButton.styleFrom(
                 backgroundColor: _landingInk,
                 foregroundColor: Colors.white,
