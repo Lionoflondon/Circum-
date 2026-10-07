@@ -26610,6 +26610,7 @@ class _LandingFooter extends StatelessWidget {
                           label: 'Newsletter',
                           uri: _CircumWebsiteAppState._canonicalWebUri('/'),
                           onPressed: onNewsletter,
+                          localAction: true,
                         ),
                       _FooterServiceLink(
                         label: 'Support',
@@ -26753,11 +26754,13 @@ class _FooterServiceLink extends StatelessWidget {
   final String label;
   final Uri uri;
   final VoidCallback onPressed;
+  final bool localAction;
 
   const _FooterServiceLink({
     required this.label,
     required this.uri,
     required this.onPressed,
+    this.localAction = false,
   });
 
   @override
@@ -26767,7 +26770,7 @@ class _FooterServiceLink extends StatelessWidget {
       target: LinkTarget.self,
       builder: (context, followLink) {
         return TextButton(
-          onPressed: kIsWeb
+          onPressed: kIsWeb && !localAction
               ? () => web.window.location.assign(uri.toString())
               : onPressed,
           style: TextButton.styleFrom(
