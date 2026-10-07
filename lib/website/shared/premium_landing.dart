@@ -304,11 +304,16 @@ class _PremiumLanding extends StatelessWidget {
                 style: TextStyle(
                     color: Color(0xffd2dfd9), fontSize: 18, height: 1.65)),
             const SizedBox(height: 16),
-            const Text('Enhanced Custody Tracking · Priority Support · Priority Dispute Review',
-              style: TextStyle(color: Color(0xff9fd0bd), fontSize: 12, height: 1.7)),
+            const Text(
+                'Enhanced Custody Tracking · Priority Support · Priority Dispute Review',
+                style: TextStyle(
+                    color: Color(0xff9fd0bd), fontSize: 12, height: 1.7)),
             const SizedBox(height: 16),
             const Text('Add Vanguard for £1.99',
-              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
             _link('Explore Vanguard ↗', '/vanguard', onVanguard, inverse: true),
           ]);
           return box.maxWidth >= 800
@@ -381,30 +386,48 @@ class _PremiumLanding extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 28),
       decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0xffdce1dc)))),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (wide) ...[
-          Text(number,
-              style: const TextStyle(color: _landingMuted, fontSize: 13)),
-          const SizedBox(width: 36)
-        ],
-        Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-                color: const Color(0xffedf1e9),
-                borderRadius: BorderRadius.circular(16)),
-            child: Icon(icon, color: _landingInk, size: 27)),
-        const SizedBox(width: 22),
-        Expanded(child: content),
-        const SizedBox(width: 12),
-        Link(
-            uri: _CircumWebsiteAppState._canonicalWebUri(path),
-            target: LinkTarget.self,
-            builder: (_, followLink) => IconButton(
-                tooltip: 'Explore $title',
-                onPressed: followLink ?? action,
-                icon: const Icon(Icons.north_east, color: _landingInk))),
-      ]),
+      child: LayoutBuilder(builder: (_, box) {
+        final actionLink = Link(
+          uri: _CircumWebsiteAppState._canonicalWebUri(path),
+          target: LinkTarget.self,
+          builder: (_, followLink) => IconButton(
+            tooltip: 'Explore $title',
+            onPressed: followLink ?? action,
+            icon: const Icon(Icons.north_east, color: _landingInk),
+          ),
+        );
+        if (box.maxWidth < 550) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(icon, color: _landingInk, size: 28),
+                  const Spacer(),
+                  actionLink,
+                ]),
+                const SizedBox(height: 12),
+                content,
+              ]);
+        }
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (wide) ...[
+            Text(number,
+                style: const TextStyle(color: _landingMuted, fontSize: 13)),
+            const SizedBox(width: 36)
+          ],
+          Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                  color: const Color(0xffedf1e9),
+                  borderRadius: BorderRadius.circular(16)),
+              child: Icon(icon, color: _landingInk, size: 27)),
+          const SizedBox(width: 22),
+          Expanded(child: content),
+          const SizedBox(width: 12),
+          actionLink,
+        ]);
+      }),
     );
   }
 
