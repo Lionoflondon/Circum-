@@ -3,13 +3,14 @@ const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const {processNotificationRetriesCore} = require("./notification-retry-core");
 
-test("future retries skip claim transactions while preserving pagination", async () => {
+test("non-due retries skip claims and unchanged cursor writes", async () => {
   const now = Date.now();
   let transactions = 0;
   let cursor;
+  let cursorWrites = 0;
   const docs = Array.from({length: 100}, (_, index) => ({
     id: `future-${index}`,
-    data: () => ({retryable: true, pushDeliveryStatus: "failed", nextRetryAt: new Date(now + 60000)}),
+    data: () => ({retryable: true, pushDeliveryStatus: index % 2 ? "skipped" : "failed", nextRetryAt: new Date(now + 60000)}),
   }));
   const db = {
     collection: () => {
@@ -21,9 +22,10 @@ test("future retries skip claim transactions while preserving pagination", async
         },
         orderBy: () => query,
         limit: () => query,
+        startAfter: () => query,
         get: async () => recovery ? {docs: [], empty: true} : {docs, size: docs.length, empty: false},
-        doc: () => ({get: async () => ({data: () => ({})}), set: async (value) => {
- cursor = value;
+        doc: () => ({get: async () => ({data: () => cursor || {}}), set: async (value) => {
+ cursor = value; cursorWrites++;
 }}),
       };
       return query;
@@ -37,4 +39,7 @@ test("future retries skip claim transactions while preserving pagination", async
   assert.equal(result.sent, 0);
   assert.equal(transactions, 0);
   assert.equal(cursor.lastNotificationId, "future-99");
+  await processNotificationRetriesCore({db, now});
+  assert.equal(transactions, 0);
+  assert.equal(cursorWrites, 1);
 });
