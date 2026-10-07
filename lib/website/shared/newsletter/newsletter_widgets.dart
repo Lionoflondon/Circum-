@@ -3,8 +3,10 @@ import 'dart:convert';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/link.dart';
+import 'package:web/web.dart' as web;
 
 // Opt in only after the backend, provider and published policy are approved.
 const newsletterSignupEnabled =
@@ -208,16 +210,17 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Stay in the CIRCUM',
+          Text('STAY IN THE CIRCUM',
               style: TextStyle(
                   color: widget.text,
-                  fontSize: compact ? 31 : 40,
-                  fontWeight: FontWeight.w900,
+                  fontSize: compact ? 36 : 48,
+                  fontFamily: 'D-DIN-Bold',
+                  fontWeight: FontWeight.w400,
                   height: 1.05)),
           const SizedBox(height: 12),
           Text('Delivery is changing. Be the first to know what’s next.',
               style: TextStyle(
-                  color: widget.mutedText, fontSize: 17, height: 1.4)),
+                  color: widget.mutedText, fontSize: 16, height: 1.5)),
           const SizedBox(height: 24),
           if (compact) ...[
             _emailField(),
@@ -233,7 +236,7 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
             const SizedBox(height: 10),
             Text(_error!,
                 style: const TextStyle(
-                    color: Color(0xffff9aa2), fontWeight: FontWeight.w700)),
+                    color: Color(0xffb91c1c), fontWeight: FontWeight.w700)),
           ],
           const SizedBox(height: 12),
           TextButton.icon(
@@ -279,7 +282,10 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
                 uri: widget.onPrivacy,
                 target: LinkTarget.self,
                 builder: (_, followLink) => TextButton(
-                    onPressed: followLink,
+                    onPressed: kIsWeb
+                        ? () => web.window.location
+                            .assign(widget.onPrivacy.toString())
+                        : followLink,
                     style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(0, 20)),
