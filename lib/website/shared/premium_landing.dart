@@ -675,31 +675,15 @@ class _ParcelRoutePainter extends CustomPainter {
 class _StoreDownloads extends StatelessWidget {
   const _StoreDownloads();
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
         padding: const EdgeInsets.only(top: 38, bottom: 30),
-        child: LayoutBuilder(builder: (_, box) {
-          final apps = [
-            _app(
-                'Circum',
-                'Send, track and stay connected.',
-                'https://apps.apple.com/gb/app/circum/id6463644284',
-                'https://play.google.com/store/apps/details?id=com.circum.app'),
-            _app(
-                'Circum Rider',
-                'Deliver with Circum.',
-                'https://apps.apple.com/gb/app/circum-rider/id6476303139',
-                'https://play.google.com/store/apps/details?id=com.circum.rider'),
-          ];
-          return box.maxWidth >= 850
-              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: apps[0]),
-                  const SizedBox(width: 48),
-                  Expanded(child: apps[1])
-                ])
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [apps[0], const SizedBox(height: 32), apps[1]]);
-        }),
+        child: _app(
+          'Circum',
+          'Send, track and stay connected.',
+          'https://apps.apple.com/gb/app/circum/id6463644284',
+          'https://play.google.com/store/apps/details?id=com.circum.app',
+        ),
       );
   Widget _app(String title, String description, String apple, String google) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
