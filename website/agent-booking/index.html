@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prepare a Circum delivery draft with your agent. Review and confirm every booking yourself.">
+  <meta name="referrer" content="no-referrer">
+  <title>Agent workspace · Circum</title>
+  <link rel="icon" href="/favicon.png">
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#07152e;color:#f6f8ff;font:16px/1.55 system-ui,sans-serif}a{color:inherit}header,main{max-width:1120px;margin:auto;padding:28px 24px}header{display:flex;justify-content:space-between;align-items:center}.wordmark{font-size:23px;letter-spacing:4px;font-weight:800;text-decoration:none}.back{color:#b8c8e4;font-size:14px}h1{font-size:clamp(42px,6vw,70px);line-height:1.05;letter-spacing:-2.5px;margin:20px 0}h1 span{color:#67e8f9}.intro{max-width:660px;color:#bbcbe3;font-size:19px}.eyebrow{color:#67e8f9;font-weight:700;font-size:12px;letter-spacing:2px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin:40px 0}.panel{background:#f8fafc;color:#10231f;border-radius:20px;padding:28px}h2{font-size:26px;letter-spacing:-.7px;margin-top:0}.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.full{grid-column:1/-1}label{display:block;font-size:13px;font-weight:650}input,textarea{display:block;width:100%;margin-top:7px;padding:12px;border:1px solid #b9c4d3;border-radius:8px;background:#fff;color:#10231f;font:inherit}textarea{min-height:110px;resize:vertical}button{font:650 15px system-ui;background:#2563eb;color:white;border:0;border-radius:9px;padding:16px 22px;cursor:pointer;min-height:50px;margin-top:22px}button:focus-visible,a:focus-visible{outline:3px solid #67e8f9;outline-offset:4px}button:disabled{opacity:.5;cursor:default}.note{font-size:14px;color:#536375}.review{background:linear-gradient(145deg,#143c6b,#25174e);color:white;border:1px solid #45558a}.review .note{color:#c5d5ef}dt{font-size:12px;color:#80deee;font-weight:700;margin-top:18px}dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#b91c1c;font-size:14px}#agent-status{font-size:13px;color:#9fb5d5}footer{padding:0 24px 35px;max-width:1120px;margin:auto;color:#a8b9d0;font-size:13px}footer a{margin-right:18px}@media(max-width:760px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.panel{padding:24px}header{gap:15px}.back{font-size:12px}}
+  </style>
+</head>
+<body>
+  <header><a class="wordmark" href="/">CIRCUM</a><a class="back" href="/">Back to Circum ↗</a></header>
+  <main>
+    <p class="eyebrow">YOUR AGENT. YOUR FINAL SAY.</p>
+    <h1>Prepared by your agent.<br><span>Approved by you.</span></h1>
+    <p class="intro">Let your agent organise a parcel delivery. Review its draft, then continue in Circum to verify the details, see the price and confirm your booking.</p>
+    <p id="agent-status">Agents can use the form. Structured browser tools are available in supported browsers.</p>
+    <div class="grid">
+      <section class="panel">
+        <h2>Prepare a delivery</h2>
+        <form id="draft-form">
+          <div class="fields">
+            <label class="full">Collection address<input name="pickup" autocomplete="off" required minlength="3" maxlength="500"></label>
+            <label class="full">Delivery address<input name="dropoff" autocomplete="off" required minlength="3" maxlength="500"></label>
+            <label class="full">Parcel description<textarea name="description" required minlength="3" maxlength="2000"></textarea></label>
+            <label>Declared weight (kg)<input name="weightKg" type="number" min="0.01" max="200" step="any"></label>
+            <label>Receiver name<input name="receiverName" maxlength="120" autocomplete="off"></label>
+            <label class="full">Receiver phone<input name="receiverPhone" type="tel" maxlength="40" autocomplete="off"></label>
+          </div>
+          <button type="submit">Prepare draft →</button>
+          <p id="error" role="alert"></p>
+        </form>
+        <p class="note">Drafts stay in this browser tab and expire after 15 minutes. Nothing is booked or charged by preparing a draft.</p>
+      </section>
+      <section id="review" class="panel review" hidden aria-live="polite">
+        <p class="eyebrow">READY FOR YOUR REVIEW</p>
+        <h2>You’re in control.</h2>
+        <dl id="summary"></dl>
+        <button id="continue" type="button">Review in Circum →</button>
+        <p class="note">Sign in to Circum, select verified addresses and check all parcel and receiver details. The final price and payment stay in the normal Circum booking flow.</p>
+      </section>
+    </div>
+  </main>
+  <footer><a href="/privacy_policy">Privacy</a><a href="/support">Support</a>© Circum Technologies Ltd.</footer>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

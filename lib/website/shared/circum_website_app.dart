@@ -30,6 +30,7 @@ import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'sender_notification_destination.dart';
 import 'sender_notification_visibility.dart';
+import 'agent_booking_draft.dart';
 import 'package:circum/website/shared/account_bootstrap_api.dart';
 import 'package:circum/website/shared/rider_delivery_authority_api.dart';
 import 'package:circum/website/shared/token_callable_api.dart';
@@ -7686,6 +7687,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _deliveryAdjustmentSub;
   String? _visibleAdjustmentId;
+  String? _agentDraftNotice;
 
   bool get _matchingHasStarted =>
       _checkoutState == _CheckoutState.matchingRiders ||
@@ -7720,8 +7722,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _receiverPhone.addListener(_handleContactDetailsChanged);
     _collectionContactName.addListener(_handleContactDetailsChanged);
     _collectionContactPhone.addListener(_handleContactDetailsChanged);
+    _applyAgentBookingDraft();
     _applyHealthPlusReturnState();
     _restoreSenderSession();
+  }
+
+  void _applyAgentBookingDraft() {
+    if (!kIsWeb || Uri.base.queryParameters['agentDraft'] != 'review') return;
+    _step = _SenderStep.details;
+    try {
+      final raw = web.window.sessionStorage.getItem(agentBookingDraftStorageKey);
+      web.window.sessionStorage.removeItem(agentBookingDraftStorageKey);
+      final draft = raw == null ? null : AgentBookingDraft.parse(raw, DateTime.now());
+      if (draft == null) {
+        _agentDraftNotice = 'Your agent draft has expired or could not be loaded. Enter your delivery details to continue.';
+        return;
+      }
+      _pickup.text = draft.details['pickup'] as String;
+      _dropoff.text = draft.details['dropoff'] as String;
+      _description.text = draft.details['description'] as String;
+      _receiverName.text = draft.details['receiverName'] as String? ?? '';
+      _receiverPhone.text = draft.details['receiverPhone'] as String? ?? '';
+      if (draft.details['weightKg'] != null) _weight.text = '${draft.details['weightKg']}';
+      _agentDraftNotice = 'Prepared by your agent. Review every detail and select verified addresses before pricing. Nothing has been booked or paid.';
+    } catch (_) {
+      _agentDraftNotice = 'Your agent draft could not be loaded. Enter your delivery details to continue.';
+    }
   }
 
   void _applyHealthPlusReturnState() {
@@ -7963,6 +7989,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Widget _buildCurrentStep(_CircumColors colors) {
+    final content = _buildCurrentStepContent(colors);
+    if (_agentDraftNotice == null || _step != _SenderStep.details || _senderAuthLoading || _senderUser == null) return content;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xff2563eb).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xff60a5fa)),
+        ),
+        child: Text(_agentDraftNotice!, style: TextStyle(color: colors.text, height: 1.5)),
+      ),
+      content,
+    ]);
+  }
+
+  Widget _buildCurrentStepContent(_CircumColors colors) {
     if (_senderAuthLoading) {
       return const Center(child: CircularProgressIndicator());
     }

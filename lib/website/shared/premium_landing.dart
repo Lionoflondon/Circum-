@@ -327,6 +327,35 @@ class _PremiumLanding extends StatelessWidget {
                   visual,
                 ]);
         }), background: const Color(0xff081530)),
+        _section(
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _eyebrow('YOUR AGENT. YOUR FINAL SAY.', color: _landingBlue),
+              const SizedBox(height: 22),
+              Text('Prepared by your agent.\nApproved by you.',
+                  style: TextStyle(
+                      color: _landingInk,
+                      fontSize: small ? 36 : 50,
+                      height: 1.12,
+                      letterSpacing: -1.5,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 24),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: const Text(
+                    'Let your agent organise the delivery details. Review the draft, verify your addresses and confirm the price and payment in Circum.',
+                    style: TextStyle(
+                        color: _landingMuted, fontSize: 18, height: 1.6)),
+              ),
+              const SizedBox(height: 24),
+              _link(
+                  'Prepare with your agent ↗',
+                  '/agents/',
+                  () => unawaited(launchUrl(
+                      _CircumWebsiteAppState._canonicalWebUri('/agents/'),
+                      webOnlyWindowName: '_self')),
+                  primary: true),
+            ]),
+            background: const Color(0xffe5f3ff)),
         _section(LayoutBuilder(builder: (_, box) {
           final heading =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

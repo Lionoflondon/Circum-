@@ -30,6 +30,7 @@ echo "Surface: Circum Website"
 echo "Entrypoint: lib/main_public_web.dart"
 echo "Output: $OUTPUT_DIR"
 echo "Identity: circum-public-web"
+node --test "$ROOT_DIR/website/agent-booking/draft.test.mjs"
 
 rm -rf "$OUTPUT_DIR"
 "$FLUTTER_BIN" build web \
@@ -41,4 +42,6 @@ rm -rf "$OUTPUT_DIR"
   --target=lib/main_public_web.dart \
   --output="$OUTPUT_DIR"
 node "$ROOT_DIR/scripts/finalize_web_artifact.js" website "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR/agents"
+cp "$ROOT_DIR/website/agent-booking/index.html" "$ROOT_DIR/website/agent-booking/app.mjs" "$ROOT_DIR/website/agent-booking/draft.mjs" "$OUTPUT_DIR/agents/"
 node "$ROOT_DIR/scripts/validate_web_artifacts.js" --surface=website
