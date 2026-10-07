@@ -8,6 +8,7 @@ import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -125,6 +126,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb && _mode == _WebAppMode.landing) {
+      unawaited(_loadLandingTypography());
+    }
     _redirectLegacyQueryIfNeeded();
     if (kIsWeb) {
       _optionalAnalyticsConsent =
@@ -164,6 +168,26 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     };
   }
 
+  Future<void> _loadLandingTypography() async {
+    Future<void> load(String family, String file) async {
+      final response = await http.get(Uri.base.resolve('/fonts/d-din/$file'))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) throw StateError('Homepage font unavailable');
+      await (FontLoader(family)
+            ..addFont(Future.value(ByteData.sublistView(response.bodyBytes))))
+          .load();
+    }
+    try {
+      await Future.wait([
+        load('D-DIN', 'D-DIN.ttf'),
+        load('D-DIN-Bold', 'D-DIN-Bold.ttf'),
+      ]);
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (kDebugMode) debugPrint('Homepage typography: $error');
+    }
+  }
+
   Future<void> _redirectLegacyQueryIfNeeded() async {
     final path = _initialRoute.legacyRedirectPath;
     if (path == null || !kIsWeb) return;
@@ -172,6 +196,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _openCanonicalPath(String path) async {
     final target = _canonicalWebUri(path);
+    if (kIsWeb) {
+      web.window.location.assign(target.toString());
+      return;
+    }
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
@@ -179,7 +207,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   static Uri _canonicalWebUri(String path) {
-    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
+    return Uri.base.resolve(path);
   }
 
   Future<void> _openSurface(
@@ -840,40 +868,61 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const landingColors = _CircumColors(false);
-    return ColoredBox(
-      color: const Color(0xfffafaf7),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            _PremiumLanding(
-              onStart: onStart,
-              onRider: onRider,
-              onHealthPlus: onHealthPlus,
-              onBusiness: onBusiness,
-              onVanguard: onVanguard,
-              onGifts: onGifts,
+    final theme = ThemeData(
+      useMaterial3: true,
+      fontFamily: 'D-DIN',
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: _landingBlue,
+        brightness: Brightness.light,
+      ),
+    );
+    return Theme(
+      data: theme,
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(fontFamily: 'D-DIN', color: _landingInk),
+        child: ColoredBox(
+          color: const Color(0xfffafaf7),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _PremiumLanding(
+                  onStart: onStart,
+                  onRider: onRider,
+                  onHealthPlus: onHealthPlus,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onGifts: onGifts,
+                ),
+                if (newsletterSignupEnabled)
+                  NewsletterSignupSection(
+                    key: newsletterKey,
+                  source: newsletterSource,
+                  background: landingColors.background,
+                  panel: const Color(0xff173b95),
+                  panelGradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xff173b95), Color(0xff49349a), Color(0xff7c2c88)],
+                  ),
+                  text: Colors.white,
+                  mutedText: const Color(0xffdbeafe),
+                  border: const Color(0xff8d83db),
+                    onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
+                      '/privacy_policy',
+                    ),
+                  ),
+                _LandingFooter(
+                  colors: landingColors,
+                  onDeliveries: onStart,
+                  onHealthPlus: onHealthPlus,
+                  onGifts: onGifts,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onNewsletter: onNewsletter,
+                ),
+              ],
             ),
-            if (newsletterSignupEnabled)
-              NewsletterSignupSection(
-                key: newsletterKey,
-                source: newsletterSource,
-                background: landingColors.background,
-                panel: landingColors.panel,
-                text: landingColors.text,
-                mutedText: landingColors.mutedText,
-                border: landingColors.border,
-                onPrivacy: _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
-              ),
-            _LandingFooter(
-              colors: landingColors,
-              onDeliveries: onStart,
-              onHealthPlus: onHealthPlus,
-              onGifts: onGifts,
-              onBusiness: onBusiness,
-              onVanguard: onVanguard,
-              onNewsletter: onNewsletter,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -26573,6 +26622,7 @@ class _LandingFooter extends StatelessWidget {
                           label: 'Newsletter',
                           uri: _CircumWebsiteAppState._canonicalWebUri('/'),
                           onPressed: onNewsletter,
+                          localAction: true,
                         ),
                       _FooterServiceLink(
                         label: 'Support',
@@ -26716,11 +26766,13 @@ class _FooterServiceLink extends StatelessWidget {
   final String label;
   final Uri uri;
   final VoidCallback onPressed;
+  final bool localAction;
 
   const _FooterServiceLink({
     required this.label,
     required this.uri,
     required this.onPressed,
+    this.localAction = false,
   });
 
   @override
@@ -26730,7 +26782,9 @@ class _FooterServiceLink extends StatelessWidget {
       target: LinkTarget.self,
       builder: (context, followLink) {
         return TextButton(
-          onPressed: followLink ?? onPressed,
+          onPressed: kIsWeb && !localAction
+              ? () => web.window.location.assign(uri.toString())
+              : onPressed,
           style: TextButton.styleFrom(
             foregroundColor: _landingInk,
             padding: EdgeInsets.zero,

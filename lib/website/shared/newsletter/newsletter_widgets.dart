@@ -3,8 +3,10 @@ import 'dart:convert';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/link.dart';
+import 'newsletter_navigation.dart';
 
 // Opt in only after the backend, provider and published policy are approved.
 const newsletterSignupEnabled =
@@ -63,6 +65,7 @@ class NewsletterSignupSection extends StatefulWidget {
     super.key,
     required this.background,
     required this.panel,
+    this.panelGradient,
     required this.text,
     required this.mutedText,
     required this.border,
@@ -73,6 +76,7 @@ class NewsletterSignupSection extends StatefulWidget {
 
   final Color background;
   final Color panel;
+  final Gradient? panelGradient;
   final Color text;
   final Color mutedText;
   final Color border;
@@ -165,7 +169,8 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
           constraints: const BoxConstraints(maxWidth: 920),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: widget.panel,
+              color: widget.panelGradient == null ? widget.panel : null,
+              gradient: widget.panelGradient,
               borderRadius: BorderRadius.circular(28),
               border: Border.all(color: widget.border),
               boxShadow: [
@@ -208,16 +213,17 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Stay in the CIRCUM',
+          Text('STAY IN THE CIRCUM',
               style: TextStyle(
                   color: widget.text,
-                  fontSize: compact ? 31 : 40,
-                  fontWeight: FontWeight.w900,
+                  fontSize: compact ? 36 : 48,
+                  fontFamily: 'D-DIN-Bold',
+                  fontWeight: FontWeight.w400,
                   height: 1.05)),
           const SizedBox(height: 12),
           Text('Delivery is changing. Be the first to know what’s next.',
               style: TextStyle(
-                  color: widget.mutedText, fontSize: 17, height: 1.4)),
+                  color: widget.mutedText, fontSize: 16, height: 1.5)),
           const SizedBox(height: 24),
           if (compact) ...[
             _emailField(),
@@ -232,11 +238,15 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(_error!,
-                style: const TextStyle(
-                    color: Color(0xffff9aa2), fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: widget.panel.computeLuminance() < 0.3
+                        ? const Color(0xfffecdd3)
+                        : const Color(0xffb91c1c),
+                    fontWeight: FontWeight.w700)),
           ],
           const SizedBox(height: 12),
           TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: widget.text),
             onPressed: () =>
                 setState(() => _showPreferences = !_showPreferences),
             icon:
@@ -279,8 +289,11 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
                 uri: widget.onPrivacy,
                 target: LinkTarget.self,
                 builder: (_, followLink) => TextButton(
-                    onPressed: followLink,
+                    onPressed: kIsWeb
+                        ? () => openNewsletterUri(widget.onPrivacy)
+                        : followLink,
                     style: TextButton.styleFrom(
+                        foregroundColor: widget.text,
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(0, 20)),
                     child: const Text('Privacy Policy'))),
@@ -294,15 +307,23 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
         controller: _email,
         keyboardType: TextInputType.emailAddress,
         autofillHints: const [AutofillHints.email],
+        style: const TextStyle(color: Color(0xff10231f)),
         onChanged: (_) => _error == null ? null : setState(() => _error = null),
         onSubmitted: (_) => _submit(),
         decoration: const InputDecoration(
-            labelText: 'Email address', border: OutlineInputBorder()),
+            labelText: 'Email address',
+            labelStyle: TextStyle(color: Color(0xff52616c)),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder()),
       );
 
   Widget _submitButton() => FilledButton(
         onPressed: _submitting ? null : _submit,
-        style: FilledButton.styleFrom(minimumSize: const Size(164, 56)),
+        style: FilledButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xff173b95),
+            minimumSize: const Size(164, 56)),
         child: _submitting
             ? const SizedBox.square(
                 dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))

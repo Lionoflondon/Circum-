@@ -3,7 +3,28 @@ part of 'circum_website_app.dart';
 const _landingInk = Color(0xff10231f);
 const _landingBlue = Color(0xff2455f5);
 const _landingVanguard = Color(0xff2563eb);
-const _landingHealth = Color(0xff22c55e);
+const _landingHealth = Color(0xff064e3b);
+const _landingGiftsSheen = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    Color(0xff176b9a),
+    Color(0xff248c78),
+    Color(0xff7851a9),
+    Color(0xffb24c82)
+  ],
+);
+const _landingGiftsPearl = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    Color(0xffe1f4ed),
+    Color(0xffe4efff),
+    Color(0xfff3e7fa),
+    Color(0xffffedf1)
+  ],
+  stops: [0, 0.34, 0.68, 1],
+);
 const _landingMuted = Color(0xff66706c);
 const _landingPaper = Color(0xfffafaf7);
 
@@ -30,7 +51,10 @@ class _PremiumLanding extends StatelessWidget {
       uri: _CircumWebsiteAppState._canonicalWebUri(path),
       target: LinkTarget.self,
       builder: (context, followLink) => TextButton(
-        onPressed: followLink ?? action,
+        onPressed: kIsWeb
+            ? () => web.window.location.assign(
+                _CircumWebsiteAppState._canonicalWebUri(path).toString())
+            : action,
         style: TextButton.styleFrom(
           backgroundColor: primary ? _landingBlue : Colors.transparent,
           foregroundColor: primary || inverse ? Colors.white : _landingInk,
@@ -38,10 +62,14 @@ class _PremiumLanding extends StatelessWidget {
               EdgeInsets.symmetric(horizontal: primary ? 24 : 14, vertical: 20),
           minimumSize: const Size(48, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+              fontSize: 13,
+              letterSpacing: 1.17,
+              fontFamily: 'D-DIN-Bold',
+              fontWeight: FontWeight.w400),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(label),
+          Text(label.toUpperCase()),
           if (primary) ...[
             const SizedBox(width: 18),
             const Icon(Icons.arrow_forward, size: 19)
@@ -57,7 +85,8 @@ class _PremiumLanding extends StatelessWidget {
             color: color,
             fontSize: 11,
             letterSpacing: 2.1,
-            fontWeight: FontWeight.w700),
+            fontFamily: 'D-DIN-Bold',
+            fontWeight: FontWeight.w400),
       );
 
   Widget _section(Widget child,
@@ -77,20 +106,23 @@ class _PremiumLanding extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
       final small = constraints.maxWidth < 600;
-      final headlineSize = small ? 54.0 : (wide ? 82.0 : 76.0);
+      final headlineSize = small ? 60.0 : 80.0;
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text.rich(
-            const TextSpan(children: [
-              TextSpan(text: 'Move what\n'),
-              TextSpan(text: 'matters.', style: TextStyle(color: _landingBlue)),
+            TextSpan(children: [
+              TextSpan(text: 'Move what\n'.toUpperCase()),
+              TextSpan(
+                  text: 'matters.'.toUpperCase(),
+                  style: const TextStyle(color: _landingBlue)),
             ]),
             style: TextStyle(
               color: _landingInk,
               fontSize: headlineSize,
-              height: 1.0,
-              letterSpacing: -3.4,
-              fontWeight: FontWeight.w800,
+              height: 0.95,
+              letterSpacing: small ? -1 : 1.6,
+              fontFamily: 'D-DIN-Bold',
+              fontWeight: FontWeight.w400,
             )),
         const SizedBox(height: 28),
         ConstrainedBox(
@@ -98,7 +130,7 @@ class _PremiumLanding extends StatelessWidget {
           child: const Text(
               'From everyday parcels to important handovers. Book a delivery, see the price, and follow its journey with Circum.',
               style:
-                  TextStyle(color: _landingMuted, fontSize: 19, height: 1.6)),
+                  TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
         ),
         const SizedBox(height: 32),
         Wrap(spacing: 10, runSpacing: 10, children: [
@@ -198,13 +230,14 @@ class _PremiumLanding extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _eyebrow('ONE CIRCUM. MORE POSSIBILITIES.'),
           const SizedBox(height: 22),
-          Text('For the everyday.\nAnd the extraordinary.',
+          Text('For the everyday.\nAnd the extraordinary.'.toUpperCase(),
               style: TextStyle(
                   color: _landingInk,
-                  fontSize: small ? 36 : 52,
+                  fontSize: small ? 36 : 48,
                   height: 1.12,
-                  letterSpacing: -1.7,
-                  fontWeight: FontWeight.w700)),
+                  letterSpacing: small ? 0.72 : 0.96,
+                  fontFamily: 'D-DIN-Bold',
+                  fontWeight: FontWeight.w400)),
           const SizedBox(height: 36),
           _service(
               '01',
@@ -220,7 +253,7 @@ class _PremiumLanding extends StatelessWidget {
                 '02',
                 'Gifts',
                 'Make someone’s day. Thoughtful gifts, sent with care.',
-                'UK-wide gifting',
+                'Delivery around the world',
                 '/gifts',
                 onGifts!,
                 Icons.card_giftcard_outlined,
@@ -248,13 +281,14 @@ class _PremiumLanding extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _eyebrow('FROM YOUR DOOR TO THEIRS.'),
               const SizedBox(height: 22),
-              Text('A simple way to send.',
+              Text('A simple way to send.'.toUpperCase(),
                   style: TextStyle(
                       color: _landingInk,
-                      fontSize: small ? 36 : 50,
+                      fontSize: small ? 36 : 48,
                       height: 1.1,
-                      letterSpacing: -1.5,
-                      fontWeight: FontWeight.w700)),
+                      letterSpacing: small ? 0.72 : 0.96,
+                      fontFamily: 'D-DIN-Bold',
+                      fontWeight: FontWeight.w400)),
               const SizedBox(height: 42),
               LayoutBuilder(builder: (_, box) {
                 final cards = [
@@ -290,18 +324,19 @@ class _PremiumLanding extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _eyebrow('MEET IRIS', color: const Color(0xff67e8f9)),
             const SizedBox(height: 22),
-            Text('A little intelligence.\nA lot of confidence.',
+            Text('A little intelligence.\nA lot of confidence.'.toUpperCase(),
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: small ? 36 : 50,
+                    fontSize: small ? 36 : 48,
                     height: 1.12,
-                    letterSpacing: -1.5,
-                    fontWeight: FontWeight.w700)),
+                    letterSpacing: small ? 0.72 : 0.96,
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400)),
             const SizedBox(height: 24),
             const Text(
                 'IRIS brings your parcel details and photos together to help assess weight and handling before you book.',
                 style: TextStyle(
-                    color: Color(0xffdbeafe), fontSize: 18, height: 1.6)),
+                    color: Color(0xffdbeafe), fontSize: 16, height: 1.5)),
             const SizedBox(height: 22),
             const Wrap(spacing: 18, runSpacing: 12, children: [
               Text('Parcel details',
@@ -332,13 +367,14 @@ class _PremiumLanding extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _eyebrow('VANGUARD PROTECTION', color: Colors.white),
             const SizedBox(height: 23),
-            Text('Important things\ndeserve extra care.',
+            Text('Important things\ndeserve extra care.'.toUpperCase(),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: small ? 36 : 48,
                     height: 1.13,
-                    letterSpacing: -1.6,
-                    fontWeight: FontWeight.w700)),
+                    letterSpacing: small ? 0.72 : 0.96,
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400)),
           ]);
           final detail =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -348,7 +384,7 @@ class _PremiumLanding extends StatelessWidget {
             const Text(
                 'Collection and receiver PIN verification help keep protected deliveries in the right hands. Circum assigns your rider. See what Vanguard adds to your delivery.',
                 style:
-                    TextStyle(color: Colors.white, fontSize: 18, height: 1.65)),
+                    TextStyle(color: Colors.white, fontSize: 16, height: 1.5)),
             const SizedBox(height: 16),
             const Text(
                 'Enhanced Custody Tracking · Priority Support · Priority Dispute Review',
@@ -359,7 +395,8 @@ class _PremiumLanding extends StatelessWidget {
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.w600)),
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400)),
             _link('Explore Vanguard ↗', '/vanguard', onVanguard, inverse: true),
           ]);
           return box.maxWidth >= 800
@@ -377,16 +414,17 @@ class _PremiumLanding extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _eyebrow('YOUR NEXT MOVE.'),
             const SizedBox(height: 18),
-            Text('Ready when you are.',
+            Text('Ready when you are.'.toUpperCase(),
                 style: TextStyle(
                     color: _landingInk,
-                    fontSize: small ? 36 : 52,
-                    letterSpacing: -1.8,
-                    fontWeight: FontWeight.w700)),
+                    fontSize: small ? 36 : 48,
+                    letterSpacing: small ? 0.72 : 0.96,
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400)),
             const SizedBox(height: 18),
             const Text('Send something important. Or help someone else do it.',
                 style:
-                    TextStyle(color: _landingMuted, fontSize: 18, height: 1.5)),
+                    TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
           ]);
           final actions = Wrap(spacing: 10, runSpacing: 10, children: [
             _link('Send a parcel', '/send', onStart, primary: true),
@@ -413,10 +451,22 @@ class _PremiumLanding extends StatelessWidget {
       bool wide) {
     final iconColor = switch (path) {
       '/send/health' => _landingHealth,
-      '/gifts' => const Color(0xffe84373),
+      '/gifts' => const Color(0xff7851a9),
       '/send/business' => const Color(0xffb96508),
       _ => _landingBlue,
     };
+    final isGifts = path == '/gifts';
+    Widget serviceIcon(double size) {
+      final glyph = Icon(icon, color: iconColor, size: size);
+      return isGifts
+          ? ShaderMask(
+              shaderCallback: _landingGiftsSheen.createShader,
+              blendMode: BlendMode.srcIn,
+              child: glyph,
+            )
+          : glyph;
+    }
+
     final content =
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title,
@@ -424,7 +474,8 @@ class _PremiumLanding extends StatelessWidget {
               color: _landingInk,
               fontSize: 26,
               letterSpacing: -0.7,
-              fontWeight: FontWeight.w700)),
+              fontFamily: 'D-DIN-Bold',
+              fontWeight: FontWeight.w400)),
       const SizedBox(height: 10),
       Text(description,
           style:
@@ -432,16 +483,16 @@ class _PremiumLanding extends StatelessWidget {
       const SizedBox(height: 14),
       Text(coverage,
           style: TextStyle(
-              color: path == '/send/health'
-                  ? const Color(0xff15803d)
-                  : _landingBlue,
+              color: path == '/send/health' ? _landingHealth : _landingBlue,
               fontSize: 12,
-              fontWeight: FontWeight.w600)),
+              fontFamily: 'D-DIN-Bold',
+              fontWeight: FontWeight.w400)),
     ]);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.06),
+          color: isGifts ? null : iconColor.withValues(alpha: 0.06),
+          gradient: isGifts ? _landingGiftsPearl : null,
           border: const Border(top: BorderSide(color: Color(0xffdce1dc)))),
       child: LayoutBuilder(builder: (_, box) {
         final actionLink = Link(
@@ -449,7 +500,10 @@ class _PremiumLanding extends StatelessWidget {
           target: LinkTarget.self,
           builder: (_, followLink) => IconButton(
             tooltip: 'Explore $title',
-            onPressed: followLink ?? action,
+            onPressed: kIsWeb
+                ? () => web.window.location.assign(
+                    _CircumWebsiteAppState._canonicalWebUri(path).toString())
+                : action,
             icon: const Icon(Icons.north_east, color: _landingInk),
           ),
         );
@@ -458,7 +512,7 @@ class _PremiumLanding extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Icon(icon, color: iconColor, size: 28),
+                  serviceIcon(28),
                   const Spacer(),
                   actionLink,
                 ]),
@@ -476,9 +530,10 @@ class _PremiumLanding extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
+                  color: isGifts ? null : iconColor.withValues(alpha: 0.12),
+                  gradient: isGifts ? _landingGiftsPearl : null,
                   borderRadius: BorderRadius.circular(16)),
-              child: Icon(icon, color: iconColor, size: 27)),
+              child: serviceIcon(27)),
           const SizedBox(width: 22),
           Expanded(child: content),
           const SizedBox(width: 12),
@@ -501,14 +556,16 @@ class _PremiumLanding extends StatelessWidget {
                 style: const TextStyle(
                     color: _landingBlue,
                     fontSize: 16,
-                    fontWeight: FontWeight.w700))),
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400))),
         const SizedBox(height: 22),
         Text(title,
             style: const TextStyle(
                 color: _landingInk,
                 fontSize: 23,
                 letterSpacing: -0.6,
-                fontWeight: FontWeight.w700)),
+                fontFamily: 'D-DIN-Bold',
+                fontWeight: FontWeight.w400)),
         const SizedBox(height: 12),
         Text(description,
             style: const TextStyle(
@@ -527,7 +584,10 @@ class _LandingPromise extends StatelessWidget {
         const SizedBox(width: 12),
         Text(title,
             style: const TextStyle(
-                color: _landingInk, fontSize: 14, fontWeight: FontWeight.w600)),
+                color: _landingInk,
+                fontSize: 14,
+                fontFamily: 'D-DIN-Bold',
+                fontWeight: FontWeight.w400)),
       ]);
 }
 
@@ -572,7 +632,8 @@ class _IrisLandingVisual extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 42,
                         letterSpacing: 8,
-                        fontWeight: FontWeight.w800)),
+                        fontFamily: 'D-DIN-Bold',
+                        fontWeight: FontWeight.w400)),
               ),
             ),
           ),
@@ -610,7 +671,8 @@ class _ParcelJourneyVisual extends StatelessWidget {
                         color: _landingInk,
                         letterSpacing: 1.8,
                         fontSize: 10,
-                        fontWeight: FontWeight.w700))),
+                        fontFamily: 'D-DIN-Bold',
+                        fontWeight: FontWeight.w400))),
             const Positioned(
                 top: 24,
                 right: 24,
@@ -655,7 +717,8 @@ class _ParcelJourneyVisual extends StatelessWidget {
                                   style: TextStyle(
                                       color: _landingInk,
                                       fontSize: 19,
-                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'D-DIN-Bold',
+                                      fontWeight: FontWeight.w400,
                                       letterSpacing: -0.4))),
                         ]),
                         const SizedBox(height: 20),
@@ -684,7 +747,8 @@ class _ParcelJourneyVisual extends StatelessWidget {
                                   style: TextStyle(
                                       color: _landingBlue,
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
+                                      fontFamily: 'D-DIN-Bold',
+                                      fontWeight: FontWeight.w400)),
                               Text('Delivered',
                                   style: TextStyle(
                                       color: _landingMuted, fontSize: 11)),
@@ -716,7 +780,8 @@ class _ParcelJourneyVisual extends StatelessWidget {
               style: const TextStyle(
                   color: _landingInk,
                   fontSize: 12,
-                  fontWeight: FontWeight.w600))
+                  fontFamily: 'D-DIN-Bold',
+                  fontWeight: FontWeight.w400))
         ]),
       );
 }
@@ -802,7 +867,10 @@ class _StoreDownloads extends StatelessWidget {
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Download $title',
             style: const TextStyle(
-                color: _landingInk, fontSize: 20, fontWeight: FontWeight.w700)),
+                color: _landingInk,
+                fontSize: 20,
+                fontFamily: 'D-DIN-Bold',
+                fontWeight: FontWeight.w400)),
         const SizedBox(height: 8),
         Text(description,
             style: const TextStyle(color: _landingMuted, fontSize: 14)),
@@ -817,12 +885,13 @@ class _StoreDownloads extends StatelessWidget {
           String app) =>
       Link(
         uri: Uri.parse(url),
-        target: LinkTarget.blank,
+        target: LinkTarget.self,
         builder: (_, followLink) => Semantics(
-          label: 'Download $app on $store, opens in a new tab',
+          label: 'Download $app on $store',
           child: TextButton(
-            onPressed: followLink ??
-                () => unawaited(launchUrl(Uri.parse(url),
+            onPressed: kIsWeb
+                ? () => web.window.location.assign(url)
+                : () => unawaited(launchUrl(Uri.parse(url),
                     mode: LaunchMode.externalApplication)),
             style: TextButton.styleFrom(
                 backgroundColor: _landingInk,
@@ -845,7 +914,8 @@ class _StoreDownloads extends StatelessWidget {
                 Text(store,
                     style: const TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.w600,
+                        fontFamily: 'D-DIN-Bold',
+                        fontWeight: FontWeight.w400,
                         color: Colors.white))
               ])
             ]),
