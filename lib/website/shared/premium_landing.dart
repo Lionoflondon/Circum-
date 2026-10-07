@@ -125,7 +125,7 @@ class _PremiumLanding extends StatelessWidget {
             stops: [0, 0.35, 0.7, 1],
           ).createShader,
           blendMode: BlendMode.srcIn,
-          child: Text('MOVE WHAT\nMATTERS.',
+          child: Text('Move what\nmatters.'.toUpperCase(),
               style: TextStyle(
                 color: Colors.white,
                 fontSize: headlineSize,
