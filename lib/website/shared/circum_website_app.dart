@@ -7990,7 +7990,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Widget _buildCurrentStep(_CircumColors colors) {
     final content = _buildCurrentStepContent(colors);
-    if (_agentDraftNotice == null || _step != _SenderStep.details || _senderAuthLoading || _senderUser == null) return content;
+    if (_agentDraftNotice == null || _step != _SenderStep.details || _senderAuthLoading) return content;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         margin: const EdgeInsets.only(bottom: 18),
@@ -8000,7 +8000,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xff60a5fa)),
         ),
-        child: Text(_agentDraftNotice!, style: TextStyle(color: colors.text, height: 1.5)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_agentDraftNotice!, style: TextStyle(color: colors.text, height: 1.5)),
+          if (_senderUser == null && _pickup.text.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Collection: ${_pickup.text}\nDelivery: ${_dropoff.text}\nParcel: ${_description.text}',
+                style: TextStyle(color: colors.text, height: 1.5)),
+          ],
+        ]),
       ),
       content,
     ]);
