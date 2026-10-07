@@ -241,14 +241,19 @@ class _PremiumLanding extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _eyebrow('ONE CIRCUM. MORE POSSIBILITIES.'),
           const SizedBox(height: 22),
-          Text('For the everyday.\nAnd the extraordinary.'.toUpperCase(),
-              style: TextStyle(
-                  color: _landingInk,
-                  fontSize: small ? 36 : 48,
-                  height: 1.12,
-                  letterSpacing: small ? 0.72 : 0.96,
-                  fontFamily: 'D-DIN-Bold',
-                  fontWeight: FontWeight.w400)),
+          ShaderMask(
+            shaderCallback: _landingGiftsSheen.createShader,
+            blendMode: BlendMode.srcIn,
+            child: Text(
+                'For the everyday.\nAnd the extraordinary.'.toUpperCase(),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: small ? 36 : 48,
+                    height: 1.12,
+                    letterSpacing: small ? 0.72 : 0.96,
+                    fontFamily: 'D-DIN-Bold',
+                    fontWeight: FontWeight.w400)),
+          ),
           const SizedBox(height: 36),
           _service(
               '01',
