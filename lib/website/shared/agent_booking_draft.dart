@@ -14,8 +14,9 @@ class AgentBookingDraft {
       final envelope = jsonDecode(raw);
       if (envelope is! Map ||
           envelope['version'] != 1 ||
-          envelope['status'] != 'customer_review_required')
+          envelope['status'] != 'customer_review_required') {
         return null;
+      }
       final created = envelope['createdAt'];
       final expires = envelope['expiresAt'];
       final timestamp = now.millisecondsSinceEpoch;
@@ -23,8 +24,9 @@ class AgentBookingDraft {
           expires is! int ||
           created > timestamp ||
           expires <= timestamp ||
-          expires - created != agentBookingDraftLifetime.inMilliseconds)
+          expires - created != agentBookingDraftLifetime.inMilliseconds) {
         return null;
+      }
       final details = envelope['details'];
       if (details is! Map) return null;
       const limits = {
@@ -36,8 +38,9 @@ class AgentBookingDraft {
       };
       if (details.keys.any(
         (key) => !limits.containsKey(key) && key != 'weightKg',
-      ))
+      )) {
         return null;
+      }
       final clean = <String, dynamic>{};
       for (final entry in limits.entries) {
         final value = details[entry.key];
@@ -50,14 +53,16 @@ class AgentBookingDraft {
         if (value is! String ||
             value.trim().length > entry.value ||
             (required && value.trim().length < 3) ||
-            RegExp(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]').hasMatch(value))
+            RegExp(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]').hasMatch(value)) {
           return null;
+        }
         clean[entry.key] = value.trim();
       }
       final weight = details['weightKg'];
       if (weight != null) {
-        if (weight is! num || !weight.isFinite || weight <= 0 || weight > 200)
+        if (weight is! num || !weight.isFinite || weight <= 0 || weight > 200) {
           return null;
+        }
         clean['weightKg'] = weight.toDouble();
       }
       return AgentBookingDraft(Map.unmodifiable(clean));
