@@ -675,7 +675,8 @@ class _ParcelRoutePainter extends CustomPainter {
 class _StoreDownloads extends StatelessWidget {
   const _StoreDownloads();
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
         padding: const EdgeInsets.only(top: 38, bottom: 30),
         child: _app(
           'Circum',
