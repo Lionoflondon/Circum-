@@ -90,10 +90,13 @@ class _PremiumLanding extends StatelessWidget {
       );
 
   Widget _section(Widget child,
-          {Color background = _landingPaper, double vertical = 80}) =>
+          {Color background = _landingPaper,
+          Gradient? gradient,
+          double vertical = 80}) =>
       Container(
         width: double.infinity,
-        color: background,
+        decoration: BoxDecoration(
+            color: gradient == null ? background : null, gradient: gradient),
         padding: EdgeInsets.symmetric(horizontal: 24, vertical: vertical),
         child: Center(
             child: ConstrainedBox(
@@ -109,21 +112,29 @@ class _PremiumLanding extends StatelessWidget {
       final headlineSize = small ? 60.0 : 80.0;
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text.rich(
-            TextSpan(children: [
-              TextSpan(text: 'Move what\n'.toUpperCase()),
-              TextSpan(
-                  text: 'matters.'.toUpperCase(),
-                  style: const TextStyle(color: _landingBlue)),
-            ]),
-            style: TextStyle(
-              color: _landingInk,
-              fontSize: headlineSize,
-              height: 0.95,
-              letterSpacing: small ? -1 : 1.6,
-              fontFamily: 'D-DIN-Bold',
-              fontWeight: FontWeight.w400,
-            )),
+        ShaderMask(
+          shaderCallback: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xff007d87),
+              Color(0xff2455f5),
+              Color(0xff7937c8),
+              Color(0xffc32e79)
+            ],
+            stops: [0, 0.35, 0.7, 1],
+          ).createShader,
+          blendMode: BlendMode.srcIn,
+          child: Text('MOVE WHAT\nMATTERS.',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: headlineSize,
+                height: 0.95,
+                letterSpacing: small ? -1 : 1.6,
+                fontFamily: 'D-DIN-Bold',
+                fontWeight: FontWeight.w400,
+              )),
+        ),
         const SizedBox(height: 28),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 445),
@@ -412,11 +423,11 @@ class _PremiumLanding extends StatelessWidget {
         _section(LayoutBuilder(builder: (_, box) {
           final message =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _eyebrow('YOUR NEXT MOVE.'),
+            _eyebrow('YOUR NEXT MOVE.', color: const Color(0xffc9f7ef)),
             const SizedBox(height: 18),
             Text('Ready when you are.'.toUpperCase(),
                 style: TextStyle(
-                    color: _landingInk,
+                    color: const Color(0xffffd56a),
                     fontSize: small ? 36 : 48,
                     letterSpacing: small ? 0.72 : 0.96,
                     fontFamily: 'D-DIN-Bold',
@@ -424,18 +435,24 @@ class _PremiumLanding extends StatelessWidget {
             const SizedBox(height: 18),
             const Text('Send something important. Or help someone else do it.',
                 style:
-                    TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
+                    TextStyle(color: Colors.white, fontSize: 16, height: 1.5)),
           ]);
           final actions = Wrap(spacing: 10, runSpacing: 10, children: [
             _link('Send a parcel', '/send', onStart, primary: true),
-            _link('Earn as a Circum Rider', '/rider', onRider),
+            _link('Earn as a Circum Rider', '/rider', onRider, inverse: true),
           ]);
           return box.maxWidth >= 1000
               ? Row(children: [Expanded(child: message), actions])
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [message, const SizedBox(height: 28), actions]);
-        })),
+        }),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xff006f78), Color(0xff1749a5), Color(0xff652ba0)],
+              stops: [0, 0.48, 1],
+            )),
       ]);
     });
   }
