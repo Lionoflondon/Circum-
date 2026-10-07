@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/link.dart';
-import 'package:web/web.dart' as web;
+import 'newsletter_navigation.dart';
 
 // Opt in only after the backend, provider and published policy are approved.
 const newsletterSignupEnabled =
@@ -283,8 +283,7 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
                 target: LinkTarget.self,
                 builder: (_, followLink) => TextButton(
                     onPressed: kIsWeb
-                        ? () => web.window.location
-                            .assign(widget.onPrivacy.toString())
+                        ? () => openNewsletterUri(widget.onPrivacy)
                         : followLink,
                     style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
