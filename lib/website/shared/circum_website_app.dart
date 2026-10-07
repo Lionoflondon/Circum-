@@ -26686,7 +26686,7 @@ class _LandingFooter extends StatelessWidget {
                   ),
                   if (onGifts != null)
                     _FooterServiceLink(
-                      label: 'Gifts by Circum',
+                      label: 'Gifts',
                       uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
                       onPressed: onGifts!,
                     ),

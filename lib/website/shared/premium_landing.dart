@@ -80,9 +80,11 @@ class _PremiumLanding extends StatelessWidget {
       final headlineSize = small ? 54.0 : (wide ? 82.0 : 76.0);
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _eyebrow('LONDON DELIVERY. A LITTLE MORE HUMAN.'),
-        const SizedBox(height: 26),
-        Text('Move what\nmatters.',
+        Text.rich(
+            const TextSpan(children: [
+              TextSpan(text: 'Move what\n'),
+              TextSpan(text: 'matters.', style: TextStyle(color: _landingBlue)),
+            ]),
             style: TextStyle(
               color: _landingInk,
               fontSize: headlineSize,
@@ -216,7 +218,7 @@ class _PremiumLanding extends StatelessWidget {
           if (onGifts != null)
             _service(
                 '02',
-                'Gifts by Circum',
+                'Gifts',
                 'Make someone’s day. Thoughtful gifts, sent with care.',
                 'UK-wide gifting',
                 '/gifts',
@@ -283,6 +285,48 @@ class _PremiumLanding extends StatelessWidget {
               }),
             ]),
             background: Colors.white),
+        _section(LayoutBuilder(builder: (_, box) {
+          final message =
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _eyebrow('MEET IRIS', color: const Color(0xff67e8f9)),
+            const SizedBox(height: 22),
+            Text('A little intelligence.\nA lot of confidence.',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: small ? 36 : 50,
+                    height: 1.12,
+                    letterSpacing: -1.5,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 24),
+            const Text(
+                'IRIS brings your parcel details and photos together to help assess weight and handling before you book.',
+                style: TextStyle(
+                    color: Color(0xffdbeafe), fontSize: 18, height: 1.6)),
+            const SizedBox(height: 22),
+            const Wrap(spacing: 18, runSpacing: 12, children: [
+              Text('Parcel details',
+                  style: TextStyle(color: Color(0xff67e8f9))),
+              Text('Photo insights',
+                  style: TextStyle(color: Color(0xffc4b5fd))),
+              Text('Handling guidance',
+                  style: TextStyle(color: Color(0xfff9a8d4))),
+            ]),
+            const SizedBox(height: 20),
+            _link('Send with Circum ↗', '/send', onStart, inverse: true),
+          ]);
+          const visual = _IrisLandingVisual();
+          return box.maxWidth >= 800
+              ? Row(children: [
+                  Expanded(flex: 6, child: message),
+                  const SizedBox(width: 50),
+                  const Expanded(flex: 4, child: visual),
+                ])
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  message,
+                  const SizedBox(height: 36),
+                  visual,
+                ]);
+        }), background: const Color(0xff081530)),
         _section(LayoutBuilder(builder: (_, box) {
           final heading =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -369,8 +413,8 @@ class _PremiumLanding extends StatelessWidget {
       bool wide) {
     final iconColor = switch (path) {
       '/send/health' => _landingHealth,
-      '/gifts' => const Color(0xffe8b4a0),
-      '/send/business' => const Color(0xff64748b),
+      '/gifts' => const Color(0xffe84373),
+      '/send/business' => const Color(0xffb96508),
       _ => _landingBlue,
     };
     final content =
@@ -395,9 +439,10 @@ class _PremiumLanding extends StatelessWidget {
               fontWeight: FontWeight.w600)),
     ]);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xffdce1dc)))),
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.06),
+          border: const Border(top: BorderSide(color: Color(0xffdce1dc)))),
       child: LayoutBuilder(builder: (_, box) {
         final actionLink = Link(
           uri: _CircumWebsiteAppState._canonicalWebUri(path),
@@ -486,6 +531,55 @@ class _LandingPromise extends StatelessWidget {
       ]);
 }
 
+class _IrisLandingVisual extends StatelessWidget {
+  const _IrisLandingVisual();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'IRIS parcel intelligence',
+        child: SizedBox(
+          height: 290,
+          child: Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const RadialGradient(
+                  center: Alignment(-0.35, -0.4),
+                  colors: [
+                    Color(0xffe0fbff),
+                    Color(0xff38bdf8),
+                    Color(0xff6366f1),
+                    Color(0xffd946ef),
+                    Color(0xff172554)
+                  ],
+                  stops: [0, 0.25, 0.55, 0.8, 1],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                      color: const Color(0xff38bdf8).withValues(alpha: 0.25),
+                      blurRadius: 70,
+                      spreadRadius: 10),
+                  BoxShadow(
+                      color: const Color(0xffd946ef).withValues(alpha: 0.2),
+                      blurRadius: 55),
+                ],
+              ),
+              child: const Center(
+                child: Text('IRIS',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 42,
+                        letterSpacing: 8,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 class _ParcelJourneyVisual extends StatelessWidget {
   const _ParcelJourneyVisual();
   @override
@@ -496,7 +590,14 @@ class _ParcelJourneyVisual extends StatelessWidget {
           height: 540,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-              color: const Color(0xffe8efeb),
+              gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xffb9e8ff),
+                    Color(0xffd1cbff),
+                    Color(0xffffd2e2)
+                  ]),
               borderRadius: BorderRadius.circular(24)),
           child: Stack(children: [
             const Positioned.fill(
