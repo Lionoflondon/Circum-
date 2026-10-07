@@ -7,7 +7,7 @@ const {verifyAccountClosed} = require("./account-closed-email");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {decodeEventarcPayload} = require("./cloud-run-notification-events");
-const {normalizeEmail} = require("./email-queue");
+const {normalizeEmail, isNonDeliverableEmail} = require("./email-queue");
 const emailPublishers = require("./transactional-email-publishers");
 const emailTemplates = require("./transactional-email-templates");
 const giftPolicy = require("./gift-communications-policy");
@@ -381,6 +381,7 @@ function recipientFor(record) {
     return {status: "suppressed", reason: text(record.suppressionReason) || "recipient_suppressed"};
   }
   const email = normalizeEmail(record.to || record.recipientEmail);
+  if (isNonDeliverableEmail(email)) return {status: "suppressed", reason: "non_deliverable_domain"};
   return email ? {status: "valid", email} : {status: "suppressed", reason: "invalid_recipient"};
 }
 
