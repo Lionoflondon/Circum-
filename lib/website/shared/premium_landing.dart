@@ -149,7 +149,7 @@ class _PremiumLanding extends StatelessWidget {
                             style: TextStyle(color: _landingInk))),
                   ],
                 ),
-              _link(small ? 'Send' : 'Send a parcel', '/send', onStart,
+              _link(small ? 'Send' : 'Send a Parcel', '/send', onStart,
                   primary: true),
             ]),
             vertical: 20),
@@ -339,7 +339,7 @@ class _PremiumLanding extends StatelessWidget {
           ]);
           final actions = Wrap(spacing: 10, runSpacing: 10, children: [
             _link('Send a parcel', '/send', onStart, primary: true),
-            _link('Become a Rider ↗', '/rider', onRider),
+            _link('Earn as a Circum Rider', '/rider', onRider),
           ]);
           return box.maxWidth >= 1000
               ? Row(children: [Expanded(child: message), actions])
