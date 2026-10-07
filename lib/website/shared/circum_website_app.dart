@@ -871,8 +871,10 @@ class _LandingPage extends StatelessWidget {
     final theme = Theme.of(context);
     return Theme(
       data: theme.copyWith(
-        textTheme: theme.textTheme.apply(fontFamily: 'D-DIN'),
-        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'D-DIN'),
+        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(seedColor: _landingBlue, brightness: Brightness.light),
+        textTheme: theme.textTheme.apply(fontFamily: 'D-DIN', bodyColor: _landingInk, displayColor: _landingInk),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'D-DIN', bodyColor: _landingInk, displayColor: _landingInk),
       ),
       child: ColoredBox(
       color: const Color(0xfffafaf7),
