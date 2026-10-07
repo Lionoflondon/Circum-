@@ -13,8 +13,9 @@ const surfaces = {
     manifestName: 'Circum Website',
     must: [
       'circum-public-web',
-      'Earn as a Circum Rider',
-      'Send a Parcel',
+      'Move what',
+      'Send a parcel',
+      'Download Circum',
     ],
     forbidden: [
       'Rider Application Centre',
