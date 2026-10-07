@@ -253,7 +253,7 @@ class _PremiumLanding extends StatelessWidget {
                 '02',
                 'Gifts',
                 'Make someone’s day. Thoughtful gifts, sent with care.',
-                'UK-wide gifting',
+                'Global gifting',
                 '/gifts',
                 onGifts!,
                 Icons.card_giftcard_outlined,

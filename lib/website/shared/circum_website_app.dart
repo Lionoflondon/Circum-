@@ -896,12 +896,17 @@ class _LandingPage extends StatelessWidget {
                 if (newsletterSignupEnabled)
                   NewsletterSignupSection(
                     key: newsletterKey,
-                    source: newsletterSource,
-                    background: landingColors.background,
-                    panel: landingColors.panel,
-                    text: landingColors.text,
-                    mutedText: landingColors.mutedText,
-                    border: landingColors.border,
+                  source: newsletterSource,
+                  background: landingColors.background,
+                  panel: const Color(0xff173b95),
+                  panelGradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xff173b95), Color(0xff49349a), Color(0xff7c2c88)],
+                  ),
+                  text: Colors.white,
+                  mutedText: const Color(0xffdbeafe),
+                  border: const Color(0xff8d83db),
                     onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
                       '/privacy_policy',
                     ),
