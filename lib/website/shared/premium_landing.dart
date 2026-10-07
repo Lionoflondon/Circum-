@@ -2,6 +2,8 @@ part of 'circum_website_app.dart';
 
 const _landingInk = Color(0xff10231f);
 const _landingBlue = Color(0xff2455f5);
+const _landingVanguard = Color(0xff2563eb);
+const _landingHealth = Color(0xff22c55e);
 const _landingMuted = Color(0xff66706c);
 const _landingPaper = Color(0xfffafaf7);
 
@@ -255,7 +257,7 @@ class _PremiumLanding extends StatelessWidget {
               LayoutBuilder(builder: (_, box) {
                 final cards = [
                   _step('1', 'Tell us what’s moving.',
-                      'Add your pickup, destination and parcel details. Get guidance from IRIS when you need it.'),
+                      'Add your pickup, destination and parcel details.'),
                   _step('2', 'Review. Then book.',
                       'See your delivery details and price before payment. Send now or choose a collection for later.'),
                   _step('3', 'Follow every handover.',
@@ -284,7 +286,7 @@ class _PremiumLanding extends StatelessWidget {
         _section(LayoutBuilder(builder: (_, box) {
           final heading =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _eyebrow('VANGUARD PROTECTION', color: const Color(0xff9fd0bd)),
+            _eyebrow('VANGUARD PROTECTION', color: Colors.white),
             const SizedBox(height: 23),
             Text('Important things\ndeserve extra care.',
                 style: TextStyle(
@@ -297,17 +299,17 @@ class _PremiumLanding extends StatelessWidget {
           final detail =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Icon(Icons.verified_user_outlined,
-                size: 38, color: Color(0xff9fd0bd)),
+                size: 38, color: Colors.white),
             const SizedBox(height: 20),
             const Text(
                 'Collection and receiver PIN verification help keep protected deliveries in the right hands. Circum assigns your rider. See what Vanguard adds to your delivery.',
-                style: TextStyle(
-                    color: Color(0xffd2dfd9), fontSize: 18, height: 1.65)),
+                style:
+                    TextStyle(color: Colors.white, fontSize: 18, height: 1.65)),
             const SizedBox(height: 16),
             const Text(
                 'Enhanced Custody Tracking · Priority Support · Priority Dispute Review',
-                style: TextStyle(
-                    color: Color(0xff9fd0bd), fontSize: 12, height: 1.7)),
+                style:
+                    TextStyle(color: Colors.white, fontSize: 12, height: 1.7)),
             const SizedBox(height: 16),
             const Text('Add Vanguard for £1.99',
                 style: TextStyle(
@@ -325,7 +327,7 @@ class _PremiumLanding extends StatelessWidget {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [heading, const SizedBox(height: 34), detail]);
-        }), background: _landingInk),
+        }), background: _landingVanguard),
         _section(LayoutBuilder(builder: (_, box) {
           final message =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -365,6 +367,12 @@ class _PremiumLanding extends StatelessWidget {
       VoidCallback action,
       IconData icon,
       bool wide) {
+    final iconColor = switch (path) {
+      '/send/health' => _landingHealth,
+      '/gifts' => const Color(0xffe8b4a0),
+      '/send/business' => const Color(0xff64748b),
+      _ => _landingBlue,
+    };
     final content =
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title,
@@ -401,7 +409,7 @@ class _PremiumLanding extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Icon(icon, color: _landingInk, size: 28),
+                  Icon(icon, color: iconColor, size: 28),
                   const Spacer(),
                   actionLink,
                 ]),
@@ -419,9 +427,9 @@ class _PremiumLanding extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                  color: const Color(0xffedf1e9),
+                  color: iconColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16)),
-              child: Icon(icon, color: _landingInk, size: 27)),
+              child: Icon(icon, color: iconColor, size: 27)),
           const SizedBox(width: 22),
           Expanded(child: content),
           const SizedBox(width: 12),
@@ -720,7 +728,11 @@ class _StoreDownloads extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8))),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 28),
+              if (store == 'Google Play')
+                const CustomPaint(
+                    size: Size(26, 28), painter: _PlayIconPainter())
+              else
+                Icon(icon, size: 28),
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(caption,
@@ -735,4 +747,33 @@ class _StoreDownloads extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _PlayIconPainter extends CustomPainter {
+  const _PlayIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    void polygon(Color color, List<Offset> points) {
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path..close(), Paint()..color = color);
+    }
+
+    final top = Offset.zero;
+    final bottom = Offset(0, size.height);
+    final center = Offset(size.width * 0.54, size.height * 0.5);
+    final upper = Offset(size.width * 0.76, size.height * 0.36);
+    final lower = Offset(size.width * 0.76, size.height * 0.64);
+    final tip = Offset(size.width, size.height * 0.5);
+    polygon(const Color(0xff4285f4), [top, center, bottom]);
+    polygon(const Color(0xff34a853), [top, upper, center]);
+    polygon(const Color(0xfffbbc04), [upper, tip, lower, center]);
+    polygon(const Color(0xffea4335), [center, lower, bottom]);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlayIconPainter oldDelegate) => false;
 }
