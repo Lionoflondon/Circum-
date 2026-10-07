@@ -868,50 +868,57 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const landingColors = _CircumColors(false);
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(
+    final theme = ThemeData(
+      useMaterial3: true,
+      fontFamily: 'D-DIN',
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: _landingBlue,
         brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(seedColor: _landingBlue, brightness: Brightness.light),
-        textTheme: theme.textTheme.apply(fontFamily: 'D-DIN', bodyColor: _landingInk, displayColor: _landingInk),
-        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'D-DIN', bodyColor: _landingInk, displayColor: _landingInk),
       ),
-      child: ColoredBox(
-      color: const Color(0xfffafaf7),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            _PremiumLanding(
-              onStart: onStart,
-              onRider: onRider,
-              onHealthPlus: onHealthPlus,
-              onBusiness: onBusiness,
-              onVanguard: onVanguard,
-              onGifts: onGifts,
+    );
+    return Theme(
+      data: theme,
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(fontFamily: 'D-DIN', color: _landingInk),
+        child: ColoredBox(
+          color: const Color(0xfffafaf7),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _PremiumLanding(
+                  onStart: onStart,
+                  onRider: onRider,
+                  onHealthPlus: onHealthPlus,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onGifts: onGifts,
+                ),
+                if (newsletterSignupEnabled)
+                  NewsletterSignupSection(
+                    key: newsletterKey,
+                    source: newsletterSource,
+                    background: landingColors.background,
+                    panel: landingColors.panel,
+                    text: landingColors.text,
+                    mutedText: landingColors.mutedText,
+                    border: landingColors.border,
+                    onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
+                      '/privacy_policy',
+                    ),
+                  ),
+                _LandingFooter(
+                  colors: landingColors,
+                  onDeliveries: onStart,
+                  onHealthPlus: onHealthPlus,
+                  onGifts: onGifts,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onNewsletter: onNewsletter,
+                ),
+              ],
             ),
-            if (newsletterSignupEnabled)
-              NewsletterSignupSection(
-                key: newsletterKey,
-                source: newsletterSource,
-                background: landingColors.background,
-                panel: landingColors.panel,
-                text: landingColors.text,
-                mutedText: landingColors.mutedText,
-                border: landingColors.border,
-                onPrivacy: _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
-              ),
-            _LandingFooter(
-              colors: landingColors,
-              onDeliveries: onStart,
-              onHealthPlus: onHealthPlus,
-              onGifts: onGifts,
-              onBusiness: onBusiness,
-              onVanguard: onVanguard,
-              onNewsletter: onNewsletter,
-            ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
