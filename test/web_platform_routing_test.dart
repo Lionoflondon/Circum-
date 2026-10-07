@@ -251,11 +251,17 @@ void main() {
     });
 
     test('Public homepage keeps Health Vanguard and Business entries', () {
-      final source = File(
+      final shared = File(
         'lib/website/shared/circum_website_app.dart',
       ).readAsStringSync();
 
-      expect(source, contains('Get started with Health+'));
+      final landing = File('lib/website/shared/premium_landing.dart').readAsStringSync();
+      final source = '$shared\n$landing';
+      expect(source, contains('_PremiumLanding('));
+      expect(landing, contains('Move what'));
+      expect(landing, contains("'/send/health', onHealthPlus"));
+      expect(landing, contains("'/send/business', onBusiness"));
+      expect(landing, contains("'/vanguard', onVanguard"));
       expect(source, contains('Health+'));
       expect(source, contains("_WebAppMode.rider => '/rider'"));
       expect(source, contains("_SenderStep.healthPlus => '/send/health'"));
@@ -263,15 +269,13 @@ void main() {
       expect(source, contains("fragment: ''"));
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
-      expect(source, contains('Open Business'));
-      expect(source, contains('Trust matters more than speed.'));
       expect(source, contains('Trusted Rider Prioritisation'));
       expect(source, contains('Enhanced Custody Tracking'));
       expect(source, contains('Priority Support'));
       expect(source, contains('Priority Dispute Review'));
       expect(source, contains("label: 'Vanguard'"));
       expect(source, contains("label: 'Vanguard Included'"));
-      expect(source, contains('Corporate Gifts · Vanguard Included'));
+      expect(landing, contains('Built for business'));
       expect(source, contains('Add Vanguard for £1.99'));
       expect(source, contains('senderStep: _SenderStep.business'));
     });
@@ -348,7 +352,8 @@ void main() {
         'lib/website/shared/circum_website_app.dart',
       ).readAsStringSync();
 
-      expect(source, contains('Customers do not choose riders'));
+      final landing = File('lib/website/shared/premium_landing.dart').readAsStringSync();
+      expect(landing, contains('Circum assigns your rider'));
       expect(source, contains('Vanguard is not insurance'));
       expect(source, contains('Vanguard Handling'));
       expect(source, contains('Custody preview'));
