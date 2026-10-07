@@ -387,8 +387,12 @@ class _PremiumLanding extends StatelessWidget {
               const TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
       const SizedBox(height: 14),
       Text(coverage,
-          style: const TextStyle(
-              color: _landingBlue, fontSize: 12, fontWeight: FontWeight.w600)),
+          style: TextStyle(
+              color: path == '/send/health'
+                  ? const Color(0xff15803d)
+                  : _landingBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w600)),
     ]);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 28),
