@@ -856,12 +856,14 @@ class _StoreDownloads extends StatelessWidget {
           String app) =>
       Link(
         uri: Uri.parse(url),
-        target: LinkTarget.blank,
+        target: LinkTarget.self,
         builder: (_, followLink) => Semantics(
-          label: 'Download $app on $store, opens in a new tab',
+          label: 'Download $app on $store',
           child: TextButton(
-            onPressed: () => unawaited(launchUrl(Uri.parse(url),
-                mode: LaunchMode.externalApplication)),
+            onPressed: kIsWeb
+                ? () => web.window.location.assign(url)
+                : () => unawaited(launchUrl(Uri.parse(url),
+                    mode: LaunchMode.externalApplication)),
             style: TextButton.styleFrom(
                 backgroundColor: _landingInk,
                 foregroundColor: Colors.white,
