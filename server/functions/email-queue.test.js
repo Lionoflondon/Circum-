@@ -2,7 +2,17 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {createEmailQueueRecord, enqueueEmail} = require("./email-queue");
+const {createEmailQueueRecord, enqueueEmail, isNonDeliverableEmail, normalizeEmail} = require("./email-queue");
+
+test("reserved invalid domains are non-deliverable without changing identity normalization", () => {
+  for (const email of ["qa@example.invalid", " QA@SUB.EXAMPLE.INVALID ", "qa@example.invalid."]) {
+    assert.equal(isNonDeliverableEmail(email), true);
+    assert.ok(normalizeEmail(email));
+  }
+  for (const email of ["qa@circumuk.com", "invalid@valid.example.com", "qa@example.invalid.com", "qa@notinvalid.com", "malformed"]) {
+    assert.equal(isNonDeliverableEmail(email), false);
+  }
+});
 
 function fakeDb(initial = {}) {
   const data = new Map(Object.entries(initial));
