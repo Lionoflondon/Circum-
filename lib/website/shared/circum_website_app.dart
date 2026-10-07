@@ -8,6 +8,7 @@ import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -125,6 +126,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb && _mode == _WebAppMode.landing) {
+      unawaited(_loadLandingTypography());
+    }
     _redirectLegacyQueryIfNeeded();
     if (kIsWeb) {
       _optionalAnalyticsConsent =
@@ -162,6 +166,26 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumSenderEntry.business => _SenderStep.business,
       CircumSenderEntry.profile => _SenderStep.profile,
     };
+  }
+
+  Future<void> _loadLandingTypography() async {
+    Future<void> load(String family, String file) async {
+      final response = await http.get(Uri.base.resolve('/fonts/d-din/$file'))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) throw StateError('Homepage font unavailable');
+      await (FontLoader(family)
+            ..addFont(Future.value(ByteData.sublistView(response.bodyBytes))))
+          .load();
+    }
+    try {
+      await Future.wait([
+        load('D-DIN', 'D-DIN.ttf'),
+        load('D-DIN-Bold', 'D-DIN-Bold.ttf'),
+      ]);
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (kDebugMode) debugPrint('Homepage typography: $error');
+    }
   }
 
   Future<void> _redirectLegacyQueryIfNeeded() async {
@@ -844,7 +868,13 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const landingColors = _CircumColors(false);
-    return ColoredBox(
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.apply(fontFamily: 'D-DIN'),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'D-DIN'),
+      ),
+      child: ColoredBox(
       color: const Color(0xfffafaf7),
       child: SingleChildScrollView(
         child: Column(
@@ -879,6 +909,7 @@ class _LandingPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
