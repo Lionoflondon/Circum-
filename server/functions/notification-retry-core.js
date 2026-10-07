@@ -163,6 +163,8 @@ async function processNotificationRetriesCore({
   const result = {scanned: page.size, sent: 0, exhausted: 0, retriedLater: 0,
     skipped: 0, uncertain: recovery.uncertain, recovered: recovery.recovered, invalidTokenCleanupFailed: 0};
   for (const doc of page.docs) {
+    // Future retries need no claim transaction; claim still rechecks fresh state.
+    if (!due(doc.data() || {}, now)) continue;
     const claimed = await claim(db, doc.ref, now);
     if (!claimed) continue;
     const {row, claimId} = claimed;
