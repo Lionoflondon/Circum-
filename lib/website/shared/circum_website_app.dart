@@ -183,7 +183,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   static Uri _canonicalWebUri(String path) {
-    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
+    return Uri.base.resolve(path);
   }
 
   Future<void> _openSurface(
