@@ -458,7 +458,7 @@ class _ParcelJourneyVisual extends StatelessWidget {
         label:
             'Illustration of a parcel journey from collection to handover. This is a preview, not a live delivery.',
         child: Container(
-          height: MediaQuery.sizeOf(context).width < 600 ? 440 : 540,
+          height: 540,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
               color: const Color(0xffe8efeb),
