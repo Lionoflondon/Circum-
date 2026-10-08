@@ -816,6 +816,37 @@ class _ServiceImageSelector extends StatefulWidget {
 
 class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
   int _selected = 0;
+  Timer? _rotation;
+  bool _paused = false;
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _restartRotation();
+  }
+
+  void _restartRotation() {
+    _rotation?.cancel();
+    if (_paused || _reduceMotion) return;
+    _rotation = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || web.document.visibilityState == 'hidden') return;
+      setState(() => _selected = (_selected + 1) % _labels.length);
+    });
+  }
+
+  void _select(int index) {
+    setState(() => _selected = index);
+    _restartRotation();
+  }
+
+  @override
+  void dispose() {
+    _rotation?.cancel();
+    super.dispose();
+  }
+
   static const _labels = ['Send', 'Gifts', 'Health', 'Business'];
   static const _images = [
     'send-campaign.jpg',
@@ -883,7 +914,18 @@ class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
                   fontWeight: FontWeight.w700,
                 ),
                 side: BorderSide(color: _colors[index].withValues(alpha: 0.22)),
-                onSelected: (_) => setState(() => _selected = index),
+                onSelected: (_) => _select(index),
+              ),
+            if (!_reduceMotion)
+              IconButton(
+                tooltip: _paused ? 'Resume slideshow' : 'Pause slideshow',
+                icon: Icon(
+                    _paused ? Icons.play_arrow_rounded : Icons.pause_rounded),
+                color: _landingInk,
+                onPressed: () {
+                  setState(() => _paused = !_paused);
+                  _restartRotation();
+                },
               ),
           ]),
     ]);
