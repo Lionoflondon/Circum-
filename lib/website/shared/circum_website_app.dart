@@ -61,6 +61,57 @@ import 'newsletter/newsletter_widgets.dart';
 
 part 'premium_landing.dart';
 
+// Shared public-web styling follows the homepage across account and service pages.
+const _websiteHeroGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
+);
+
+ThemeData _websiteTheme(bool dark) {
+  final colors = _CircumColors(dark);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _landingBlue,
+    brightness: dark ? Brightness.dark : Brightness.light,
+    primary: dark ? const Color(0xffa9bfff) : _landingBlue,
+    surface: colors.panel,
+    onSurface: colors.text,
+  );
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+  final button = ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+    padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
+    shape: WidgetStatePropertyAll(shape),
+    textStyle: const WidgetStatePropertyAll(TextStyle(
+        fontFamily: 'D-DIN', fontWeight: FontWeight.w700, fontSize: 16)),
+  );
+  return ThemeData(
+    useMaterial3: true,
+    fontFamily: 'D-DIN',
+    colorScheme: scheme,
+    scaffoldBackgroundColor: colors.appBackground,
+    filledButtonTheme: FilledButtonThemeData(style: button),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: button),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: button.copyWith(
+            side: WidgetStatePropertyAll(BorderSide(color: scheme.primary)))),
+    textButtonTheme: TextButtonThemeData(style: button),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colors.field,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: colors.border)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: scheme.primary, width: 2)),
+    ),
+    dividerColor: colors.border,
+  );
+}
+
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _webVanguardAddOnPriceGbp = 1.99;
@@ -112,7 +163,7 @@ class CircumWebsiteApp extends StatefulWidget {
 }
 
 class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
-  bool _darkMode = true;
+  bool _darkMode = false;
   CookiePreferences? _cookieConsent;
   bool? get _optionalAnalyticsConsent => _cookieConsent?.analytics;
   final _consentNavigatorKey = GlobalKey<NavigatorState>();
@@ -183,13 +234,16 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _loadLandingTypography() async {
     Future<void> load(String family, String file) async {
-      final response = await http.get(Uri.base.resolve('/fonts/d-din/$file'))
+      final response = await http
+          .get(Uri.base.resolve('/fonts/d-din/$file'))
           .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) throw StateError('Homepage font unavailable');
+      if (response.statusCode != 200)
+        throw StateError('Homepage font unavailable');
       await (FontLoader(family)
             ..addFont(Future.value(ByteData.sublistView(response.bodyBytes))))
           .load();
     }
+
     try {
       await Future.wait([
         load('D-DIN', 'D-DIN.ttf'),
@@ -343,14 +397,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       debugShowCheckedModeBanner: false,
       navigatorKey: _consentNavigatorKey,
       title: _companyName,
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'Helvetica',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2563eb),
-          brightness: _darkMode ? Brightness.dark : Brightness.light,
-        ),
-      ),
+      theme: _websiteTheme(_darkMode),
       home: Scaffold(
         backgroundColor: colors.background,
         body: Stack(
@@ -984,14 +1031,7 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const landingColors = _CircumColors(false);
-    final theme = ThemeData(
-      useMaterial3: true,
-      fontFamily: 'D-DIN',
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _landingBlue,
-        brightness: Brightness.light,
-      ),
-    );
+    final theme = _websiteTheme(false);
     return Theme(
       data: theme,
       child: DefaultTextStyle.merge(
@@ -1012,17 +1052,21 @@ class _LandingPage extends StatelessWidget {
                 if (newsletterSignupEnabled)
                   NewsletterSignupSection(
                     key: newsletterKey,
-                  source: newsletterSource,
-                  background: landingColors.background,
-                  panel: const Color(0xff173b95),
-                  panelGradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xff173b95), Color(0xff49349a), Color(0xff7c2c88)],
-                  ),
-                  text: Colors.white,
-                  mutedText: const Color(0xffdbeafe),
-                  border: const Color(0xff8d83db),
+                    source: newsletterSource,
+                    background: landingColors.background,
+                    panel: const Color(0xff173b95),
+                    panelGradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xff173b95),
+                        Color(0xff49349a),
+                        Color(0xff7c2c88)
+                      ],
+                    ),
+                    text: Colors.white,
+                    mutedText: const Color(0xffdbeafe),
+                    border: const Color(0xff8d83db),
                     onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
                       '/privacy_policy',
                     ),
@@ -1167,7 +1211,6 @@ String _adminDateText(dynamic value) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
-
 class _VanguardBlueChip extends StatelessWidget {
   final String label;
 
@@ -1205,7 +1248,6 @@ class _VanguardBlueChip extends StatelessWidget {
   }
 }
 
-
 class _PhoneStage extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
@@ -1214,76 +1256,14 @@ class _PhoneStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width >= _desktopWebBreakpoint) {
-      return Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: colors.stage,
-        padding: const EdgeInsets.all(28),
-        child: Center(
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 1180),
-            decoration: BoxDecoration(
-              color: colors.appBackground,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: colors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 32,
-                  offset: Offset(0, 18),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: child,
-          ),
-        ),
-      );
-    }
-
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: colors.stage,
-      padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
-        vertical: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
+      decoration: BoxDecoration(
+        color: colors.appBackground,
+        gradient: colors.dark ? null : _websiteHeroGradient,
       ),
-      child: Center(
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 430),
-          decoration: BoxDecoration(
-            color: colors.appBackground,
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(42),
-            border: MediaQuery.sizeOf(context).width < 520
-                ? null
-                : Border.all(
-                    color: colors.dark ? Colors.black : Colors.black,
-                    width: 8,
-                  ),
-            boxShadow: [
-              if (MediaQuery.sizeOf(context).width >= 520)
-                const BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 34,
-                  offset: Offset(0, 18),
-                ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(32),
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 }
@@ -1900,7 +1880,7 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                     icon: const Icon(Icons.menu_book_outlined),
                     label: const Text('Read Charter'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 22,
@@ -2318,7 +2298,7 @@ class _RiderPortalTabs extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xff030712),
+        color: colors.appBackground,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
@@ -2331,10 +2311,10 @@ class _RiderPortalTabs extends StatelessWidget {
                 avatar: Icon(_riderTabIcon(tab), size: 18),
                 label: Text(_riderTabLabel(tab)),
                 onSelected: (_) => onSelected(tab),
-                selectedColor: const Color(0xff2563eb),
-                backgroundColor: const Color(0xff111827),
+                selectedColor: colors.action,
+                backgroundColor: colors.field,
                 labelStyle: TextStyle(
-                  color: Colors.white,
+                  color: selected == tab ? colors.inverseText : colors.text,
                   fontWeight: FontWeight.w900,
                 ),
                 side: BorderSide(
@@ -2573,7 +2553,7 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xff0b1730),
+                  color: colors.field,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xff2563eb)),
                 ),
@@ -5105,7 +5085,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   @override
   Widget build(BuildContext context) {
-    const colors = _CircumColors(true);
+    final colors = widget.colors;
     return Stack(
       children: [
         LayoutBuilder(
@@ -5362,7 +5342,7 @@ class _RiderAccessPanel extends StatelessWidget {
                               : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
@@ -5498,9 +5478,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xff0f172a),
+                color: colors.field,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xff26334d)),
+                border: Border.all(color: colors.border),
               ),
               child: Text(
                 note,
@@ -5729,7 +5709,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
               : const Icon(Icons.two_wheeler),
           label: Text(submitting ? 'Sending...' : 'Send rider application'),
           style: FilledButton.styleFrom(
-            backgroundColor: colors.text,
+            backgroundColor: colors.action,
             foregroundColor: colors.inverseText,
             padding: const EdgeInsets.symmetric(vertical: 17),
             shape: RoundedRectangleBorder(
@@ -5835,7 +5815,7 @@ class _RiderWorkspace extends StatelessWidget {
     final signedIn = user != null;
     final compact = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      color: const Color(0xff030712),
+      color: colors.appBackground,
       padding: EdgeInsets.fromLTRB(
         compact ? 16 : 28,
         compact ? 18 : 28,
@@ -6137,7 +6117,7 @@ class _RiderWorkspace extends StatelessWidget {
                           : 'Request withdrawal',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -6304,9 +6284,9 @@ class _RiderDocumentStatusList extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xff0f172a),
+              color: colors.field,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xff26334d)),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
@@ -6515,7 +6495,7 @@ class _AccountSecurityPanel extends StatelessWidget {
                   : const Icon(Icons.password),
               label: const Text('Change password'),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -7548,7 +7528,7 @@ class _RiderStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xff111827),
+        color: colors.panel,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xff253047)),
       ),
@@ -7946,8 +7926,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           setState(() {
             _step = _SenderStep.profile;
             _senderProfileTab = 1;
-            _senderProfileMessage =
-                'This conversation is no longer available.';
+            _senderProfileMessage = 'This conversation is no longer available.';
           });
         }
         return true;
@@ -8073,7 +8052,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
-                  child: desktop
+                  child: desktop && _senderUser != null
                       ? _DesktopPortalLayout(
                           colors: colors,
                           pickup: _pickup.text,
@@ -13769,126 +13748,186 @@ class _SenderAccessGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: _GlassPanel(
-          colors: colors,
+    final form = _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(
+            colors: colors,
+            title: signupMode ? 'Create a Circum account' : 'Circum login',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            signupMode
+                ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
+                : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (signupMode) ...[
+            _InputBox(
+              colors: colors,
+              controller: fullName,
+              hint: 'Full name',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: phone,
+              hint: 'Phone number',
+            ),
+            const SizedBox(height: 10),
+          ],
+          _InputBox(
+            colors: colors,
+            controller: email,
+            hint: 'Email address',
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: password,
+            hint: 'Password',
+            obscureText: true,
+          ),
+          if (signupMode) ...[
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: referralCode,
+              hint: 'Referral code (optional)',
+            ),
+            const Text(
+              'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
+            ),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: busy ? null : onForgotPassword,
+              child: const Text('Forgot Password?'),
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              message!,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(builder: (context, constraints) {
+            final primary = FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : signupMode
+                      ? onSignUp
+                      : onSignIn,
+              icon: busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_open),
+              label: Text(
+                busy
+                    ? 'Please wait'
+                    : signupMode
+                        ? 'Create account'
+                        : 'Sign in',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    colors.dark ? const Color(0xffa9bfff) : _landingBlue,
+                foregroundColor: colors.dark ? _landingInk : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            );
+            final toggle = TextButton(
+              onPressed: busy ? null : onToggleMode,
+              child: Text(signupMode ? 'Sign in' : 'Sign up'),
+            );
+            if (constraints.maxWidth < 280) {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [primary, const SizedBox(height: 8), toggle]);
+            }
+            return Row(children: [
+              Expanded(child: primary),
+              const SizedBox(width: 10),
+              toggle
+            ]);
+          }),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final welcome = Padding(
+          padding: EdgeInsets.all(wide ? 40 : 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(
-                colors: colors,
-                title: signupMode ? 'Create a Circum account' : 'Circum login',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                signupMode
-                    ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (signupMode) ...[
-                _InputBox(
-                  colors: colors,
-                  controller: fullName,
-                  hint: 'Full name',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: phone,
-                  hint: 'Phone number',
-                ),
-                const SizedBox(height: 10),
-              ],
-              _InputBox(
-                colors: colors,
-                controller: email,
-                hint: 'Email address',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: password,
-                hint: 'Password',
-                obscureText: true,
-              ),
-              if (signupMode) ...[
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: referralCode,
-                  hint: 'REFERRAL CODE (OPTIONAL)',
-                ),
-                const Text(
-                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
-                ),
-              ],
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: busy ? null : onForgotPassword,
-                  child: const Text('Forgot Password?'),
-                ),
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  message!,
+              Text('MOVE WHAT MATTERS',
                   style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy
-                          ? null
-                          : signupMode
-                              ? onSignUp
-                              : onSignIn,
-                      icon: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_open),
-                      label: Text(
-                        busy
-                            ? 'Please wait'
-                            : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.text,
-                        foregroundColor: colors.inverseText,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  TextButton(
-                    onPressed: busy ? null : onToggleMode,
-                    child: Text(signupMode ? 'Sign in' : 'Sign up'),
-                  ),
-                ],
+                      color: colors.adminAccent,
+                      fontSize: 13,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xff007d87),
+                    Color(0xff2455f5),
+                    Color(0xff7937c8),
+                    Color(0xffc32e79)
+                  ],
+                ).createShader(bounds),
+                child: Text(
+                    signupMode
+                        ? 'Your next move\nstarts here.'
+                        : 'Welcome back.\nLet’s get moving.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'D-DIN-Bold',
+                        fontSize: wide ? 62 : 38,
+                        height: 1.02,
+                        fontWeight: FontWeight.w800)),
               ),
+              const SizedBox(height: 24),
+              Text(
+                  'Parcels, thoughtful gifts and everyday essentials. All in one place.',
+                  style: TextStyle(
+                      color: colors.mutedText, fontSize: 18, height: 1.5)),
             ],
           ),
-        ),
-      ),
+        );
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: wide
+                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(child: welcome),
+                    const SizedBox(width: 48),
+                    Expanded(child: form)
+                  ])
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [welcome, const SizedBox(height: 28), form]),
+          ),
+        );
+      },
     );
   }
 }
@@ -13984,7 +14023,7 @@ class _RoleChoiceButton extends StatelessWidget {
         icon: Icon(icon),
         label: Text(label),
         style: FilledButton.styleFrom(
-          backgroundColor: colors.text,
+          backgroundColor: colors.action,
           foregroundColor: colors.inverseText,
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
@@ -18706,7 +18745,7 @@ class _DetailsStep extends StatelessWidget {
                 : const Icon(Icons.auto_awesome),
             label: Text(ctaLabel),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               disabledBackgroundColor: colors.text.withValues(alpha: 0.45),
               shape: RoundedRectangleBorder(
@@ -18911,7 +18950,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
                   color: const Color(0xff2fae8c),
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  fontFamily: 'serif',
+                  fontFamily: 'D-DIN-Bold',
                 ),
               ),
               const SizedBox(height: 4),
@@ -20922,8 +20961,9 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         color: colors.text,
-        fontSize: 18,
-        fontWeight: FontWeight.w900,
+        fontSize: 24,
+        fontFamily: 'D-DIN-Bold',
+        fontWeight: FontWeight.w700,
       ),
     );
   }
@@ -21185,7 +21225,7 @@ class _VehicleStep extends StatelessWidget {
           child: FilledButton(
             onPressed: canContinue ? onContinue : null,
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -21724,7 +21764,7 @@ class _PaymentStep extends StatelessWidget {
                           : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -21979,7 +22019,7 @@ class _WebDeliveryStatusHeader extends StatelessWidget {
             'Delivery status',
             style: TextStyle(
               color: colors.text,
-              fontFamily: 'DM Serif Display',
+              fontFamily: 'D-DIN-Bold',
               fontSize: 30,
               height: 1.15,
               fontWeight: FontWeight.w400,
@@ -22040,10 +22080,10 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 height: 9,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xff60a5fa),
+                  color: Theme.of(context).colorScheme.primary,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xff60a5fa).withValues(alpha: 0.55),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
                       blurRadius: 12,
                       spreadRadius: 4,
                     ),
@@ -22059,8 +22099,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xfff5f7fb),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -22068,8 +22108,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   body,
-                  style: const TextStyle(
-                    color: Color(0xff9ca3af),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                     height: 1.35,
                     fontWeight: FontWeight.w500,
@@ -22103,13 +22143,13 @@ class _WebDeliveryRouteCard extends StatelessWidget {
           _WebDeliveryRouteRow(
             label: 'Pickup',
             value: pickup,
-            accent: const Color(0xff60a5fa),
+            accent: Theme.of(context).colorScheme.primary,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
             child: Divider(
               height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
           _WebDeliveryRouteRow(
@@ -22159,8 +22199,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
             children: [
               Text(
                 label.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xff9ca3af),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontFamily: 'JetBrains Mono',
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
@@ -22172,8 +22212,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
                 value,
                 style: TextStyle(
                   color: pending
-                      ? const Color(0xff9ca3af)
-                      : const Color(0xfff5f7fb),
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurface,
                   fontSize: 15,
                   height: 1.35,
                   fontWeight: pending ? FontWeight.w400 : FontWeight.w600,
@@ -22209,10 +22249,10 @@ class _WebDeliveryPriceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Price breakdown',
             style: TextStyle(
-              color: Color(0xfff5f7fb),
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -22252,7 +22292,7 @@ class _WebDeliveryPriceCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 7),
-            child: Divider(color: Colors.white.withValues(alpha: 0.10)),
+            child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           _WebDeliveryPriceLine(
             label: 'Total',
@@ -22287,7 +22327,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
               label,
               style: TextStyle(
                 color:
-                    strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+                    strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: strong ? 16 : 13.5,
                 fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -22296,7 +22336,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+              color: strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
               fontFamily: 'JetBrains Mono',
               fontSize: strong ? 16 : 13.5,
               fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
@@ -22327,17 +22367,17 @@ class _WebDeliveryInfoBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.info_outline_rounded,
-            color: Color(0xff60a5fa),
+            color: Theme.of(context).colorScheme.primary,
             size: 18,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Color(0xff60a5fa),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
                 fontSize: 13,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
@@ -22361,9 +22401,9 @@ class _WebDeliveryPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       decoration: BoxDecoration(
-        color: const Color(0xfff5f7fb).withValues(alpha: 0.055),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: child,
     );
@@ -22933,7 +22973,7 @@ class _ChatSheet extends StatelessWidget {
                         onPressed: onSend,
                         icon: const Icon(Icons.send),
                         style: IconButton.styleFrom(
-                          backgroundColor: colors.text,
+                          backgroundColor: colors.action,
                           foregroundColor: colors.inverseText,
                         ),
                       ),
@@ -22948,7 +22988,6 @@ class _ChatSheet extends StatelessWidget {
     );
   }
 }
-
 
 class _AddressField extends StatefulWidget {
   final _CircumColors colors;
@@ -23999,7 +24038,8 @@ class _InputBox extends StatelessWidget {
       enabled: enabled,
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
       decoration: InputDecoration(
-        hintText: hint,
+        labelText: hint,
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
         hintStyle: TextStyle(color: colors.mutedText),
         filled: true,
         fillColor: colors.field,
@@ -24008,8 +24048,8 @@ class _InputBox extends StatelessWidget {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
     );
@@ -25344,7 +25384,7 @@ class _DriverRatingPrompt extends StatelessWidget {
                         : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -25506,7 +25546,7 @@ class _CompletedDeliveryActions extends StatelessWidget {
             icon: const Icon(Icons.add_box_outlined),
             label: const Text('Book another delivery'),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
@@ -25606,32 +25646,16 @@ class _GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.96),
-            colors.adminAccent.withValues(alpha: colors.dark ? 0.10 : 0.06),
-            colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.94),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+        color: colors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: colors.dark ? 0.18 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: colors.adminGlow.withValues(
-              alpha: colors.dark ? 0.12 : 0.08,
-            ),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
+              color: Colors.black.withValues(alpha: colors.dark ? 0.16 : 0.035),
+              blurRadius: 24,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: child,
@@ -25683,7 +25707,6 @@ class _MetricPill extends StatelessWidget {
   }
 }
 
-
 class _VanguardLandingPage extends StatelessWidget {
   final _CircumColors colors;
   final VoidCallback onBack;
@@ -25698,14 +25721,14 @@ class _VanguardLandingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final narrow = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
-      backgroundColor: const Color(0xff030812),
+      backgroundColor: colors.appBackground,
       body: SafeArea(
         child: Stack(
           children: [
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
+                  gradient: colors.dark ? RadialGradient(
                     center: const Alignment(0, -0.78),
                     radius: 1.08,
                     colors: [
@@ -25713,7 +25736,7 @@ class _VanguardLandingPage extends StatelessWidget {
                       const Color(0xff07192f).withValues(alpha: 0.93),
                       const Color(0xff030812),
                     ],
-                  ),
+                  ) : _websiteHeroGradient,
                 ),
               ),
             ),
@@ -25731,14 +25754,14 @@ class _VanguardLandingPage extends StatelessWidget {
                       IconButton(
                         tooltip: 'Back',
                         onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        icon: Icon(Icons.arrow_back, color: colors.text),
                       ),
                       const SizedBox(width: 6),
                     ],
                     Image.asset(
                       'assets/images/circum_wordmark.png',
                       width: narrow ? 142 : 154,
-                      errorBuilder: (context, error, stackTrace) => const Text(
+                      errorBuilder: (context, error, stackTrace) => Text(
                         'CIRCUM',
                         style: TextStyle(
                           color: Color(0xff0a84ff),
@@ -25762,8 +25785,8 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Georgia',
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 68 : 88,
                             height: 0.96,
                             fontWeight: FontWeight.w700,
@@ -25774,7 +25797,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard gives your delivery enhanced\nhandling, priority support, trusted Circum Rider\nprioritisation, and stronger custody tracking\nfor important items.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.73),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: narrow ? 26 : 30,
                             height: 1.55,
                             fontWeight: FontWeight.w600,
@@ -25785,7 +25808,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Optional add-on at checkout — £1.99',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontSize: narrow ? 20 : 23,
                             fontWeight: FontWeight.w900,
                           ),
@@ -25795,8 +25818,8 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Georgia',
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 45 : 62,
                             height: 1.18,
                             fontWeight: FontWeight.w700,
@@ -25922,7 +25945,7 @@ class _VanguardFeatureCard extends StatelessWidget {
       width: double.infinity,
       constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
       padding: EdgeInsets.all(narrow ? 30 : 34),
-      decoration: _vanguardCardDecoration(),
+      decoration: _vanguardCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -25932,7 +25955,7 @@ class _VanguardFeatureCard extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: narrow ? 26 : 30,
               height: 1.14,
               fontWeight: FontWeight.w900,
@@ -25942,7 +25965,7 @@ class _VanguardFeatureCard extends StatelessWidget {
           Text(
             body,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: narrow ? 21 : 24,
               height: 1.42,
               fontWeight: FontWeight.w600,
@@ -25975,15 +25998,15 @@ class _VanguardTimelineCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(darker: true),
+      decoration: _vanguardCardDecoration(context, darker: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Custody preview',
             style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
+              color: Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.02,
               fontWeight: FontWeight.w700,
@@ -26019,7 +26042,7 @@ class _VanguardTimelineCard extends StatelessWidget {
                   child: Text(
                     steps[index],
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: narrow ? 22 : 26,
                       fontWeight: FontWeight.w900,
                     ),
@@ -26051,15 +26074,15 @@ class _VanguardChecklistCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(),
+      decoration: _vanguardCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
             style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
+              color: Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
               fontWeight: FontWeight.w700,
@@ -26082,7 +26105,7 @@ class _VanguardChecklistCard extends StatelessWidget {
                     child: Text(
                       item,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: narrow ? 23 : 27,
                         height: 1.18,
                         fontWeight: FontWeight.w800,
@@ -26113,15 +26136,15 @@ class _VanguardImportantCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(darker: true),
+      decoration: _vanguardCardDecoration(context, darker: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Important',
             style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
+              color: Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
               fontWeight: FontWeight.w700,
@@ -26131,7 +26154,7 @@ class _VanguardImportantCard extends StatelessWidget {
           Text(
             'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: narrow ? 22 : 27,
               height: 1.45,
               fontWeight: FontWeight.w600,
@@ -26143,17 +26166,10 @@ class _VanguardImportantCard extends StatelessWidget {
   }
 }
 
-BoxDecoration _vanguardCardDecoration({bool darker = false}) {
+BoxDecoration _vanguardCardDecoration(BuildContext context, {bool darker = false}) {
   return BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(darker ? 0xff101722 : 0xff102845).withValues(alpha: 0.86),
-        Color(darker ? 0xff0b1019 : 0xff0b1a2c).withValues(alpha: 0.92),
-      ],
-    ),
-    borderRadius: BorderRadius.circular(28),
+    color: Theme.of(context).colorScheme.surface,
+    borderRadius: BorderRadius.circular(16),
     border: Border.all(
       color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
       width: 1.4,
@@ -28619,11 +28635,11 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
             height: compact ? size.height * 0.92 : double.infinity,
             padding: EdgeInsets.zero,
             decoration: BoxDecoration(
-              color: const Color(0xff07090f),
+              color: colors.panel,
               borderRadius: compact
                   ? BorderRadius.circular(24)
                   : const BorderRadius.horizontal(left: Radius.circular(24)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+              border: Border.all(color: colors.border),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xff3b82f6).withValues(alpha: 0.12),
@@ -28689,8 +28705,8 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                           Text(
                             'Circum',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.68),
-                              fontFamily: 'JetBrains Mono',
+                              color: colors.mutedText,
+                              fontFamily: 'D-DIN',
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -28702,7 +28718,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             onPressed: () => setState(() => _open = false),
                             icon: Icon(
                               Icons.close,
-                              color: Colors.white.withValues(alpha: 0.68),
+                              color: colors.mutedText,
                             ),
                           ),
                         ],
@@ -28718,18 +28734,18 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               'Contact Circum',
                               style: TextStyle(
                                 color: const Color(0xff60a5fa),
-                                fontFamily: 'JetBrains Mono',
+                                fontFamily: 'D-DIN',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
                               ),
                             ),
                             const SizedBox(height: 18),
-                            const Text(
+                            Text(
                               'How can we help you?',
                               style: TextStyle(
-                                color: Color(0xfff5f7fb),
-                                fontFamily: 'DM Serif Display',
+                                color: colors.text,
+                                fontFamily: 'D-DIN-Bold',
                                 fontSize: 34,
                                 height: 1.25,
                                 fontWeight: FontWeight.w400,
@@ -28739,7 +28755,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'Send Circum a message about deliveries, riders, accounts, payments, partnerships, or anything else you need help with.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.62),
+                                color: colors.mutedText,
                                 fontSize: 15,
                                 height: 1.55,
                                 fontWeight: FontWeight.w600,
@@ -28802,7 +28818,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'If your message is about an existing delivery, include your delivery reference if you have it.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.58),
+                                color: colors.mutedText,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -28825,7 +28841,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   top: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.14),
+                                    color: colors.border,
                                   ),
                                 ),
                               ),
@@ -28835,9 +28851,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                                   Text(
                                     'Press enter or',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.56,
-                                      ),
+                                      color: colors.mutedText,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -28970,23 +28984,22 @@ class _CircumColors {
 
   const _CircumColors(this.dark);
 
-  Color get background => dark ? Colors.black : Colors.white;
-  Color get appBackground => dark ? const Color(0xff030712) : Colors.white;
-  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff3f4f6);
-  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff8fafc);
+  Color get background => dark ? Colors.black : _landingPaper;
+  Color get appBackground => dark ? const Color(0xff030712) : _landingPaper;
+  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff0f2f8);
+  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff3f4fa);
   Color get panel => dark ? const Color(0xff111827) : Colors.white;
-  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff3f4f6);
-  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffe5e7eb);
-  Color get text => dark ? Colors.white : Colors.black;
+  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff0f2f8);
+  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffdce2e9);
+  Color get text => dark ? Colors.white : _landingInk;
+  Color get action => dark ? const Color(0xffa9bfff) : _landingBlue;
   Color get inverseText => dark ? Colors.black : Colors.white;
-  Color get mutedText =>
-      dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
+  Color get mutedText => dark ? const Color(0xff9ca3af) : _landingMuted;
   Color get success => const Color(0xff16a34a);
   Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
       dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
-  Color get adminAccent =>
-      dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
+  Color get adminAccent => dark ? const Color(0xff38bdf8) : _landingBlue;
   Color get adminGlow =>
       dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }
