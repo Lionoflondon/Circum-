@@ -338,9 +338,22 @@ class _PremiumLanding extends StatelessWidget {
                 : box.maxWidth >= 620
                     ? 2
                     : 1;
-            final width = (box.maxWidth - (columns - 1) * 16) / columns;
-            return Wrap(spacing: 16, runSpacing: 16, children: [
-              for (final card in cards) SizedBox(width: width, child: card),
+            return Column(children: [
+              for (var start = 0; start < cards.length; start += columns) ...[
+                if (start > 0) const SizedBox(height: 16),
+                IntrinsicHeight(
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                      for (var offset = 0; offset < columns; offset++) ...[
+                        if (offset > 0) const SizedBox(width: 16),
+                        Expanded(
+                            child: start + offset < cards.length
+                                ? cards[start + offset]
+                                : const SizedBox.shrink()),
+                      ],
+                    ])),
+              ],
             ]);
           }),
         ])),
@@ -569,56 +582,31 @@ class _PremiumLanding extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-          color: isGifts ? null : iconColor.withValues(alpha: 0.06),
-          gradient: isGifts ? _landingGiftsPearl : null,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xffdce1dc))),
-      child: LayoutBuilder(builder: (_, box) {
-        final actionLink = Link(
-          uri: _CircumWebsiteAppState._canonicalWebUri(path),
-          target: LinkTarget.self,
-          builder: (_, followLink) => IconButton(
-            tooltip: 'Explore $title',
-            onPressed: kIsWeb
-                ? () => web.window.location.assign(
-                    _CircumWebsiteAppState._canonicalWebUri(path).toString())
-                : action,
-            icon: const Icon(Icons.north_east, color: _landingInk),
+        color: isGifts ? null : iconColor.withValues(alpha: 0.06),
+        gradient: isGifts ? _landingGiftsPearl : null,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xffdce1dc)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          serviceIcon(28),
+          const Spacer(),
+          Link(
+            uri: _CircumWebsiteAppState._canonicalWebUri(path),
+            target: LinkTarget.self,
+            builder: (_, followLink) => IconButton(
+              tooltip: 'Explore $title',
+              onPressed: kIsWeb
+                  ? () => web.window.location.assign(
+                      _CircumWebsiteAppState._canonicalWebUri(path).toString())
+                  : action,
+              icon: const Icon(Icons.north_east, color: _landingInk),
+            ),
           ),
-        );
-        if (box.maxWidth < 550) {
-          return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  serviceIcon(28),
-                  const Spacer(),
-                  actionLink,
-                ]),
-                const SizedBox(height: 12),
-                content,
-              ]);
-        }
-        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (wide) ...[
-            Text(number,
-                style: const TextStyle(color: _landingMuted, fontSize: 13)),
-            const SizedBox(width: 36)
-          ],
-          Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                  color: isGifts ? null : iconColor.withValues(alpha: 0.12),
-                  gradient: isGifts ? _landingGiftsPearl : null,
-                  borderRadius: BorderRadius.circular(16)),
-              child: serviceIcon(27)),
-          const SizedBox(width: 22),
-          Expanded(child: content),
-          const SizedBox(width: 12),
-          actionLink,
-        ]);
-      }),
+        ]),
+        const SizedBox(height: 12),
+        content,
+      ]),
     );
   }
 
