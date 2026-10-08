@@ -26222,6 +26222,7 @@ class _CompliancePage extends StatelessWidget {
   final String intro;
   final List<_ComplianceSection> sections;
   final List<Widget> actions;
+  final bool colourPop;
 
   const _CompliancePage({
     required this.colors,
@@ -26229,89 +26230,124 @@ class _CompliancePage extends StatelessWidget {
     required this.intro,
     required this.sections,
     required this.actions,
+    this.colourPop = false,
   });
 
   @override
   Widget build(BuildContext context) => SelectionArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 820),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CIRCUM',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 42),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 38,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    intro,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontSize: 17,
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  ...sections.map(
-                    (section) => Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: colors.panel,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.border),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: colourPop ? const EdgeInsets.all(28) : EdgeInsets.zero,
+                decoration: colourPop
+                    ? BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [_landingBlue, Color(0xff173b95)],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              section.title,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              section.body,
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontSize: 15,
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
+                        borderRadius: BorderRadius.circular(24),
+                      )
+                    : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'CIRCUM',
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
                       ),
                     ),
-                  ),
-                  Wrap(spacing: 18, runSpacing: 12, children: actions),
-                ],
+                    SizedBox(height: colourPop ? 24 : 42),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.text,
+                        fontSize: 38,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      intro,
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.mutedText,
+                        fontSize: 17,
+                        height: 1.55,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 28),
+              ...sections.map(
+                (section) => Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: colors.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colourPop
+                            ? colors.action.withValues(alpha: .35)
+                            : colors.border,
+                      ),
+                      gradient: colourPop
+                          ? LinearGradient(
+                              colors: [
+                                colors.panel,
+                                Color.alphaBlend(
+                                  colors.action.withValues(alpha: .08),
+                                  colors.panel,
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          section.title,
+                          style: TextStyle(
+                            color: colourPop ? colors.action : colors.text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          section.body,
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Wrap(spacing: 18, runSpacing: 12, children: actions),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _AccountDeletionPage extends StatelessWidget {
@@ -26419,6 +26455,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _CompliancePage(
         colors: colors,
+        colourPop: true,
         title: 'Privacy Policy',
         intro:
             'Version 2.0. Effective 19 September 2026. This policy explains how Circum Technologies Ltd uses personal data across the Circum User and Circum Rider services, our websites, applications, and related delivery, payment, support, and communications services. All User and Rider account holders must be at least 18 years old.',
