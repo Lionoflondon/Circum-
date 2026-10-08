@@ -26618,6 +26618,8 @@ class _LandingFooter extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const _StoreDownloads(),
+              const _FooterSocialLinks(),
+              const SizedBox(height: 24),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,

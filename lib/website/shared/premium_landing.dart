@@ -1114,3 +1114,49 @@ class _LandingBookingPanelState extends State<_LandingBookingPanel> {
             ])),
       );
 }
+
+class _FooterSocialLinks extends StatelessWidget {
+  const _FooterSocialLinks();
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Follow Circum',
+              style: TextStyle(
+                  color: _landingInk, fontSize: 20, fontFamily: 'D-DIN-Bold')),
+          const SizedBox(height: 8),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            _socialLink('X', 'https://x.com/circumuk'),
+            _socialLink('TikTok', 'https://www.tiktok.com/@circumuk'),
+            _socialLink('Instagram', 'https://www.instagram.com/circumuk/'),
+          ]),
+        ],
+      );
+
+  Widget _socialLink(String label, String url) => Link(
+        uri: Uri.parse(url),
+        target: LinkTarget.blank,
+        builder: (_, followLink) => Tooltip(
+          message: 'Follow Circum on $label (opens in a new tab)',
+          child: OutlinedButton(
+            onPressed: kIsWeb
+                ? () => web.window.open(url, '_blank', 'noopener,noreferrer')
+                : () => unawaited(launchUrl(Uri.parse(url),
+                    mode: LaunchMode.externalApplication)),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: _landingInk,
+                minimumSize: const Size(90, 48),
+                side: const BorderSide(color: Color(0xffd9dfd8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(label),
+              const SizedBox(width: 10),
+              const Icon(Icons.north_east, size: 16),
+            ]),
+          ),
+        ),
+      );
+}
