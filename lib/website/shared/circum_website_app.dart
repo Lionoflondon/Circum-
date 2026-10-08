@@ -313,7 +313,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       final paths = <String>{'/', web.window.location.pathname};
       final segments = web.window.location.pathname.split('/');
       for (var i = 1; i < segments.length; i++) {
-        paths.add(segments.take(i).join('/') + '/');
+        paths.add('${segments.take(i).join('/')}/');
       }
       final domains = <String>{'', host};
       if (host == 'circumuk.com' || host.endsWith('.circumuk.com')) {
