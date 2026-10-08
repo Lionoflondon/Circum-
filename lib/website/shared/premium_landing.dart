@@ -46,7 +46,7 @@ class _PremiumLanding extends StatelessWidget {
   });
 
   Widget _link(String label, String path, VoidCallback action,
-      {bool primary = false, bool inverse = false}) {
+      {bool primary = false, bool inverse = false, bool outlined = false}) {
     return Link(
       uri: _CircumWebsiteAppState._canonicalWebUri(path),
       target: LinkTarget.self,
@@ -58,9 +58,9 @@ class _PremiumLanding extends StatelessWidget {
         style: TextButton.styleFrom(
           backgroundColor: primary ? _landingBlue : Colors.transparent,
           foregroundColor: primary || inverse ? Colors.white : _landingInk,
-          padding:
-              EdgeInsets.symmetric(horizontal: primary ? 24 : 14, vertical: 20),
-          minimumSize: const Size(48, 48),
+          padding: EdgeInsets.symmetric(horizontal: primary ? 24 : 16),
+          minimumSize: const Size(48, 56),
+          side: outlined ? const BorderSide(color: _landingBlue) : null,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: const TextStyle(
               fontSize: 13,
@@ -111,6 +111,11 @@ class _PremiumLanding extends StatelessWidget {
       final small = constraints.maxWidth < 600;
       final headlineSize = small ? 60.0 : 80.0;
       const handoverPhoto = _ServiceImageSelector();
+      final actionWidth = small
+          ? (constraints.maxWidth < 378
+              ? constraints.maxWidth - 48
+              : (constraints.maxWidth - 60) / 2)
+          : 190.0;
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ShaderMask(
@@ -145,12 +150,21 @@ class _PremiumLanding extends StatelessWidget {
                   TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
         ),
         const SizedBox(height: 32),
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          _link('Send a parcel', '/send', onStart),
-          if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          SizedBox(
+            width: actionWidth,
+            height: 56,
+            child: _link('Send a parcel', '/send', onStart, outlined: true),
+          ),
+          if (onGifts != null)
+            SizedBox(
+              width: actionWidth,
+              height: 56,
+              child:
+                  _link('Explore Gifts ↗', '/gifts', onGifts!, outlined: true),
+            ),
         ]),
-        const SizedBox(height: 24),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
           SizedBox(width: 7),
@@ -233,7 +247,7 @@ class _PremiumLanding extends StatelessWidget {
             colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
           ),
         ),
-        _section(handoverPhoto, vertical: small ? 24 : 40),
+        handoverPhoto,
         _section(
             Container(
               padding: const EdgeInsets.symmetric(vertical: 25),
@@ -873,24 +887,65 @@ class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
     super.dispose();
   }
 
-  Widget _frame(int index) => ColoredBox(
-        color: const Color(0xfff4f3f0),
-        child: Image(
-          image: _image(index),
-          fit: BoxFit.contain,
-          semanticLabel: _descriptions[index],
-          errorBuilder: (_, __, ___) => const SizedBox.expand(),
-        ),
-      );
+  Widget _frame(int index, bool portrait) {
+    final photo = Image(
+      image: _image(index),
+      width: 1122,
+      height: 1402,
+      fit: BoxFit.fill,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: _landingPaper),
+    );
+    // The existing posters all use a 1122 x 1402 canvas. Show the
+    // photographic region on desktop, without changing any source asset.
+    const photoTop = [450.0, 440.0, 440.0, 500.0];
+    final croppedHeight = 1240 - photoTop[index];
+    return Semantics(
+      image: true,
+      label: _descriptions[index],
+      child: ExcludeSemantics(
+        child: portrait
+            ? Image(
+                image: _image(index),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const ColoredBox(color: _landingPaper),
+              )
+            : ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: 1122,
+                    height: croppedHeight,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topCenter,
+                        minWidth: 1122,
+                        maxWidth: 1122,
+                        minHeight: 1402,
+                        maxHeight: 1402,
+                        child: Transform.translate(
+                          offset: Offset(0, -photoTop[index]),
+                          child: photo,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+    return LayoutBuilder(builder: (_, box) {
+      final portrait = box.maxWidth < 600;
+      return SizedBox(
+        width: double.infinity,
+        height:
+            portrait ? box.maxWidth * 1.25 : MediaQuery.sizeOf(context).height,
         child: Stack(fit: StackFit.expand, children: [
-          ExcludeSemantics(child: _frame(_previous)),
+          ExcludeSemantics(child: _frame(_previous, portrait)),
           TweenAnimationBuilder<double>(
             key: ValueKey(_selected),
             tween: Tween(begin: 0, end: 1),
@@ -900,11 +955,11 @@ class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
             curve: Curves.easeInOut,
             builder: (_, opacity, child) =>
                 Opacity(opacity: opacity, child: child),
-            child: _frame(_selected),
+            child: _frame(_selected, portrait),
           ),
         ]),
-      ),
-    );
+      );
+    });
   }
 }
 
