@@ -221,6 +221,8 @@
         "scripts/deploy_isolated.sh",
         "scripts/finalize_web_artifact.js",
         "scripts/firebase_tools.sh",
+        "scripts/provision_runtime_secret.js",
+        "scripts/provision_runtime_secret.self_test.js",
         "scripts/release_orchestrator.js",
         "scripts/scoped_functions_deploy_list.js",
         "scripts/scoped_functions_deploy_list.test.js",

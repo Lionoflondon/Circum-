@@ -128,3 +128,29 @@ test("publisher timeout or missing failure reason never causes an automatic rese
   assert.equal((await db.doc("notifications/timeout").get()).data().pushDeliveryStatus, "manual_review");
   assert.equal((await db.doc("notifications/missing-reason").get()).data().pushDeliveryStatus, "manual_review");
 }));
+
+test("due timestamp work bypasses a full page of future retries and preserves legacy work", async () => withDb("indexed-due", async (db) => {
+  const now = Date.now();
+  const batch = db.batch();
+  for (let i = 0; i < 120; i++) {
+    batch.set(db.doc(`notifications/a-future-${String(i).padStart(3, "0")}`), {
+      type: "chat_message", retryable: true, pushDeliveryStatus: "failed",
+      nextRetryAt: Timestamp.fromMillis(now + 60000), createdAt: Timestamp.fromMillis(now - 1000),
+    });
+  }
+  await batch.commit();
+  await seed(db, "z-due", {type: "chat_message", nextRetryAt: Timestamp.fromMillis(now - 1000)});
+  await seed(db, "0-legacy", {type: "chat_message"});
+  const sent = [];
+  const options = {db, now, ownedToken: async () => "token-1", sendPush: async (message) => {
+    sent.push(message.data.notificationId); return "fcm-1";
+  }};
+  const preview = await processNotificationRetriesCore({...options, dryRun: true});
+  assert.equal(preview.due, 2);
+  assert.equal(preview.scanned, 11);
+  assert.equal((await db.doc("operationsState/notification_retry_cursor_v2").get()).exists, false);
+  const result = await processNotificationRetriesCore(options);
+  assert.equal(result.sent, 2);
+  assert.deepEqual(sent.sort(), ["0-legacy", "z-due"]);
+  assert.equal((await db.doc("notifications/a-future-000").get()).data().pushDeliveryStatus, "failed");
+}));
