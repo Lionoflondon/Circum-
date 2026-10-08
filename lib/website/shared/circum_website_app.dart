@@ -21966,10 +21966,10 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 height: 9,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xff60a5fa),
+                  color: Theme.of(context).colorScheme.primary,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xff60a5fa).withValues(alpha: 0.55),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
                       blurRadius: 12,
                       spreadRadius: 4,
                     ),
@@ -21985,8 +21985,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xfff5f7fb),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -21994,8 +21994,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   body,
-                  style: const TextStyle(
-                    color: Color(0xff9ca3af),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                     height: 1.35,
                     fontWeight: FontWeight.w500,
@@ -22029,13 +22029,13 @@ class _WebDeliveryRouteCard extends StatelessWidget {
           _WebDeliveryRouteRow(
             label: 'Pickup',
             value: pickup,
-            accent: const Color(0xff60a5fa),
+            accent: Theme.of(context).colorScheme.primary,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
             child: Divider(
               height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
           _WebDeliveryRouteRow(
@@ -22085,8 +22085,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
             children: [
               Text(
                 label.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xff9ca3af),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontFamily: 'JetBrains Mono',
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
@@ -22098,8 +22098,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
                 value,
                 style: TextStyle(
                   color: pending
-                      ? const Color(0xff9ca3af)
-                      : const Color(0xfff5f7fb),
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurface,
                   fontSize: 15,
                   height: 1.35,
                   fontWeight: pending ? FontWeight.w400 : FontWeight.w600,
@@ -22135,10 +22135,10 @@ class _WebDeliveryPriceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Price breakdown',
             style: TextStyle(
-              color: Color(0xfff5f7fb),
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -22178,7 +22178,7 @@ class _WebDeliveryPriceCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 7),
-            child: Divider(color: Colors.white.withValues(alpha: 0.10)),
+            child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           _WebDeliveryPriceLine(
             label: 'Total',
@@ -22213,7 +22213,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
               label,
               style: TextStyle(
                 color:
-                    strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+                    strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: strong ? 16 : 13.5,
                 fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -22222,7 +22222,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+              color: strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
               fontFamily: 'JetBrains Mono',
               fontSize: strong ? 16 : 13.5,
               fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
@@ -22253,17 +22253,17 @@ class _WebDeliveryInfoBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.info_outline_rounded,
-            color: Color(0xff60a5fa),
+            color: Theme.of(context).colorScheme.primary,
             size: 18,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Color(0xff60a5fa),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
                 fontSize: 13,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
@@ -22287,9 +22287,9 @@ class _WebDeliveryPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       decoration: BoxDecoration(
-        color: const Color(0xfff5f7fb).withValues(alpha: 0.055),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: child,
     );
@@ -25607,14 +25607,14 @@ class _VanguardLandingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final narrow = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
-      backgroundColor: const Color(0xff030812),
+      backgroundColor: colors.appBackground,
       body: SafeArea(
         child: Stack(
           children: [
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
+                  gradient: colors.dark ? RadialGradient(
                     center: const Alignment(0, -0.78),
                     radius: 1.08,
                     colors: [
@@ -25622,7 +25622,7 @@ class _VanguardLandingPage extends StatelessWidget {
                       const Color(0xff07192f).withValues(alpha: 0.93),
                       const Color(0xff030812),
                     ],
-                  ),
+                  ) : _websiteHeroGradient,
                 ),
               ),
             ),
@@ -25640,14 +25640,14 @@ class _VanguardLandingPage extends StatelessWidget {
                       IconButton(
                         tooltip: 'Back',
                         onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        icon: Icon(Icons.arrow_back, color: colors.text),
                       ),
                       const SizedBox(width: 6),
                     ],
                     Image.asset(
                       'assets/images/circum_wordmark.png',
                       width: narrow ? 142 : 154,
-                      errorBuilder: (context, error, stackTrace) => const Text(
+                      errorBuilder: (context, error, stackTrace) => Text(
                         'CIRCUM',
                         style: TextStyle(
                           color: Color(0xff0a84ff),
@@ -25671,7 +25671,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 68 : 88,
                             height: 0.96,
@@ -25683,7 +25683,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard gives your delivery enhanced\nhandling, priority support, trusted Circum Rider\nprioritisation, and stronger custody tracking\nfor important items.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.73),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: narrow ? 26 : 30,
                             height: 1.55,
                             fontWeight: FontWeight.w600,
@@ -25694,7 +25694,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Optional add-on at checkout — £1.99',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontSize: narrow ? 20 : 23,
                             fontWeight: FontWeight.w900,
                           ),
@@ -25704,7 +25704,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 45 : 62,
                             height: 1.18,
@@ -25831,7 +25831,7 @@ class _VanguardFeatureCard extends StatelessWidget {
       width: double.infinity,
       constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
       padding: EdgeInsets.all(narrow ? 30 : 34),
-      decoration: _vanguardCardDecoration(),
+      decoration: _vanguardCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -25841,7 +25841,7 @@ class _VanguardFeatureCard extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: narrow ? 26 : 30,
               height: 1.14,
               fontWeight: FontWeight.w900,
@@ -25851,7 +25851,7 @@ class _VanguardFeatureCard extends StatelessWidget {
           Text(
             body,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: narrow ? 21 : 24,
               height: 1.42,
               fontWeight: FontWeight.w600,
@@ -25884,14 +25884,14 @@ class _VanguardTimelineCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(darker: true),
+      decoration: _vanguardCardDecoration(context, darker: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Custody preview',
             style: TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.02,
@@ -25928,7 +25928,7 @@ class _VanguardTimelineCard extends StatelessWidget {
                   child: Text(
                     steps[index],
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: narrow ? 22 : 26,
                       fontWeight: FontWeight.w900,
                     ),
@@ -25960,14 +25960,14 @@ class _VanguardChecklistCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(),
+      decoration: _vanguardCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
             style: TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
@@ -25991,7 +25991,7 @@ class _VanguardChecklistCard extends StatelessWidget {
                     child: Text(
                       item,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: narrow ? 23 : 27,
                         height: 1.18,
                         fontWeight: FontWeight.w800,
@@ -26022,14 +26022,14 @@ class _VanguardImportantCard extends StatelessWidget {
         narrow ? 34 : 42,
         narrow ? 44 : 48,
       ),
-      decoration: _vanguardCardDecoration(darker: true),
+      decoration: _vanguardCardDecoration(context, darker: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Important',
             style: TextStyle(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
@@ -26040,7 +26040,7 @@ class _VanguardImportantCard extends StatelessWidget {
           Text(
             'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: narrow ? 22 : 27,
               height: 1.45,
               fontWeight: FontWeight.w600,
@@ -26052,17 +26052,10 @@ class _VanguardImportantCard extends StatelessWidget {
   }
 }
 
-BoxDecoration _vanguardCardDecoration({bool darker = false}) {
+BoxDecoration _vanguardCardDecoration(BuildContext context, {bool darker = false}) {
   return BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(darker ? 0xff101722 : 0xff102845).withValues(alpha: 0.86),
-        Color(darker ? 0xff0b1019 : 0xff0b1a2c).withValues(alpha: 0.92),
-      ],
-    ),
-    borderRadius: BorderRadius.circular(28),
+    color: Theme.of(context).colorScheme.surface,
+    borderRadius: BorderRadius.circular(16),
     border: Border.all(
       color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
       width: 1.4,
