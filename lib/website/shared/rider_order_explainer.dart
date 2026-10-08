@@ -47,19 +47,42 @@ class RiderOrderExplainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accentColours = dark
+        ? const [
+            Color(0xff67e8f9),
+            Color(0xff8aaaff),
+            Color(0xffc4b5fd),
+            Color(0xfff9a8d4),
+            Color(0xffffd56a)
+          ]
+        : const [
+            Color(0xff007d87),
+            Color(0xff2455f5),
+            Color(0xff7937c8),
+            Color(0xffc32e79),
+            Color(0xffb96508)
+          ];
+    Widget colourPop(Widget child) => ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) =>
+              LinearGradient(colors: accentColours.take(4).toList())
+                  .createShader(bounds),
+          child: child,
+        );
     final narrow = MediaQuery.sizeOf(context).width < 760;
     Text body(String value) => Text(value,
         style: TextStyle(
             color: scheme.onSurfaceVariant, fontSize: 18, height: 1.65));
     Widget title(String value) => Padding(
         padding: const EdgeInsets.only(bottom: 20),
-        child: Text(value,
+        child: colourPop(Text(value,
             style: TextStyle(
                 color: scheme.onSurface,
                 fontFamily: 'D-DIN-Bold',
                 fontSize: narrow ? 34 : 46,
                 height: 1.15,
-                fontWeight: FontWeight.w700)));
+                fontWeight: FontWeight.w700))));
     Widget section(String heading, List<Widget> children) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(
@@ -105,13 +128,13 @@ class RiderOrderExplainer extends StatelessWidget {
                                   letterSpacing: 2,
                                   fontWeight: FontWeight.w700)),
                           const SizedBox(height: 24),
-                          Text('Every Veteran\nwas once an Agent.',
+                          colourPop(Text('Every Veteran\nwas once an Agent.',
                               style: TextStyle(
                                   fontFamily: 'D-DIN-Bold',
                                   fontSize: narrow ? 48 : 76,
                                   height: 1.08,
                                   fontWeight: FontWeight.w700,
-                                  color: scheme.onSurface)),
+                                  color: scheme.onSurface))),
                           const SizedBox(height: 28),
                           body(
                               'Deliver with Circum. Build a reputation through trust, service and contribution. Discover the Rider network, what each rank means and how progression is reviewed before you join or log in.'),
@@ -132,6 +155,13 @@ class RiderOrderExplainer extends StatelessWidget {
                             ...ranks.asMap().entries.map((entry) => Padding(
                                 padding: const EdgeInsets.only(bottom: 32),
                                 child: Card(
+                                    color: accentColours[entry.key]
+                                        .withValues(alpha: dark ? 0.10 : 0.06),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                        side: BorderSide(
+                                            color: accentColours[entry.key]
+                                                .withValues(alpha: 0.32))),
                                     child: Padding(
                                         padding: const EdgeInsets.all(26),
                                         child: Column(
@@ -145,7 +175,8 @@ class RiderOrderExplainer extends StatelessWidget {
                                                       fontFamily: 'D-DIN-Bold',
                                                       fontWeight:
                                                           FontWeight.w700,
-                                                      color: scheme.primary)),
+                                                      color: accentColours[
+                                                          entry.key])),
                                               const SizedBox(height: 12),
                                               Text('“${entry.value.$2}”',
                                                   style: TextStyle(

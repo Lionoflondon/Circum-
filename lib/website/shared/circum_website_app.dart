@@ -405,10 +405,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             onToggleTheme: () => setState(() => _darkMode = !_darkMode),
           ),
         ),
-      _WebAppMode.rider when !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
+      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
           onBack: () => _openSurface(_WebAppMode.landing),
           onLogin: () => _openCanonicalPath('/rider?access=login'),
-          onJoin: () => _openCanonicalPath('/rider?access=join'),
+          onJoin: () => _openCanonicalPath('/rider/onboarding'),
         ),
       _WebAppMode.rider => _PhoneStage(
           key: const ValueKey(circumRiderWebIdentity),
@@ -5022,7 +5022,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               34,
                             ),
                             children: [
-                              _RiderPublicIntro(colors: colors),
+                              _RiderPublicIntro(colors: colors, onboarding: Uri.base.path == '/rider/onboarding'),
                               const SizedBox(height: 14),
                               _RiderAccessPanel(
                                 colors: colors,
@@ -5090,7 +5090,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 class _RiderPublicIntro extends StatelessWidget {
   final _CircumColors colors;
 
-  const _RiderPublicIntro({required this.colors});
+  final bool onboarding;
+  const _RiderPublicIntro({required this.colors, this.onboarding = false});
 
   @override
   Widget build(BuildContext context) {
@@ -5100,7 +5101,7 @@ class _RiderPublicIntro extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Earn with Circum.',
+            onboarding ? 'Start your Rider onboarding.' : 'Earn with Circum.',
             style: TextStyle(
               color: colors.text,
               fontSize: 34,
@@ -5110,7 +5111,9 @@ class _RiderPublicIntro extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a Circum Rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
+            onboarding
+                ? 'Step 1: create your Rider account. Then verify your email, complete your application and upload your required documents for review. Already have an account? Sign in to continue your onboarding.'
+                : 'Create a Circum Rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.45,
