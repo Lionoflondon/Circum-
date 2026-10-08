@@ -26746,8 +26746,25 @@ class _LandingFooter extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const _StoreDownloads(),
-              const _FooterSocialLinks(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              Text('STAY IN THE CIRCUM',
+                style: TextStyle(color: colors.text, fontSize: 14,
+                  letterSpacing: 1.4, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 14),
+              const Wrap(spacing: 12, runSpacing: 12, children: [
+                _FooterSocialLink(label: 'Instagram',
+                  url: 'https://www.instagram.com/circumuk/',
+                  icon: Icons.camera_alt_outlined,
+                  colours: [Color(0xff7937c8), Color(0xffc32e79), Color(0xffa94a00)]),
+                _FooterSocialLink(label: 'TikTok',
+                  url: 'https://www.tiktok.com/@circumuk',
+                  icon: Icons.music_note_rounded,
+                  colours: [Color(0xff007981), Color(0xff2455f5), Color(0xffb72273)]),
+                _FooterSocialLink(label: 'X',
+                  url: 'https://x.com/circumuk',
+                  colours: [Color(0xff2455f5), Color(0xff7937c8)]),
+              ]),
+              const SizedBox(height: 32),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -26903,6 +26920,51 @@ class _LandingFooter extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterSocialLink extends StatelessWidget {
+  final String label;
+  final String url;
+  final IconData? icon;
+  final List<Color> colours;
+
+  const _FooterSocialLink({required this.label, required this.url,
+    required this.colours, this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Link(
+      uri: Uri.parse(url),
+      target: LinkTarget.blank,
+      builder: (context, followLink) => Container(
+        width: 200,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colours),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [BoxShadow(color: colours.first.withValues(alpha: 0.22),
+            blurRadius: 14, offset: const Offset(0, 5))],
+        ),
+        child: TextButton(
+          onPressed: followLink,
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.white,
+            minimumSize: const Size(170, 56),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            overlayColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (icon != null) Icon(icon, size: 22)
+            else const Text('X', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 10),
+            Text(icon == null ? 'Follow on X' : label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 16),
+            const Icon(Icons.north_east, size: 16),
+          ]),
         ),
       ),
     );
