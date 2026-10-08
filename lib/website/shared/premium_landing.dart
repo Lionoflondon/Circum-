@@ -110,7 +110,23 @@ class _PremiumLanding extends StatelessWidget {
       final wide = constraints.maxWidth >= 900;
       final small = constraints.maxWidth < 600;
       final headlineSize = small ? 60.0 : 80.0;
-      const handoverPhoto = _ServiceImageSelector();
+      final handoverPhoto = ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: AspectRatio(
+          aspectRatio: 2.5,
+          child: Image.network(
+            Uri.base.resolve('/images/parcel-handover.jpg').toString(),
+            fit: BoxFit.cover,
+            semanticLabel:
+                'Illustration of a thoughtful parcel handover at a doorstep',
+            errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xffe1eee9),
+                child: Center(
+                    child: Icon(Icons.inventory_2_outlined,
+                        color: _landingBlue, size: 44))),
+          ),
+        ),
+      );
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ShaderMask(
@@ -805,78 +821,6 @@ class _PlayIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PlayIconPainter oldDelegate) => false;
-}
-
-class _ServiceImageSelector extends StatefulWidget {
-  const _ServiceImageSelector();
-
-  @override
-  State<_ServiceImageSelector> createState() => _ServiceImageSelectorState();
-}
-
-class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
-  int _selected = 0;
-  static const _labels = ['Send', 'Gifts', 'Health'];
-  static const _images = [
-    'parcel-handover.jpg',
-    'gifts-handover.jpg',
-    'health-handover.jpg'
-  ];
-  static const _descriptions = [
-    'Illustration of a thoughtful parcel handover at a doorstep',
-    'Illustration of an iridescent gift being shared at a doorway',
-    'Illustration of a sealed pharmacy bag being handed over',
-  ];
-  static const _colors = [_landingBlue, Color(0xff7937c8), Color(0xff064e3b)];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: AspectRatio(
-          aspectRatio: 2.5,
-          child: AnimatedSwitcher(
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 240),
-            child: Image.network(
-              Uri.base.resolve('/images/${_images[_selected]}').toString(),
-              key: ValueKey(_selected),
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              semanticLabel: _descriptions[_selected],
-              errorBuilder: (_, __, ___) => ColoredBox(
-                color: _colors[_selected].withValues(alpha: 0.08),
-                child: Center(
-                    child: Icon(Icons.inventory_2_outlined,
-                        color: _colors[_selected], size: 44)),
-              ),
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 10),
-      Wrap(spacing: 8, runSpacing: 4, children: [
-        for (var index = 0; index < _labels.length; index++)
-          ChoiceChip(
-            label: Text(_labels[index]),
-            selected: _selected == index,
-            showCheckmark: false,
-            tooltip: 'Show ${_labels[index]} image',
-            selectedColor: _colors[index],
-            backgroundColor: Colors.white,
-            labelStyle: TextStyle(
-              color: _selected == index ? Colors.white : _colors[index],
-              fontWeight: FontWeight.w700,
-            ),
-            side: BorderSide(color: _colors[index].withValues(alpha: 0.22)),
-            onSelected: (_) => setState(() => _selected = index),
-          ),
-      ]),
-    ]);
-  }
 }
 
 class _LandingBookingPanel extends StatefulWidget {
