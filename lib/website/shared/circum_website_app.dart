@@ -1,3 +1,4 @@
+import 'rider_order_explainer.dart';
 import 'landing_booking_draft.dart';
 import 'landing_booking_store.dart';
 import 'policies/web_auth_terminal.dart';
@@ -403,6 +404,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             onGifts: () => _openSurface(_WebAppMode.gifts),
             onToggleTheme: () => setState(() => _darkMode = !_darkMode),
           ),
+        ),
+      _WebAppMode.rider when !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onLogin: () => _openCanonicalPath('/rider?access=login'),
+          onJoin: () => _openCanonicalPath('/rider?access=join'),
         ),
       _WebAppMode.rider => _PhoneStage(
           key: const ValueKey(circumRiderWebIdentity),
@@ -2619,6 +2625,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void initState() {
     super.initState();
+    _signupMode = Uri.base.queryParameters['access'] != 'login';
     for (final controller in [
       _withdrawAmount,
       _bankName,
