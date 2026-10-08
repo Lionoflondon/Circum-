@@ -26739,6 +26739,12 @@ class _LandingFooter extends StatelessWidget {
               const _StoreDownloads(),
               const _FooterSocialLinks(),
               const SizedBox(height: 24),
+              Text('Circum Technologies Ltd · Registered in England and Wales · Company number 13931698',
+                style: TextStyle(color: colors.mutedText, fontSize: 12, height: 1.5)),
+              const SizedBox(height: 4),
+              Text('Registered office: 124 City Road, London, England, EC1V 2NX',
+                style: TextStyle(color: colors.mutedText, fontSize: 12, height: 1.5)),
+              const SizedBox(height: 16),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
