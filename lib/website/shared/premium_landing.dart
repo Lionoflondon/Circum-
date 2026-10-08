@@ -92,11 +92,14 @@ class _PremiumLanding extends StatelessWidget {
   Widget _section(Widget child,
           {Color background = _landingPaper,
           Gradient? gradient,
+          DecorationImage? image,
           double vertical = 80}) =>
       Container(
         width: double.infinity,
         decoration: BoxDecoration(
-            color: gradient == null ? background : null, gradient: gradient),
+            color: gradient == null ? background : null,
+            gradient: gradient,
+            image: image),
         padding: EdgeInsets.symmetric(horizontal: 24, vertical: vertical),
         child: Center(
             child: ConstrainedBox(
@@ -150,7 +153,6 @@ class _PremiumLanding extends StatelessWidget {
           if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
         ]),
         const SizedBox(height: 24),
-        if (wide) handoverPhoto,
         const SizedBox(height: 24),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
@@ -226,16 +228,18 @@ class _PremiumLanding extends StatelessWidget {
                   intro,
                   const SizedBox(height: 42),
                   const _LandingBookingPanel(),
-                  const SizedBox(height: 28),
-                  handoverPhoto,
                 ]),
           vertical: small ? 36 : 62,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
+          image: DecorationImage(
+            image: NetworkImage(
+                Uri.base.resolve('/images/london-hero.jpg').toString()),
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            colorFilter: ColorFilter.mode(
+                Colors.white.withValues(alpha: 0.72), BlendMode.srcOver),
           ),
         ),
+        _section(handoverPhoto, vertical: small ? 24 : 40),
         _section(
             Container(
               padding: const EdgeInsets.symmetric(vertical: 25),
@@ -816,38 +820,11 @@ class _ServiceImageSelector extends StatefulWidget {
 
 class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
   int _selected = 0;
+  int _previous = 0;
   Timer? _rotation;
-  bool _paused = false;
   bool _reduceMotion = false;
+  bool _preloaded = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reduceMotion = MediaQuery.disableAnimationsOf(context);
-    _restartRotation();
-  }
-
-  void _restartRotation() {
-    _rotation?.cancel();
-    if (_paused || _reduceMotion) return;
-    _rotation = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted || web.document.visibilityState == 'hidden') return;
-      setState(() => _selected = (_selected + 1) % _labels.length);
-    });
-  }
-
-  void _select(int index) {
-    setState(() => _selected = index);
-    _restartRotation();
-  }
-
-  @override
-  void dispose() {
-    _rotation?.cancel();
-    super.dispose();
-  }
-
-  static const _labels = ['Send', 'Gifts', 'Health', 'Business'];
   static const _images = [
     'send-campaign.jpg',
     'gifts-campaign.jpg',
@@ -860,75 +837,80 @@ class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
     'Health: Care, delivered. For what matters most. Explore Health in the Circum app.',
     'Business: Keep business moving. Deliveries that work for you. Explore Business in the Circum app.',
   ];
-  static const _colors = [
-    _landingBlue,
-    Color(0xff7937c8),
-    Color(0xff064e3b),
-    Color(0xff132b50)
-  ];
+
+  ImageProvider _image(int index) =>
+      NetworkImage(Uri.base.resolve('/images/${_images[index]}').toString());
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_preloaded) {
+      _preloaded = true;
+      unawaited(_preload());
+    } else {
+      _restartRotation();
+    }
+  }
+
+  Future<void> _preload() async {
+    await Future.wait([
+      for (var index = 0; index < _images.length; index++)
+        precacheImage(_image(index), context),
+    ]);
+    if (mounted) _restartRotation();
+  }
+
+  void _restartRotation() {
+    _rotation?.cancel();
+    if (_reduceMotion) return;
+    _rotation = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || web.document.visibilityState == 'hidden') return;
+      setState(() {
+        _previous = _selected;
+        _selected = (_selected + 1) % _images.length;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _rotation?.cancel();
+    super.dispose();
+  }
+
+  Widget _frame(int index) => ColoredBox(
+        color: const Color(0xfff4f3f0),
+        child: Image(
+          image: _image(index),
+          fit: BoxFit.contain,
+          semanticLabel: _descriptions[index],
+          errorBuilder: (_, __, ___) => const SizedBox.expand(),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ClipRRect(
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: SizedBox(
-          height: 420,
-          child: AnimatedSwitcher(
-            duration: MediaQuery.disableAnimationsOf(context)
+        child: Stack(fit: StackFit.expand, children: [
+          ExcludeSemantics(child: _frame(_previous)),
+          TweenAnimationBuilder<double>(
+            key: ValueKey(_selected),
+            tween: Tween(begin: 0, end: 1),
+            duration: _reduceMotion
                 ? Duration.zero
-                : const Duration(milliseconds: 240),
-            child: Image.network(
-              Uri.base.resolve('/images/${_images[_selected]}').toString(),
-              key: ValueKey(_selected),
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.contain,
-              semanticLabel: _descriptions[_selected],
-              errorBuilder: (_, __, ___) => ColoredBox(
-                color: _colors[_selected].withValues(alpha: 0.08),
-                child: Center(
-                    child: Icon(Icons.inventory_2_outlined,
-                        color: _colors[_selected], size: 44)),
-              ),
-            ),
+                : const Duration(milliseconds: 1000),
+            curve: Curves.easeInOut,
+            builder: (_, opacity, child) =>
+                Opacity(opacity: opacity, child: child),
+            child: _frame(_selected),
           ),
-        ),
+        ]),
       ),
-      const SizedBox(height: 10),
-      Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            for (var index = 0; index < _labels.length; index++)
-              ChoiceChip(
-                label: Text(_labels[index]),
-                selected: _selected == index,
-                showCheckmark: false,
-                tooltip: 'Show ${_labels[index]} image',
-                selectedColor: _colors[index],
-                backgroundColor: Colors.white,
-                labelStyle: TextStyle(
-                  color: _selected == index ? Colors.white : _colors[index],
-                  fontWeight: FontWeight.w700,
-                ),
-                side: BorderSide(color: _colors[index].withValues(alpha: 0.22)),
-                onSelected: (_) => _select(index),
-              ),
-            if (!_reduceMotion)
-              IconButton(
-                tooltip: _paused ? 'Resume slideshow' : 'Pause slideshow',
-                icon: Icon(
-                    _paused ? Icons.play_arrow_rounded : Icons.pause_rounded),
-                color: _landingInk,
-                onPressed: () {
-                  setState(() => _paused = !_paused);
-                  _restartRotation();
-                },
-              ),
-          ]),
-    ]);
+    );
   }
 }
 
