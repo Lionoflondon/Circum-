@@ -380,6 +380,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
                 child: Material(color: _landingPaper,
                   borderRadius: BorderRadius.circular(20),
                   child: TextButton.icon(onPressed: _showConsentPreferences,
+                    style: TextButton.styleFrom(foregroundColor: _landingInk),
                     icon: const Icon(Icons.tune, size: 18),
                     label: const Text('Cookie settings'))))),
           ],
