@@ -35,7 +35,7 @@ void main() {
         'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
 
     expect(shell, contains('id="mcjs" type="text/plain"'));
-    expect(shell, contains('data-circum-consent="optional-analytics"'));
+    expect(shell, contains('data-circum-consent="optional-marketing"'));
     expect(shell, contains(trackingUrl));
     expect(source, contains('_enableMailchimpSiteTracking()'));
     expect(source, contains("existing.getAttribute('type') != 'text/plain'"));

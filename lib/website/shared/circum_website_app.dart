@@ -1,3 +1,5 @@
+import 'privacy/cookie_preferences.dart';
+import 'dart:js_interop';
 import 'rider_order_explainer.dart';
 import 'landing_booking_draft.dart';
 import 'landing_booking_store.dart';
@@ -141,7 +143,7 @@ enum _WebAppMode {
   newsletterPreferences,
 }
 
-const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
+const _analyticsConsentStorageKey = 'circum_public_cookie_preferences_v2';
 const _mailchimpSiteTrackingScriptId = 'mcjs';
 const _mailchimpSiteTrackingScriptUrl =
     'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
@@ -163,7 +165,11 @@ class CircumWebsiteApp extends StatefulWidget {
 
 class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   bool _darkMode = false;
-  bool? _optionalAnalyticsConsent;
+  CookiePreferences? _cookieConsent;
+  bool? get _optionalAnalyticsConsent => _cookieConsent?.analytics;
+  final _consentNavigatorKey = GlobalKey<NavigatorState>();
+  JSFunction? _consentStorageListener;
+  Timer? _consentExpiryTimer;
   late final CircumWebRouteResolution _initialRoute = resolveCircumWebRoute(
     Uri.base,
     adminHostingTarget: false,
@@ -185,13 +191,18 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     }
     _redirectLegacyQueryIfNeeded();
     if (kIsWeb) {
-      _optionalAnalyticsConsent =
-          web.window.localStorage.getItem(_analyticsConsentStorageKey) ==
-              'accepted';
-      if (_optionalAnalyticsConsent == true) {
-        _enableMailchimpSiteTracking();
-        _logWebsiteVisit();
-      }
+      _cookieConsent = _readCookiePreferences();
+      if (_cookieConsent?.marketing == true) { _enableMailchimpSiteTracking(); }
+      if (_cookieConsent?.marketing != true) { _disableMailchimpSiteTracking(); }
+      if (_optionalAnalyticsConsent == true) { unawaited(_logWebsiteVisit()); }
+      _consentStorageListener = ((web.Event event) {
+        final storageEvent = event as web.StorageEvent;
+        if (storageEvent.key == _analyticsConsentStorageKey ||
+            storageEvent.key == null) { _refreshCookiePreferences(); }
+      }).toJS;
+      web.window.addEventListener('storage', _consentStorageListener);
+      _consentExpiryTimer = Timer.periodic(const Duration(minutes: 1),
+          (_) => _refreshCookiePreferences());
     }
   }
 
@@ -301,7 +312,12 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _logWebsiteVisit() async {
     if (_optionalAnalyticsConsent != true) return;
-    final pageUri = newsletterPublicPageUri(Uri.base);
+    final sourceUri = newsletterPublicPageUri(Uri.base);
+    const campaignKeys = {'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'};
+    final pageUri = sourceUri.replace(queryParameters: {
+      for (final entry in sourceUri.queryParameters.entries)
+        if (campaignKeys.contains(entry.key)) entry.key: entry.value.substring(0, math.min(entry.value.length, 128)),
+    }, fragment: '');
     try {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(
@@ -318,7 +334,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   void _enableMailchimpSiteTracking() {
-    if (!kIsWeb || _optionalAnalyticsConsent != true) return;
+    if (!kIsWeb || _cookieConsent?.marketing != true) return;
 
     final existing = web.document.getElementById(
       _mailchimpSiteTrackingScriptId,
@@ -334,7 +350,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       ..id = _mailchimpSiteTrackingScriptId
       ..async = true
       ..src = _mailchimpSiteTrackingScriptUrl;
-    script.setAttribute('data-circum-consent', 'optional-analytics');
+    script.setAttribute('data-circum-consent', 'optional-marketing');
     web.document.head!.appendChild(script);
   }
 
@@ -346,6 +362,32 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     if (script != null && script.getAttribute('type') != 'text/plain') {
       script.remove();
     }
+    // Clear known first-party tracking cookies without touching auth/session data.
+    try {
+      final host = web.window.location.hostname;
+      final paths = <String>{'/', web.window.location.pathname};
+      final segments = web.window.location.pathname.split('/');
+      for (var i = 1; i < segments.length; i++) {
+        paths.add('${segments.take(i).join('/')}/');
+      }
+      final domains = <String>{'', host};
+      if (host == 'circumuk.com' || host.endsWith('.circumuk.com')) {
+        domains.add('circumuk.com');
+      }
+      for (final entry in web.document.cookie.split(';')) {
+        final name = entry.split('=').first.trim();
+        if (!(name == '_mcid' || name.startsWith('_mc_') ||
+            name == 'mc_cid' || name == 'mc_eid' || name == 'MCPopupClosed')) { continue; }
+        for (final path in paths) {
+          for (final domain in domains) {
+            web.document.cookie = '$name=; Max-Age=0; Path=$path;'
+                '${domain.isEmpty ? '' : ' Domain=$domain;'} SameSite=Lax';
+          }
+        }
+      }
+    } catch (_) {
+      // Browser privacy restrictions must not block the consent controls.
+    }
   }
 
   @override
@@ -354,6 +396,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _consentNavigatorKey,
       title: _companyName,
       theme: _websiteTheme(_darkMode),
       home: Scaffold(
@@ -373,13 +416,21 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               },
             ),
             _CompanyLiveChatButton(colors: colors),
-            if (kIsWeb && _optionalAnalyticsConsent == null)
+            if (kIsWeb && _cookieConsent == null)
               _CookieConsentBanner(
                 colors: colors,
-                onReject: () => _setAnalyticsConsent(false),
-                onAccept: () => _setAnalyticsConsent(true),
+                onReject: () => _setCookiePreferences(false, false),
+                onAccept: () => _setCookiePreferences(true, true),
                 onManage: _showConsentPreferences,
               ),
+            if (kIsWeb && _cookieConsent != null)
+              Positioned(left: 16, bottom: 16, child: SafeArea(
+                child: Material(color: _landingPaper,
+                  borderRadius: BorderRadius.circular(20),
+                  child: TextButton.icon(onPressed: _showConsentPreferences,
+                    style: TextButton.styleFrom(foregroundColor: _landingInk),
+                    icon: const Icon(Icons.tune, size: 18),
+                    label: const Text('Cookie settings'))))),
           ],
         ),
       ),
@@ -492,47 +543,110 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     }
   }
 
-  void _setAnalyticsConsent(bool accepted) {
-    if (!kIsWeb) return;
-    web.window.localStorage.setItem(
-      _analyticsConsentStorageKey,
-      accepted ? 'accepted' : 'rejected',
-    );
-    setState(() => _optionalAnalyticsConsent = accepted);
-    if (accepted) {
-      _enableMailchimpSiteTracking();
-      _logWebsiteVisit();
-    } else {
-      _disableMailchimpSiteTracking();
+  CookiePreferences? _readCookiePreferences() {
+    if (Uri.base.queryParameters['cookie_opt_out'] == '1') {
+      return CookiePreferences(analytics: false, marketing: false, savedAt: DateTime.now());
+    }
+    try {
+      return CookiePreferences.decode(
+          web.window.localStorage.getItem(_analyticsConsentStorageKey),
+          DateTime.now());
+    } catch (_) {
+      return null;
     }
   }
 
+  void _refreshCookiePreferences() {
+    if (!mounted) return;
+    final next = _readCookiePreferences();
+    if (next?.analytics == _cookieConsent?.analytics &&
+        next?.marketing == _cookieConsent?.marketing &&
+        next?.savedAt == _cookieConsent?.savedAt) { return; }
+    final withdrawMarketing = _cookieConsent?.marketing == true &&
+        next?.marketing != true;
+    setState(() => _cookieConsent = next);
+    if (withdrawMarketing) {
+      _disableMailchimpSiteTracking();
+      web.window.location.reload();
+    } else if (next?.marketing == true) {
+      _enableMailchimpSiteTracking();
+    }
+  }
+
+  void _setCookiePreferences(bool analytics, bool marketing) {
+    if (!kIsWeb) return;
+    final withdrawMarketing = _cookieConsent?.marketing == true && !marketing;
+    final next = CookiePreferences(analytics: analytics, marketing: marketing,
+        savedAt: DateTime.now());
+    var persisted = false;
+    try {
+      web.window.localStorage.setItem(_analyticsConsentStorageKey, next.encode());
+      persisted = true;
+      web.window.localStorage.removeItem('circum_public_optional_analytics_consent');
+    } catch (_) {
+      // A blocked storage API must not prevent rejecting or choosing locally.
+    }
+    setState(() => _cookieConsent = next);
+    if (persisted && Uri.base.queryParameters.containsKey('cookie_opt_out')) {
+      final query = Map<String, String>.from(Uri.base.queryParameters)..remove('cookie_opt_out');
+      web.window.location.replace(Uri.base.replace(queryParameters: query).toString());
+      return;
+    }
+    if (withdrawMarketing) {
+      _disableMailchimpSiteTracking();
+      if (persisted) {
+        web.window.location.reload();
+      } else {
+        web.window.location.replace(Uri.base.replace(queryParameters: {
+          ...Uri.base.queryParameters, 'cookie_opt_out': '1'}).toString());
+      }
+      return;
+    }
+    if (marketing) { _enableMailchimpSiteTracking(); }
+    if (analytics) { unawaited(_logWebsiteVisit()); }
+  }
+
   void _showConsentPreferences() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
+    final dialogContext = _consentNavigatorKey.currentContext;
+    if (dialogContext == null) return;
+    var analytics = _cookieConsent?.analytics ?? false;
+    var marketing = _cookieConsent?.marketing ?? false;
+    showDialog<void>(context: dialogContext,
+      builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
         title: const Text('Cookie and storage preferences'),
-        content: const Text(
-          'Optional visitor analytics is currently disabled. You can allow or keep it off. Strictly necessary technologies remain active.',
-        ),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Necessary storage supports security, sign-in and requested bookings. Your choice is remembered for 180 days. You can change it using Cookie settings.'),
+            SwitchListTile(contentPadding: EdgeInsets.zero,
+              title: const Text('Visitor analytics'),
+              subtitle: const Text('Allow analytics to help Circum understand visits and improve the website. Off unless you choose it.'),
+              value: analytics, onChanged: (v) => update(() => analytics = v)),
+            SwitchListTile(contentPadding: EdgeInsets.zero,
+              title: const Text('Mailchimp marketing tracking'),
+              subtitle: const Text('Allow Mailchimp (Intuit) connected-site tracking to collect browser and visit information for marketing measurement. Newsletter signup does not require this.'),
+              value: marketing, onChanged: (v) => update(() => marketing = v)),
+            TextButton(onPressed: () => unawaited(launchUrl(
+                Uri.base.resolve('/cookie_policy'), webOnlyWindowName: '_self')),
+              child: const Text('Read Cookie Policy')),
+          ])),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _setAnalyticsConsent(false);
-            },
-            child: const Text('Reject optional'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _setAnalyticsConsent(true);
-            },
-            child: const Text('Accept optional'),
-          ),
+          OutlinedButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(false, false); }, child: const Text('Reject optional')),
+          OutlinedButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(true, true); }, child: const Text('Accept optional')),
+          FilledButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(analytics, marketing); }, child: const Text('Save choices')),
         ],
-      ),
-    );
+      )));
+  }
+
+  @override
+  void dispose() {
+    _consentExpiryTimer?.cancel();
+    if (kIsWeb && _consentStorageListener != null) {
+      web.window.removeEventListener('storage', _consentStorageListener);
+    }
+    super.dispose();
   }
 
   void _openRole(CircumRole role) {
@@ -26289,7 +26403,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'How we obtain personal data',
-            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
+            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Google (account, hosting, security and analytics services), Google Maps, Stripe, Apple notification services, Google push notification services and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
           ),
           _ComplianceSection(
             'Why we use data and lawful bases',
@@ -26321,7 +26435,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Service messages push notifications and marketing',
-            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
+            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Google push notification services. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
           ),
           _ComplianceSection(
             'Newsletter and Resend',
@@ -26333,7 +26447,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Who we share data with',
-            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Google (account, hosting, security and analytics services); Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Google push notification services; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
           ),
           _ComplianceSection(
             'International transfers',
@@ -26410,19 +26524,19 @@ class _CookiePolicyPage extends StatelessWidget {
         sections: const [
           _ComplianceSection(
             'What we use',
-            'The website uses browser storage for your optional analytics preference. Strictly necessary browser and hosting technologies support page delivery, navigation, security, and requested functionality.',
+            'Necessary technologies support page delivery, security and sign-in through Google account and security services, including reCAPTCHA Enterprise. When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional analytics and marketing tracking stay off until you actively enable their respective switches.',
           ),
           _ComplianceSection(
             'Optional visitor analytics',
-            'If you choose Accept optional, the website may send a visit record containing the page, URL, query parameters, app mode, and, where you are signed in, the account context available to the service. This is used for visitor analytics and service improvement. It is off by default and is not required to browse the website.',
+            'Analytics sends a page visit record to Circum’s analytics service (provided by Google). This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Mailchimp (Intuit) connected-site marketing tracking is a separate optional purpose and may collect browser, device and visit information and use its own cookies or storage. Neither purpose is required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website tracking permission.',
           ),
           _ComplianceSection(
             'Storage and duration',
-            'The preference is stored in your browser under a CIRCUM preference key until you remove it, clear site data, or change your choice. The website does not claim a fixed duration for other strictly necessary browser or hosting technologies where the browser or provider controls that duration.',
+            'circum_public_cookie_preferences_v2 stores your choices, notice version and choice date for 180 days. After expiry or a notice version change we ask again with optional purposes off. The booking key circum.landingBooking.v1 is tab-scoped, expires after 30 minutes and is consumed once. Authentication and security storage duration depends on your session and provider. Mailchimp controls its own storage and retention; see its privacy information linked below.',
           ),
           _ComplianceSection(
             'Your choices',
-            'You can reject optional analytics, accept it, or reopen these choices from this page. You can also clear CIRCUM site data in your browser settings. Rejecting optional analytics does not disable necessary service functionality.',
+            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from any page or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
           ),
           _ComplianceSection(
             'Relationship with privacy information',
@@ -26430,7 +26544,7 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'PECR and data protection',
-            'CIRCUM applies the UK Privacy and Electronic Communications Regulations and the UK data-protection framework to technologies used on this website. We will review this policy before introducing analytics, advertising, tracking pixels, behavioural tracking, fingerprinting, or other optional technologies.',
+            'This notice was updated on 8 October 2026. Circum uses opt-in for its optional purposes under PECR and UK GDPR; browsing or scrolling is not consent. Plain social profile links do not load social-network tracking on Circum. When you follow a link, the destination platform applies its own privacy and cookie rules.',
           ),
           _ComplianceSection(
             'Contact',
@@ -26438,6 +26552,12 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
         ],
         actions: [
+          TextButton(onPressed: () => unawaited(launchUrl(
+            Uri.parse('https://www.intuit.com/privacy/statement/'),
+            webOnlyWindowName: '_blank')), child: const Text('Mailchimp / Intuit privacy')),
+          TextButton(onPressed: () => unawaited(launchUrl(
+            Uri.parse('https://policies.google.com/privacy'),
+            webOnlyWindowName: '_blank')), child: const Text('Google privacy')),
           TextButton(
             onPressed: onManageConsent,
             child: const Text('Manage preferences'),
@@ -26487,10 +26607,10 @@ class _CookieConsentBanner extends StatelessWidget {
               spacing: 12,
               runSpacing: 10,
               children: [
-                const SizedBox(
-                  width: 420,
-                  child: Text(
-                    'CIRCUM uses optional visitor analytics only with your permission. Necessary technologies remain active.',
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: const Text(
+                    'Necessary storage keeps Circum working. Optional visitor analytics and Mailchimp marketing tracking stay off until you choose. We remember your choice for 180 days; change it any time in Cookie settings.',
                   ),
                 ),
                 TextButton(
@@ -26501,7 +26621,7 @@ class _CookieConsentBanner extends StatelessWidget {
                   onPressed: onReject,
                   child: const Text('Reject optional'),
                 ),
-                FilledButton(
+                OutlinedButton(
                   onPressed: onAccept,
                   child: const Text('Accept optional'),
                 ),
