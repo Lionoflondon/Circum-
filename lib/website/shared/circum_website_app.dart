@@ -4971,7 +4971,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   @override
   Widget build(BuildContext context) {
-    const colors = _CircumColors(true);
+    final colors = widget.colors;
     return Stack(
       children: [
         LayoutBuilder(
