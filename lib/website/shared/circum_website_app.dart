@@ -1,5 +1,4 @@
 import 'privacy/consent_tracking_gate.dart';
-import 'privacy/cookie_consent_panel.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
 import 'rider_order_explainer.dart';
@@ -419,9 +418,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       theme: _websiteTheme(_darkMode),
       home: Scaffold(
         backgroundColor: colors.background,
-        body: Column(
+        body: Stack(
           children: [
-            Expanded(child: Stack(children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: _surfaceStage(colors),
@@ -435,16 +433,15 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               },
             ),
             _CompanyLiveChatButton(colors: colors),
-            ])),
             if (kIsWeb && _cookieConsent == null)
-              CookieConsentPanel(
+              _CookieConsentBanner(
+                colors: colors,
                 onReject: () => _setCookiePreferences(false, false),
                 onAccept: () => _setCookiePreferences(true, true),
-                onCustomise: _showConsentPreferences,
+                onManage: _showConsentPreferences,
               ),
             if (kIsWeb && _cookieConsent != null)
-              Align(alignment: Alignment.centerLeft, child: SafeArea(
-                top: false, minimum: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              Positioned(left: 16, bottom: 16, child: SafeArea(
                 child: Material(color: _landingPaper,
                   borderRadius: BorderRadius.circular(20),
                   child: TextButton.icon(onPressed: _showConsentPreferences,
@@ -646,21 +643,17 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     var analytics = _cookieConsent?.analytics ?? false;
     var marketing = _cookieConsent?.marketing ?? false;
     showDialog<void>(context: dialogContext,
-      builder: (context) => Theme(data: _websiteTheme(true), child: StatefulBuilder(builder: (context, update) => AlertDialog(
-        title: const Text('Cookie settings'),
+      builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
+        title: const Text('Cookie and storage preferences'),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Necessary storage supports security, sign-in and requested bookings. Your choice is remembered for 180 days. You can change it using Cookie settings.'),
-            const ListTile(contentPadding: EdgeInsets.zero,
-              title: Text('Essential — always active'),
-              subtitle: Text('Required for security, sign-in and the services you request.'),
-              trailing: Icon(Icons.lock_outline)),
             SwitchListTile(contentPadding: EdgeInsets.zero,
-              title: const Text('Analytics'),
+              title: const Text('Visitor analytics'),
               subtitle: const Text('Allow analytics to help Circum understand visits and improve the website. Off unless you choose it.'),
               value: analytics, onChanged: (v) => update(() => analytics = v)),
             SwitchListTile(contentPadding: EdgeInsets.zero,
-              title: const Text('Marketing'),
+              title: const Text('Mailchimp marketing tracking'),
               subtitle: const Text('Allow Mailchimp (Intuit) connected-site tracking to collect browser and visit information for marketing measurement. Newsletter signup does not require this.'),
               value: marketing, onChanged: (v) => update(() => marketing = v)),
             TextButton(onPressed: () => unawaited(launchUrl(
@@ -671,11 +664,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           OutlinedButton(onPressed: () { Navigator.pop(context);
             _setCookiePreferences(false, false); }, child: const Text('Reject optional')),
           OutlinedButton(onPressed: () { Navigator.pop(context);
-            _setCookiePreferences(true, true); }, child: const Text('Accept all')),
+            _setCookiePreferences(true, true); }, child: const Text('Accept optional')),
           FilledButton(onPressed: () { Navigator.pop(context);
             _setCookiePreferences(analytics, marketing); }, child: const Text('Save choices')),
         ],
-      ))));
+      )));
   }
 
   @override
@@ -26577,7 +26570,7 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Your choices',
-            'Reject optional and Accept all are equally available, or use Customise to select each purpose separately. Reopen Cookie settings from any page or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
+            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from any page or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
           ),
           _ComplianceSection(
             'Relationship with privacy information',
@@ -26615,6 +26608,61 @@ class _CookiePolicyPage extends StatelessWidget {
             child: const Text('Privacy Policy'),
           ),
         ],
+      );
+}
+
+class _CookieConsentBanner extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onReject;
+  final VoidCallback onAccept;
+  final VoidCallback onManage;
+
+  const _CookieConsentBanner({
+    required this.colors,
+    required this.onReject,
+    required this.onAccept,
+    required this.onManage,
+  });
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+        left: 16,
+        right: 16,
+        bottom: 16,
+        child: Material(
+          elevation: 8,
+          color: colors.panel,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: const Text(
+                    'Necessary storage keeps Circum working. Optional visitor analytics and Mailchimp marketing tracking stay off until you choose. We remember your choice for 180 days; change it any time in Cookie settings.',
+                  ),
+                ),
+                TextButton(
+                  onPressed: onManage,
+                  child: const Text('Manage preferences'),
+                ),
+                OutlinedButton(
+                  onPressed: onReject,
+                  child: const Text('Reject optional'),
+                ),
+                OutlinedButton(
+                  onPressed: onAccept,
+                  child: const Text('Accept optional'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
 }
 
