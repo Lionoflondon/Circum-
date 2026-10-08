@@ -59,6 +59,57 @@ import 'newsletter/newsletter_widgets.dart';
 
 part 'premium_landing.dart';
 
+// Shared public-web styling follows the homepage across account and service pages.
+const _websiteHeroGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
+);
+
+ThemeData _websiteTheme(bool dark) {
+  final colors = _CircumColors(dark);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _landingBlue,
+    brightness: dark ? Brightness.dark : Brightness.light,
+    primary: dark ? const Color(0xffa9bfff) : _landingBlue,
+    surface: colors.panel,
+    onSurface: colors.text,
+  );
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+  final button = ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+    padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
+    shape: WidgetStatePropertyAll(shape),
+    textStyle: const WidgetStatePropertyAll(TextStyle(
+        fontFamily: 'D-DIN', fontWeight: FontWeight.w700, fontSize: 16)),
+  );
+  return ThemeData(
+    useMaterial3: true,
+    fontFamily: 'D-DIN',
+    colorScheme: scheme,
+    scaffoldBackgroundColor: colors.appBackground,
+    filledButtonTheme: FilledButtonThemeData(style: button),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: button),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: button.copyWith(
+            side: WidgetStatePropertyAll(BorderSide(color: scheme.primary)))),
+    textButtonTheme: TextButtonThemeData(style: button),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colors.field,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: colors.border)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: scheme.primary, width: 2)),
+    ),
+    dividerColor: colors.border,
+  );
+}
+
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _webVanguardAddOnPriceGbp = 1.99;
@@ -110,7 +161,7 @@ class CircumWebsiteApp extends StatefulWidget {
 }
 
 class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
-  bool _darkMode = true;
+  bool _darkMode = false;
   bool? _optionalAnalyticsConsent;
   late final CircumWebRouteResolution _initialRoute = resolveCircumWebRoute(
     Uri.base,
@@ -172,13 +223,16 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _loadLandingTypography() async {
     Future<void> load(String family, String file) async {
-      final response = await http.get(Uri.base.resolve('/fonts/d-din/$file'))
+      final response = await http
+          .get(Uri.base.resolve('/fonts/d-din/$file'))
           .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) throw StateError('Homepage font unavailable');
+      if (response.statusCode != 200)
+        throw StateError('Homepage font unavailable');
       await (FontLoader(family)
             ..addFont(Future.value(ByteData.sublistView(response.bodyBytes))))
           .load();
     }
+
     try {
       await Future.wait([
         load('D-DIN', 'D-DIN.ttf'),
@@ -300,14 +354,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: _companyName,
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'Helvetica',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2563eb),
-          brightness: _darkMode ? Brightness.dark : Brightness.light,
-        ),
-      ),
+      theme: _websiteTheme(_darkMode),
       home: Scaffold(
         backgroundColor: colors.background,
         body: Stack(
@@ -870,14 +917,7 @@ class _LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const landingColors = _CircumColors(false);
-    final theme = ThemeData(
-      useMaterial3: true,
-      fontFamily: 'D-DIN',
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _landingBlue,
-        brightness: Brightness.light,
-      ),
-    );
+    final theme = _websiteTheme(false);
     return Theme(
       data: theme,
       child: DefaultTextStyle.merge(
@@ -898,17 +938,21 @@ class _LandingPage extends StatelessWidget {
                 if (newsletterSignupEnabled)
                   NewsletterSignupSection(
                     key: newsletterKey,
-                  source: newsletterSource,
-                  background: landingColors.background,
-                  panel: const Color(0xff173b95),
-                  panelGradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xff173b95), Color(0xff49349a), Color(0xff7c2c88)],
-                  ),
-                  text: Colors.white,
-                  mutedText: const Color(0xffdbeafe),
-                  border: const Color(0xff8d83db),
+                    source: newsletterSource,
+                    background: landingColors.background,
+                    panel: const Color(0xff173b95),
+                    panelGradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xff173b95),
+                        Color(0xff49349a),
+                        Color(0xff7c2c88)
+                      ],
+                    ),
+                    text: Colors.white,
+                    mutedText: const Color(0xffdbeafe),
+                    border: const Color(0xff8d83db),
                     onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
                       '/privacy_policy',
                     ),
@@ -1053,7 +1097,6 @@ String _adminDateText(dynamic value) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
-
 class _VanguardBlueChip extends StatelessWidget {
   final String label;
 
@@ -1091,7 +1134,6 @@ class _VanguardBlueChip extends StatelessWidget {
   }
 }
 
-
 class _PhoneStage extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
@@ -1100,76 +1142,14 @@ class _PhoneStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width >= _desktopWebBreakpoint) {
-      return Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: colors.stage,
-        padding: const EdgeInsets.all(28),
-        child: Center(
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 1180),
-            decoration: BoxDecoration(
-              color: colors.appBackground,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: colors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 32,
-                  offset: Offset(0, 18),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: child,
-          ),
-        ),
-      );
-    }
-
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: colors.stage,
-      padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
-        vertical: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
+      decoration: BoxDecoration(
+        color: colors.appBackground,
+        gradient: colors.dark ? null : _websiteHeroGradient,
       ),
-      child: Center(
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 430),
-          decoration: BoxDecoration(
-            color: colors.appBackground,
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(42),
-            border: MediaQuery.sizeOf(context).width < 520
-                ? null
-                : Border.all(
-                    color: colors.dark ? Colors.black : Colors.black,
-                    width: 8,
-                  ),
-            boxShadow: [
-              if (MediaQuery.sizeOf(context).width >= 520)
-                const BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 34,
-                  offset: Offset(0, 18),
-                ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(32),
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 }
@@ -1786,7 +1766,7 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                     icon: const Icon(Icons.menu_book_outlined),
                     label: const Text('Read Charter'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 22,
@@ -5248,7 +5228,7 @@ class _RiderAccessPanel extends StatelessWidget {
                               : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
@@ -5615,7 +5595,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
               : const Icon(Icons.two_wheeler),
           label: Text(submitting ? 'Sending...' : 'Send rider application'),
           style: FilledButton.styleFrom(
-            backgroundColor: colors.text,
+            backgroundColor: colors.action,
             foregroundColor: colors.inverseText,
             padding: const EdgeInsets.symmetric(vertical: 17),
             shape: RoundedRectangleBorder(
@@ -6023,7 +6003,7 @@ class _RiderWorkspace extends StatelessWidget {
                           : 'Request withdrawal',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -6401,7 +6381,7 @@ class _AccountSecurityPanel extends StatelessWidget {
                   : const Icon(Icons.password),
               label: const Text('Change password'),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -7832,8 +7812,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           setState(() {
             _step = _SenderStep.profile;
             _senderProfileTab = 1;
-            _senderProfileMessage =
-                'This conversation is no longer available.';
+            _senderProfileMessage = 'This conversation is no longer available.';
           });
         }
         return true;
@@ -7959,7 +7938,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
-                  child: desktop
+                  child: desktop && _senderUser != null
                       ? _DesktopPortalLayout(
                           colors: colors,
                           pickup: _pickup.text,
@@ -13655,126 +13634,186 @@ class _SenderAccessGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: _GlassPanel(
-          colors: colors,
+    final form = _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(
+            colors: colors,
+            title: signupMode ? 'Create a Circum account' : 'Circum login',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            signupMode
+                ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
+                : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (signupMode) ...[
+            _InputBox(
+              colors: colors,
+              controller: fullName,
+              hint: 'Full name',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: phone,
+              hint: 'Phone number',
+            ),
+            const SizedBox(height: 10),
+          ],
+          _InputBox(
+            colors: colors,
+            controller: email,
+            hint: 'Email address',
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: password,
+            hint: 'Password',
+            obscureText: true,
+          ),
+          if (signupMode) ...[
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: referralCode,
+              hint: 'Referral code (optional)',
+            ),
+            const Text(
+              'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
+            ),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: busy ? null : onForgotPassword,
+              child: const Text('Forgot Password?'),
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              message!,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(builder: (context, constraints) {
+            final primary = FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : signupMode
+                      ? onSignUp
+                      : onSignIn,
+              icon: busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_open),
+              label: Text(
+                busy
+                    ? 'Please wait'
+                    : signupMode
+                        ? 'Create account'
+                        : 'Sign in',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    colors.dark ? const Color(0xffa9bfff) : _landingBlue,
+                foregroundColor: colors.dark ? _landingInk : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            );
+            final toggle = TextButton(
+              onPressed: busy ? null : onToggleMode,
+              child: Text(signupMode ? 'Sign in' : 'Sign up'),
+            );
+            if (constraints.maxWidth < 280) {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [primary, const SizedBox(height: 8), toggle]);
+            }
+            return Row(children: [
+              Expanded(child: primary),
+              const SizedBox(width: 10),
+              toggle
+            ]);
+          }),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final welcome = Padding(
+          padding: EdgeInsets.all(wide ? 40 : 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(
-                colors: colors,
-                title: signupMode ? 'Create a Circum account' : 'Circum login',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                signupMode
-                    ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (signupMode) ...[
-                _InputBox(
-                  colors: colors,
-                  controller: fullName,
-                  hint: 'Full name',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: phone,
-                  hint: 'Phone number',
-                ),
-                const SizedBox(height: 10),
-              ],
-              _InputBox(
-                colors: colors,
-                controller: email,
-                hint: 'Email address',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: password,
-                hint: 'Password',
-                obscureText: true,
-              ),
-              if (signupMode) ...[
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: referralCode,
-                  hint: 'REFERRAL CODE (OPTIONAL)',
-                ),
-                const Text(
-                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
-                ),
-              ],
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: busy ? null : onForgotPassword,
-                  child: const Text('Forgot Password?'),
-                ),
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  message!,
+              Text('MOVE WHAT MATTERS',
                   style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy
-                          ? null
-                          : signupMode
-                              ? onSignUp
-                              : onSignIn,
-                      icon: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_open),
-                      label: Text(
-                        busy
-                            ? 'Please wait'
-                            : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.text,
-                        foregroundColor: colors.inverseText,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  TextButton(
-                    onPressed: busy ? null : onToggleMode,
-                    child: Text(signupMode ? 'Sign in' : 'Sign up'),
-                  ),
-                ],
+                      color: colors.adminAccent,
+                      fontSize: 13,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xff007d87),
+                    Color(0xff2455f5),
+                    Color(0xff7937c8),
+                    Color(0xffc32e79)
+                  ],
+                ).createShader(bounds),
+                child: Text(
+                    signupMode
+                        ? 'Your next move\nstarts here.'
+                        : 'Welcome back.\nLet’s get moving.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'D-DIN-Bold',
+                        fontSize: wide ? 62 : 38,
+                        height: 1.02,
+                        fontWeight: FontWeight.w800)),
               ),
+              const SizedBox(height: 24),
+              Text(
+                  'Parcels, thoughtful gifts and everyday essentials. All in one place.',
+                  style: TextStyle(
+                      color: colors.mutedText, fontSize: 18, height: 1.5)),
             ],
           ),
-        ),
-      ),
+        );
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: wide
+                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(child: welcome),
+                    const SizedBox(width: 48),
+                    Expanded(child: form)
+                  ])
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [welcome, const SizedBox(height: 28), form]),
+          ),
+        );
+      },
     );
   }
 }
@@ -13870,7 +13909,7 @@ class _RoleChoiceButton extends StatelessWidget {
         icon: Icon(icon),
         label: Text(label),
         style: FilledButton.styleFrom(
-          backgroundColor: colors.text,
+          backgroundColor: colors.action,
           foregroundColor: colors.inverseText,
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
@@ -18592,7 +18631,7 @@ class _DetailsStep extends StatelessWidget {
                 : const Icon(Icons.auto_awesome),
             label: Text(ctaLabel),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               disabledBackgroundColor: colors.text.withValues(alpha: 0.45),
               shape: RoundedRectangleBorder(
@@ -20808,8 +20847,9 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         color: colors.text,
-        fontSize: 18,
-        fontWeight: FontWeight.w900,
+        fontSize: 24,
+        fontFamily: 'D-DIN-Bold',
+        fontWeight: FontWeight.w700,
       ),
     );
   }
@@ -21071,7 +21111,7 @@ class _VehicleStep extends StatelessWidget {
           child: FilledButton(
             onPressed: canContinue ? onContinue : null,
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -21610,7 +21650,7 @@ class _PaymentStep extends StatelessWidget {
                           : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -22819,7 +22859,7 @@ class _ChatSheet extends StatelessWidget {
                         onPressed: onSend,
                         icon: const Icon(Icons.send),
                         style: IconButton.styleFrom(
-                          backgroundColor: colors.text,
+                          backgroundColor: colors.action,
                           foregroundColor: colors.inverseText,
                         ),
                       ),
@@ -22834,7 +22874,6 @@ class _ChatSheet extends StatelessWidget {
     );
   }
 }
-
 
 class _AddressField extends StatefulWidget {
   final _CircumColors colors;
@@ -23885,7 +23924,8 @@ class _InputBox extends StatelessWidget {
       enabled: enabled,
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
       decoration: InputDecoration(
-        hintText: hint,
+        labelText: hint,
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
         hintStyle: TextStyle(color: colors.mutedText),
         filled: true,
         fillColor: colors.field,
@@ -23894,8 +23934,8 @@ class _InputBox extends StatelessWidget {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
     );
@@ -25230,7 +25270,7 @@ class _DriverRatingPrompt extends StatelessWidget {
                         : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -25392,7 +25432,7 @@ class _CompletedDeliveryActions extends StatelessWidget {
             icon: const Icon(Icons.add_box_outlined),
             label: const Text('Book another delivery'),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
@@ -25492,32 +25532,16 @@ class _GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.96),
-            colors.adminAccent.withValues(alpha: colors.dark ? 0.10 : 0.06),
-            colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.94),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+        color: colors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: colors.dark ? 0.18 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: colors.adminGlow.withValues(
-              alpha: colors.dark ? 0.12 : 0.08,
-            ),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
+              color: Colors.black.withValues(alpha: colors.dark ? 0.16 : 0.035),
+              blurRadius: 24,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: child,
@@ -25568,7 +25592,6 @@ class _MetricPill extends StatelessWidget {
     );
   }
 }
-
 
 class _VanguardLandingPage extends StatelessWidget {
   final _CircumColors colors;
@@ -28848,23 +28871,22 @@ class _CircumColors {
 
   const _CircumColors(this.dark);
 
-  Color get background => dark ? Colors.black : Colors.white;
-  Color get appBackground => dark ? const Color(0xff030712) : Colors.white;
-  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff3f4f6);
-  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff8fafc);
+  Color get background => dark ? Colors.black : _landingPaper;
+  Color get appBackground => dark ? const Color(0xff030712) : _landingPaper;
+  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff0f2f8);
+  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff3f4fa);
   Color get panel => dark ? const Color(0xff111827) : Colors.white;
-  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff3f4f6);
-  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffe5e7eb);
-  Color get text => dark ? Colors.white : Colors.black;
+  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff0f2f8);
+  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffdce2e9);
+  Color get text => dark ? Colors.white : _landingInk;
+  Color get action => dark ? const Color(0xffa9bfff) : _landingBlue;
   Color get inverseText => dark ? Colors.black : Colors.white;
-  Color get mutedText =>
-      dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
+  Color get mutedText => dark ? const Color(0xff9ca3af) : _landingMuted;
   Color get success => const Color(0xff16a34a);
   Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
       dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
-  Color get adminAccent =>
-      dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
+  Color get adminAccent => dark ? const Color(0xff38bdf8) : _landingBlue;
   Color get adminGlow =>
       dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }
