@@ -7961,7 +7961,8 @@
         "docs/NEWSLETTER_RELEASE.md",
         "lib/website/shared/newsletter/newsletter_widgets.dart",
         "server/functions/cloud-run-newsletter.js",
-        "server/functions/production-functions-inventory.json"
+        "server/functions/production-functions-inventory.json",
+        "test/website_newsletter_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,

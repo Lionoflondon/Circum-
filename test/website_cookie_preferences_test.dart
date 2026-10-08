@@ -10,6 +10,7 @@ void main() {
       'accepted',
       'rejected',
       '{}',
+      '{"version":1,"analytics":true,"marketing":true,"savedAt":"2026-10-08"}',
       '[]',
       '{"version":2,"analytics":"true","marketing":true,"savedAt":"2026-10-08"}',
       CookiePreferences(
@@ -39,5 +40,38 @@ void main() {
         expect(decoded.marketing, marketing);
       }
     }
+  });
+  test('restoration keeps timestamp and expires exactly at 180 days', () {
+    final choice =
+        CookiePreferences(analytics: true, marketing: false, savedAt: now);
+    final restored = CookiePreferences.decode(
+        choice.encode(), now.add(const Duration(days: 179)))!;
+    expect(restored.savedAt, now);
+    expect(restored.analytics, isTrue);
+    expect(restored.marketing, isFalse);
+    expect(
+        CookiePreferences.decode(
+            choice.encode(), now.add(CookiePreferences.lifetime)),
+        isNull);
+  });
+  test('withdrawal persists both optional categories off after refresh', () {
+    final withdrawn =
+        CookiePreferences(analytics: false, marketing: false, savedAt: now);
+    final restored = CookiePreferences.decode(
+        withdrawn.encode(), now.add(const Duration(hours: 1)))!;
+    expect(restored.analytics, isFalse);
+    expect(restored.marketing, isFalse);
+  });
+  test(
+      'browser expiry checks use safe timer intervals without renewing consent',
+      () {
+    final choice =
+        CookiePreferences(analytics: true, marketing: true, savedAt: now);
+    expect(choice.reviewDelay(now), const Duration(days: 1));
+    expect(choice.reviewDelay(now.add(const Duration(days: 179, hours: 23))),
+        const Duration(hours: 1));
+    expect(
+        choice.reviewDelay(now.add(const Duration(days: 181))), Duration.zero);
+    expect(choice.savedAt, now);
   });
 }

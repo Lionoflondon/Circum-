@@ -14,6 +14,15 @@ class CookiePreferences {
     required this.savedAt,
   });
 
+  /// Browser timers cannot safely represent the full 180-day interval.
+  /// Review daily, or at expiry when it is closer, without extending consent.
+  Duration reviewDelay(DateTime now) {
+    final remaining = savedAt.add(lifetime).difference(now);
+    if (remaining.isNegative) return Duration.zero;
+    const day = Duration(days: 1);
+    return remaining > day ? day : remaining;
+  }
+
   String encode() => jsonEncode({
         'version': version,
         'analytics': analytics,
