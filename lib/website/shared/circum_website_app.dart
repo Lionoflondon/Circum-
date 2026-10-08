@@ -2184,7 +2184,7 @@ class _RiderPortalTabs extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xff030712),
+        color: colors.appBackground,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
@@ -2197,10 +2197,10 @@ class _RiderPortalTabs extends StatelessWidget {
                 avatar: Icon(_riderTabIcon(tab), size: 18),
                 label: Text(_riderTabLabel(tab)),
                 onSelected: (_) => onSelected(tab),
-                selectedColor: const Color(0xff2563eb),
-                backgroundColor: const Color(0xff111827),
+                selectedColor: colors.action,
+                backgroundColor: colors.field,
                 labelStyle: TextStyle(
-                  color: Colors.white,
+                  color: selected == tab ? colors.inverseText : colors.text,
                   fontWeight: FontWeight.w900,
                 ),
                 side: BorderSide(
@@ -2439,7 +2439,7 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xff0b1730),
+                  color: colors.field,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xff2563eb)),
                 ),
@@ -5364,9 +5364,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xff0f172a),
+                color: colors.field,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xff26334d)),
+                border: Border.all(color: colors.border),
               ),
               child: Text(
                 note,
@@ -5701,7 +5701,7 @@ class _RiderWorkspace extends StatelessWidget {
     final signedIn = user != null;
     final compact = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      color: const Color(0xff030712),
+      color: colors.appBackground,
       padding: EdgeInsets.fromLTRB(
         compact ? 16 : 28,
         compact ? 18 : 28,
@@ -6170,9 +6170,9 @@ class _RiderDocumentStatusList extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xff0f172a),
+              color: colors.field,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xff26334d)),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
@@ -7414,7 +7414,7 @@ class _RiderStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xff111827),
+        color: colors.panel,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xff253047)),
       ),
@@ -18836,7 +18836,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
                   color: const Color(0xff2fae8c),
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  fontFamily: 'serif',
+                  fontFamily: 'D-DIN-Bold',
                 ),
               ),
               const SizedBox(height: 4),
@@ -21905,7 +21905,7 @@ class _WebDeliveryStatusHeader extends StatelessWidget {
             'Delivery status',
             style: TextStyle(
               color: colors.text,
-              fontFamily: 'DM Serif Display',
+              fontFamily: 'D-DIN-Bold',
               fontSize: 30,
               height: 1.15,
               fontWeight: FontWeight.w400,
@@ -25672,7 +25672,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontFamily: 'Georgia',
+                            fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 68 : 88,
                             height: 0.96,
                             fontWeight: FontWeight.w700,
@@ -25705,7 +25705,7 @@ class _VanguardLandingPage extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontFamily: 'Georgia',
+                            fontFamily: 'D-DIN-Bold',
                             fontSize: narrow ? 45 : 62,
                             height: 1.18,
                             fontWeight: FontWeight.w700,
@@ -25892,7 +25892,7 @@ class _VanguardTimelineCard extends StatelessWidget {
             'Custody preview',
             style: TextStyle(
               color: Colors.white,
-              fontFamily: 'Georgia',
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.02,
               fontWeight: FontWeight.w700,
@@ -25968,7 +25968,7 @@ class _VanguardChecklistCard extends StatelessWidget {
             title,
             style: TextStyle(
               color: Colors.white,
-              fontFamily: 'Georgia',
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
               fontWeight: FontWeight.w700,
@@ -26030,7 +26030,7 @@ class _VanguardImportantCard extends StatelessWidget {
             'Important',
             style: TextStyle(
               color: Colors.white,
-              fontFamily: 'Georgia',
+              fontFamily: 'D-DIN-Bold',
               fontSize: narrow ? 42 : 52,
               height: 1.04,
               fontWeight: FontWeight.w700,
@@ -28520,11 +28520,11 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
             height: compact ? size.height * 0.92 : double.infinity,
             padding: EdgeInsets.zero,
             decoration: BoxDecoration(
-              color: const Color(0xff07090f),
+              color: colors.panel,
               borderRadius: compact
                   ? BorderRadius.circular(24)
                   : const BorderRadius.horizontal(left: Radius.circular(24)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+              border: Border.all(color: colors.border),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xff3b82f6).withValues(alpha: 0.12),
@@ -28590,8 +28590,8 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                           Text(
                             'Circum',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.68),
-                              fontFamily: 'JetBrains Mono',
+                              color: colors.mutedText,
+                              fontFamily: 'D-DIN',
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -28603,7 +28603,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             onPressed: () => setState(() => _open = false),
                             icon: Icon(
                               Icons.close,
-                              color: Colors.white.withValues(alpha: 0.68),
+                              color: colors.mutedText,
                             ),
                           ),
                         ],
@@ -28619,18 +28619,18 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               'Contact Circum',
                               style: TextStyle(
                                 color: const Color(0xff60a5fa),
-                                fontFamily: 'JetBrains Mono',
+                                fontFamily: 'D-DIN',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
                               ),
                             ),
                             const SizedBox(height: 18),
-                            const Text(
+                            Text(
                               'How can we help you?',
                               style: TextStyle(
-                                color: Color(0xfff5f7fb),
-                                fontFamily: 'DM Serif Display',
+                                color: colors.text,
+                                fontFamily: 'D-DIN-Bold',
                                 fontSize: 34,
                                 height: 1.25,
                                 fontWeight: FontWeight.w400,
@@ -28640,7 +28640,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'Send Circum a message about deliveries, riders, accounts, payments, partnerships, or anything else you need help with.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.62),
+                                color: colors.mutedText,
                                 fontSize: 15,
                                 height: 1.55,
                                 fontWeight: FontWeight.w600,
@@ -28703,7 +28703,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'If your message is about an existing delivery, include your delivery reference if you have it.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.58),
+                                color: colors.mutedText,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -28726,7 +28726,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   top: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.14),
+                                    color: colors.border,
                                   ),
                                 ),
                               ),
@@ -28736,9 +28736,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                                   Text(
                                     'Press enter or',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.56,
-                                      ),
+                                      color: colors.mutedText,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
