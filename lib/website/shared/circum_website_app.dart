@@ -5187,7 +5187,7 @@ class _RiderAccessPanel extends StatelessWidget {
         children: [
           _SectionTitle(
             colors: colors,
-            title: signedIn ? 'Circum Rider account' : 'Circum Rider sign in',
+            title: signedIn ? 'Circum Rider account' : signupMode ? 'Create your Rider account' : 'Circum Rider sign in',
           ),
           const SizedBox(height: 10),
           Text(
