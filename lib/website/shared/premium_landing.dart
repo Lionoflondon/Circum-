@@ -110,6 +110,23 @@ class _PremiumLanding extends StatelessWidget {
       final wide = constraints.maxWidth >= 900;
       final small = constraints.maxWidth < 600;
       final headlineSize = small ? 60.0 : 80.0;
+      final handoverPhoto = ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: AspectRatio(
+          aspectRatio: 2.5,
+          child: Image.network(
+            Uri.base.resolve('/images/parcel-handover.jpg').toString(),
+            fit: BoxFit.cover,
+            semanticLabel:
+                'Illustration of a thoughtful parcel handover at a doorstep',
+            errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xffe1eee9),
+                child: Center(
+                    child: Icon(Icons.inventory_2_outlined,
+                        color: _landingBlue, size: 44))),
+          ),
+        ),
+      );
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ShaderMask(
@@ -145,27 +162,11 @@ class _PremiumLanding extends StatelessWidget {
         ),
         const SizedBox(height: 32),
         Wrap(spacing: 10, runSpacing: 10, children: [
-          _link('Send a parcel', '/send', onStart, primary: true),
+          _link('Send a parcel', '/send', onStart),
           if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
         ]),
         const SizedBox(height: 24),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: AspectRatio(
-            aspectRatio: 2.5,
-            child: Image.network(
-              Uri.base.resolve('/images/parcel-handover.jpg').toString(),
-              fit: BoxFit.cover,
-              semanticLabel:
-                  'Illustration of a thoughtful parcel handover at a doorstep',
-              errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: Color(0xffe1eee9),
-                  child: Center(
-                      child: Icon(Icons.inventory_2_outlined,
-                          color: _landingBlue, size: 44))),
-            ),
-          ),
-        ),
+        if (wide) handoverPhoto,
         const SizedBox(height: 24),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
@@ -241,6 +242,8 @@ class _PremiumLanding extends StatelessWidget {
                   intro,
                   const SizedBox(height: 42),
                   const _LandingBookingPanel(),
+                  const SizedBox(height: 28),
+                  handoverPhoto,
                 ]),
           vertical: small ? 36 : 62,
           gradient: const LinearGradient(
