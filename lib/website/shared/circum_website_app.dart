@@ -1892,24 +1892,6 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
           ),
           const SizedBox(height: 18),
         ],
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Future rank data'),
-              const SizedBox(height: 10),
-              Text(
-                'This layout can later attach delivery requirements, profit-share percentages, badges, benefits, and promotion criteria to each rank without redesigning the Riders page.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
