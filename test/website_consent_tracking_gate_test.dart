@@ -35,4 +35,42 @@ void main() {
     await operation;
     expect(recorded, isFalse);
   });
+
+  test('provider startup failure never records or retries analytics', () async {
+    var preparations = 0;
+    var recordings = 0;
+    final failure = StateError('provider unavailable');
+    await expectLater(
+      runConsentedAnalytics(
+        allowed: () => true,
+        prepare: () async {
+          preparations++;
+          throw failure;
+        },
+        record: () async => recordings++,
+      ),
+      throwsA(same(failure)),
+    );
+    expect(preparations, 1);
+    expect(recordings, 0);
+  });
+
+  test('visitor endpoint failure makes one attempt without retrying', () async {
+    var preparations = 0;
+    var recordings = 0;
+    final failure = StateError('HTTP 500');
+    await expectLater(
+      runConsentedAnalytics(
+        allowed: () => true,
+        prepare: () async => preparations++,
+        record: () async {
+          recordings++;
+          throw failure;
+        },
+      ),
+      throwsA(same(failure)),
+    );
+    expect(preparations, 1);
+    expect(recordings, 1);
+  });
 }
