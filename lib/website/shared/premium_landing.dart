@@ -213,6 +213,11 @@ class _PremiumLanding extends StatelessWidget {
                   const _ParcelJourneyVisual(),
                 ]),
           vertical: small ? 36 : 62,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
+          ),
         ),
         _section(
             Container(
@@ -334,7 +339,11 @@ class _PremiumLanding extends StatelessWidget {
                           ]);
               }),
             ]),
-            background: Colors.white),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xffdef5f1), Color(0xffe7ebff), Color(0xffefe3fa)],
+            )),
         _section(LayoutBuilder(builder: (_, box) {
           final message =
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -565,34 +574,46 @@ class _PremiumLanding extends StatelessWidget {
     );
   }
 
-  Widget _step(String number, String title, String description) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xffd9dfd8)),
-                shape: BoxShape.circle),
-            child: Text(number,
-                style: const TextStyle(
-                    color: _landingBlue,
-                    fontSize: 16,
-                    fontFamily: 'D-DIN-Bold',
-                    fontWeight: FontWeight.w400))),
-        const SizedBox(height: 22),
-        Text(title,
-            style: const TextStyle(
-                color: _landingInk,
-                fontSize: 23,
-                letterSpacing: -0.6,
-                fontFamily: 'D-DIN-Bold',
-                fontWeight: FontWeight.w400)),
-        const SizedBox(height: 12),
-        Text(description,
-            style: const TextStyle(
-                color: _landingMuted, fontSize: 16, height: 1.7)),
-      ]);
+  Widget _step(String number, String title, String description) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: switch (number) {
+            '1' => const Color(0xffdbeafe),
+            '2' => const Color(0xffe9ddfa),
+            _ => const Color(0xfffbe0ea),
+          },
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.75)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xffd9dfd8)),
+                  shape: BoxShape.circle),
+              child: Text(number,
+                  style: const TextStyle(
+                      color: _landingBlue,
+                      fontSize: 16,
+                      fontFamily: 'D-DIN-Bold',
+                      fontWeight: FontWeight.w400))),
+          const SizedBox(height: 22),
+          Text(title,
+              style: const TextStyle(
+                  color: _landingInk,
+                  fontSize: 23,
+                  letterSpacing: -0.6,
+                  fontFamily: 'D-DIN-Bold',
+                  fontWeight: FontWeight.w400)),
+          const SizedBox(height: 12),
+          Text(description,
+              style: const TextStyle(
+                  color: _landingInk, fontSize: 16, height: 1.7)),
+        ]),
+      );
 }
 
 class _LandingPromise extends StatelessWidget {
