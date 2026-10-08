@@ -887,13 +887,54 @@ class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
     super.dispose();
   }
 
-  Widget _frame(int index, bool portrait) => Image(
-        image: _image(index),
-        fit: BoxFit.cover,
-        alignment: portrait ? Alignment.center : const Alignment(0, 0.24),
-        semanticLabel: _descriptions[index],
-        errorBuilder: (_, __, ___) => const ColoredBox(color: _landingPaper),
-      );
+  Widget _frame(int index, bool portrait) {
+    final photo = Image(
+      image: _image(index),
+      width: 1122,
+      height: 1402,
+      fit: BoxFit.fill,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: _landingPaper),
+    );
+    // The existing posters all use a 1122 x 1402 canvas. Show the
+    // photographic region on desktop, without changing any source asset.
+    const photoTop = [450.0, 440.0, 440.0, 500.0];
+    final croppedHeight = 1240 - photoTop[index];
+    return Semantics(
+      image: true,
+      label: _descriptions[index],
+      child: ExcludeSemantics(
+        child: portrait
+            ? Image(
+                image: _image(index),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const ColoredBox(color: _landingPaper),
+              )
+            : ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: 1122,
+                    height: croppedHeight,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topCenter,
+                        minWidth: 1122,
+                        maxWidth: 1122,
+                        minHeight: 1402,
+                        maxHeight: 1402,
+                        child: Transform.translate(
+                          offset: Offset(0, -photoTop[index]),
+                          child: photo,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
