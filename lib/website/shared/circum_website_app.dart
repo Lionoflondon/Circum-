@@ -1,3 +1,5 @@
+import 'landing_booking_draft.dart';
+import 'landing_booking_store.dart';
 import 'policies/web_auth_terminal.dart';
 import 'rider_onboarding/application_policy.dart';
 import 'rider_onboarding/file_picker.dart';
@@ -7762,6 +7764,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderReferralCode.text = normalizeSignupReferral(widget.referralCode!);
       _senderSignupMode = true;
     }
+    if (kIsWeb &&
+        widget.initialStep == _SenderStep.dashboard &&
+        Uri.base.queryParameters['start'] == 'delivery') {
+      final draft = takeLandingBookingDraft();
+      if (draft != null) {
+        _pickup.text = draft.pickup;
+        _dropoff.text = draft.destination;
+        _step = _SenderStep.details;
+      }
+    }
     _weight.addListener(_handleWeightChanged);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
@@ -8020,7 +8032,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         colors: colors,
         signupMode: _senderSignupMode,
         busy: _senderAuthBusy,
-        message: _senderProfileMessage,
+        message: _senderProfileMessage ??
+            (_step == _SenderStep.details &&
+                    _pickup.text.isNotEmpty &&
+                    _dropoff.text.isNotEmpty
+                ? 'Your route is ready: ${_pickup.text} → ${_dropoff.text}. Sign in to confirm your addresses and parcel details, then see your price.'
+                : null),
         email: _senderEmail,
         password: _senderPassword,
         fullName: _senderName,

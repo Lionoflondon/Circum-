@@ -110,6 +110,7 @@ class _PremiumLanding extends StatelessWidget {
       final wide = constraints.maxWidth >= 900;
       final small = constraints.maxWidth < 600;
       final headlineSize = small ? 60.0 : 80.0;
+      const handoverPhoto = _ServiceImageSelector();
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ShaderMask(
@@ -145,10 +146,12 @@ class _PremiumLanding extends StatelessWidget {
         ),
         const SizedBox(height: 32),
         Wrap(spacing: 10, runSpacing: 10, children: [
-          _link('Send a parcel', '/send', onStart, primary: true),
+          _link('Send a parcel', '/send', onStart),
           if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
         ]),
-        const SizedBox(height: 34),
+        const SizedBox(height: 24),
+        if (wide) handoverPhoto,
+        const SizedBox(height: 24),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
           SizedBox(width: 7),
@@ -164,10 +167,14 @@ class _PremiumLanding extends StatelessWidget {
               Image.asset('assets/images/circum_wordmark.png',
                   width: small ? 106 : 134, height: 32, fit: BoxFit.contain),
               const Spacer(),
-              if (!small) ...[
+              if (wide) ...[
                 _link('Business', '/send/business', onBusiness),
                 _link('Health+', '/send/health', onHealthPlus),
                 if (wide) _link('Rider', '/rider', onRider),
+              ],
+              if (!small) ...[
+                _link('Help', '/support', onStart),
+                _link('Account', '/send/profile', onStart),
               ],
               if (small)
                 PopupMenuButton<String>(
@@ -178,6 +185,14 @@ class _PremiumLanding extends StatelessWidget {
                       _CircumWebsiteAppState._canonicalWebUri(path),
                       webOnlyWindowName: '_self')),
                   itemBuilder: (_) => const [
+                    PopupMenuItem(
+                        value: '/support',
+                        child:
+                            Text('Help', style: TextStyle(color: _landingInk))),
+                    PopupMenuItem(
+                        value: '/send/profile',
+                        child: Text('Account',
+                            style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/send/business',
                         child: Text('Business',
@@ -205,12 +220,14 @@ class _PremiumLanding extends StatelessWidget {
               ? Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                   Expanded(flex: 10, child: intro),
                   const SizedBox(width: 54),
-                  const Expanded(flex: 11, child: _ParcelJourneyVisual()),
+                  const Expanded(flex: 11, child: _LandingBookingPanel()),
                 ])
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   intro,
                   const SizedBox(height: 42),
-                  const _ParcelJourneyVisual(),
+                  const _LandingBookingPanel(),
+                  const SizedBox(height: 28),
+                  handoverPhoto,
                 ]),
           vertical: small ? 36 : 62,
           gradient: const LinearGradient(
@@ -260,43 +277,69 @@ class _PremiumLanding extends StatelessWidget {
                     fontWeight: FontWeight.w400)),
           ),
           const SizedBox(height: 36),
-          _service(
-              '01',
-              'Personal deliveries',
-              'A forgotten essential. An important document. A parcel that needs to get there.',
-              'London & surrounding areas',
-              '/send',
-              onStart,
-              Icons.inventory_2_outlined,
-              wide),
-          if (onGifts != null)
-            _service(
-                '02',
-                'Gifts',
-                'Make someone’s day. Thoughtful gifts, sent with care.',
-                'Delivery around the world',
-                '/gifts',
-                onGifts!,
-                Icons.card_giftcard_outlined,
-                wide),
-          _service(
-              '03',
-              'Health+',
-              'Prescription and healthcare pickups, with protected handovers.',
-              'London',
-              '/send/health',
-              onHealthPlus,
-              Icons.health_and_safety_outlined,
-              wide),
-          _service(
-              '04',
-              'Built for business',
-              'Keep documents, packages and important deliveries moving with your working day.',
-              'London & surrounding areas',
-              '/send/business',
-              onBusiness,
-              Icons.business_center_outlined,
-              wide),
+          LayoutBuilder(builder: (_, box) {
+            final cards = <Widget>[
+              _service(
+                  '01',
+                  'Personal deliveries',
+                  'A forgotten essential. An important document. A parcel that needs to get there.',
+                  'London & surrounding areas',
+                  '/send',
+                  onStart,
+                  Icons.inventory_2_outlined,
+                  wide),
+              if (onGifts != null)
+                _service(
+                    '02',
+                    'Gifts',
+                    'Make someone’s day. Thoughtful gifts, sent with care.',
+                    'Delivery around the world',
+                    '/gifts',
+                    onGifts!,
+                    Icons.card_giftcard_outlined,
+                    wide),
+              _service(
+                  '03',
+                  'Health+',
+                  'Prescription and healthcare pickups, with protected handovers.',
+                  'London',
+                  '/send/health',
+                  onHealthPlus,
+                  Icons.health_and_safety_outlined,
+                  wide),
+              _service(
+                  '04',
+                  'Built for business',
+                  'Keep documents, packages and important deliveries moving with your working day.',
+                  'London & surrounding areas',
+                  '/send/business',
+                  onBusiness,
+                  Icons.business_center_outlined,
+                  wide),
+            ];
+            final columns = box.maxWidth >= 1000
+                ? 4
+                : box.maxWidth >= 620
+                    ? 2
+                    : 1;
+            return Column(children: [
+              for (var start = 0; start < cards.length; start += columns) ...[
+                if (start > 0) const SizedBox(height: 16),
+                IntrinsicHeight(
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                      for (var offset = 0; offset < columns; offset++) ...[
+                        if (offset > 0) const SizedBox(width: 16),
+                        Expanded(
+                            child: start + offset < cards.length
+                                ? cards[start + offset]
+                                : const SizedBox.shrink()),
+                      ],
+                    ])),
+              ],
+            ]);
+          }),
         ])),
         _section(
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -321,14 +364,15 @@ class _PremiumLanding extends StatelessWidget {
                       'Track delivery progress and stay connected through secure chat, all the way to your recipient.'),
                 ];
                 return box.maxWidth >= 800
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    ? IntrinsicHeight(
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
                             for (var i = 0; i < cards.length; i++) ...[
                               if (i > 0) const SizedBox(width: 48),
                               Expanded(child: cards[i])
                             ]
-                          ])
+                          ]))
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -520,57 +564,33 @@ class _PremiumLanding extends StatelessWidget {
               fontWeight: FontWeight.w400)),
     ]);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-          color: isGifts ? null : iconColor.withValues(alpha: 0.06),
-          gradient: isGifts ? _landingGiftsPearl : null,
-          border: const Border(top: BorderSide(color: Color(0xffdce1dc)))),
-      child: LayoutBuilder(builder: (_, box) {
-        final actionLink = Link(
-          uri: _CircumWebsiteAppState._canonicalWebUri(path),
-          target: LinkTarget.self,
-          builder: (_, followLink) => IconButton(
-            tooltip: 'Explore $title',
-            onPressed: kIsWeb
-                ? () => web.window.location.assign(
-                    _CircumWebsiteAppState._canonicalWebUri(path).toString())
-                : action,
-            icon: const Icon(Icons.north_east, color: _landingInk),
+        color: isGifts ? null : iconColor.withValues(alpha: 0.06),
+        gradient: isGifts ? _landingGiftsPearl : null,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xffdce1dc)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          serviceIcon(28),
+          const Spacer(),
+          Link(
+            uri: _CircumWebsiteAppState._canonicalWebUri(path),
+            target: LinkTarget.self,
+            builder: (_, followLink) => IconButton(
+              tooltip: 'Explore $title',
+              onPressed: kIsWeb
+                  ? () => web.window.location.assign(
+                      _CircumWebsiteAppState._canonicalWebUri(path).toString())
+                  : action,
+              icon: const Icon(Icons.north_east, color: _landingInk),
+            ),
           ),
-        );
-        if (box.maxWidth < 550) {
-          return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  serviceIcon(28),
-                  const Spacer(),
-                  actionLink,
-                ]),
-                const SizedBox(height: 12),
-                content,
-              ]);
-        }
-        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (wide) ...[
-            Text(number,
-                style: const TextStyle(color: _landingMuted, fontSize: 13)),
-            const SizedBox(width: 36)
-          ],
-          Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                  color: isGifts ? null : iconColor.withValues(alpha: 0.12),
-                  gradient: isGifts ? _landingGiftsPearl : null,
-                  borderRadius: BorderRadius.circular(16)),
-              child: serviceIcon(27)),
-          const SizedBox(width: 22),
-          Expanded(child: content),
-          const SizedBox(width: 12),
-          actionLink,
-        ]);
-      }),
+        ]),
+        const SizedBox(height: 12),
+        content,
+      ]),
     );
   }
 
@@ -684,215 +704,6 @@ class _IrisLandingVisual extends StatelessWidget {
       );
 }
 
-class _ParcelJourneyVisual extends StatelessWidget {
-  const _ParcelJourneyVisual();
-  @override
-  Widget build(BuildContext context) => Semantics(
-        label:
-            'Illustration of a parcel journey from collection to handover. This is a preview, not a live delivery.',
-        child: Container(
-          height: 540,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xffb9e8ff),
-                    Color(0xffd1cbff),
-                    Color(0xffffd2e2)
-                  ]),
-              borderRadius: BorderRadius.circular(24)),
-          child: Stack(children: [
-            const Positioned.fill(
-                child: CustomPaint(painter: _ParcelRoutePainter())),
-            const Positioned(
-                top: 24,
-                left: 24,
-                child: Text('YOUR CITY. CONNECTED.',
-                    style: TextStyle(
-                        color: _landingInk,
-                        letterSpacing: 1.8,
-                        fontSize: 10,
-                        fontFamily: 'D-DIN-Bold',
-                        fontWeight: FontWeight.w400))),
-            const Positioned(
-                top: 24,
-                right: 24,
-                child: Text('LONDON',
-                    style: TextStyle(
-                        color: _landingMuted,
-                        letterSpacing: 1.6,
-                        fontSize: 10))),
-            Positioned(
-                top: 105,
-                left: 26,
-                child: _mapLabel(
-                    Icons.radio_button_checked, 'Collection', _landingInk)),
-            Positioned(
-                top: 224,
-                right: 24,
-                child: _mapLabel(Icons.location_on, 'Handover', _landingBlue)),
-            Positioned(
-                left: 22,
-                right: 22,
-                bottom: 22,
-                child: Container(
-                  padding: const EdgeInsets.all(23),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: _landingInk.withValues(alpha: 0.08),
-                            blurRadius: 30,
-                            offset: const Offset(0, 12))
-                      ]),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(children: [
-                          Icon(Icons.inventory_2_outlined,
-                              color: _landingBlue, size: 26),
-                          SizedBox(width: 12),
-                          Expanded(
-                              child: Text('Every step, in sight.',
-                                  style: TextStyle(
-                                      color: _landingInk,
-                                      fontSize: 19,
-                                      fontFamily: 'D-DIN-Bold',
-                                      fontWeight: FontWeight.w400,
-                                      letterSpacing: -0.4))),
-                        ]),
-                        const SizedBox(height: 20),
-                        const Row(children: [
-                          Icon(Icons.check_circle,
-                              color: _landingBlue, size: 17),
-                          Expanded(
-                              child:
-                                  Divider(color: _landingBlue, thickness: 2)),
-                          Icon(Icons.radio_button_checked,
-                              color: _landingBlue, size: 17),
-                          Expanded(
-                              child: Divider(
-                                  color: Color(0xffdde4df), thickness: 2)),
-                          Icon(Icons.radio_button_unchecked,
-                              color: Color(0xffadb9b1), size: 17),
-                        ]),
-                        const SizedBox(height: 9),
-                        const Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Collected',
-                                  style: TextStyle(
-                                      color: _landingMuted, fontSize: 11)),
-                              Text('In transit',
-                                  style: TextStyle(
-                                      color: _landingBlue,
-                                      fontSize: 11,
-                                      fontFamily: 'D-DIN-Bold',
-                                      fontWeight: FontWeight.w400)),
-                              Text('Delivered',
-                                  style: TextStyle(
-                                      color: _landingMuted, fontSize: 11)),
-                            ]),
-                        const SizedBox(height: 20),
-                        const Text('A clear view from pickup to recipient.',
-                            style:
-                                TextStyle(color: _landingMuted, fontSize: 13)),
-                        const SizedBox(height: 12),
-                        const Text('ILLUSTRATIVE DELIVERY PREVIEW',
-                            style: TextStyle(
-                                color: _landingMuted,
-                                fontSize: 8,
-                                letterSpacing: 1.2)),
-                      ]),
-                )),
-          ]),
-        ),
-      );
-
-  Widget _mapLabel(IconData icon, String text, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(9)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Text(text,
-              style: const TextStyle(
-                  color: _landingInk,
-                  fontSize: 12,
-                  fontFamily: 'D-DIN-Bold',
-                  fontWeight: FontWeight.w400))
-        ]),
-      );
-}
-
-class _ParcelRoutePainter extends CustomPainter {
-  const _ParcelRoutePainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final streets = Paint()
-      ..color = Colors.white.withValues(alpha: 0.72)
-      ..strokeWidth = 7;
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.rotate(-0.24);
-    for (double x = -size.width; x <= size.width; x += 68) {
-      canvas.drawLine(Offset(x, -size.height), Offset(x, size.height), streets);
-    }
-    for (double y = -size.height; y <= size.height; y += 58) {
-      canvas.drawLine(Offset(-size.width, y), Offset(size.width, y), streets);
-    }
-    canvas.restore();
-    final river = Path()
-      ..moveTo(-20, size.height * 0.46)
-      ..cubicTo(size.width * 0.27, size.height * 0.27, size.width * 0.28,
-          size.height * 0.57, size.width * 0.53, size.height * 0.43)
-      ..cubicTo(size.width * 0.74, size.height * 0.32, size.width * 0.72,
-          size.height * 0.25, size.width + 20, size.height * 0.31);
-    canvas.drawPath(
-        river,
-        Paint()
-          ..color = const Color(0xffc8dcf3)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 36
-          ..strokeCap = StrokeCap.round);
-    final route = Path()
-      ..moveTo(size.width * 0.16, 155)
-      ..lineTo(size.width * 0.16, 184)
-      ..lineTo(size.width * 0.4, 184)
-      ..quadraticBezierTo(size.width * 0.46, 184, size.width * 0.46, 216)
-      ..lineTo(size.width * 0.46, 265)
-      ..lineTo(size.width * 0.82, 265);
-    canvas.drawPath(
-        route,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 10
-          ..strokeJoin = StrokeJoin.round);
-    canvas.drawPath(
-        route,
-        Paint()
-          ..color = _landingBlue
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..strokeJoin = StrokeJoin.round);
-    for (final point in [
-      Offset(size.width * 0.16, 155),
-      Offset(size.width * 0.82, 265)
-    ]) {
-      canvas.drawCircle(point, 9, Paint()..color = Colors.white);
-      canvas.drawCircle(point, 5, Paint()..color = _landingBlue);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ParcelRoutePainter oldDelegate) => false;
-}
-
 class _StoreDownloads extends StatelessWidget {
   const _StoreDownloads();
   @override
@@ -994,4 +805,239 @@ class _PlayIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PlayIconPainter oldDelegate) => false;
+}
+
+class _ServiceImageSelector extends StatefulWidget {
+  const _ServiceImageSelector();
+
+  @override
+  State<_ServiceImageSelector> createState() => _ServiceImageSelectorState();
+}
+
+class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
+  int _selected = 0;
+  static const _labels = ['Send', 'Gifts', 'Health', 'Business'];
+  static const _images = [
+    'send-campaign.jpg',
+    'gifts-campaign.jpg',
+    'health-campaign.jpg',
+    'business-campaign.jpg'
+  ];
+  static const _descriptions = [
+    'Send: Move what matters. Everyday parcels. Made simple. Send a parcel in the Circum app.',
+    'Gifts: Make their day. Thoughtfully delivered. Explore Gifts in the Circum app.',
+    'Health: Care, delivered. For what matters most. Explore Health in the Circum app.',
+    'Business: Keep business moving. Deliveries that work for you. Explore Business in the Circum app.',
+  ];
+  static const _colors = [
+    _landingBlue,
+    Color(0xff7937c8),
+    Color(0xff064e3b),
+    Color(0xff132b50)
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: SizedBox(
+          height: 420,
+          child: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 240),
+            child: Image.network(
+              Uri.base.resolve('/images/${_images[_selected]}').toString(),
+              key: ValueKey(_selected),
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.contain,
+              semanticLabel: _descriptions[_selected],
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: _colors[_selected].withValues(alpha: 0.08),
+                child: Center(
+                    child: Icon(Icons.inventory_2_outlined,
+                        color: _colors[_selected], size: 44)),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (var index = 0; index < _labels.length; index++)
+              ChoiceChip(
+                label: Text(_labels[index]),
+                selected: _selected == index,
+                showCheckmark: false,
+                tooltip: 'Show ${_labels[index]} image',
+                selectedColor: _colors[index],
+                backgroundColor: Colors.white,
+                labelStyle: TextStyle(
+                  color: _selected == index ? Colors.white : _colors[index],
+                  fontWeight: FontWeight.w700,
+                ),
+                side: BorderSide(color: _colors[index].withValues(alpha: 0.22)),
+                onSelected: (_) => setState(() => _selected = index),
+              ),
+          ]),
+    ]);
+  }
+}
+
+class _LandingBookingPanel extends StatefulWidget {
+  const _LandingBookingPanel();
+
+  @override
+  State<_LandingBookingPanel> createState() => _LandingBookingPanelState();
+}
+
+class _LandingBookingPanelState extends State<_LandingBookingPanel> {
+  final _form = GlobalKey<FormState>();
+  final _pickup = TextEditingController();
+  final _destination = TextEditingController();
+  String? _error;
+  bool _opening = false;
+
+  @override
+  void dispose() {
+    _pickup.dispose();
+    _destination.dispose();
+    super.dispose();
+  }
+
+  void _continue() {
+    if (_opening || !_form.currentState!.validate()) return;
+    final draft = LandingBookingDraft(
+        _pickup.text.trim(), _destination.text.trim(), DateTime.now());
+    if (!saveLandingBookingDraft(draft)) {
+      setState(() => _error =
+          'Your browser could not save these details. Open the booking page to enter them there.');
+      return;
+    }
+    setState(() => _opening = true);
+    web.window.location
+        .assign(Uri.base.resolve('/send?start=delivery').toString());
+  }
+
+  Widget _addressField(
+          String label, TextEditingController controller, IconData icon,
+          {bool last = false}) =>
+      TextFormField(
+        controller: controller,
+        maxLength: 300,
+        textInputAction: last ? TextInputAction.go : TextInputAction.next,
+        onFieldSubmitted: last ? (_) => _continue() : null,
+        style: const TextStyle(color: _landingInk, fontSize: 16),
+        validator: (value) => value == null || value.trim().isEmpty
+            ? 'Enter ${label.toLowerCase()}.'
+            : null,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Color(0xff42534e)),
+          prefixIcon: Icon(icon, color: _landingBlue, size: 21),
+          filled: true,
+          fillColor: const Color(0xfff1f4f8),
+          counterText: '',
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 20, horizontal: 18),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xffdce1e8))),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xffdce1e8))),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _landingBlue, width: 2)),
+          errorStyle: const TextStyle(color: Color(0xffa21b38), fontSize: 13),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding:
+            EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 24 : 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xffe0e5ed)),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x14243b70), blurRadius: 40, offset: Offset(0, 14))
+          ],
+        ),
+        child: Form(
+            key: _form,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Your delivery starts here.',
+                  style: TextStyle(
+                      fontFamily: 'D-DIN-Bold',
+                      fontSize: 32,
+                      height: 1.1,
+                      color: _landingInk)),
+              const SizedBox(height: 12),
+              const Text('Where are we collecting and delivering?',
+                  style: TextStyle(
+                      color: _landingMuted, fontSize: 16, height: 1.5)),
+              const SizedBox(height: 26),
+              _addressField(
+                  'Pickup address or postcode', _pickup, Icons.trip_origin),
+              const SizedBox(height: 16),
+              _addressField('Delivery address or postcode', _destination,
+                  Icons.location_on_outlined,
+                  last: true),
+              const SizedBox(height: 24),
+              SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _opening ? null : _continue,
+                    icon: const Icon(Icons.arrow_forward, size: 20),
+                    label: Text(_opening
+                        ? 'Opening your booking…'
+                        : 'See delivery price'),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: _landingBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 22),
+                        textStyle: const TextStyle(
+                            fontFamily: 'D-DIN-Bold', fontSize: 17),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
+                  )),
+              const SizedBox(height: 16),
+              const Text(
+                  'Sign in and confirm your addresses and parcel details to see your price before payment.',
+                  style: TextStyle(
+                      color: _landingMuted, fontSize: 14, height: 1.5)),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!,
+                    style: const TextStyle(
+                        color: Color(0xffa21b38), fontSize: 14)),
+                TextButton(
+                    onPressed: () => web.window.location
+                        .assign(Uri.base.resolve('/send').toString()),
+                    child: const Text('Open booking page')),
+              ],
+              const SizedBox(height: 22),
+              const Divider(color: Color(0xffe0e5ed)),
+              const SizedBox(height: 12),
+              const Row(children: [
+                Icon(Icons.verified_user_outlined,
+                    color: _landingBlue, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                    child: Text('Secure handovers. Clear delivery progress.',
+                        style: TextStyle(color: _landingInk, fontSize: 14)))
+              ]),
+            ])),
+      );
 }
