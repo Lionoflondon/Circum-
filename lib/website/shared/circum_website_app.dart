@@ -581,9 +581,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     _consentExpiryTimer?.cancel();
     final consent = _cookieConsent;
     if (consent == null) return;
-    final remaining = consent.savedAt.add(CookiePreferences.lifetime)
-        .difference(DateTime.now());
-    _consentExpiryTimer = Timer(remaining.isNegative ? Duration.zero : remaining,
+    _consentExpiryTimer = Timer(consent.reviewDelay(DateTime.now()),
         _refreshCookiePreferences);
   }
 
@@ -592,7 +590,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     final next = _readCookiePreferences();
     if (next?.analytics == _cookieConsent?.analytics &&
         next?.marketing == _cookieConsent?.marketing &&
-        next?.savedAt == _cookieConsent?.savedAt) { return; }
+        next?.savedAt == _cookieConsent?.savedAt) {
+      _scheduleConsentExpiry();
+      return;
+    }
     final withdrawMarketing = _cookieConsent?.marketing == true &&
         next?.marketing != true;
     setState(() => _cookieConsent = next);

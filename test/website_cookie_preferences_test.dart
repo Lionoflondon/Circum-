@@ -62,4 +62,16 @@ void main() {
     expect(restored.analytics, isFalse);
     expect(restored.marketing, isFalse);
   });
+  test(
+      'browser expiry checks use safe timer intervals without renewing consent',
+      () {
+    final choice =
+        CookiePreferences(analytics: true, marketing: true, savedAt: now);
+    expect(choice.reviewDelay(now), const Duration(days: 1));
+    expect(choice.reviewDelay(now.add(const Duration(days: 179, hours: 23))),
+        const Duration(hours: 1));
+    expect(
+        choice.reviewDelay(now.add(const Duration(days: 181))), Duration.zero);
+    expect(choice.savedAt, now);
+  });
 }
