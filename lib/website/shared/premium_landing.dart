@@ -92,23 +92,16 @@ class _PremiumLanding extends StatelessWidget {
   Widget _section(Widget child,
           {Color background = _landingPaper,
           Gradient? gradient,
-          DecorationImage? image,
-          Gradient? imageOverlay,
           double vertical = 80}) =>
       Container(
         width: double.infinity,
         decoration: BoxDecoration(
-            color: gradient == null ? background : null,
-            gradient: gradient,
-            image: image),
-        child: Container(
-          decoration: BoxDecoration(gradient: imageOverlay),
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: vertical),
-          child: Center(
-              child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1180),
-                  child: child)),
-        ),
+            color: gradient == null ? background : null, gradient: gradient),
+        padding: EdgeInsets.symmetric(horizontal: 24, vertical: vertical),
+        child: Center(
+            child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: child)),
       );
 
   @override
@@ -156,7 +149,8 @@ class _PremiumLanding extends StatelessWidget {
           _link('Send a parcel', '/send', onStart),
           if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
         ]),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+        const SizedBox(height: 24),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
           SizedBox(width: 7),
@@ -233,22 +227,10 @@ class _PremiumLanding extends StatelessWidget {
                   const _LandingBookingPanel(),
                 ]),
           vertical: small ? 36 : 62,
-          image: DecorationImage(
-            image: NetworkImage(
-                Uri.base.resolve('/images/london-hero.jpg').toString()),
-            fit: BoxFit.cover,
-            alignment: Alignment(small ? -0.25 : 0, -0.35),
-          ),
-          imageOverlay: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.70),
-              Colors.white.withValues(alpha: 0.62),
-              Colors.white.withValues(alpha: 0.02),
-              Colors.white.withValues(alpha: 0.02),
-            ],
-            stops: const [0, 0.28, 0.43, 1],
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
           ),
         ),
         _section(handoverPhoto, vertical: small ? 24 : 40),
