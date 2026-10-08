@@ -116,50 +116,36 @@ class _PremiumLanding extends StatelessWidget {
       const handoverPhoto = _ServiceImageSelector();
       final intro =
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        ShaderMask(
-          shaderCallback: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xff007d87),
-              Color(0xff2455f5),
-              Color(0xff7937c8),
-              Color(0xffc32e79)
-            ],
-            stops: [0, 0.35, 0.7, 1],
-          ).createShader,
-          blendMode: BlendMode.srcIn,
-          child: Text('Move what\nmatters.'.toUpperCase(),
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: headlineSize,
-                height: 0.95,
-                letterSpacing: small ? -1 : 1.6,
-                fontFamily: 'D-DIN-Bold',
-                fontWeight: FontWeight.w400,
-              )),
-        ),
+        Text('Move what\nmatters.'.toUpperCase(),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: headlineSize,
+              height: 0.95,
+              letterSpacing: small ? -1 : 1.6,
+              fontFamily: 'D-DIN-Bold',
+              fontWeight: FontWeight.w400,
+            )),
         const SizedBox(height: 28),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 445),
           child: const Text(
               'From everyday parcels to important handovers. Book a delivery, see the price, and follow its journey with Circum.',
-              style:
-                  TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
+              style: TextStyle(
+                  color: Color(0xfff2f5fa), fontSize: 16, height: 1.5)),
         ),
         const SizedBox(height: 32),
         Wrap(spacing: 10, runSpacing: 10, children: [
-          _link('Send a parcel', '/send', onStart),
-          if (onGifts != null) _link('Explore Gifts ↗', '/gifts', onGifts!),
+          _link('Send a parcel', '/send', onStart, primary: true),
+          if (onGifts != null)
+            _link('Explore Gifts ↗', '/gifts', onGifts!, inverse: true),
         ]),
-        const SizedBox(height: 24),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         const Row(children: [
-          Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
+          Icon(Icons.location_on_outlined, size: 16, color: Colors.white),
           SizedBox(width: 7),
           Flexible(
               child: Text('Deliveries across London & surrounding areas',
-                  style: TextStyle(fontSize: 12, color: _landingMuted))),
+                  style: TextStyle(fontSize: 12, color: Colors.white))),
         ]),
       ]);
 
@@ -236,7 +222,8 @@ class _PremiumLanding extends StatelessWidget {
             fit: BoxFit.cover,
             alignment: Alignment.center,
             colorFilter: ColorFilter.mode(
-                Colors.white.withValues(alpha: 0.72), BlendMode.srcOver),
+                const Color(0xff081d35).withValues(alpha: 0.48),
+                BlendMode.srcOver),
           ),
         ),
         _section(handoverPhoto, vertical: small ? 24 : 40),
