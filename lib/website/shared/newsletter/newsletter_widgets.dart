@@ -25,8 +25,15 @@ typedef NewsletterCall = Future<Map<String, dynamic>> Function(
     String name, Map<String, dynamic> data);
 
 Future<Map<String, dynamic>> _callNewsletter(
-    String name, Map<String, dynamic> data) async {
+    String name, Map<String, dynamic> data,
+    {bool Function()? analyticsAllowed}) async {
+  if (name == 'recordNewsletterAnalytics' && analyticsAllowed?.call() != true) {
+    return {};
+  }
   final appCheck = await FirebaseAppCheck.instance.getToken();
+  if (name == 'recordNewsletterAnalytics' && analyticsAllowed?.call() != true) {
+    return {};
+  }
   if (appCheck == null || appCheck.isEmpty) {
     throw const NewsletterRequestException(
         'Circum security verification is required.');
@@ -72,6 +79,7 @@ class NewsletterSignupSection extends StatefulWidget {
     required this.onPrivacy,
     this.call = _callNewsletter,
     this.source = 'homepage',
+    this.analyticsAllowed,
   });
 
   final Color background;
@@ -83,6 +91,7 @@ class NewsletterSignupSection extends StatefulWidget {
   final Uri onPrivacy;
   final NewsletterCall call;
   final String source;
+  final bool Function()? analyticsAllowed;
 
   @override
   State<NewsletterSignupSection> createState() =>
@@ -111,8 +120,14 @@ class _NewsletterSignupSectionState extends State<NewsletterSignupSection> {
 
   Future<void> _event(String event) async {
     try {
-      await widget.call('recordNewsletterAnalytics',
-          {'event': event, 'source': widget.source});
+      if (widget.analyticsAllowed?.call() != true) return;
+      final data = <String, dynamic>{'event': event, 'source': widget.source};
+      if (widget.call == _callNewsletter) {
+        await _callNewsletter('recordNewsletterAnalytics', data,
+            analyticsAllowed: widget.analyticsAllowed);
+      } else {
+        await widget.call('recordNewsletterAnalytics', data);
+      }
     } catch (_) {
       // Privacy-conscious analytics must never affect signup.
     }
