@@ -613,7 +613,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             const Text('Necessary storage supports security, sign-in and requested bookings. Your choice is remembered for 180 days. You can change it using Cookie settings.'),
             SwitchListTile(contentPadding: EdgeInsets.zero,
               title: const Text('Visitor analytics'),
-              subtitle: const Text('Allow Circum visit statistics using Firebase / Google Cloud. Off unless you choose it.'),
+              subtitle: const Text('Allow analytics to help Circum understand visits and improve the website. Off unless you choose it.'),
               value: analytics, onChanged: (v) => update(() => analytics = v)),
             SwitchListTile(contentPadding: EdgeInsets.zero,
               title: const Text('Mailchimp marketing tracking'),
@@ -26411,7 +26411,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'How we obtain personal data',
-            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
+            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Google (account, hosting, security and analytics services), Google Maps, Stripe, Apple notification services, Google push notification services and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
           ),
           _ComplianceSection(
             'Why we use data and lawful bases',
@@ -26443,7 +26443,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Service messages push notifications and marketing',
-            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
+            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Google push notification services. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
           ),
           _ComplianceSection(
             'Newsletter and Resend',
@@ -26455,7 +26455,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Who we share data with',
-            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Google (account, hosting, security and analytics services); Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Google push notification services; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
           ),
           _ComplianceSection(
             'International transfers',
@@ -26532,11 +26532,11 @@ class _CookiePolicyPage extends StatelessWidget {
         sections: const [
           _ComplianceSection(
             'What we use',
-            'Necessary technologies support page delivery, security and sign-in through Firebase Authentication and App Check / reCAPTCHA Enterprise (Google). When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional analytics and marketing tracking stay off until you actively enable their respective switches.',
+            'Necessary technologies support page delivery, security and sign-in through Google account and security services, including reCAPTCHA Enterprise. When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional analytics and marketing tracking stay off until you actively enable their respective switches.',
           ),
           _ComplianceSection(
             'Optional visitor analytics',
-            'Visitor analytics sends a page visit record to Circum using Firebase / Google Cloud. This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Mailchimp (Intuit) connected-site marketing tracking is a separate optional purpose and may collect browser, device and visit information and use its own cookies or storage. Neither purpose is required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website tracking permission.',
+            'Analytics sends a page visit record to Circum’s analytics service (provided by Google). This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Mailchimp (Intuit) connected-site marketing tracking is a separate optional purpose and may collect browser, device and visit information and use its own cookies or storage. Neither purpose is required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website tracking permission.',
           ),
           _ComplianceSection(
             'Storage and duration',
