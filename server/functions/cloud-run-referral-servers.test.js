@@ -15,12 +15,13 @@ async function listen(server, run) {
   }
 }
 
-test("callable adapter requires Firebase auth and preserves denied activation", async () => {
+test("callable adapter requires Firebase auth and App Check and preserves denied activation", async () => {
   const calls = [];
   const server = createCallableServer({dependenciesFactory: () => ({
     verifyIdToken: async (token) => token === "valid" ? {uid: "sender-1", email: "sender@example.invalid"} : Promise.reject(new Error("bad token")),
+    verifyAppCheck: async (token) => token === "attested" ? {appId: "sender-app"} : Promise.reject(Object.assign(new Error("private credential material"), {code: "app-check/invalid-argument"})),
     handlers: {
-      ensureReferralCode: async (_data, context) => (calls.push(context.auth.uid), {referralCode: "CODE1"}),
+      ensureReferralCode: async (_data, context) => (calls.push([context.auth.uid, context.app.appId]), {referralCode: "CODE1"}),
       attachReferralCode: async () => ({status: "applied"}),
       activateReferral: async () => {
  throw Object.assign(new Error("Backend only."), {code: "permission-denied"});
@@ -30,12 +31,37 @@ test("callable adapter requires Firebase auth and preserves denied activation", 
   await listen(server, async (url) => {
     let response = await fetch(`${url}/v1/callable/ensureReferralCode`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({data: {}})});
     assert.equal(response.status, 401);
-    response = await fetch(`${url}/v1/callable/ensureReferralCode`, {method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+    response = await fetch(`${url}/v1/callable/ensureReferralCode`, {method: "POST", headers: {authorization: "Bearer valid", "x-firebase-appcheck": "attested", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {result: {referralCode: "CODE1"}});
-    response = await fetch(`${url}/v1/callable/activateReferral`, {method: "POST", headers: {authorization: "Bearer valid", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
+    response = await fetch(`${url}/v1/callable/activateReferral`, {method: "POST", headers: {authorization: "Bearer valid", "x-firebase-appcheck": "attested", "content-type": "application/json"}, body: JSON.stringify({data: {}})});
     assert.equal(response.status, 403);
-    assert.equal(calls.length, 1);
+    assert.deepEqual(calls, [["sender-1", "sender-app"]]);
+  });
+});
+
+test("referral attestation rejects missing and invalid tokens without invoking handlers or leaking diagnostics", async () => {
+  let calls = 0;
+  const server = createCallableServer({dependenciesFactory: () => ({
+    verifyIdToken: async () => ({uid: "sender-1"}),
+    verifyAppCheck: async () => {
+ throw Object.assign(new Error("secret-and-personal-data"), {code: "app-check/invalid-argument"});
+},
+    handlers: {ensureReferralCode: async () => {
+ calls++; return {};
+}},
+  })});
+  await listen(server, async (url) => {
+    for (const token of [null, "invalid"]) {
+      const headers = {authorization: "Bearer user-token", "content-type": "application/json"};
+      if (token) headers["x-firebase-appcheck"] = token;
+      const response = await fetch(`${url}/v1/callable/ensureReferralCode`, {method: "POST", headers, body: JSON.stringify({data: {}})});
+      assert.equal(response.status, 401);
+      const body = await response.json();
+      assert.equal(body.error.status, "UNAUTHENTICATED");
+      assert.equal(JSON.stringify(body).includes("secret-and-personal-data"), false);
+    }
+    assert.equal(calls, 0);
   });
 });
 
