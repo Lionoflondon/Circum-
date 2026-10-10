@@ -21,6 +21,7 @@ import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 import 'sender_wallet_cloud_run_api.dart';
+import 'sender_referral_cloud_run_api.dart';
 
 const _senderWalletSheetInitTimeout = Duration(seconds: 20);
 const _senderWalletSheetPresentTimeout = Duration(seconds: 90);
@@ -1531,11 +1532,7 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw StateError('Sign in to use referrals.');
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('ensureReferralCode')
-          .call()
-          .timeout(_senderWalletActionTimeout);
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = await loadSenderReferralCodeViaCloudRun();
       final code = '${data['referralCode'] ?? ''}'.trim();
       final link = '${data['referralLink'] ?? ''}'.trim();
       if (code.isEmpty || link.isEmpty) {
