@@ -84,6 +84,44 @@ If pulls remain prohibited or billing prevents a durable write, escalate the
 preservation decision now; documents and snapshots cannot preserve the backlog
 through the retention deadline. The current state remains UNPRESERVED.
 
+## Decision milestones and acceptance record
+
+Recommended planning dates below are not scheduled jobs or permission to operate.
+A named accountable owner must be recorded for each role; none is assigned by
+this document. Keep the original source subscription held throughout.
+
+| Target date (2026) | Accountable role to name | Required reviewable result |
+| --- | --- | --- |
+| 12 October | Recovery decision owner | Choose a preservation path or explicitly record the risk of retention loss; identify archive operator and independent verifier. |
+| 13 October | Archive/security reviewer | Specify exact destination, existing access/encryption controls, data retention, cost feasibility under unchanged caps, and a bounded pull/lease/write authorization request. |
+| 14 October | Recovery decision owner | Review snapshot eligibility only if separately authorized; the estimated 14 October cutoff is not a durable preservation solution. |
+| 20 October | Archive operator and independent verifier | Target completion of any separately authorized preservation, leaving time for incomplete capture or billing blockers to be resolved. |
+| 30 October | Containment reviewer | Complete cap-reset review before 1 November, including the 25 holds, manual zero, tag-free retry, staged zero traffic, and independent enabled scheduler/unheld push paths. |
+| 2 November | Independent verifier | Final preservation readiness review; escalate unresolved destination, authorization, billing or completeness evidence before estimated 7 November expiry. |
+
+For the proposed reader, approval must bound the source, destination, duration,
+maximum delivered envelopes/bytes, lease behavior, permitted API methods and
+stop conditions. Omit credentials and message bodies from diagnostic logs.
+Require atomic immutable archive records, payload checksum verification and a
+manifest mapping source/message ID to object/checksum/publication time. A
+same-ID/different-bytes collision is a failure, not an overwrite. Stop on any
+unexpected acknowledgement, business invocation, write failure or containment
+change; report partial preservation explicitly.
+
+Repeated pulls without acknowledgement may repeatedly return the same messages.
+An empty pull or matching metric count cannot demonstrate complete coverage.
+Define how redelivery starvation, concurrent arrivals and the original bounded
+publication cohort will be accounted for before authorizing a reader. If an
+independent verifier cannot establish coverage, label the archive PARTIAL and
+retain that blocker; do not silently introduce acknowledgements or seek.
+
+The decision record must include named owners, authorization scope, verified
+storage/billing feasibility, synthetic validation evidence, original cohort
+bounds, unique archived IDs, checksums, independent coverage evidence and any
+exceptions. Until that record and durable contents exist, status is UNPRESERVED.
+No queue operation, archive write, cap change or recurring task is authorized
+by merging this documentation.
+
 ## Before 1 November cap reset
 
 Review independent containment before the monthly reset: manual zero, no retry
