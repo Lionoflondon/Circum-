@@ -27,6 +27,8 @@ jobs:
       - run: node scripts/absolute_product_ownership.js
       - run: node scripts/backend_authority_guard.js
       - run: node scripts/deploy_guard.self_test.js
+      - name: Check offline retry containment safety
+        run: node --test tools/retry_containment_check.test.js
       - name: Check Sender application ownership
         env:
           GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
