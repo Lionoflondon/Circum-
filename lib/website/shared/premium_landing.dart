@@ -782,12 +782,18 @@ class _StoreDownloads extends StatelessWidget {
           String app) =>
       Link(
         uri: Uri.parse(url),
-        target: LinkTarget.self,
+        target: compact ? LinkTarget.blank : LinkTarget.self,
         builder: (_, followLink) => Semantics(
           label: 'Download $app on $store',
           child: TextButton(
             onPressed: kIsWeb
-                ? () => web.window.location.assign(url)
+                ? () {
+                    if (compact) {
+                      web.window.open(url, '_blank', 'noopener');
+                    } else {
+                      web.window.location.assign(url);
+                    }
+                  }
                 : () => unawaited(launchUrl(Uri.parse(url),
                     mode: LaunchMode.externalApplication)),
             style: TextButton.styleFrom(
