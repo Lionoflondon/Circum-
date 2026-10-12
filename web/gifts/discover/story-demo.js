@@ -17,7 +17,7 @@
     screen.dataset.chapter=String(index);paint();
   }
   function setPlaying(value){
-    playing=value;screen.dataset.playing=String(value);play.textContent=value?'Pause example':ended?'Replay example':'Play example';
+    playing=value;screen.dataset.playing=String(value);play.textContent=value?'Pause story':ended?'Replay story':'Play story';
     cancelAnimationFrame(frame);last=0;if(value)frame=requestAnimationFrame(tick);
   }
   function tick(now){
