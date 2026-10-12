@@ -1,5 +1,6 @@
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
+import 'service_access_frame.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
 import 'rider_order_explainer.dart';
@@ -542,12 +543,12 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           darkMode: _darkMode,
           onStart: () => _openSurface(_WebAppMode.sender),
           onRider: () => _openSurface(_WebAppMode.rider),
-          onHealthPlus: () => _openSurface(
-            _WebAppMode.sender,
-            senderStep: _SenderStep.healthPlus,
-          ),
-          onBusiness: () => _openSurface(_WebAppMode.sender,
-              senderStep: _SenderStep.business),
+          onHealthPlus: () => kIsWeb
+              ? _openCanonicalPath('/health/discover/')
+              : _openSurface(_WebAppMode.sender, senderStep: _SenderStep.healthPlus),
+          onBusiness: () => kIsWeb
+              ? _openCanonicalPath('/business/discover/')
+              : _openSurface(_WebAppMode.sender, senderStep: _SenderStep.business),
           onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
           newsletterKey: _newsletterKey,
@@ -8072,9 +8073,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = widget.colors;
+    final serviceAccess = _senderUser == null &&
+        (_step == _SenderStep.business || _step == _SenderStep.healthPlus);
+    final colors = serviceAccess ? const _CircumColors(true) : widget.colors;
     return Stack(
       children: [
+        if (serviceAccess)
+          const Positioned.fill(child: ColoredBox(color: Color(0xff030506))),
         LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= _desktopWebBreakpoint;
@@ -8082,9 +8087,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               children: [
                 _PortalHeader(
                   colors: colors,
-                  darkMode: widget.darkMode,
+                  darkMode: colors.dark,
                   onBack: widget.onBack,
-                  onToggleTheme: widget.onToggleTheme,
+                  onToggleTheme: serviceAccess ? null : widget.onToggleTheme,
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
@@ -8115,7 +8120,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           child: _buildCurrentStep(colors),
                         )
                       : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                          padding: serviceAccess
+                              ? const EdgeInsets.only(bottom: 90)
+                              : const EdgeInsets.fromLTRB(18, 18, 18, 90),
                           child: _buildAnimatedStep(colors),
                         ),
                 ),
@@ -8159,6 +8166,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_senderUser == null) {
       return _SenderAccessGate(
         colors: colors,
+        service: _step == _SenderStep.business || _step == _SenderStep.healthPlus
+            ? _step
+            : null,
         signupMode: _senderSignupMode,
         busy: _senderAuthBusy,
         message: _senderProfileMessage ??
@@ -13753,6 +13763,7 @@ class _RouteLine extends StatelessWidget {
 
 class _SenderAccessGate extends StatelessWidget {
   final _CircumColors colors;
+  final _SenderStep? service;
   final bool signupMode;
   final bool busy;
   final String? message;
@@ -13768,6 +13779,7 @@ class _SenderAccessGate extends StatelessWidget {
 
   const _SenderAccessGate({
     required this.colors,
+    this.service,
     required this.signupMode,
     required this.busy,
     required this.message,
@@ -13784,20 +13796,27 @@ class _SenderAccessGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final form = _GlassPanel(
-      colors: colors,
-      child: Column(
+    final colors = service == null ? this.colors : const _CircumColors(true);
+    final health = service == _SenderStep.healthPlus;
+    final accent = health ? const Color(0xffd2f6ee) : const Color(0xfff0d9ba);
+    final formContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionTitle(
             colors: colors,
-            title: signupMode ? 'Create a Circum account' : 'Circum login',
+            title: signupMode
+                ? 'Create a Circum account'
+                : service != null
+                    ? 'Sign in to ${health ? 'Health+' : 'Circum Business'}'
+                    : 'Circum login',
           ),
           const SizedBox(height: 8),
           Text(
             signupMode
                 ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
+                : service != null
+                    ? 'Use your Circum account to continue. Your existing account works here.'
+                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.45,
@@ -13882,8 +13901,11 @@ class _SenderAccessGate extends StatelessWidget {
                         : 'Sign in',
               ),
               style: FilledButton.styleFrom(
-                backgroundColor:
-                    colors.dark ? const Color(0xffa9bfff) : _landingBlue,
+                backgroundColor: service != null
+                    ? accent
+                    : colors.dark
+                        ? const Color(0xffa9bfff)
+                        : _landingBlue,
                 foregroundColor: colors.dark ? _landingInk : Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),
@@ -13904,8 +13926,11 @@ class _SenderAccessGate extends StatelessWidget {
             ]);
           }),
         ],
-      ),
     );
+    if (service != null) {
+      return ServiceAccessFrame(health: health, child: formContent);
+    }
+    final form = _GlassPanel(colors: colors, child: formContent);
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
@@ -18175,7 +18200,7 @@ class _PortalHeader extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
+  final VoidCallback? onToggleTheme;
   final VoidCallback? onProfile;
 
   const _PortalHeader({
@@ -18217,7 +18242,7 @@ class _PortalHeader extends StatelessWidget {
                 onPressed: onProfile,
                 icon: Icon(Icons.account_circle_outlined, color: colors.text),
               ),
-            IconButton(
+            if (onToggleTheme != null) IconButton(
               tooltip: darkMode ? 'Light mode' : 'Dark mode',
               onPressed: onToggleTheme,
               icon: Icon(
