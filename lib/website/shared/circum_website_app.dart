@@ -1,3 +1,4 @@
+import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
@@ -3060,24 +3061,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
     try {
       await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'rider');
       if (!mounted) return;
       setState(
-        () => _authMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _authMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _authMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum Rider account found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _authMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(
@@ -9865,24 +9856,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'sender');
       if (!mounted) return;
       setState(
-        () => _senderProfileMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _senderProfileMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _senderProfileMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum profile found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _senderProfileMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(

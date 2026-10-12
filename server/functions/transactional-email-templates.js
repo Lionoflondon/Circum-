@@ -28,6 +28,25 @@ const FORBIDDEN_CUSTOMER_TOKENS = [
 
 const text = (value) => `${value || ""}`.trim();
 
+function passwordReset({link}) {
+  const url = new URL(link);
+  const params = new URLSearchParams(url.hash.slice(1));
+  if (url.origin !== APP_URL || url.pathname !== "/reset-password/" || url.search || url.username || url.password ||
+      params.get("mode") !== "resetPassword" || !/^[A-Za-z0-9_-]{20,2048}$/.test(params.get("oobCode") || "") ||
+      !["sender", "rider"].includes(params.get("app")) || [...params.keys()].length !== 3) throw new Error("invalid_recovery_link");
+  const heading = "Reset your CIRCUM password";
+  const paragraphs = [
+    "A fresh start, securely delivered. Follow the link below to choose a new password for your CIRCUM account.",
+    "This link can be used once and expires for your security. If it has expired, request a new one from the login page.",
+    "If you did not request this email, you can ignore it. Your password will stay the same. Never share this link with anyone.",
+  ];
+  const footer = "Need help? Contact support@circumuk.com. CIRCUM will never ask you to share your password.";
+  const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"></head><body style="margin:0;background:#080b10;color:#f5f7fc;font-family:Arial,Helvetica,sans-serif;line-height:1.65"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:40px 20px"><table role="presentation" width="100%" style="max-width:560px"><tr><td style="padding:0 0 36px"><a href="${APP_URL}"><img src="${WELCOME_WORDMARK_URL}" width="140" alt="CIRCUM" style="display:block;border:0;max-width:100%;filter:brightness(0) invert(1)"></a></td></tr><tr><td style="padding:32px 28px;background:#111722;border:1px solid #273348;border-radius:20px"><p style="color:#7fb6ff;font-size:11px;letter-spacing:3px;margin:0">ACCOUNT SECURITY</p><h1 style="font-size:32px;line-height:1.15;font-weight:500;margin:20px 0 24px">${heading}</h1><p style="color:#c2cad7">${escapeHtml(paragraphs[0])}</p><p style="margin:32px 0"><a href="${escapeHtml(link)}" style="display:inline-block;background:#0a84ff;color:#fff;text-decoration:none;font-weight:600;padding:16px 28px;border-radius:10px">Reset password</a></p><p style="font-size:14px;color:#c2cad7">${escapeHtml(paragraphs[1])}</p><p style="font-size:14px;color:#a7b2c4">${escapeHtml(paragraphs[2])}</p></td></tr><tr><td style="padding:28px 8px;color:#a7b2c4;font-size:12px">${escapeHtml(footer)}<p>Circum Technologies Ltd</p></td></tr></table></td></tr></table></body></html>`;
+  const copy = {subject: heading, html, text: [heading, paragraphs[0], `Reset password: ${link}`, ...paragraphs.slice(1), footer].join("\n\n")};
+  assertCustomerFacingContent(copy);
+  return copy;
+}
+
 function escapeHtml(value) {
   return text(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -596,6 +615,7 @@ function visibleCustomerText(copy) {
 }
 
 module.exports = {
+  passwordReset,
   APP_URL,
   FORBIDDEN_CUSTOMER_TOKENS,
   assertCustomerFacingContent,

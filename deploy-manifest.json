@@ -458,6 +458,39 @@
         "test/website_account_bootstrap_api_test.dart"
       ],
       "reason": "Sender notification state and canonical deep links are one explicitly reviewed cross-surface contract across the established backend authority, Sender Web, and Sender native callers; no unrelated product or backend route is included."
+    },
+    {
+      "products": [
+        "website",
+        "sender-app",
+        "backend"
+      ],
+      "files": [
+        "deploy-manifest.json",
+        "firebase.json",
+        "lib/helper/password_recovery.dart",
+        "lib/app/authentication/bloc/auth_bloc.dart",
+        "lib/app/authentication/view/create_new_password.dart",
+        "lib/app/authentication/view/forgot_password.dart",
+        "lib/website/shared/circum_website_app.dart",
+        "server/functions/business-gifts.test.js",
+        "server/functions/firestore-password-recovery-rules.test.js",
+        "server/functions/password-recovery.js",
+        "server/functions/password-recovery.test.js",
+        "server/functions/password-recovery-page.test.js",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-transactional-email.js",
+        "server/functions/transactional-email-templates.js",
+        "test/password_recovery_test.dart",
+        "test/website_auth_terminal_test.dart",
+        "test/website_sender_auth_deterministic_contract_test.dart",
+        "web/reset-password/index.html",
+        "web/reset-password/recovery.mjs",
+        "web/reset-password/page.mjs",
+        "web/reset-password/style.css",
+        "docs/PASSWORD_RECOVERY_RELEASE.md"
+      ],
+      "reason": "Branded password recovery connects the signed-out attested request, existing transactional email owner, HTTPS action handler and Sender and Website callers as one narrow authentication contract. No financial or dispatch ownership changes."
     }
   ],
   "blockedPrefixes": [

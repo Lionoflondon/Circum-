@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 "use strict";
+const {EVENT: PASSWORD_RECOVERY_EVENT, preparePasswordRecovery} = require("./password-recovery");
 
 const http = require("node:http");
 const {getAuth} = require("firebase-admin/auth");
@@ -467,7 +468,7 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
   return {providerId: text(payload.id)};
 }
 
-async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, nowMs = Date.now(), apiKey, from}) {
+async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, nowMs = Date.now(), apiKey, from, recoveryAuth}) {
   const claim = await claimEmail({db, emailId, eventId, nowMs});
   if (claim.status === "deferred") {
     throw Object.assign(new Error("email_retry_deferred"), {statusCode: 503});
@@ -502,20 +503,43 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     (text(record.eventType || record.type).toLowerCase() === "gift_delivered" && source.source &&
       source.source.giftStoryUnlocked === true && text(source.source.giftStoryStatus) === "unlocked" &&
       Boolean(source.source.giftStoryAccessToken));
-  const effectiveRecord = text(record.eventType || record.type).toLowerCase() === "gift_delivered" ?
+  let effectiveRecord = text(record.eventType || record.type).toLowerCase() === "gift_delivered" ?
     {...record, ...emailTemplates.giftDelivered({recipientName: source.source.recipientName,
       ...(deliveryUsesStory ? {storyUrl: `https://circumuk.com/story/${encodeURIComponent(source.source.giftStoryAccessToken)}`} : {})})} :
     currentServiceDesign(record, source);
   let providerResult;
   try {
+    if (record.eventType === PASSWORD_RECOVERY_EVENT) {
+      const recovery = await preparePasswordRecovery({record, source: source.source, auth: recoveryAuth, nowMs});
+      if (recovery.status !== "valid") {
+        await updateQueue(db, emailId, {status: "suppressed", failureReason: recovery.reason, recoveryMessage: FieldValue.delete(), leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
+        return {status: "suppressed", reason: recovery.reason};
+      }
+      // Persist once before contacting Resend. Ambiguous retries reuse the same
+      // code, payload and existing provider idempotency key.
+      if (!record.recoveryMessage) {
+        try {
+          await updateQueue(db, emailId, {recoveryMessage: recovery.message, recoveryUid: recovery.uid});
+        } catch (_error) {
+          throw Object.assign(new Error("recovery_message_persist_failed"), {retryable: true});
+        }
+      }
+      effectiveRecord = {...record, ...recovery.message};
+    }
     providerResult = await sendResend({record: effectiveRecord, to: recipient.email, fetchImpl, apiKey, from});
-  } catch (error) {
+  } catch (caughtError) {
+    let error = caughtError;
+    if (record.eventType === PASSWORD_RECOVERY_EVENT) {
+      // Provider/Admin errors can contain request data. Never persist or log it.
+      error = Object.assign(new Error("password_recovery_delivery_failed"), {retryable: error && error.retryable === true, statusCode: 503});
+    }
     const retryable = error && error.retryable;
     const attempt = Number(claim.attempts || 1);
     const maxAttempts = Number(claim.maxAttempts || DEFAULT_MAX_ATTEMPTS);
     const terminal = !retryable || attempt >= maxAttempts;
     await updateQueue(db, emailId, {
       status: terminal ? "failed" : "retryable_failed",
+      ...(terminal && record.eventType === PASSWORD_RECOVERY_EVENT ? {recoveryMessage: FieldValue.delete()} : {}),
       failureReason: text(error && (error.providerCode || error.message)) || "email_send_failed",
       nextAttemptAt: terminal ? null : Timestamp.fromMillis(nowMs + RETRY_BACKOFF_MS[Math.min(attempt - 1, RETRY_BACKOFF_MS.length - 1)]),
       leaseOwner: null,
@@ -527,6 +551,7 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
   try {
     await updateQueue(db, emailId, {
       status: "sent",
+      ...(record.eventType === PASSWORD_RECOVERY_EVENT ? {recoveryMessage: FieldValue.delete()} : {}),
       provider: "resend",
       providerId: providerResult.providerId || null,
       sentAt: FieldValue.serverTimestamp(),
