@@ -186,7 +186,8 @@ class _PremiumLanding extends StatelessWidget {
                 if (wide) _link('Rider', '/rider', onRider),
               ],
               if (!small) ...[
-                _link('Help', '/support', onStart),
+                if (onGifts != null)
+                  _link('Gifts', '/gifts/discover/', onGifts!),
                 _link('Account', '/send/profile', onStart),
               ],
               if (small)
@@ -199,9 +200,9 @@ class _PremiumLanding extends StatelessWidget {
                       webOnlyWindowName: '_self')),
                   itemBuilder: (_) => const [
                     PopupMenuItem(
-                        value: '/support',
-                        child:
-                            Text('Help', style: TextStyle(color: _landingInk))),
+                        value: '/gifts/discover/',
+                        child: Text('Gifts',
+                            style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/send/profile',
                         child: Text('Account',
@@ -213,10 +214,6 @@ class _PremiumLanding extends StatelessWidget {
                     PopupMenuItem(
                         value: '/health/discover/',
                         child: Text('Health+',
-                            style: TextStyle(color: _landingInk))),
-                    PopupMenuItem(
-                        value: '/gifts/discover/',
-                        child: Text('Gifts',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/rider',
