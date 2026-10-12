@@ -163,3 +163,18 @@ test("HTTP recovery accepts signed-out attested clients and keeps existing route
  server.close(); await once(server, "close");
 }
 });
+
+test("duplicate recovery delivery responses never return stored action messages", async () => {
+  const {db} = await fixture();
+  const queued = db.records.get("emailQueue/password_reset_one");
+  queued.status = "failed";
+  queued.recoveryMessage = {html: "private-reset-token", text: "private-reset-token"};
+  assert.deepEqual(await processEmailQueueRecord({db, emailId: "password_reset_one", eventId: "duplicate", nowMs: 100000}), {status: "duplicate"});
+});
+
+test("Auth provider failures are retriable and never expose provider detail", async () => {
+  const {record, source} = await fixture();
+  await assert.rejects(preparePasswordRecovery({record, source, nowMs: 100000, auth: {getUserByEmail: async () => {
+    throw Error("private-auth-token");
+  }}}), (error) => error.retryable === true && !error.message.includes("private-auth-token"));
+});

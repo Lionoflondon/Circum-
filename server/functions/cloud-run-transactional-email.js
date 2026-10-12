@@ -148,6 +148,7 @@ async function claimEmail({db, emailId, eventId, nowMs = Date.now()}) {
       tx.set(ref, {
         status: "failed",
         failureReason: "max_attempts_exceeded",
+        ...(current.eventType === PASSWORD_RECOVERY_EVENT ? {recoveryMessage: FieldValue.delete()} : {}),
         updatedAt: FieldValue.serverTimestamp(),
         leaseOwner: null,
         leaseExpiresAt: Timestamp.fromMillis(nowMs),
@@ -440,6 +441,7 @@ async function sendResend({record, to, fetchImpl = null, apiKey = process.env.RE
   try {
     response = await transport(EMAIL_API_URL, {
       method: "POST",
+      ...(record.eventType === PASSWORD_RECOVERY_EVENT ? {signal: AbortSignal.timeout(15000)} : {}),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -473,14 +475,16 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
   if (claim.status === "deferred") {
     throw Object.assign(new Error("email_retry_deferred"), {statusCode: 503});
   }
-  if (["duplicate", "missing", "failed"].includes(claim.status)) return claim;
+  if (["duplicate", "missing", "failed"].includes(claim.status)) {
+    return claim.current && claim.current.eventType === PASSWORD_RECOVERY_EVENT ? {status: claim.status} : claim;
+  }
   if (claim.status === "busy") throw Object.assign(new Error("email_already_processing"), {statusCode: 503});
   const ref = claimRef(db, emailId);
   const snapshot = await ref.get();
   const record = snapshot.data() || {};
   const recipient = recipientFor(record);
   if (recipient.status !== "valid") {
-    await updateQueue(db, emailId, {status: "suppressed", failureReason: recipient.reason, leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
+    await updateQueue(db, emailId, {status: "suppressed", failureReason: recipient.reason, ...(record.eventType === PASSWORD_RECOVERY_EVENT ? {recoveryMessage: FieldValue.delete()} : {}), leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
     return {status: "suppressed", reason: recipient.reason};
   }
   const source = await revalidateSource(db, record);
@@ -496,7 +500,7 @@ async function processEmailQueueRecord({db, emailId, eventId, fetchImpl = null, 
     throw Object.assign(new Error(source.reason || "email_source_not_ready"), {statusCode: 503});
   }
   if (source.status !== "valid") {
-    await updateQueue(db, emailId, {status: "suppressed", failureReason: source.reason, leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
+    await updateQueue(db, emailId, {status: "suppressed", failureReason: source.reason, ...(record.eventType === PASSWORD_RECOVERY_EVENT ? {recoveryMessage: FieldValue.delete()} : {}), leaseOwner: null, leaseExpiresAt: Timestamp.fromMillis(nowMs)});
     return {status: "suppressed", reason: source.reason};
   }
   const deliveryUsesStory = text(record.sourceStoryRole) || /\/story\//.test(text(record.ctaUrl)) ||
