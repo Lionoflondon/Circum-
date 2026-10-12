@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -77,15 +78,17 @@ Future<Map<String, dynamic>> invokeSenderNotificationState({
           }),
         )
         .timeout(const Duration(seconds: 8));
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode != 200) {
-      final error = payload['error'] as Map?;
-      throw SenderAccountBootstrapException(
-        '${error?['status'] ?? 'INTERNAL'}',
-        '${error?['message'] ?? 'Account request failed.'}',
-      );
-    }
-    return Map<String, dynamic>.from(payload['result'] as Map);
+    return _decodeAccountResponse(response);
+  } on TimeoutException {
+    throw const SenderAccountBootstrapException(
+      'DEADLINE_EXCEEDED',
+      'Confirmation took too long. Check its status before trying again.',
+    );
+  } on http.ClientException {
+    throw const SenderAccountBootstrapException(
+      'UNAVAILABLE',
+      'Connection interrupted. Check its status before trying again.',
+    );
   } finally {
     if (ownsClient) transport.close();
   }
@@ -125,15 +128,17 @@ Future<Map<String, dynamic>> invokeSenderAccountBootstrap({
           body: jsonEncode({'data': <String, dynamic>{}}),
         )
         .timeout(const Duration(seconds: 8));
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode != 200) {
-      final error = payload['error'] as Map?;
-      throw SenderAccountBootstrapException(
-        '${error?['status'] ?? 'INTERNAL'}',
-        '${error?['message'] ?? 'Account request failed.'}',
-      );
-    }
-    return Map<String, dynamic>.from(payload['result'] as Map);
+    return _decodeAccountResponse(response);
+  } on TimeoutException {
+    throw const SenderAccountBootstrapException(
+      'DEADLINE_EXCEEDED',
+      'Confirmation took too long. Check its status before trying again.',
+    );
+  } on http.ClientException {
+    throw const SenderAccountBootstrapException(
+      'UNAVAILABLE',
+      'Connection interrupted. Check its status before trying again.',
+    );
   } finally {
     if (ownsClient) transport.close();
   }
@@ -178,14 +183,55 @@ Future<Map<String, dynamic>> invokeSenderVerificationEmailViaCloudRun({
             },
             body: jsonEncode({'data': {}}))
         .timeout(const Duration(seconds: 15));
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode != 200) {
-      final error = payload['error'] as Map?;
-      throw SenderAccountBootstrapException('${error?['status'] ?? 'INTERNAL'}',
-          '${error?['message'] ?? 'Verification email could not be sent.'}');
-    }
-    return Map<String, dynamic>.from(payload['result'] as Map);
+    return _decodeAccountResponse(response);
+  } on TimeoutException {
+    throw const SenderAccountBootstrapException(
+      'DEADLINE_EXCEEDED',
+      'Confirmation took too long. Check its status before trying again.',
+    );
+  } on http.ClientException {
+    throw const SenderAccountBootstrapException(
+      'UNAVAILABLE',
+      'Connection interrupted. Check its status before trying again.',
+    );
   } finally {
     if (client == null) transport.close();
   }
+}
+
+Map<String, dynamic> _decodeAccountResponse(http.Response response) {
+  final fallbackStatus = switch (response.statusCode) {
+    401 => 'UNAUTHENTICATED',
+    403 => 'PERMISSION_DENIED',
+    429 => 'RESOURCE_EXHAUSTED',
+    >= 500 => 'UNAVAILABLE',
+    _ => 'INTERNAL',
+  };
+  const fallbackMessage =
+      'The service could not confirm this request. Check its status before trying again.';
+  Object? decoded;
+  try {
+    decoded = jsonDecode(response.body);
+  } on FormatException {
+    throw SenderAccountBootstrapException(fallbackStatus, fallbackMessage);
+  }
+  if (decoded is! Map<String, dynamic>) {
+    throw SenderAccountBootstrapException(fallbackStatus, fallbackMessage);
+  }
+  if (response.statusCode != 200 || decoded.containsKey('error')) {
+    final error = decoded['error'];
+    throw SenderAccountBootstrapException(
+      error is Map && error['status'] is String
+          ? error['status'] as String
+          : fallbackStatus,
+      error is Map && error['message'] is String
+          ? error['message'] as String
+          : fallbackMessage,
+    );
+  }
+  final result = decoded['result'];
+  if (result is! Map<String, dynamic>) {
+    throw const SenderAccountBootstrapException('INTERNAL', fallbackMessage);
+  }
+  return result;
 }
