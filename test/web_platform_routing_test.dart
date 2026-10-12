@@ -259,13 +259,17 @@ void main() {
       final source = '$shared\n$landing';
       expect(source, contains('_PremiumLanding('));
       expect(landing, contains('Move what'));
-      expect(landing, contains("'/send/health', onHealthPlus"));
-      expect(landing, contains("'/send/business', onBusiness"));
+      expect(landing, contains("'/health/discover/', onHealthPlus"));
+      expect(landing, contains("'/business/discover/', onBusiness"));
       expect(landing, contains("'/vanguard', onVanguard"));
       expect(source, contains('Health+'));
       expect(source, contains("_WebAppMode.rider => '/rider'"));
       expect(source, contains("_SenderStep.healthPlus => '/send/health'"));
       expect(source, contains("_SenderStep.business => '/send/business'"));
+      for (final service in ['business', 'health']) {
+        final discovery = File('web/$service/discover/index.html').readAsStringSync();
+        expect(discovery, contains('href="/send/$service"'));
+      }
       expect(source, contains("fragment: ''"));
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
