@@ -1,4 +1,5 @@
 import 'privacy/consent_tracking_gate.dart';
+import 'gifts_sign_in.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
 import 'rider_order_explainer.dart';
@@ -188,7 +189,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
-    if (kIsWeb && _mode == _WebAppMode.landing) {
+    if (kIsWeb && (_mode == _WebAppMode.landing || _mode == _WebAppMode.gifts)) {
       unawaited(_loadLandingTypography());
     }
     _redirectLegacyQueryIfNeeded();
@@ -250,6 +251,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       await Future.wait([
         load('D-DIN', 'D-DIN.ttf'),
         load('D-DIN-Bold', 'D-DIN-Bold.ttf'),
+        if (_mode == _WebAppMode.gifts)
+          load('GiftsSerif', '../libre-baskerville/LibreBaskerville-Italic.ttf'),
       ]);
       if (mounted) setState(() {});
     } catch (error) {
@@ -292,7 +295,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           _ => '/send',
         },
       _WebAppMode.rider => '/rider',
-      _WebAppMode.gifts => '/gifts',
+      _WebAppMode.gifts => '/gifts/discover/',
       _WebAppMode.vanguard => '/vanguard',
       _WebAppMode.support => '/support',
       _WebAppMode.deleteAccount => '/delete_account',
@@ -26979,7 +26982,7 @@ class _LandingFooter extends StatelessWidget {
                   if (onGifts != null)
                     _FooterServiceLink(
                       label: 'Gifts',
-                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts/discover/'),
                       onPressed: onGifts!,
                     ),
                   _FooterServiceLink(
@@ -27598,6 +27601,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final colors = widget.colors;
     final narrow = MediaQuery.sizeOf(context).width < 760;
     final signedIn = FirebaseAuth.instance.currentUser != null;
+    if (!signedIn) {
+      return GiftsSignIn(
+        emailController: _previewEmail,
+        passwordController: _previewPassword,
+        signingIn: _signingIn,
+        message: _message,
+        onSignIn: _signInToPreview,
+        onBack: widget.onBack,
+        onPrivacy: () => launchUrl(Uri.base.resolve('/privacy_policy'), webOnlyWindowName: '_self'),
+        onTerms: () => launchUrl(Uri.base.resolve('/terms'), webOnlyWindowName: '_self'),
+      );
+    }
+
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
@@ -27668,71 +27684,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       child: _HealthChip(label: 'Vanguard Included'),
                     ),
                     const SizedBox(height: 16),
-                    if (!signedIn)
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Sign in to Gifts',
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Sign in to create and pay for a curated gift experience.',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            _giftField(
-                              _previewEmail,
-                              'Email address',
-                              Icons.email_outlined,
-                              type: TextInputType.emailAddress,
-                            ),
-                            _giftField(
-                              _previewPassword,
-                              'Password',
-                              Icons.lock_outline,
-                              obscure: true,
-                            ),
-                            if (_message != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                _message!,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            FilledButton.icon(
-                              onPressed: _signingIn ? null : _signInToPreview,
-                              icon: _signingIn
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.lock_open),
-                              label: Text(
-                                _signingIn
-                                    ? 'Signing in...'
-                                    : 'Sign in and continue',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     if (signedIn) ...[
                       _GlassPanel(
                         colors: colors,

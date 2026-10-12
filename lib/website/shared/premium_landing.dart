@@ -161,7 +161,7 @@ class _PremiumLanding extends StatelessWidget {
               width: actionWidth,
               height: 56,
               child:
-                  _link('Explore Gifts ↗', '/gifts', onGifts!, outlined: true),
+                  _link('Explore Gifts ↗', '/gifts/discover/', onGifts!, outlined: true),
             ),
         ]),
         const SizedBox(height: 32),
@@ -215,7 +215,7 @@ class _PremiumLanding extends StatelessWidget {
                         child: Text('Health+',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
-                        value: '/gifts',
+                        value: '/gifts/discover/',
                         child: Text('Gifts',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
@@ -306,7 +306,7 @@ class _PremiumLanding extends StatelessWidget {
                     'Gifts',
                     'Make someone’s day. Thoughtful gifts, sent with care.',
                     'Delivery around the world',
-                    '/gifts',
+                    '/gifts/discover/',
                     onGifts!,
                     Icons.card_giftcard_outlined,
                     wide),
@@ -538,11 +538,11 @@ class _PremiumLanding extends StatelessWidget {
       bool wide) {
     final iconColor = switch (path) {
       '/send/health' => _landingHealth,
-      '/gifts' => const Color(0xff7851a9),
+      '/gifts/discover/' => const Color(0xff7851a9),
       '/send/business' => const Color(0xffb96508),
       _ => _landingBlue,
     };
-    final isGifts = path == '/gifts';
+    final isGifts = path == '/gifts/discover/';
     Widget serviceIcon(double size) {
       final glyph = Icon(icon, color: iconColor, size: size);
       return isGifts
