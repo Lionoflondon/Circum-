@@ -242,6 +242,11 @@
   "sharedFiles": [],
   "allowedDependencyIntersections": [
     {
+      "products": ["sender-app", "website"],
+      "files": ["lib/helper/password_recovery.dart"],
+      "reason": "The same signed-out App Check password recovery transport is used by Sender and Website; it has no product UI or account-session dependency."
+    },
+    {
       "products": [
         "sender-app",
         "backend"
@@ -481,7 +486,7 @@
         "server/functions/cloud-run-account-bootstrap.js",
         "server/functions/cloud-run-transactional-email.js",
         "server/functions/transactional-email-templates.js",
-        "test/password_recovery_test.dart",
+        "test/sender_password_recovery_test.dart",
         "test/website_auth_terminal_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart",
         "web/reset-password/index.html",
