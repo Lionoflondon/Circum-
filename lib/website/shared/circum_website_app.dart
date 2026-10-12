@@ -1,5 +1,6 @@
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
+import 'account_access_page.dart';
 import 'service_access_frame.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
@@ -190,7 +191,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
-    if (kIsWeb && (_mode == _WebAppMode.landing || _mode == _WebAppMode.gifts)) {
+    if (kIsWeb && (_mode == _WebAppMode.landing ||
+        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender)) {
       unawaited(_loadLandingTypography());
     }
     _redirectLegacyQueryIfNeeded();
@@ -8079,6 +8081,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final serviceAccess = _senderUser == null &&
         (_step == _SenderStep.business || _step == _SenderStep.healthPlus);
     final colors = serviceAccess ? const _CircumColors(true) : widget.colors;
+    if (!_senderAuthLoading && _senderUser == null && !serviceAccess) {
+      return _buildCurrentStep(colors);
+    }
     return Stack(
       children: [
         if (serviceAccess)
@@ -8167,11 +8172,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_senderUser == null) {
-      return _SenderAccessGate(
-        colors: colors,
-        service: _step == _SenderStep.business || _step == _SenderStep.healthPlus
-            ? _step
-            : null,
+      if (_step == _SenderStep.business || _step == _SenderStep.healthPlus) {
+        return _SenderAccessGate(
+          colors: colors,
+          service: _step,
+          signupMode: _senderSignupMode,
+          busy: _senderAuthBusy,
+          message: _senderProfileMessage,
+          email: _senderEmail,
+          password: _senderPassword,
+          fullName: _senderName,
+          phone: _senderPhone,
+          referralCode: _senderReferralCode,
+          onToggleMode: () => setState(() => _senderSignupMode = !_senderSignupMode),
+          onSignIn: _signInSender,
+          onSignUp: _signUpSender,
+          onForgotPassword: _sendSenderPasswordReset,
+        );
+      }
+      return AccountAccessPage(
         signupMode: _senderSignupMode,
         busy: _senderAuthBusy,
         message: _senderProfileMessage ??
@@ -8185,11 +8204,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         fullName: _senderName,
         phone: _senderPhone,
         referralCode: _senderReferralCode,
-        onToggleMode: () =>
-            setState(() => _senderSignupMode = !_senderSignupMode),
-        onSignIn: _signInSender,
+        onToggleMode: () => setState(() {
+          _senderSignupMode = !_senderSignupMode;
+          _senderProfileMessage = null;
+        }),
+        onLogIn: _signInSender,
         onSignUp: _signUpSender,
         onForgotPassword: _sendSenderPasswordReset,
+        onBack: widget.onBack,
+        onPrivacy: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
+            webOnlyWindowName: '_self')),
+        onTerms: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/terms'),
+            webOnlyWindowName: '_self')),
       );
     }
     if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
