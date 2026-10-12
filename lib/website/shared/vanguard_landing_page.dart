@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 
 /// Informational surface. Booking, prices and verification stay server-owned.
@@ -110,10 +111,10 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                               padding: EdgeInsets.symmetric(
                                   horizontal: pad, vertical: 24),
                               child: Row(children: [
-                                Image.asset('assets/images/circum_wordmark.png',
+                                CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png',
                                     width: 124,
                                     height: 30,
-                                    semanticLabel: 'CIRCUM'),
+                                    semanticLabel: 'CIRCUM')),
                                 const Spacer(),
                                 TextButton.icon(
                                     onPressed: widget.onBack,

@@ -176,8 +176,8 @@ class _PremiumLanding extends StatelessWidget {
       return Column(children: [
         _section(
             Row(children: [
-              Image.asset('assets/images/circum_wordmark.png',
-                  width: small ? 106 : 134, height: 32, fit: BoxFit.contain),
+              CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png',
+                  width: small ? 106 : 134, height: 32, fit: BoxFit.contain)),
               const Spacer(),
               if (wide) ...[
                 _link('Business', '/business/discover/', onBusiness),

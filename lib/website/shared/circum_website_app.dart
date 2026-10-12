@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
 import 'account_access_page.dart';
@@ -14825,7 +14826,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                 icon: Icon(Icons.arrow_back, color: colors.text),
               ),
               const SizedBox(width: 4),
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM · BUSINESS',
                 style: TextStyle(
                   color: colors.mutedText,
@@ -14833,7 +14834,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.4,
                 ),
-              ),
+              )),
               const Spacer(),
               IconButton(
                 tooltip: 'Refresh Business',
@@ -18259,12 +18260,12 @@ class _PortalHeader extends StatelessWidget {
               icon: Icon(Icons.arrow_back, color: colors.text),
             ),
             const SizedBox(width: 8),
-            Image.asset(
+            CircumHomeLink(child: Image.asset(
               'assets/images/circum_wordmark.png',
               width: 116,
               height: 28,
               fit: BoxFit.contain,
-            ),
+            )),
             const Spacer(),
             if (onProfile != null)
               IconButton(
@@ -19035,7 +19036,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM',
                 style: TextStyle(
                   color: const Color(0xff2fae8c),
@@ -19043,7 +19044,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
                   fontWeight: FontWeight.w900,
                   fontFamily: 'D-DIN-Bold',
                 ),
-              ),
+              )),
               const SizedBox(height: 4),
               Text(
                 'HEALTH+ - GUIDED PICKUP',
@@ -25847,7 +25848,7 @@ class _CompliancePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    CircumHomeLink(child: Text(
                       'CIRCUM',
                       style: TextStyle(
                         color: colourPop ? Colors.white : colors.text,
@@ -25855,7 +25856,7 @@ class _CompliancePage extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.5,
                       ),
-                    ),
+                    )),
                     SizedBox(height: colourPop ? 24 : 42),
                     Text(
                       title,
@@ -26430,12 +26431,12 @@ class _LandingFooter extends StatelessWidget {
                 spacing: 24,
                 runSpacing: 18,
                 children: [
-                  Image.asset(
+                  CircumHomeLink(child: Image.asset(
                     'assets/images/circum_wordmark.png',
                     width: 118,
                     height: 28,
                     fit: BoxFit.contain,
-                  ),
+                  )),
                   Wrap(
                     spacing: 14,
                     runSpacing: 8,
@@ -27209,7 +27210,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   onPressed: widget.onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                Image.asset('assets/images/circum_wordmark.png', width: 126),
+                CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png', width: 126)),
               ],
             ),
             const SizedBox(height: 22),
@@ -27220,11 +27221,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: Image.asset(
+                      child: CircumHomeLink(child: Image.asset(
                         'assets/images/gifts_by_circum_logo.jpg',
                         width: narrow ? 280 : 390,
                         semanticLabel: 'Gifts by Circum logo',
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -28007,12 +28008,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                     icon: const Icon(Icons.arrow_back),
                   ),
                   const SizedBox(width: 8),
-                  Image.asset(
+                  CircumHomeLink(child: Image.asset(
                     'assets/images/circum_wordmark.png',
                     width: 126,
                     height: 30,
                     fit: BoxFit.contain,
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -28049,11 +28050,11 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                         child: Semantics(
                           image: true,
                           label: 'Gifts by Circum logo',
-                          child: Image.asset(
+                          child: CircumHomeLink(child: Image.asset(
                             'assets/images/gifts_by_circum_logo.jpg',
                             fit: BoxFit.contain,
                             semanticLabel: 'Gifts by Circum logo',
-                          ),
+                          )),
                         ),
                       ),
                     ),
@@ -28363,7 +28364,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
+                          CircumHomeLink(child: Text(
                             'Circum',
                             style: TextStyle(
                               color: colors.mutedText,
@@ -28372,7 +28373,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
                             ),
-                          ),
+                          )),
                           const Spacer(),
                           IconButton(
                             tooltip: 'Close contact form',
