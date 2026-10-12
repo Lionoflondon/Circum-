@@ -11,10 +11,10 @@ class VanguardLandingPage extends StatefulWidget {
 }
 
 class _VanguardLandingPageState extends State<VanguardLandingPage> {
-  static const ink = Color(0xff152820);
-  static const muted = Color(0xff667168);
-  static const paper = Color(0xfff7f8f3);
-  static const lime = Color(0xffd9ef99);
+  static const ink = Color(0xff06172d);
+  static const muted = Color(0xff596c85);
+  static const paper = Color(0xfff5f9ff);
+  static const vanguardBlue = Color(0xff0a84ff);
   int stage = 0;
   final journeyKey = GlobalKey();
   static const stages = [
@@ -59,11 +59,11 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
           height: 1.02,
           letterSpacing: -1.8,
           color: color));
-  Widget startButton({bool dark = false}) => FilledButton.icon(
+  Widget startButton() => FilledButton.icon(
         onPressed: widget.onStart,
         style: FilledButton.styleFrom(
-            backgroundColor: dark ? lime : ink,
-            foregroundColor: dark ? ink : Colors.white,
+            backgroundColor: vanguardBlue,
+            foregroundColor: ink,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
@@ -195,7 +195,8 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                eyebrow('SEE HOW DELIVERY WORKS', color: lime),
+                                eyebrow('SEE HOW DELIVERY WORKS',
+                                    color: const Color(0xff82c3ff)),
                                 const SizedBox(height: 18),
                                 heading(
                                     'Three moments.\nOne considered delivery.',
@@ -212,16 +213,16 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                                 '0${i + 1}  ${stages[i].$1}'),
                                             selected: stage == i,
                                             showCheckmark: false,
-                                            selectedColor: lime,
+                                            selectedColor: vanguardBlue,
                                             backgroundColor:
-                                                const Color(0xff24382e),
+                                                const Color(0xff102d50),
                                             labelStyle: TextStyle(
                                                 color:
                                                     stage == i ? ink : paper),
                                             side: BorderSide(
                                                 color: stage == i
-                                                    ? lime
-                                                    : const Color(0xff506156)),
+                                                    ? vanguardBlue
+                                                    : const Color(0xff365779)),
                                             onSelected: (_) =>
                                                 setState(() => stage = i)))),
                                 const SizedBox(height: 30),
@@ -235,19 +236,20 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                         width: double.infinity,
                                         padding: EdgeInsets.all(wide ? 36 : 24),
                                         decoration: BoxDecoration(
-                                            color: const Color(0xff24382e),
+                                            color: const Color(0xff102d50),
                                             borderRadius:
                                                 BorderRadius.circular(18),
                                             border: Border.all(
                                                 color:
-                                                    const Color(0xff405044))),
+                                                    const Color(0xff2b527b))),
                                         child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Row(children: [
                                                 Icon(stages[stage].$4,
-                                                    color: lime, size: 34),
+                                                    color: vanguardBlue,
+                                                    size: 34),
                                                 const SizedBox(width: 20),
                                                 Expanded(
                                                     child: Align(
@@ -256,7 +258,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                                         child: eyebrow(
                                                             'ILLUSTRATIVE EXAMPLE',
                                                             color: const Color(
-                                                                0xffb2c4b7))))
+                                                                0xffb7d3f0))))
                                               ]),
                                               const SizedBox(height: 24),
                                               heading(stages[stage].$2,
@@ -269,7 +271,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                                           maxWidth: 630),
                                                   child: copy(stages[stage].$3,
                                                       color: const Color(
-                                                          0xffd3dfd5))),
+                                                          0xffd7e8fa))),
                                               const SizedBox(height: 28),
                                               Row(
                                                   children: List.generate(
@@ -284,9 +286,9 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                                               decoration: BoxDecoration(
                                                                   color: i <=
                                                                           stage
-                                                                      ? lime
+                                                                      ? vanguardBlue
                                                                       : const Color(
-                                                                          0xff536057),
+                                                                          0xff3b5675),
                                                                   borderRadius:
                                                                       BorderRadius
                                                                           .circular(
@@ -296,7 +298,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                 copy(
                                     'Circum assigns your rider. Keep each PIN private until the matching handover.',
                                     size: 14,
-                                    color: const Color(0xffb2c4b7)),
+                                    color: const Color(0xffb7d3f0)),
                               ])),
                       color: ink),
                   section(wide
@@ -330,7 +332,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                 'Pack your item securely and check that it is accepted for delivery. Your booking shows whether Vanguard is optional or required and confirms the final price.',
                                 color: muted)
                           ]),
-                      color: const Color(0xffe9ede3)),
+                      color: const Color(0xffe6f0fc)),
                   Padding(
                       padding: EdgeInsets.fromLTRB(pad, 28, pad, 80),
                       child: Row(children: [
@@ -390,9 +392,9 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xffdde8cd),
-                    Color(0xffe9eddf),
-                    Color(0xffc3d6bc)
+                    Color(0xff0859cf),
+                    Color(0xff0a84ff),
+                    Color(0xff66b9ff)
                   ])),
           child: LayoutBuilder(
               builder: (context, box) =>
@@ -403,14 +405,14 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                         top: 28,
                         left: 28,
                         child: eyebrow('IMPORTANT TO YOU.\nCONSIDERED BY US.',
-                            color: const Color(0xff415341))),
+                            color: const Color(0xffffffff))),
                     Transform.rotate(
                         angle: -.10,
                         child: Container(
                             width: box.maxWidth * .47,
                             height: box.maxWidth * .47,
                             decoration: BoxDecoration(
-                                color: const Color(0xfff9f8ec),
+                                color: const Color(0xfff8fbff),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
@@ -421,19 +423,19 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                             child:
                                 Stack(alignment: Alignment.center, children: [
                               Container(
-                                  width: 36, color: const Color(0xffd3debe)),
+                                  width: 36, color: const Color(0xffc4dfff)),
                               Container(
-                                  height: 36, color: const Color(0xffd3debe)),
+                                  height: 36, color: const Color(0xffc4dfff)),
                               Container(
                                   width: 90,
                                   height: 90,
                                   decoration: BoxDecoration(
-                                      color: ink,
+                                      color: vanguardBlue,
                                       borderRadius: BorderRadius.circular(24)),
                                   child: const Icon(
                                       Icons.verified_user_outlined,
                                       size: 48,
-                                      color: lime)),
+                                      color: Colors.white)),
                             ]))),
                     Positioned(
                         bottom: 26,
@@ -458,7 +460,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                         size: 13, color: muted)
                                   ])),
                               const Icon(Icons.check_circle,
-                                  color: Color(0xff4e7241), size: 22)
+                                  color: Color(0xff0874dc), size: 22)
                             ]))),
                   ]))));
 
@@ -497,7 +499,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xffcad2c5)),
+                        border: Border.all(color: const Color(0xffc5d7ed)),
                         borderRadius: BorderRadius.circular(30)),
                     child: copy(label, size: 14)))
                 .toList())
@@ -507,7 +509,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
       padding: const EdgeInsets.all(30),
       decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: const Color(0xffdce2d5)),
+          border: Border.all(color: const Color(0xffd0dff1)),
           borderRadius: BorderRadius.circular(20)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         eyebrow('A LITTLE EXTRA CARE'),
@@ -531,7 +533,7 @@ class _DeliveryOrbitPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xff738969).withValues(alpha: .22)
+      ..color = const Color(0xffffffff).withValues(alpha: .22)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final scale in [.7, 1.0, 1.3]) {
@@ -543,9 +545,9 @@ class _DeliveryOrbitPainter extends CustomPainter {
           paint);
     }
     canvas.drawCircle(Offset(size.width * .14, size.height * .38), 5,
-        Paint()..color = const Color(0xff415d39));
+        Paint()..color = const Color(0xffffffff));
     canvas.drawCircle(Offset(size.width * .87, size.height * .61), 5,
-        Paint()..color = const Color(0xff415d39));
+        Paint()..color = const Color(0xffffffff));
   }
 
   @override
