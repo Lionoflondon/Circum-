@@ -4551,6 +4551,7 @@
         "server/functions/sender-account.js",
         "test/sender_account_bootstrap_api_test.dart",
         "test/website_account_bootstrap_api_test.dart",
+        "test/website_account_outage_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],
       "criticality": "P0/P1-review-required",
