@@ -1,5 +1,6 @@
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
+import 'account_access_page.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
 import 'rider_order_explainer.dart';
@@ -189,7 +190,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
-    if (kIsWeb && (_mode == _WebAppMode.landing || _mode == _WebAppMode.gifts)) {
+    if (kIsWeb && (_mode == _WebAppMode.landing ||
+        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender)) {
       unawaited(_loadLandingTypography());
     }
     _redirectLegacyQueryIfNeeded();
@@ -8073,6 +8075,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    if (!_senderAuthLoading && _senderUser == null) {
+      return _buildCurrentStep(colors);
+    }
     return Stack(
       children: [
         LayoutBuilder(
@@ -8157,8 +8162,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_senderUser == null) {
-      return _SenderAccessGate(
-        colors: colors,
+      return AccountAccessPage(
         signupMode: _senderSignupMode,
         busy: _senderAuthBusy,
         message: _senderProfileMessage ??
@@ -8172,11 +8176,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         fullName: _senderName,
         phone: _senderPhone,
         referralCode: _senderReferralCode,
-        onToggleMode: () =>
-            setState(() => _senderSignupMode = !_senderSignupMode),
-        onSignIn: _signInSender,
+        onToggleMode: () => setState(() {
+          _senderSignupMode = !_senderSignupMode;
+          _senderProfileMessage = null;
+        }),
+        onLogIn: _signInSender,
         onSignUp: _signUpSender,
         onForgotPassword: _sendSenderPasswordReset,
+        onBack: widget.onBack,
+        onPrivacy: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
+            webOnlyWindowName: '_self')),
+        onTerms: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/terms'),
+            webOnlyWindowName: '_self')),
       );
     }
     if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
@@ -13747,223 +13760,6 @@ class _RouteLine extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SenderAccessGate extends StatelessWidget {
-  final _CircumColors colors;
-  final bool signupMode;
-  final bool busy;
-  final String? message;
-  final TextEditingController email;
-  final TextEditingController password;
-  final TextEditingController fullName;
-  final TextEditingController phone;
-  final TextEditingController referralCode;
-  final VoidCallback onToggleMode;
-  final VoidCallback onSignIn;
-  final VoidCallback onSignUp;
-  final VoidCallback onForgotPassword;
-
-  const _SenderAccessGate({
-    required this.colors,
-    required this.signupMode,
-    required this.busy,
-    required this.message,
-    required this.email,
-    required this.password,
-    required this.fullName,
-    required this.phone,
-    required this.referralCode,
-    required this.onToggleMode,
-    required this.onSignIn,
-    required this.onSignUp,
-    required this.onForgotPassword,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final form = _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(
-            colors: colors,
-            title: signupMode ? 'Create a Circum account' : 'Circum login',
-          ),
-          const SizedBox(height: 8),
-          Text(
-            signupMode
-                ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (signupMode) ...[
-            _InputBox(
-              colors: colors,
-              controller: fullName,
-              hint: 'Full name',
-            ),
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: phone,
-              hint: 'Phone number',
-            ),
-            const SizedBox(height: 10),
-          ],
-          _InputBox(
-            colors: colors,
-            controller: email,
-            hint: 'Email address',
-          ),
-          const SizedBox(height: 10),
-          _InputBox(
-            colors: colors,
-            controller: password,
-            hint: 'Password',
-            obscureText: true,
-          ),
-          if (signupMode) ...[
-            const SizedBox(height: 10),
-            _InputBox(
-              colors: colors,
-              controller: referralCode,
-              hint: 'Referral code (optional)',
-            ),
-            const Text(
-              'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
-            ),
-          ],
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: busy ? null : onForgotPassword,
-              child: const Text('Forgot Password?'),
-            ),
-          ),
-          if (message != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              message!,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          LayoutBuilder(builder: (context, constraints) {
-            final primary = FilledButton.icon(
-              onPressed: busy
-                  ? null
-                  : signupMode
-                      ? onSignUp
-                      : onSignIn,
-              icon: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.lock_open),
-              label: Text(
-                busy
-                    ? 'Please wait'
-                    : signupMode
-                        ? 'Create account'
-                        : 'Sign in',
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor:
-                    colors.dark ? const Color(0xffa9bfff) : _landingBlue,
-                foregroundColor: colors.dark ? _landingInk : Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
-            );
-            final toggle = TextButton(
-              onPressed: busy ? null : onToggleMode,
-              child: Text(signupMode ? 'Sign in' : 'Sign up'),
-            );
-            if (constraints.maxWidth < 280) {
-              return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [primary, const SizedBox(height: 8), toggle]);
-            }
-            return Row(children: [
-              Expanded(child: primary),
-              const SizedBox(width: 10),
-              toggle
-            ]);
-          }),
-        ],
-      ),
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 900;
-        final welcome = Padding(
-          padding: EdgeInsets.all(wide ? 40 : 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('MOVE WHAT MATTERS',
-                  style: TextStyle(
-                      color: colors.adminAccent,
-                      fontSize: 13,
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [
-                    Color(0xff007d87),
-                    Color(0xff2455f5),
-                    Color(0xff7937c8),
-                    Color(0xffc32e79)
-                  ],
-                ).createShader(bounds),
-                child: Text(
-                    signupMode
-                        ? 'Your next move\nstarts here.'
-                        : 'Welcome back.\nLet’s get moving.',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'D-DIN-Bold',
-                        fontSize: wide ? 62 : 38,
-                        height: 1.02,
-                        fontWeight: FontWeight.w800)),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                  'Parcels, thoughtful gifts and everyday essentials. All in one place.',
-                  style: TextStyle(
-                      color: colors.mutedText, fontSize: 18, height: 1.5)),
-            ],
-          ),
-        );
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1180),
-            child: wide
-                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(child: welcome),
-                    const SizedBox(width: 48),
-                    Expanded(child: form)
-                  ])
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [welcome, const SizedBox(height: 28), form]),
-          ),
-        );
-      },
     );
   }
 }

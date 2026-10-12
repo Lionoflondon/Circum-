@@ -188,7 +188,7 @@ class _PremiumLanding extends StatelessWidget {
               if (!small) ...[
                 if (onGifts != null)
                   _link('Gifts', '/gifts/discover/', onGifts!),
-                _link('Account', '/send/profile', onStart),
+                _link('Login', '/send/profile', onStart),
               ],
               if (small)
                 PopupMenuButton<String>(
@@ -205,7 +205,7 @@ class _PremiumLanding extends StatelessWidget {
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/send/profile',
-                        child: Text('Account',
+                        child: Text('Login',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/send/business',
