@@ -193,7 +193,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   void initState() {
     super.initState();
     if (kIsWeb && (_mode == _WebAppMode.landing ||
-        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender)) {
+        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender ||
+        _mode == _WebAppMode.vanguard)) {
       unawaited(_loadLandingTypography());
     }
     _redirectLegacyQueryIfNeeded();

@@ -274,6 +274,7 @@ void main() {
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
       expect(shared, contains('_WebAppMode.vanguard => VanguardLandingPage('));
+      expect(shared, contains('_mode == _WebAppMode.vanguard))'));
       final vanguard = File('lib/website/shared/vanguard_landing_page.dart').readAsStringSync();
       expect(vanguard, contains('trusted Circum Riders prioritised'));
       expect(vanguard, contains('Custody milestones'));
