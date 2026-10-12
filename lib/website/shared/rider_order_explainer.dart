@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 
 /// Public Rider introduction. Account access is a deliberate next step.
@@ -112,8 +113,8 @@ class RiderOrderExplainer extends StatelessWidget {
                   onPressed: onBack,
                   icon: const Icon(Icons.arrow_back)),
               const SizedBox(width: 12),
-              Image.asset('assets/images/circum_wordmark.png',
-                  width: narrow ? 142 : 180)
+              CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png',
+                  width: narrow ? 142 : 180))
             ]),
             Center(
                 child: ConstrainedBox(
