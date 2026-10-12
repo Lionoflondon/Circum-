@@ -5714,6 +5714,7 @@
         "server/functions/sender-payment-app-check.test.js",
         "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart",
         "test/website_account_bootstrap_api_test.dart",
+        "test/website_account_outage_test.dart",
         "test/website_sender_auth_deterministic_contract_test.dart"
       ],
       "criticality": "review-required",
@@ -6123,7 +6124,8 @@
         "server/functions/cloud-run-runtime-only.test.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/sender-payment-app-check.test.js",
-        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart"
+        "test/sender_mobile/sender_wallet_cloud_run_contract_test.dart",
+        "test/website_account_outage_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -10947,6 +10949,7 @@
         "server/functions/rider-account.test.js",
         "server/functions/rider-onboarding-flow.emulator.test.js",
         "test/website_account_bootstrap_api_test.dart",
+        "test/website_account_outage_test.dart",
         "test/website_rider_onboarding_hardening_test.dart"
       ],
       "criticality": "review-required",
@@ -11125,7 +11128,8 @@
         "server/functions/sender-notification-state.test.js",
         "test/sender_account_bootstrap_api_test.dart",
         "test/sender_mobile/sender_notification_cloud_run_contract_test.dart",
-        "test/website_account_bootstrap_api_test.dart"
+        "test/website_account_bootstrap_api_test.dart",
+        "test/website_account_outage_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
