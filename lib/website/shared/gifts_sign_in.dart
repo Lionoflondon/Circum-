@@ -91,20 +91,23 @@ class _GiftsSignInState extends State<GiftsSignIn> {
                       horizontal: narrow ? 24 : 64, vertical: 22),
                   child: Row(children: [
                     Semantics(
-                      label: 'Gifts by Circum',
-                      image: true,
-                      child: ExcludeSemantics(
-                        child: SizedBox(
-                          width: 150,
-                          height: 62,
-                          child: ClipRect(
-                            child: OverflowBox(
-                              maxWidth: 178,
-                              maxHeight: 178,
-                              child: Image.asset(
-                                  'assets/images/gifts_by_circum_logo.jpg',
-                                  width: 178,
-                                  height: 178),
+                      label: 'Circum home',
+                      button: true,
+                      child: InkWell(
+                        onTap: widget.onBack,
+                        child: ExcludeSemantics(
+                          child: SizedBox(
+                            width: 150,
+                            height: 62,
+                            child: ClipRect(
+                              child: OverflowBox(
+                                maxWidth: 178,
+                                maxHeight: 178,
+                                child: Image.asset(
+                                    'assets/images/gifts_by_circum_logo.jpg',
+                                    width: 178,
+                                    height: 178),
+                              ),
                             ),
                           ),
                         ),
@@ -183,8 +186,8 @@ class _GiftsSignInState extends State<GiftsSignIn> {
                           letterSpacing: -1.8)),
                   Text('With every\ndelivery.',
                       style: TextStyle(
-                          fontFamily: 'GiftsSerif',
-                          fontStyle: FontStyle.italic,
+                          fontFamily: 'D-DIN',
+                          fontStyle: FontStyle.normal,
                           fontSize: narrow ? 42 : 61,
                           height: 1.06,
                           letterSpacing: -1.8,
