@@ -2,6 +2,7 @@ import 'privacy/consent_tracking_gate.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
 import 'rider_order_explainer.dart';
+import 'rider_recruitment_page.dart';
 import 'landing_booking_draft.dart';
 import 'landing_booking_store.dart';
 import 'policies/web_auth_terminal.dart';
@@ -473,8 +474,14 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             onToggleTheme: () => setState(() => _darkMode = !_darkMode),
           ),
         ),
-      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
+      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) && Uri.base.queryParameters['view'] != 'vision' => RiderRecruitmentPage(
           onBack: () => _openSurface(_WebAppMode.landing),
+          onJoin: () => _openCanonicalPath('/rider/onboarding'),
+          onLogin: () => _openCanonicalPath('/rider?access=login'),
+          onVision: () => _openCanonicalPath('/rider?view=vision'),
+        ),
+      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
+          onBack: () => _openCanonicalPath('/rider'),
           onLogin: () => _openCanonicalPath('/rider?access=login'),
           onJoin: () => _openCanonicalPath('/rider/onboarding'),
         ),
