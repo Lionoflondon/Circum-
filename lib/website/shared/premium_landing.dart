@@ -713,13 +713,47 @@ class _IrisLandingVisual extends StatelessWidget {
       );
 }
 
+class _StoreDownloadFooter extends StatelessWidget {
+  const _StoreDownloadFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    // Keep the keyboard and form actions clear on the booking/sign-in pages.
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      return const SizedBox.shrink();
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _landingPaper,
+        border: Border(top: BorderSide(color: _landingInk.withValues(alpha: .12))),
+      ),
+      child: const SafeArea(top: false, child: _StoreDownloads(compact: true)),
+    );
+  }
+}
+
 class _StoreDownloads extends StatelessWidget {
-  const _StoreDownloads();
+  const _StoreDownloads({this.compact = false});
+  final bool compact;
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        padding: const EdgeInsets.only(top: 38, bottom: 30),
-        child: _app(
+        padding: compact
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : const EdgeInsets.only(top: 38, bottom: 30),
+        child: compact
+            ? Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _storeLink('App Store', 'Download on the', Icons.apple,
+                      'https://apps.apple.com/gb/app/circum/id6463644284', 'Circum'),
+                  _storeLink('Google Play', 'Get it on', Icons.play_arrow_rounded,
+                      'https://play.google.com/store/apps/details?id=com.circum.app', 'Circum'),
+                ],
+              )
+            : _app(
           'Circum',
           'Send, track and stay connected.',
           'https://apps.apple.com/gb/app/circum/id6463644284',
@@ -759,24 +793,25 @@ class _StoreDownloads extends StatelessWidget {
             style: TextButton.styleFrom(
                 backgroundColor: _landingInk,
                 foregroundColor: Colors.white,
-                minimumSize: const Size(156, 58),
+                minimumSize: Size(compact ? 136 : 156, compact ? 50 : 58),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    EdgeInsets.symmetric(horizontal: compact ? 12 : 16, vertical: 11),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8))),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (store == 'Google Play')
-                const CustomPaint(
-                    size: Size(26, 28), painter: _PlayIconPainter())
+                CustomPaint(
+                    size: Size(compact ? 22 : 26, compact ? 24 : 28),
+                    painter: const _PlayIconPainter())
               else
-                Icon(icon, size: 28),
+                Icon(icon, size: compact ? 22 : 28),
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(caption,
                     style: const TextStyle(fontSize: 9, color: Colors.white)),
                 Text(store,
-                    style: const TextStyle(
-                        fontSize: 17,
+                    style: TextStyle(
+                        fontSize: compact ? 15 : 17,
                         fontFamily: 'D-DIN-Bold',
                         fontWeight: FontWeight.w400,
                         color: Colors.white))
