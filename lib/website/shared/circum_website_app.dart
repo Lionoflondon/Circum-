@@ -27618,34 +27618,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Image.asset(
-                        'assets/images/gifts_by_circum_logo.jpg',
-                        width: narrow ? 280 : 390,
-                        semanticLabel: 'Gifts by Circum logo',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Thoughtful gifting, delivered by Circum',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: narrow ? 25 : 34,
-                        height: 1.2,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+                    const _GiftsDiscovery(),
                     const SizedBox(height: 24),
                     Center(
                       child: Chip(
@@ -27661,6 +27634,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       child: _HealthChip(label: 'Vanguard Included'),
                     ),
                     const SizedBox(height: 16),
+                    const _GiftsJourney(),
+                    const SizedBox(height: 20),
                     if (!signedIn)
                       _GlassPanel(
                         colors: colors,

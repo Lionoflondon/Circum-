@@ -25,7 +25,7 @@ const _landingGiftsPearl = LinearGradient(
   ],
   stops: [0, 0.34, 0.68, 1],
 );
-const _landingMuted = Color(0xff66706c);
+const _landingMuted = Color(0xff465650);
 const _landingPaper = Color(0xfffafaf7);
 
 class _PremiumLanding extends StatelessWidget {
@@ -108,8 +108,9 @@ class _PremiumLanding extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
+      final headerWide = constraints.maxWidth >= 1100;
       final small = constraints.maxWidth < 600;
-      final headlineSize = small ? 60.0 : 80.0;
+      final headlineSize = small ? 52.0 : 72.0;
       const handoverPhoto = _ServiceImageSelector();
       final actionWidth = small
           ? (constraints.maxWidth < 378
@@ -131,7 +132,7 @@ class _PremiumLanding extends StatelessWidget {
             stops: [0, 0.35, 0.7, 1],
           ).createShader,
           blendMode: BlendMode.srcIn,
-          child: Text('Move what\nmatters.'.toUpperCase(),
+          child: Text('Move what matters.\nMake their day.'.toUpperCase(),
               style: TextStyle(
                 color: Colors.white,
                 fontSize: headlineSize,
@@ -145,31 +146,31 @@ class _PremiumLanding extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 445),
           child: const Text(
-              'From everyday parcels to important handovers. Book a delivery, see the price, and follow its journey with Circum.',
+              'A thoughtful surprise. An everyday delivery. Bring people closer with Gifts by Circum, or send a parcel across London.',
               style:
                   TextStyle(color: _landingMuted, fontSize: 16, height: 1.5)),
         ),
         const SizedBox(height: 32),
         Wrap(spacing: 12, runSpacing: 12, children: [
+          if (onGifts != null)
+            SizedBox(
+              width: actionWidth,
+              height: 56,
+              child: _link('Explore Gifts', '/gifts', onGifts!, primary: true),
+            ),
           SizedBox(
             width: actionWidth,
             height: 56,
             child: _link('Send a parcel', '/send', onStart, outlined: true),
           ),
-          if (onGifts != null)
-            SizedBox(
-              width: actionWidth,
-              height: 56,
-              child:
-                  _link('Explore Gifts ↗', '/gifts', onGifts!, outlined: true),
-            ),
         ]),
         const SizedBox(height: 32),
         const Row(children: [
           Icon(Icons.location_on_outlined, size: 16, color: _landingMuted),
           SizedBox(width: 7),
           Flexible(
-              child: Text('Deliveries across London & surrounding areas',
+              child: Text(
+                  'Gifts around the world · Parcels across London & surrounding areas',
                   style: TextStyle(fontSize: 12, color: _landingMuted))),
         ]),
       ]);
@@ -180,16 +181,17 @@ class _PremiumLanding extends StatelessWidget {
               Image.asset('assets/images/circum_wordmark.png',
                   width: small ? 106 : 134, height: 32, fit: BoxFit.contain),
               const Spacer(),
-              if (wide) ...[
+              if (headerWide) ...[
+                if (onGifts != null) _link('Gifts', '/gifts', onGifts!),
                 _link('Business', '/send/business', onBusiness),
                 _link('Health+', '/send/health', onHealthPlus),
-                if (wide) _link('Rider', '/rider', onRider),
+                _link('Rider', '/rider', onRider),
               ],
               if (!small) ...[
                 _link('Help', '/support', onStart),
                 _link('Account', '/send/profile', onStart),
               ],
-              if (small)
+              if (!headerWide)
                 PopupMenuButton<String>(
                   tooltip: 'Explore Circum',
                   icon: const Icon(Icons.menu, color: _landingInk),
@@ -247,7 +249,6 @@ class _PremiumLanding extends StatelessWidget {
             colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
           ),
         ),
-        handoverPhoto,
         _section(
             Container(
               padding: const EdgeInsets.symmetric(vertical: 25),
@@ -271,15 +272,17 @@ class _PremiumLanding extends StatelessWidget {
                   ]),
             ),
             vertical: 12),
+        if (onGifts != null)
+          _section(_GiftsDiscovery(onExplore: onGifts!),
+              vertical: small ? 36 : 64),
         _section(
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _eyebrow('ONE CIRCUM. MORE POSSIBILITIES.'),
+          _eyebrow('FOR EVERY OTHER THING THAT MATTERS.'),
           const SizedBox(height: 22),
           ShaderMask(
             shaderCallback: _landingGiftsSheen.createShader,
             blendMode: BlendMode.srcIn,
-            child: Text(
-                'For the everyday.\nAnd the extraordinary.'.toUpperCase(),
+            child: Text('More ways to send.'.toUpperCase(),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: small ? 36 : 48,
@@ -353,6 +356,7 @@ class _PremiumLanding extends StatelessWidget {
             ]);
           }),
         ])),
+        handoverPhoto,
         _section(
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _eyebrow('FROM YOUR DOOR TO THEIRS.'),
@@ -405,7 +409,7 @@ class _PremiumLanding extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _eyebrow('MEET IRIS', color: const Color(0xff67e8f9)),
             const SizedBox(height: 22),
-            Text('A little intelligence.\nA lot of confidence.'.toUpperCase(),
+            Text('Know your parcel.\nPlan its journey.'.toUpperCase(),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: small ? 36 : 48,
@@ -448,7 +452,7 @@ class _PremiumLanding extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _eyebrow('VANGUARD PROTECTION', color: Colors.white),
             const SizedBox(height: 23),
-            Text('Important things\ndeserve extra care.'.toUpperCase(),
+            Text('Extra care.\nClear handovers.'.toUpperCase(),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: small ? 36 : 48,
@@ -508,6 +512,8 @@ class _PremiumLanding extends StatelessWidget {
                     TextStyle(color: Colors.white, fontSize: 16, height: 1.5)),
           ]);
           final actions = Wrap(spacing: 10, runSpacing: 10, children: [
+            if (onGifts != null)
+              _link('Explore Gifts', '/gifts', onGifts!, primary: true),
             _link('Send a parcel', '/send', onStart, primary: true),
             _link('Earn as a Circum Rider', '/rider', onRider, inverse: true),
           ]);
@@ -644,6 +650,224 @@ class _PremiumLanding extends StatelessWidget {
           Text(description,
               style: const TextStyle(
                   color: _landingInk, fontSize: 16, height: 1.7)),
+        ]),
+      );
+}
+
+/// Public discovery only: shares the public Gifts URL, never request or recipient data.
+class _GiftsDiscovery extends StatelessWidget {
+  final VoidCallback? onExplore;
+  const _GiftsDiscovery({this.onExplore});
+
+  Future<void> _copyLink(BuildContext context) async {
+    try {
+      await Clipboard.setData(
+          const ClipboardData(text: 'https://circumuk.com/gifts'));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Gifts link copied. Share it with someone you have in mind.')));
+    } catch (_) {
+      if (!context.mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Share Gifts by Circum'),
+          content: const SelectableText('https://circumuk.com/gifts'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'))
+          ],
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+        final wide = box.maxWidth >= 760;
+        final message = Padding(
+          padding: EdgeInsets.all(wide ? 40 : 24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('GIFTS BY CIRCUM',
+                style: TextStyle(
+                    color: Color(0xffb8f4e5),
+                    fontFamily: 'D-DIN-Bold',
+                    fontSize: 13,
+                    letterSpacing: 2)),
+            const SizedBox(height: 20),
+            Semantics(
+                header: true,
+                child: Text('A little thought.\nA big moment.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'D-DIN-Bold',
+                        fontSize: wide ? 48 : 38,
+                        height: 1.05))),
+            const SizedBox(height: 20),
+            const Text(
+                'For the people you know best. And the moments they won’t see coming.',
+                style:
+                    TextStyle(color: Colors.white, fontSize: 20, height: 1.4)),
+            const SizedBox(height: 16),
+            const Text(
+                'Tell us about them, the occasion and your budget. Circum curates the surprise. They discover what’s inside.',
+                style: TextStyle(
+                    color: Color(0xffe4e9ff), fontSize: 16, height: 1.5)),
+            const SizedBox(height: 24),
+            const Wrap(spacing: 8, runSpacing: 8, children: [
+              _GiftOccasion(label: 'Birthdays'),
+              _GiftOccasion(label: 'Thank you'),
+              _GiftOccasion(label: 'Just because'),
+            ]),
+            const SizedBox(height: 26),
+            Wrap(spacing: 12, runSpacing: 12, children: [
+              if (onExplore != null)
+                Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                  target: LinkTarget.self,
+                  builder: (_, followLink) => FilledButton.icon(
+                    onPressed: kIsWeb
+                        ? () => web.window.location.assign(
+                            _CircumWebsiteAppState._canonicalWebUri('/gifts')
+                                .toString())
+                        : onExplore,
+                    icon: const Icon(Icons.arrow_forward, size: 19),
+                    label: const Text('Explore Gifts'),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xff182454),
+                        minimumSize: const Size(150, 52)),
+                  ),
+                ),
+              OutlinedButton.icon(
+                onPressed: () => _copyLink(context),
+                icon: const Icon(Icons.link, size: 20),
+                label: const Text('Copy Gifts link'),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xffb8c8ed)),
+                    minimumSize: const Size(160, 52)),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            const Text('Know someone who would love this? Pass it on.',
+                style: TextStyle(
+                    color: Color(0xffe4e9ff), fontSize: 14, height: 1.5)),
+          ]),
+        );
+        final artwork = Image.network(
+          Uri.base.resolve('/images/gifts-campaign.jpg').toString(),
+          fit: BoxFit.contain,
+          semanticLabel:
+              'Gifts by Circum: an iridescent gift with a blue ribbon, passed from one person to another.',
+          errorBuilder: (_, __, ___) => const SizedBox(
+              height: 300,
+              child: Center(
+                  child: Icon(Icons.card_giftcard,
+                      color: Colors.white, size: 90))),
+        );
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                  Color(0xff102b45),
+                  Color(0xff2e245d),
+                  Color(0xff532d5c)
+                ])),
+            child: wide
+                ? Row(children: [
+                    Expanded(flex: 6, child: message),
+                    Expanded(flex: 5, child: artwork)
+                  ])
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [message, artwork]),
+          ),
+        );
+      });
+}
+
+class _GiftOccasion extends StatelessWidget {
+  final String label;
+  const _GiftOccasion({required this.label});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+            color: const Color(0xff394569),
+            borderRadius: BorderRadius.circular(30)),
+        child: Text(label,
+            style: const TextStyle(color: Colors.white, fontSize: 14)),
+      );
+}
+
+/// Visible before authentication: explains the surprise and the recipient's choice.
+class _GiftsJourney extends StatelessWidget {
+  const _GiftsJourney();
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+            gradient: _landingGiftsPearl,
+            borderRadius: BorderRadius.circular(20)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('How the surprise unfolds',
+              style: TextStyle(
+                  color: _landingInk, fontFamily: 'D-DIN-Bold', fontSize: 28)),
+          const SizedBox(height: 20),
+          for (final step in const [
+            (
+              '01',
+              'Make it personal',
+              'Tell us about the person, the occasion and your budget.'
+            ),
+            (
+              '02',
+              'Let us curate',
+              'The Gifts team reviews the experience, then sources and prepares the surprise.'
+            ),
+            (
+              '03',
+              'Their moment to discover',
+              'The contents stay a surprise until delivery. Recording or sharing a reaction is always optional.'
+            ),
+          ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(step.$1,
+                    style: const TextStyle(
+                        color: _landingBlue,
+                        fontFamily: 'D-DIN-Bold',
+                        fontSize: 20)),
+                const SizedBox(width: 16),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(step.$2,
+                          style: const TextStyle(
+                              color: _landingInk,
+                              fontFamily: 'D-DIN-Bold',
+                              fontSize: 19)),
+                      const SizedBox(height: 4),
+                      Text(step.$3,
+                          style: const TextStyle(
+                              color: _landingMuted, fontSize: 16, height: 1.5)),
+                    ])),
+              ]),
+            ),
+          const Text(
+              'A gift can be received without filming or public posting.',
+              style: TextStyle(color: _landingInk, fontSize: 14, height: 1.5)),
         ]),
       );
 }
@@ -1056,7 +1280,7 @@ class _LandingBookingPanelState extends State<_LandingBookingPanel> {
                       height: 1.1,
                       color: _landingInk)),
               const SizedBox(height: 12),
-              const Text('Where are we collecting and delivering?',
+              const Text('Send a parcel across London & surrounding areas.',
                   style: TextStyle(
                       color: _landingMuted, fontSize: 16, height: 1.5)),
               const SizedBox(height: 26),
@@ -1074,7 +1298,7 @@ class _LandingBookingPanelState extends State<_LandingBookingPanel> {
                     icon: const Icon(Icons.arrow_forward, size: 20),
                     label: Text(_opening
                         ? 'Opening your booking…'
-                        : 'See delivery price'),
+                        : 'Continue to booking'),
                     style: FilledButton.styleFrom(
                         backgroundColor: _landingBlue,
                         foregroundColor: Colors.white,
@@ -1087,7 +1311,7 @@ class _LandingBookingPanelState extends State<_LandingBookingPanel> {
                   )),
               const SizedBox(height: 16),
               const Text(
-                  'Sign in and confirm your addresses and parcel details to see your price before payment.',
+                  'Your addresses carry into booking. Sign in, confirm your parcel details, then review the price before payment.',
                   style: TextStyle(
                       color: _landingMuted, fontSize: 14, height: 1.5)),
               if (_error != null) ...[
