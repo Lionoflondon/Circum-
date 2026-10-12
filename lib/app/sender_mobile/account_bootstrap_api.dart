@@ -78,7 +78,7 @@ Future<Map<String, dynamic>> invokeSenderNotificationState({
           }),
         )
         .timeout(const Duration(seconds: 8));
-    return _decodeAccountResponse(response);
+    return _decodeAccountResponse(response, 'updateSenderNotificationState');
   } on TimeoutException {
     throw const SenderAccountBootstrapException(
       'DEADLINE_EXCEEDED',
@@ -128,7 +128,7 @@ Future<Map<String, dynamic>> invokeSenderAccountBootstrap({
           body: jsonEncode({'data': <String, dynamic>{}}),
         )
         .timeout(const Duration(seconds: 8));
-    return _decodeAccountResponse(response);
+    return _decodeAccountResponse(response, 'ensureSenderAccount');
   } on TimeoutException {
     throw const SenderAccountBootstrapException(
       'DEADLINE_EXCEEDED',
@@ -183,7 +183,7 @@ Future<Map<String, dynamic>> invokeSenderVerificationEmailViaCloudRun({
             },
             body: jsonEncode({'data': {}}))
         .timeout(const Duration(seconds: 15));
-    return _decodeAccountResponse(response);
+    return _decodeAccountResponse(response, 'sendCircumVerificationEmail');
   } on TimeoutException {
     throw const SenderAccountBootstrapException(
       'DEADLINE_EXCEEDED',
@@ -199,7 +199,8 @@ Future<Map<String, dynamic>> invokeSenderVerificationEmailViaCloudRun({
   }
 }
 
-Map<String, dynamic> _decodeAccountResponse(http.Response response) {
+Map<String, dynamic> _decodeAccountResponse(
+    http.Response response, String operation) {
   final fallbackStatus = switch (response.statusCode) {
     401 => 'UNAUTHENTICATED',
     403 => 'PERMISSION_DENIED',
@@ -231,6 +232,16 @@ Map<String, dynamic> _decodeAccountResponse(http.Response response) {
   }
   final result = decoded['result'];
   if (result is! Map<String, dynamic>) {
+    throw const SenderAccountBootstrapException('INTERNAL', fallbackMessage);
+  }
+  final confirmed = switch (operation) {
+    'ensureSenderAccount' => result['allowed'] is bool,
+    'updateSenderNotificationState' => result['ok'] == true,
+    'sendCircumVerificationEmail' => result['ok'] == true &&
+        (result['queued'] == true || result['alreadyVerified'] == true),
+    _ => false,
+  };
+  if (!confirmed) {
     throw const SenderAccountBootstrapException('INTERNAL', fallbackMessage);
   }
   return result;
