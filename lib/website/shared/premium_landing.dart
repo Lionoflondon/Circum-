@@ -181,8 +181,8 @@ class _PremiumLanding extends StatelessWidget {
                   width: small ? 106 : 134, height: 32, fit: BoxFit.contain),
               const Spacer(),
               if (wide) ...[
-                _link('Business', '/send/business', onBusiness),
-                _link('Health+', '/send/health', onHealthPlus),
+                _link('Business', '/business/discover/', onBusiness),
+                _link('Health+', '/health/discover/', onHealthPlus),
                 if (wide) _link('Rider', '/rider', onRider),
               ],
               if (!small) ...[
@@ -208,11 +208,11 @@ class _PremiumLanding extends StatelessWidget {
                         child: Text('Login',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
-                        value: '/send/business',
+                        value: '/business/discover/',
                         child: Text('Business',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
-                        value: '/send/health',
+                        value: '/health/discover/',
                         child: Text('Health+',
                             style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
@@ -312,7 +312,7 @@ class _PremiumLanding extends StatelessWidget {
                   'Health+',
                   'Prescription and healthcare pickups, with protected handovers.',
                   'London',
-                  '/send/health',
+                  '/health/discover/',
                   onHealthPlus,
                   Icons.health_and_safety_outlined,
                   wide),
@@ -321,7 +321,7 @@ class _PremiumLanding extends StatelessWidget {
                   'Built for business',
                   'Keep documents, packages and important deliveries moving with your working day.',
                   'London & surrounding areas',
-                  '/send/business',
+                  '/business/discover/',
                   onBusiness,
                   Icons.business_center_outlined,
                   wide),
@@ -534,9 +534,9 @@ class _PremiumLanding extends StatelessWidget {
       IconData icon,
       bool wide) {
     final iconColor = switch (path) {
-      '/send/health' => _landingHealth,
+      '/health/discover/' => _landingHealth,
       '/gifts/discover/' => const Color(0xff7851a9),
-      '/send/business' => const Color(0xffb96508),
+      '/business/discover/' => const Color(0xffb96508),
       _ => _landingBlue,
     };
     final isGifts = path == '/gifts/discover/';
@@ -567,7 +567,7 @@ class _PremiumLanding extends StatelessWidget {
       const SizedBox(height: 14),
       Text(coverage,
           style: TextStyle(
-              color: path == '/send/health' ? _landingHealth : _landingBlue,
+              color: path == '/health/discover/' ? _landingHealth : _landingBlue,
               fontSize: 12,
               fontFamily: 'D-DIN-Bold',
               fontWeight: FontWeight.w400)),
