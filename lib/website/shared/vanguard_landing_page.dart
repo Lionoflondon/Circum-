@@ -246,20 +246,9 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Row(children: [
-                                                Icon(stages[stage].$4,
-                                                    color: vanguardBlue,
-                                                    size: 34),
-                                                const SizedBox(width: 20),
-                                                Expanded(
-                                                    child: Align(
-                                                        alignment: Alignment
-                                                            .centerRight,
-                                                        child: eyebrow(
-                                                            'ILLUSTRATIVE EXAMPLE',
-                                                            color: const Color(
-                                                                0xffb7d3f0))))
-                                              ]),
+                                              Icon(stages[stage].$4,
+                                                  color: vanguardBlue,
+                                                  size: 34),
                                               const SizedBox(height: 24),
                                               heading(stages[stage].$2,
                                                   wide ? 38 : 30,

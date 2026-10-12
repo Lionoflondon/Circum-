@@ -363,7 +363,6 @@ void main() {
       expect(vanguard, contains('Circum assigns your rider'));
       expect(vanguard, contains('Vanguard is not insurance'));
       expect(vanguard, contains('reimbursement, financial cover or guarantees'));
-      expect(vanguard, contains('ILLUSTRATIVE EXAMPLE'));
       expect(vanguard, contains('Optional upgrade £1.99. Included when required.'));
       expect(vanguard, contains('Gifts, Business, Health+'));
       expect(vanguard, contains('Gifts & keepsakes'));
