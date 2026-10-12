@@ -110,10 +110,23 @@ class RiderRecruitmentPage extends StatelessWidget {
                 height: 72,
                 child: Center(
                     child: apple
-                        ? SvgPicture.asset('assets/svg/app_store_badge.svg',
-                            width: 166, height: 56, excludeFromSemantics: true)
-                        : Image.asset('assets/images/google_play_badge.png',
-                            width: 190, excludeFromSemantics: true)),
+                        ? SvgPicture.network(
+                            Uri.base
+                                .resolve('/images/store-badges/app-store.svg')
+                                .toString(),
+                            width: 166,
+                            height: 56,
+                            excludeFromSemantics: true,
+                            errorBuilder: (context, error, stack) => Text(label,
+                                style: const TextStyle(color: Colors.white)))
+                        : Image.network(
+                            Uri.base
+                                .resolve('/images/store-badges/google-play.png')
+                                .toString(),
+                            width: 190,
+                            excludeFromSemantics: true,
+                            errorBuilder: (context, error, stack) => Text(label,
+                                style: const TextStyle(color: Colors.white)))),
               ),
             ),
           ));
