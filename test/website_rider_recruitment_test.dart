@@ -33,7 +33,7 @@ void main() {
       await tester.tap(find.text('Explore the Rider vision'));
       expect(vision, isTrue);
       await tester.scrollUntilVisible(
-          find.bySemanticsLabel('Get it on Google Play'), 600);
+          find.byKey(const ValueKey('Get it on Google Play')), 600);
       final links =
           tester.widgetList<Link>(find.byType(Link)).map((link) => link.uri);
       expect(

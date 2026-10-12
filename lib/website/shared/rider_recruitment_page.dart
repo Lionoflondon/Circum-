@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'app_store_badge.dart';
 import 'package:url_launcher/link.dart';
 
 /// Public recruitment surface; account creation and approval stay in onboarding.
@@ -103,6 +104,7 @@ class RiderRecruitmentPage extends StatelessWidget {
             label: label,
             link: true,
             child: InkWell(
+              key: ValueKey(label),
               onTap: followLink,
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
@@ -110,15 +112,8 @@ class RiderRecruitmentPage extends StatelessWidget {
                 height: 72,
                 child: Center(
                     child: apple
-                        ? SvgPicture.network(
-                            Uri.base
-                                .resolve('/images/store-badges/app-store.svg')
-                                .toString(),
-                            width: 166,
-                            height: 56,
-                            excludeFromSemantics: true,
-                            errorBuilder: (context, error, stack) => Text(label,
-                                style: const TextStyle(color: Colors.white)))
+                        ? SvgPicture.string(appStoreBadgeSvg,
+                            width: 166, height: 56, excludeFromSemantics: true)
                         : Image.network(
                             Uri.base
                                 .resolve('/images/store-badges/google-play.png')
