@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -94,55 +93,16 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
           body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 25));
-    return _decodeAccountResponse(response);
-  } on TimeoutException {
-    throw const AccountBootstrapException(
-      'DEADLINE_EXCEEDED',
-      'Confirmation took too long. Check its status before trying again.',
-    );
-  } on http.ClientException {
-    throw const AccountBootstrapException(
-      'UNAVAILABLE',
-      'Connection interrupted. Check its status before trying again.',
-    );
+    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final error = payload['error'] as Map?;
+      throw AccountBootstrapException(
+        '${error?['status'] ?? 'INTERNAL'}',
+        '${error?['message'] ?? 'Account request failed.'}',
+      );
+    }
+    return Map<String, dynamic>.from(payload['result'] as Map);
   } finally {
     if (ownsClient) transport.close();
   }
-}
-
-Map<String, dynamic> _decodeAccountResponse(http.Response response) {
-  final fallbackStatus = switch (response.statusCode) {
-    401 => 'UNAUTHENTICATED',
-    403 => 'PERMISSION_DENIED',
-    429 => 'RESOURCE_EXHAUSTED',
-    >= 500 => 'UNAVAILABLE',
-    _ => 'INTERNAL',
-  };
-  const fallbackMessage =
-      'The service could not confirm this request. Check its status before trying again.';
-  Object? decoded;
-  try {
-    decoded = jsonDecode(response.body);
-  } on FormatException {
-    throw AccountBootstrapException(fallbackStatus, fallbackMessage);
-  }
-  if (decoded is! Map<String, dynamic>) {
-    throw AccountBootstrapException(fallbackStatus, fallbackMessage);
-  }
-  if (response.statusCode != 200 || decoded.containsKey('error')) {
-    final error = decoded['error'];
-    throw AccountBootstrapException(
-      error is Map && error['status'] is String
-          ? error['status'] as String
-          : fallbackStatus,
-      error is Map && error['message'] is String
-          ? error['message'] as String
-          : fallbackMessage,
-    );
-  }
-  final result = decoded['result'];
-  if (result is! Map<String, dynamic>) {
-    throw const AccountBootstrapException('INTERNAL', fallbackMessage);
-  }
-  return result;
 }
