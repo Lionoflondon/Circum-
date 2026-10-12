@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:circum/app/sender_mobile/account_bootstrap_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  final validResults = <String, Map<String, dynamic>>{
+    'bootstrap': {'allowed': true},
+    'notifications': {'ok': true},
+    'verification': {'ok': true, 'queued': true}
+  };
   final routes = <String, Future<Map<String, dynamic>> Function(http.Client)>{
     'bootstrap': (client) =>
         invokeSenderAccountBootstrap(idToken: 'auth', client: client),
@@ -26,6 +32,13 @@ void main() {
       (403, '<html>Forbidden</html>', 'PERMISSION_DENIED'),
       (429, '', 'RESOURCE_EXHAUSTED'),
       (200, '{}', 'INTERNAL'),
+      (200, '{"result":{}}', 'INTERNAL'),
+      (200, '{"result":{"ok":false}}', 'INTERNAL'),
+      (
+        200,
+        '{"result":{"ok":"true","allowed":"true","status":"unknown"}}',
+        'INTERNAL'
+      ),
       (200, '{"result":null}', 'INTERNAL'),
       (200, '{"result":[]}', 'INTERNAL'),
       (200, '{"result":true}', 'INTERNAL'),
@@ -81,13 +94,36 @@ void main() {
       await tester.pump(const Duration(seconds: 31));
       await check;
       expect(attempts, 1);
-      pending.complete(http.Response('{"result":{"ok":true}}', 200));
+      pending.complete(
+          http.Response(jsonEncode({'result': validResults[route.key]}), 200));
       await tester.pump();
     });
     test('${route.key} preserves a valid confirmation', () async {
-      final client =
-          MockClient((_) async => http.Response('{"result":{"ok":true}}', 200));
-      expect(await route.value(client), {'ok': true});
+      final client = MockClient((_) async =>
+          http.Response(jsonEncode({'result': validResults[route.key]}), 200));
+      expect(await route.value(client), validResults[route.key]);
     });
   }
+  test('bootstrap preserves a confirmed access denial', () async {
+    final client = MockClient(
+        (_) async => http.Response('{"result":{"allowed":false}}', 200));
+    expect(await invokeSenderAccountBootstrap(idToken: 'auth', client: client),
+        {'allowed': false});
+  });
+  test('verification preserves an already verified account', () async {
+    final client = MockClient((_) async =>
+        http.Response('{"result":{"ok":true,"alreadyVerified":true}}', 200));
+    expect(
+        await invokeSenderVerificationEmailViaCloudRun(
+            idToken: 'auth', appCheckToken: 'check', client: client),
+        {'ok': true, 'alreadyVerified': true});
+  });
+  test('verification rejects ok without a confirmed email outcome', () async {
+    final client =
+        MockClient((_) async => http.Response('{"result":{"ok":true}}', 200));
+    await expectLater(
+        invokeSenderVerificationEmailViaCloudRun(
+            idToken: 'auth', appCheckToken: 'check', client: client),
+        throwsA(isA<SenderAccountBootstrapException>()));
+  });
 }
