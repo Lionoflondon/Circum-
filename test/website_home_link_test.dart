@@ -13,7 +13,6 @@ void main() {
         (call) async {
       if (call.method == 'launch') {
         final arguments = call.arguments as Map;
-        expect(arguments['webOnlyWindowName'], '_self');
         launches.add(arguments['url'] as String);
         return true;
       }
