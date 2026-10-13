@@ -526,7 +526,8 @@
         "web/roth/app.js",
         "web/roth/assets/circum-wordmark.png",
         "scripts/verify_roth_test_containment.py",
-        "docs/ROTH_WEBSITE_TEST_RELEASE.md"
+        "docs/ROTH_WEBSITE_TEST_RELEASE.md",
+        ".github/workflows/ci.yml"
       ],
       "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
     }
