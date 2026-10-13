@@ -13813,7 +13813,7 @@ class _SenderAccessGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = service == null ? this.colors : const _CircumColors(true);
     final health = service == _SenderStep.healthPlus;
-    final accent = health ? const Color(0xffd2f6ee) : const Color(0xfff0d9ba);
+    final accent = health ? const Color(0xffd2f6ee) : const Color(0xffc6d4e8);
     final formContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -15182,7 +15182,7 @@ class _BusinessOperationalPill extends StatelessWidget {
       case _BusinessTone.blue:
         return const Color(0xff3b82f6);
       case _BusinessTone.roth:
-        return const Color(0xffc9a227);
+        return colors.dark ? const Color(0xff90a8cb) : const Color(0xff526b8e);
       case _BusinessTone.neutral:
         return colors.mutedText;
     }
@@ -16301,7 +16301,11 @@ class _BusinessStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final valueColor =
-        tone == _BusinessTone.roth ? const Color(0xffc9a227) : colors.text;
+        tone == _BusinessTone.roth
+            ? colors.dark
+                ? const Color(0xff90a8cb)
+                : const Color(0xff526b8e)
+            : colors.text;
     return _BusinessSurface(
       colors: colors,
       padding: const EdgeInsets.all(14),
