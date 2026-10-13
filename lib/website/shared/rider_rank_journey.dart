@@ -17,7 +17,6 @@ class _RiderRankJourneyState extends State<RiderRankJourney>
     vsync: this,
     duration: const Duration(seconds: 12),
   );
-  bool _paused = false;
   bool _reduceMotion = false;
 
   @override
@@ -28,7 +27,7 @@ class _RiderRankJourneyState extends State<RiderRankJourney>
   }
 
   void _updatePlayback() {
-    if (_reduceMotion || _paused) {
+    if (_reduceMotion) {
       _controller.stop();
     } else if (!_controller.isAnimating) {
       _controller.repeat();
@@ -143,19 +142,6 @@ class _RiderRankJourneyState extends State<RiderRankJourney>
                   ]);
                 });
           }),
-          if (!_reduceMotion) ...[
-            const SizedBox(height: 18),
-            TextButton.icon(
-              onPressed: () => setState(() {
-                _paused = !_paused;
-                _updatePlayback();
-              }),
-              style: TextButton.styleFrom(foregroundColor: _ink),
-              icon: Icon(_paused ? Icons.play_arrow : Icons.pause, size: 18),
-              label: Text(
-                  _paused ? 'Play rank animation' : 'Pause rank animation'),
-            ),
-          ],
         ],
       );
 }
