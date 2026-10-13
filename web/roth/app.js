@@ -34,7 +34,10 @@ async function api(action, data) {
   const response = await fetch(`/api/roth/${action}`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Firebase-AppCheck': await secureToken()}, body: JSON.stringify(data)});
   let value;
   try {value = await response.json();} catch (_) {throw Error('Unable to read the server response.');}
-  if (!response.ok) throw Error(value.error || 'Unable to complete this request.');
+  if (!response.ok) {
+    if (/Verification required|Account changed/.test(value.error || '')) reset();
+    throw Error(value.error || 'Unable to complete this request.');
+  }
   return value;
 }
 async function run(operation) {
@@ -83,7 +86,7 @@ document.querySelector('#pay').addEventListener('click', () => run(async () => {
   location.assign(checkoutDestination(result.checkoutUrl));
 }));
 document.querySelector('#refresh-wallet').addEventListener('click', () => run(refresh));
-document.querySelector('#logout').addEventListener('click', () => run(async () => {await api('logout', validateAccess(access)); reset();}));
+document.querySelector('#logout').addEventListener('click', () => run(async () => {try {await api('logout', validateAccess(access));} finally {reset();}}));
 try {access = validateAccess(JSON.parse(sessionStorage.getItem('roth-verification')));} catch (_) {access = null; sessionStorage.removeItem('roth-verification');}
 if (access) {
   form.hidden = true; panel.hidden = false;
