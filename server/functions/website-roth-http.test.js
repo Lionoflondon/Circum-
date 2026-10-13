@@ -8,8 +8,12 @@ test("HTTP rejects missing App Check and forged Stripe events; accepts correctly
   const stripe = new Stripe("sk_test_local_fixture");
   const secret = "whsec_local_fixture_only";
   let finalized = 0;
+  let failNext = false;
   const service = {request: async () => ({ok: true}), finalize: async () => {
 finalized++;
+if (failNext) {
+ failNext = false; throw new Error("temporary backend failure");
+}
 }};
   const server = createWebsiteRothServer({service, stripe, webhookSecret: secret, verifyAppCheck: async (token) => {
 if (token !== "test-only-valid") throw new Error("invalid");
@@ -24,6 +28,9 @@ if (token !== "test-only-valid") throw new Error("invalid");
     const signature = stripe.webhooks.generateTestHeaderString({payload, secret});
     assert.equal((await fetch(`${url}/webhook`, {method: "POST", body: payload, headers: {"stripe-signature": signature}})).status, 200);
     assert.equal(finalized, 1);
+    failNext = true;
+    assert.equal((await fetch(`${url}/webhook`, {method: "POST", body: payload, headers: {"stripe-signature": signature}})).status, 500);
+    assert.equal((await fetch(`${url}/webhook`, {method: "POST", body: payload, headers: {"stripe-signature": signature}})).status, 200);
   } finally {
 await new Promise((resolve) => server.close(resolve));
 }
