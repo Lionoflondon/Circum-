@@ -131,7 +131,7 @@ function createStripeWebhookProcessor(deps) {
       }
       return finish({success: true}, "charge_succeeded");
     }
-    if (event.type === "checkout.session.completed") {
+    if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
       const session = event.data.object;
       let membershipResult;
       let routed;
