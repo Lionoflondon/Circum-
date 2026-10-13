@@ -54,6 +54,12 @@ function createStripeWebhookProcessor(deps) {
       return response(200, body);
     };
 
+    // Website TEST financial artifacts belong exclusively to the named TEST owner.
+    const websiteMetadata = event.data?.object?.metadata || {};
+    if (!event.livemode && runtimeConfig.mode === "test" && websiteMetadata.type === "website_roth_top_up" && websiteMetadata.testDatabase === "roth-website-test") {
+      return finish({success: true, delegated: "website_roth_test"}, "website_roth_test_delegated");
+    }
+
     if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
       const giftSubscription = giftsPayment && typeof giftsPayment.handleGiftSubscriptionEvent === "function" ? await giftsPayment.handleGiftSubscriptionEvent({db, event}) : {handled: false};
       if (giftSubscription.handled) return finish({success: true, gift: giftSubscription}, "gift_subscription");

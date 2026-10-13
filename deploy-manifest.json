@@ -20,7 +20,10 @@
         "test/security/circum_app_check_contract_test.dart",
         "test/web_platform_routing_test.dart",
         "scripts/build_public_web.sh",
-        "scripts/deploy_public_web.sh"
+        "scripts/deploy_public_web.sh",
+        "scripts/deploy_website_roth_test.sh",
+        "scripts/verify_roth_test_containment.py",
+        "scripts/website_roth_routes.test.mjs"
       ],
       "forbiddenPrefixes": [
         "lib/main.dart",
@@ -186,6 +189,8 @@
         ".github/PULL_REQUEST_TEMPLATE/",
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js",
         ".github/workflows/deploy_firestore_rules.yml",
         ".github/workflows/deploy_functions.yml",
         ".github/workflows/rc1_deploy.yml",
@@ -496,6 +501,39 @@
         "docs/PASSWORD_RECOVERY_RELEASE.md"
       ],
       "reason": "Branded password recovery connects the signed-out attested request, existing transactional email owner, HTTPS action handler and Sender and Website callers as one narrow authentication contract. No financial or dispatch ownership changes."
+    },
+    {
+      "products": [
+        "website",
+        "backend"
+      ],
+      "files": [
+        "firebase.json",
+        "deploy-manifest.json",
+        ".github/workflows/deploy_website.yml",
+        "scripts/build_public_web.sh",
+        "scripts/deploy_website_roth_test.sh",
+        "scripts/website_roth_routes.test.mjs",
+        "server/functions/cloud-run-website-roth.js",
+        "server/functions/website-roth.js",
+        "server/functions/website-roth-http.test.js",
+        "server/functions/website-roth.emulator.test.js",
+        "server/functions/Dockerfile.website-roth",
+        "server/functions/cloudbuild.website-roth.yaml",
+        "lib/website/shared/premium_landing.dart",
+        "web/roth/state.mjs",
+        "web/roth/index.html",
+        "web/roth/config.js",
+        "web/roth/style.css",
+        "web/roth/app.js",
+        "web/roth/assets/circum-wordmark.png",
+        "scripts/verify_roth_test_containment.py",
+        "docs/ROTH_WEBSITE_TEST_RELEASE.md",
+        ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js"
+      ],
+      "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
     }
   ],
   "blockedPrefixes": [
