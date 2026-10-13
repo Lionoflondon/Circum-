@@ -49,6 +49,9 @@ if [[ "${WEBSITE_ROTH_TEST_ENABLED:-false}" == "true" ]]; then
 const fs = require('fs');
 const siteKey = process.env.ROTH_APP_CHECK_SITE_KEY;
 if (!siteKey) throw Error('Public Website App Check key required');
-fs.writeFileSync('build/public_web/roth/config.js', 'window.ROTH_CONFIG = ' + JSON.stringify({enabled:true,environment:'test',appCheckSiteKey:siteKey}) + ';\n');
+const publicOptions = fs.readFileSync('lib/website/shared/firebase/website_firebase_options.dart', 'utf8');
+const firebaseAppId = /appId:\s*'([^']+)'/.exec(publicOptions)?.[1];
+if (!firebaseAppId || !firebaseAppId.startsWith('1:516426305461:web:')) throw Error('Public Website Firebase app identity required');
+fs.writeFileSync('build/public_web/roth/config.js', 'window.ROTH_CONFIG = ' + JSON.stringify({enabled:true,environment:'test',firebaseAppId,appCheckSiteKey:siteKey}) + ';\n');
 NODE
 fi

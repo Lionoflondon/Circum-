@@ -17,13 +17,13 @@ amount.addEventListener('input', () => {
   document.querySelector('#quote').textContent = Number.isInteger(n) && n >= 1 && n <= 100 ? `£${n} adds ${n} test ROTH.` : 'Choose a whole-pound amount between £1 and £100.';
 });
 async function secureToken() {
-  if (!config.appCheckSiteKey) throw Error('Secure verification is unavailable.');
+  if (!config.appCheckSiteKey || !config.firebaseAppId) throw Error('Secure verification is unavailable.');
   if (!appCheckPromise) appCheckPromise = (async () => {
     const [{initializeApp}, {initializeAppCheck, ReCaptchaEnterpriseProvider, getToken}, response] = await Promise.all([
       import('https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js'), import('https://www.gstatic.com/firebasejs/12.16.0/firebase-app-check.js'), fetch('/__/firebase/init.json', {cache: 'no-store'})]);
     const firebase = await response.json();
     if (!response.ok || firebase.projectId !== 'circum-2797c') throw Error('Invalid website configuration.');
-    const app = initializeApp(firebase, 'roth-web');
+    const app = initializeApp({...firebase, appId: config.firebaseAppId}, 'roth-web');
     const check = initializeAppCheck(app, {provider: new ReCaptchaEnterpriseProvider(config.appCheckSiteKey), isTokenAutoRefreshEnabled: true});
     return async () => (await getToken(check)).token;
   })();

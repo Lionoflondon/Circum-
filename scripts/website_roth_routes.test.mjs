@@ -21,3 +21,10 @@ test('return handling only retrieves status and cancellation never awards credit
  assert(!app.includes('finalize(')); assert(!app.includes('test-pay'));
  assert(app.includes("api('logout'")); assert(app.includes("sessionStorage.removeItem('roth-verification')"));
 });
+
+test('App Check binds to the explicit Public Website Firebase app identity',()=>{
+ const build=fs.readFileSync(new URL('../scripts/build_public_web.sh',import.meta.url),'utf8');
+ const app=fs.readFileSync(new URL('../web/roth/app.js',import.meta.url),'utf8');
+ assert(build.includes('lib/website/shared/firebase/website_firebase_options.dart'));
+ assert(app.includes('appId: config.firebaseAppId'));
+});
