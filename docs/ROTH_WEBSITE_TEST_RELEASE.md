@@ -31,3 +31,5 @@ The dedicated runtime service identity is `circum-website-roth-test`. Its datast
 For real provider retry certification, the operator may arm exactly one approved session with `{remaining:1}` in the named database's websiteRothCertificationFailures/sessionId document before paying. The signed TEST webhook atomically consumes this fixture and returns500 once before credit; subsequent automatic delivery processes normally. There is no public fixture route. Record both automatic attempts and do not manually replay to prove retry.
 
 Website checkout and PaymentIntent metadata explicitly identify the named TEST database. The canonical TEST owner must deploy the signed-event delegation guard before any new website purchase, preventing TEST review/ledger records in the default database. The dedicated website owner remains the only financial finalizer.
+
+Runtime startup independently probes named-database read access and requires an actual PERMISSION_DENIED for a non-customer probe in the default database. It refuses to start otherwise. Public release also requires this isolationVerified health flag at the exact approved SHA.

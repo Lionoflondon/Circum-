@@ -2,7 +2,7 @@
 "use strict";
 const http = require("node:http");
 const {createWebsiteRoth} = require("./website-roth");
-function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck, afterFinalize = async () => {}, beforeFinalize = async () => {}, clientKey = (req) => req.socket.remoteAddress}) {
+function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck, afterFinalize = async () => {}, beforeFinalize = async () => {}, isolationVerified = false, clientKey = (req) => req.socket.remoteAddress}) {
   return http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Type", "application/json");
@@ -11,7 +11,7 @@ function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck
       if (req.url.endsWith("/webhook")) console.info("website_roth_test_delivery", {eventId: signedEventId, httpStatus: code});
 res.statusCode = code; res.end(JSON.stringify(value));
 };
-    if (req.method === "GET" && req.url === "/health") return send(200, {ok: true, environment: "test", sourceSHA: process.env.CIRCUM_SOURCE_SHA || "unknown"});
+    if (req.method === "GET" && req.url === "/health") return send(200, {ok: true, environment: "test", isolationVerified, sourceSHA: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (req.method !== "POST") return send(405, {error: "Method not allowed."});
     const path = req.url.replace(/^\/api\/roth/, "");
     try {
@@ -68,7 +68,17 @@ function testRuntimeConfig(env) {
   if (!allowedUids.size) throw new Error("TEST account allowlist required.");
   return {allowedUids, databaseId: "roth-website-test"};
 }
-function production() {
+async function verifyTestDatabaseIsolation(testDb, defaultDb) {
+  await testDb.collection("__rothPermissionProbe__").doc("nonexistent").get();
+  try {
+    await defaultDb.collection("__rothPermissionProbe__").doc("nonexistent").get();
+  } catch (error) {
+    if (error.code === 7) return true;
+    throw error;
+  }
+  throw new Error("TEST runtime must not access the default database.");
+}
+async function production() {
   const config = testRuntimeConfig(process.env);
   const {initializeApp} = require("firebase-admin/app");
   const {getFirestore, FieldValue} = require("firebase-admin/firestore");
@@ -76,6 +86,7 @@ function production() {
   const {getAppCheck} = require("firebase-admin/app-check");
   const app = initializeApp();
   const db = getFirestore(app, config.databaseId);
+  await verifyTestDatabaseIsolation(db, getFirestore(app));
   const auth = getAuth(app);
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   const emails = require("./cloud-run-transactional-email");
@@ -93,7 +104,7 @@ function production() {
       const result = await emails.processEmailQueueRecord({db, emailId: id, eventId: id, apiKey: process.env.RESEND_API_KEY});
       if (result.status !== "sent") throw new Error("Verification email unavailable.");
     }});
-  return createWebsiteRothServer({service, stripe, webhookSecret: process.env.WEBSITE_ROTH_WEBHOOK_SECRET, afterFinalize: processReceipt, beforeFinalize: (session) => consumeTestFailure(db, session.id),
+  return createWebsiteRothServer({service, stripe, webhookSecret: process.env.WEBSITE_ROTH_WEBHOOK_SECRET, isolationVerified: true, afterFinalize: processReceipt, beforeFinalize: (session) => consumeTestFailure(db, session.id),
     verifyAppCheck: async (token) => {
       if (!token) throw Object.assign(new Error("App Check required."), {statusCode: 401});
       try {
@@ -103,5 +114,10 @@ function production() {
       }
     }});
 }
-if (require.main === module) production().listen(Number(process.env.PORT || 8080), "0.0.0.0");
-module.exports = {createWebsiteRothServer, testRuntimeConfig, consumeTestFailure};
+if (require.main === module) {
+production().then((server) => server.listen(Number(process.env.PORT || 8080), "0.0.0.0")).catch((error) => {
+  console.error("ROTH TEST startup rejected", {errorType: error.code || error.name});
+  process.exit(1);
+});
+}
+module.exports = {createWebsiteRothServer, testRuntimeConfig, consumeTestFailure, verifyTestDatabaseIsolation};

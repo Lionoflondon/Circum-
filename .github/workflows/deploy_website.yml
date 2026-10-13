@@ -45,5 +45,5 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           curl --fail --silent --show-error https://circum-website-roth-test-516426305461.us-central1.run.app/health > /tmp/roth-health.json
-          node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("/tmp/roth-health.json"));if(h.environment!=="test"||h.sourceSHA!==process.env.EXPECTED_SHA||!h.ok)throw Error("Unverified ROTH runtime")'
+          node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("/tmp/roth-health.json"));if(h.environment!=="test"||h.sourceSHA!==process.env.EXPECTED_SHA||!h.ok||!h.isolationVerified)throw Error("Unverified ROTH runtime")'
       - run: firebase deploy --only hosting:public --project circum-2797c
