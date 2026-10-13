@@ -2,7 +2,7 @@
 "use strict";
 const http = require("node:http");
 const {createWebsiteRoth} = require("./website-roth");
-function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck, afterFinalize = async () => {}, clientKey = (req) => req.socket.remoteAddress}) {
+function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck, afterFinalize = async () => {}, beforeFinalize = async () => {}, clientKey = (req) => req.socket.remoteAddress}) {
   return http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Type", "application/json");
@@ -27,6 +27,7 @@ size += chunk.length; if (size > 16384) throw new Error("Request too large."); c
 }
         if (event.livemode || event.data.object.metadata?.type !== "website_roth_top_up") return send(200, {ignored: true});
         if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
+          await beforeFinalize(event.data.object);
           await service.finalize(event.data.object);
           await afterFinalize(event.data.object, event.id);
         }
@@ -42,6 +43,18 @@ size += chunk.length; if (size > 16384) throw new Error("Request too large."); c
       return send(path === "/webhook" ? 500 : error.statusCode || 503, {error: error.statusCode ? error.message : "Unable to complete this request. Please try again."});
     }
   });
+}
+async function consumeTestFailure(db, sessionId) {
+  if (!/^cs_test_/.test(sessionId || "")) throw new Error("TEST session required.");
+  // Operator-only fixture in the isolated database. No public arming route.
+  const ref = db.collection("websiteRothCertificationFailures").doc(sessionId);
+  const failOnce = await db.runTransaction(async (tx) => {
+    const item = (await tx.get(ref)).data();
+    if (item?.remaining !== 1) return false;
+    tx.update(ref, {remaining: 0});
+    return true;
+  });
+  if (failOnce) throw new Error("Controlled isolated TEST temporary failure.");
 }
 function testRuntimeConfig(env) {
   if (env.WEBSITE_ROTH_ENABLED !== "true" || env.WEBSITE_ROTH_LIVE === "true" || env.STRIPE_MODE !== "test") throw new Error("Only explicitly enabled Stripe TEST is supported.");
@@ -77,7 +90,7 @@ function production() {
       const result = await emails.processEmailQueueRecord({db, emailId: id, eventId: id, apiKey: process.env.RESEND_API_KEY});
       if (result.status !== "sent") throw new Error("Verification email unavailable.");
     }});
-  return createWebsiteRothServer({service, stripe, webhookSecret: process.env.WEBSITE_ROTH_WEBHOOK_SECRET, afterFinalize: processReceipt,
+  return createWebsiteRothServer({service, stripe, webhookSecret: process.env.WEBSITE_ROTH_WEBHOOK_SECRET, afterFinalize: processReceipt, beforeFinalize: (session) => consumeTestFailure(db, session.id),
     verifyAppCheck: async (token) => {
       if (!token) throw Object.assign(new Error("App Check required."), {statusCode: 401});
       try {
@@ -88,4 +101,4 @@ function production() {
     }});
 }
 if (require.main === module) production().listen(Number(process.env.PORT || 8080), "0.0.0.0");
-module.exports = {createWebsiteRothServer, testRuntimeConfig};
+module.exports = {createWebsiteRothServer, testRuntimeConfig, consumeTestFailure};

@@ -119,3 +119,12 @@ test("named TEST ledger cannot change default production financial collections",
   assert.equal((await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit, productionBefore);
   assert.equal((await db.collection("walletTransactions").doc("isolated_named_test").get()).exists, false);
 });
+
+test("operator-only TEST failure is consumed once for actual provider retry certification", async () => {
+  const testDb = getFirestore(app, "roth-website-test");
+  const {consumeTestFailure} = require("./cloud-run-website-roth");
+  await testDb.collection("websiteRothCertificationFailures").doc("cs_test_retry_cert").set({remaining: 1});
+  await assert.rejects(consumeTestFailure(testDb, "cs_test_retry_cert"), /Controlled/);
+  await consumeTestFailure(testDb, "cs_test_retry_cert");
+  await assert.rejects(consumeTestFailure(testDb, "cs_live_wrong"), /TEST/);
+});
