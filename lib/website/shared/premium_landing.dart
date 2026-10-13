@@ -160,7 +160,7 @@ class _PremiumLanding extends StatelessWidget {
               width: actionWidth,
               height: 56,
               child:
-                  _link('Explore Gifts ↗', '/gifts/discover/', onGifts!, outlined: true),
+                  _link('Explore Gifts', '/gifts/discover/', onGifts!, outlined: true),
             ),
         ]),
         const SizedBox(height: 32),
@@ -423,7 +423,7 @@ class _PremiumLanding extends StatelessWidget {
                   style: TextStyle(color: Color(0xfff9a8d4))),
             ]),
             const SizedBox(height: 20),
-            _link('Send with Circum ↗', '/send', onStart, inverse: true),
+            _link('Send with Circum', '/send', onStart, inverse: true),
           ]);
           const visual = _IrisLandingVisual();
           return box.maxWidth >= 800
@@ -473,7 +473,7 @@ class _PremiumLanding extends StatelessWidget {
                     fontSize: 14,
                     fontFamily: 'D-DIN-Bold',
                     fontWeight: FontWeight.w400)),
-            _link('Explore Vanguard ↗', '/vanguard', onVanguard, inverse: true),
+            _link('Explore Vanguard', '/vanguard', onVanguard, inverse: true),
           ]);
           return box.maxWidth >= 800
               ? Row(children: [
@@ -585,13 +585,13 @@ class _PremiumLanding extends StatelessWidget {
           Link(
             uri: _CircumWebsiteAppState._canonicalWebUri(path),
             target: LinkTarget.self,
-            builder: (_, followLink) => IconButton(
-              tooltip: 'Explore $title',
+            builder: (_, followLink) => TextButton(
               onPressed: kIsWeb
                   ? () => web.window.location.assign(
                       _CircumWebsiteAppState._canonicalWebUri(path).toString())
                   : action,
-              icon: const Icon(Icons.north_east, color: _landingInk),
+              child: Text('Explore', semanticsLabel: 'Explore $title',
+                  style: const TextStyle(color: _landingInk)),
             ),
           ),
         ]),

@@ -26606,8 +26606,6 @@ class _FooterSocialLink extends StatelessWidget {
             else const Text('X', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(width: 10),
             Text(icon == null ? 'Follow on X' : label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 16),
-            const Icon(Icons.north_east, size: 16),
           ]),
         ),
       ),
