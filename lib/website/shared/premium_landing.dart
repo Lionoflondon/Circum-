@@ -536,7 +536,7 @@ class _PremiumLanding extends StatelessWidget {
     final iconColor = switch (path) {
       '/health/discover/' => _landingHealth,
       '/gifts/discover/' => const Color(0xff7851a9),
-      '/business/discover/' => const Color(0xffb96508),
+      '/business/discover/' => const Color(0xff526b8e),
       _ => _landingBlue,
     };
     final isGifts = path == '/gifts/discover/';

@@ -11,7 +11,7 @@ class ServiceAccessFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = health ? const Color(0xffd2f6ee) : const Color(0xfff0d9ba);
+    final accent = health ? const Color(0xffd2f6ee) : const Color(0xffc6d4e8);
     return Theme(
       data: Theme.of(context).copyWith(
         brightness: Brightness.dark,
@@ -28,7 +28,7 @@ class ServiceAccessFrame extends StatelessWidget {
             center: Alignment.bottomLeft,
             radius: 1.35,
             colors: [
-              health ? const Color(0xff163b3b) : const Color(0xff352e23),
+              health ? const Color(0xff163b3b) : const Color(0xff1c2d46),
               const Color(0xff030506)
             ],
           )),
