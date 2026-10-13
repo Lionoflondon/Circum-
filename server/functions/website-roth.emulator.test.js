@@ -45,7 +45,17 @@ test("verified email binds payment to Alice; Bob unchanged; unpaid and tampered 
   await assert.rejects(service.finalize({...session, payment_status: "paid", client_reference_id: walletIdForEmail(bob.email)}), /match/);
   await assert.rejects(service.finalize({...session, payment_status: "paid", livemode: true}), /match/);
   session.payment_status = "paid"; session.status = "complete";
-  await Promise.all([service.status(access), service.finalize(session), service.finalize(session)]);
+  assert.equal((await service.status(access)).status, "pending");
+  assert.equal((await db.collection("walletTransactions").where("uid", "==", alice.uid).get()).size, 0);
+  await Promise.all([service.finalize(session), service.finalize(session)]);
+  assert.equal((await service.status(access)).balance, 1);
+  assert.equal((await service.wallet(access)).balance, 1);
+  await assert.rejects(service.wallet({...access, token: "a".repeat(64)}));
+  await service.logout(access);
+  await assert.rejects(service.wallet(access));
+  const loginChallenge = await service.request({identifier: alice.email}, "returning-client");
+  const login = await service.verify({...loginChallenge, code: sent.code});
+  assert.equal((await service.wallet(login)).balance, 1);
   process.env.STRIPE_MODE = "test";
   await require("./roth-ledger").recordWebsiteRothTopUpFromStripeSession(session);
   const wallet = (await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data();
@@ -99,4 +109,13 @@ test("failure after committed credit retries without another ledger entry or rec
   assert.equal((await db.collection("walletTransactions").where("uid", "==", alice.uid).get()).size, 2);
   assert.equal((await db.collection("emailQueue").where("recipientId", "==", alice.uid).get()).size, 2);
   assert.equal((await db.collection("wallets").doc(walletIdForEmail(bob.email)).get()).data().rothCredit, 19);
+});
+
+test("named TEST ledger cannot change default production financial collections", async () => {
+  const testDb = getFirestore(app, "roth-website-test");
+  const productionBefore = (await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit;
+  await require("./roth-ledger").recordRothMovement({db: testDb, userId: walletIdForEmail(alice.email), userEmail: alice.email, uid: alice.uid, amount: 1, balanceType: "rothCredit", type: require("./roth-ledger-core").TRANSACTION_TYPES.userTopUp, reason: "Isolated TEST", transactionId: "isolated_named_test"});
+  assert.equal((await testDb.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit, 1);
+  assert.equal((await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit, productionBefore);
+  assert.equal((await db.collection("walletTransactions").doc("isolated_named_test").get()).exists, false);
 });

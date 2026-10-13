@@ -187,6 +187,7 @@ class _PremiumLanding extends StatelessWidget {
               if (!small) ...[
                 if (onGifts != null)
                   _link('Gifts', '/gifts/discover/', onGifts!),
+                _link('ROTH', '/roth/', onStart),
                 _link('Login', '/send/profile', onStart),
               ],
               if (small)
@@ -198,6 +199,7 @@ class _PremiumLanding extends StatelessWidget {
                       _CircumWebsiteAppState._canonicalWebUri(path),
                       webOnlyWindowName: '_self')),
                   itemBuilder: (_) => const [
+                    PopupMenuItem(value: '/roth/', child: Text('ROTH', style: TextStyle(color: _landingInk))),
                     PopupMenuItem(
                         value: '/gifts/discover/',
                         child: Text('Gifts',

@@ -1,0 +1,27 @@
+# Website ROTH TEST release
+
+Only Website and dedicated `circum-website-roth-test` runtime are released. Sender/Rider and existing TEST/LIVE webhook services are excluded. Startup refuses LIVE keys, LIVE enablement, any database except `roth-website-test`, and a missing approved UID allowlist.
+
+API challenges, orders, balances, canonical ledger and outbox use the named TEST database. The existing ledger receives this database explicitly. Firebase Auth remains the registered identity authority. The dedicated endpoint processes website ROTH orders only; subscribe to checkout.session.completed, checkout.session.async_payment_succeeded and checkout.session.async_payment_failed. Keep existing owners unchanged.
+
+The runtime sends only its own OTP/receipt records using the existing branded worker and deterministic provider idempotency keys. No held queue, Eventarc subscription or shared email service is changed.
+
+Status is authenticated and read-only. It waits for the webhook even if Stripe reports paid. Cancellation expires an unpaid open checkout. Logout revokes the verification capability and clears local state; fresh OTP login restores the same account balance.
+
+## Release procedure
+
+Provision the dedicated TEST database and approved isolated fixtures. Independently verify database permissions, public App Check and TEST key/account/endpoint secret bindings. Use protected merged main and preserve current caps/holds throughout.
+
+Private `ROTH_TEST_ENV_FILE` YAML must contain WEBSITE_ROTH_ENABLED=true, WEBSITE_ROTH_LIVE=false, STRIPE_MODE=test, FIRESTORE_DATABASE_ID=roth-website-test, and WEBSITE_ROTH_TEST_UIDS listing approved identities only. Do not put secret values in this file.
+
+Supply ROTH_CONTAINMENT_BASELINE (reviewed snapshot with exact25 names), ROTH_TEST_IMAGE_REPOSITORY (existing project repository), ROTH_TEST_OTP_VERSION and ROTH_TEST_WEBHOOK_VERSION (dedicated pinned secret versions). Run `scripts/deploy_website_roth_test.sh <exact-approved-current-main-sha>`.
+
+The script checks containment and prerequisites, creates a clean temporary checkout, builds only Dockerfile.website-roth, deploys only circum-website-roth-test at min0/max1 and rechecks containment. It does not deploy Functions or update other services. Existing TEST Stripe key version2 must be verified privately before running.
+
+Verify the new runtime before dispatching the existing Deploy Website workflow at the same SHA with enable_roth_test=true. It deploys hosting:public only and uses Public Website App Check. Other website releases keep purchases disabled by default.
+
+## Certification
+
+Fresh deployed website checkout, real approved OTP, Stripe TEST card. Capture independent provider delivery, named database before/after balances and one canonical ledger/outbox; compare relevant default database records read-only. Verify exactly one inbox receipt, refresh/logout/login, account denial and invalid/unpaid/failed/cancelled cases. Prove real provider retry after a controlled isolated temporary failure and duplicate/delayed idempotency. Unit/emulator tests do not substitute for deployed/provider evidence.
+
+Preserve GBP6 CONFIGURED, GBP5 ENFORCED, exact25 holds, retry manual0 and #579 zero traffic. No LIVE configuration changes or unrelated deployments. Stop before a release gate that cannot be safely met.

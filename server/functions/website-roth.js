@@ -8,7 +8,7 @@ const digest = (value) => crypto.createHash("sha256").update(value).digest("hex"
 const random = () => crypto.randomBytes(32).toString("hex");
 const equal = (a, b) => typeof a === "string" && typeof b === "string" && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Date.now, live = false, returnBase = "https://circumuk.com/roth/"}) {
+function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Date.now, live = false, allowedUids = null, returnBase = "https://circumuk.com/roth/"}) {
   if (!secret || secret.length < 32) throw new Error("A dedicated OTP secret of at least 32 characters is required.");
   if (returnBase !== "https://circumuk.com/roth/" && (live || returnBase !== "http://127.0.0.1:8779/roth/")) throw new Error("Unapproved return URL.");
   const mac = (value) => crypto.createHmac("sha256", secret).update(value).digest("hex");
@@ -25,7 +25,7 @@ function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Da
         if (result.size !== 1) return null;
         user = await auth.getUser(result.docs[0].id);
       }
-      if (user.disabled || !user.email) return null;
+      if (user.disabled || !user.email || (allowedUids && !allowedUids.has(user.uid))) return null;
       const email = user.email.trim().toLowerCase();
       return {uid: user.uid, email, walletId: walletIdForEmail(email)};
     } catch (error) {
@@ -74,7 +74,7 @@ function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Da
     const item = (await challenges.doc(challengeId).get()).data();
     if (!item?.verified || item.tokenExpires <= now() || !equal(item.tokenHash, digest(token))) throw fail("Verification required.");
     const user = await auth.getUser(item.uid);
-    if (user.disabled || user.email?.trim().toLowerCase() !== item.email) throw fail("Account changed. Verify your email again.");
+    if (user.disabled || (allowedUids && !allowedUids.has(user.uid)) || user.email?.trim().toLowerCase() !== item.email) throw fail("Account changed. Verify your email again.");
     return item;
   }
   async function checkout({challengeId, token, amountPence}) {
@@ -95,17 +95,59 @@ function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Da
     await ref.update({sessionId: session.id});
     return {checkoutUrl: session.url, sessionId: session.id};
   }
-  const finalize = (session) => finalizeWebsiteRoth({db, auth, credit, live}, session);
-  async function status({challengeId, token}) {
-    await verified(challengeId, token);
-    const order = (await orders.doc(challengeId).get()).data();
-    if (!order?.sessionId) return {status: "pending"};
-    // Retrieve from Stripe; query-string success is never proof of payment.
-    const session = await stripe.checkout.sessions.retrieve(order.sessionId);
-    if (session.payment_status !== "paid") return {status: "pending"};
-    return finalize(session);
+  const finalize = async (session) => {
+    if (allowedUids) {
+      const order = (await orders.doc(session.metadata?.orderId || "unknown").get()).data();
+      if (!order || !allowedUids.has(order.uid)) throw fail("Unknown TEST order.");
+    }
+    return finalizeWebsiteRoth({db, auth, credit, live}, session);
+  };
+  async function wallet({challengeId, token}) {
+    const identity = await verified(challengeId, token);
+    const data = (await db.collection("wallets").doc(identity.walletId).get()).data() || {};
+    const balance = Number(data.rothCredit || 0);
+    if (!Number.isFinite(balance) || balance < 0) throw new Error("Invalid wallet balance.");
+    return {balance, environment: live ? "live" : "test"};
   }
-  return {request, verify, checkout, status, finalize};
+  async function status({challengeId, token}) {
+    const identity = await verified(challengeId, token);
+    const order = (await orders.doc(challengeId).get()).data();
+    const balance = await wallet({challengeId, token});
+    if (!order?.sessionId) return {status: "pending", ...balance};
+    if (order.uid !== identity.uid || order.walletId !== identity.walletId) throw fail("Order ownership mismatch.");
+    const session = await stripe.checkout.sessions.retrieve(order.sessionId);
+    if (session.id !== order.sessionId || session.livemode !== live || session.client_reference_id !== identity.walletId || session.amount_total !== order.amountPence || session.currency !== "gbp") throw fail("Payment does not match the order.");
+    // Read-only: even a paid provider session waits for the signed webhook.
+    const status = order.status === "credited" ? "credited" : session.status === "expired" ? "cancelled" : order.status === "failed" ? "failed" : "pending";
+    return {status, roth: status === "credited" ? order.amountPence / 100 : 0, ...balance};
+  }
+  async function logout({challengeId, token}) {
+    await verified(challengeId, token);
+    await challenges.doc(challengeId).update({tokenExpires: 0});
+    return {loggedOut: true};
+  }
+  async function cancel({challengeId, token}) {
+    const identity = await verified(challengeId, token);
+    const order = (await orders.doc(challengeId).get()).data();
+    if (order?.sessionId) {
+      if (order.uid !== identity.uid) throw fail("Order ownership mismatch.");
+      const session = await stripe.checkout.sessions.retrieve(order.sessionId);
+      if (session.status === "open" && session.payment_status !== "paid") await stripe.checkout.sessions.expire(order.sessionId);
+    }
+    return status({challengeId, token});
+  }
+  async function failed(session) {
+    const id = session.metadata?.orderId;
+    if (!/^[a-f0-9]{64}$/.test(id || "")) throw fail("Unknown order.");
+    const ref = orders.doc(id);
+    await db.runTransaction(async (tx) => {
+      const order = (await tx.get(ref)).data();
+      if (!order || order.sessionId !== session.id || session.livemode !== live || session.client_reference_id !== order.walletId) throw fail("Payment does not match the order.");
+      if (order.status !== "credited") tx.update(ref, {status: "failed"});
+    });
+    return {status: "failed"};
+  }
+  return {request, verify, checkout, status, wallet, logout, cancel, failed, finalize};
 }
 async function finalizeWebsiteRoth({db, auth, credit, live}, session) {
   const orders = db.collection("websiteRothOrders");
