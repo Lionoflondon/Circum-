@@ -177,7 +177,9 @@ test("website ROTH checkout uses the canonical ledger finalizer and fails closed
   const session = {id: "cs_test_roth", metadata: {type: "website_roth_top_up"}};
   let received;
   const result = await routeCheckoutSessionCompleted(session, "evt_test", {
-    rothLedger: {recordWebsiteRothTopUpFromStripeSession: async (value) => {received = value;}},
+    rothLedger: {recordWebsiteRothTopUpFromStripeSession: async (value) => {
+received = value;
+}},
   });
   assert.equal(result.handled, true);
   assert.equal(received, session);
