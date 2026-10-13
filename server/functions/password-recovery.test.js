@@ -44,6 +44,9 @@ test("known and unknown requests perform the same work with no Auth lookup or ac
     const response = await createPasswordRecoveryHandler({db, now: () => 100000})({email, client: "sender"}, context);
     assert.deepEqual(response, {ok: true});
     assert.equal(db.records.size, 4);
+    for (const [key, value] of db.records) {
+      if (key.startsWith("authPasswordResetLimits/")) assert.equal(value.startedAtMs, 100000);
+    }
     assert.equal([...db.records.values()].filter((v) => v.eventType === EVENT).length, 1);
   }
 });

@@ -34,7 +34,8 @@ function createPasswordRecoveryHandler({db, now = Date.now, randomId = randomUUI
       const [perEmail, global] = await Promise.all([tx.get(emailRef), tx.get(globalRef)]);
       const current = (snapshot) => {
         const value = snapshot.data() || {};
-        return timestamp - Number(value.startedAtMs || 0) < HOUR_MS ? value : {startedAtMs: timestamp, count: 0};
+        return Number.isFinite(value.startedAtMs) && timestamp >= value.startedAtMs &&
+          timestamp - value.startedAtMs < HOUR_MS ? value : {startedAtMs: timestamp, count: 0};
       };
       const e = current(perEmail);
       const g = current(global);
