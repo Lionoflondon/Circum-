@@ -1,3 +1,4 @@
+import '../../../helper/password_recovery.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,8 +32,7 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                 Navigator.pop(context);
                 ShowToast().successToast(
                     title: 'Password reset',
-                    description:
-                        'Password reset instructions have been sent to your email.');
+                    description: passwordRecoveryAcknowledgement);
               }
             },
             child: Column(

@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 
 /// Account presentation only. The sender portal owns authentication and state.
@@ -99,8 +100,8 @@ class _AccountAccessPageState extends State<AccountAccessPage> {
                     padding: EdgeInsets.symmetric(
                         horizontal: wide ? 48 : 24, vertical: 22),
                     child: Row(children: [
-                      Image.asset('assets/images/circum_wordmark.png',
-                          width: 125, height: 32, semanticLabel: 'CIRCUM'),
+                      CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png',
+                          width: 125, height: 32, semanticLabel: 'CIRCUM')),
                       const Spacer(),
                       TextButton.icon(
                         onPressed: widget.onBack,

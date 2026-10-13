@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 
 /// A flowing presentation around the existing sender authentication form.
@@ -39,9 +40,9 @@ class ServiceAccessFrame extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(health ? 'HEALTH+' : 'CIRCUM BUSINESS',
+                    CircumHomeLink(child: Text(health ? 'HEALTH+' : 'CIRCUM BUSINESS',
                         style: TextStyle(
-                            color: accent, fontSize: 11, letterSpacing: 2.5)),
+                            color: accent, fontSize: 11, letterSpacing: 2.5))),
                     const SizedBox(height: 34),
                     Text(health ? 'A little help.' : 'Business moves.',
                         style: TextStyle(

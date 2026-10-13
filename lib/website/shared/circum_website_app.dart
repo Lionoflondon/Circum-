@@ -1,6 +1,9 @@
+import '../../helper/password_recovery.dart';
+import 'circum_home_link.dart';
 import 'privacy/consent_tracking_gate.dart';
 import 'gifts_sign_in.dart';
 import 'account_access_page.dart';
+import 'vanguard_landing_page.dart';
 import 'service_access_frame.dart';
 import 'privacy/cookie_preferences.dart';
 import 'dart:js_interop';
@@ -192,7 +195,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   void initState() {
     super.initState();
     if (kIsWeb && (_mode == _WebAppMode.landing ||
-        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender)) {
+        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender ||
+        _mode == _WebAppMode.vanguard)) {
       unawaited(_loadLandingTypography());
     }
     _redirectLegacyQueryIfNeeded();
@@ -507,10 +511,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
-      _WebAppMode.vanguard => _VanguardLandingPage(
+      _WebAppMode.vanguard => VanguardLandingPage(
           key: const ValueKey('vanguard-page'),
-          colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
+          onStart: () => _openSurface(_WebAppMode.sender),
         ),
       _WebAppMode.support => _SupportPage(
           key: const ValueKey('support-page'),
@@ -3057,24 +3061,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
     try {
       await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'rider');
       if (!mounted) return;
       setState(
-        () => _authMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _authMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _authMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum Rider account found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _authMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(
@@ -9862,24 +9856,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'sender');
       if (!mounted) return;
       setState(
-        () => _senderProfileMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _senderProfileMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _senderProfileMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum profile found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _senderProfileMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(
@@ -14823,7 +14807,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                 icon: Icon(Icons.arrow_back, color: colors.text),
               ),
               const SizedBox(width: 4),
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM · BUSINESS',
                 style: TextStyle(
                   color: colors.mutedText,
@@ -14831,7 +14815,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.4,
                 ),
-              ),
+              )),
               const Spacer(),
               IconButton(
                 tooltip: 'Refresh Business',
@@ -18257,12 +18241,12 @@ class _PortalHeader extends StatelessWidget {
               icon: Icon(Icons.arrow_back, color: colors.text),
             ),
             const SizedBox(width: 8),
-            Image.asset(
+            CircumHomeLink(child: Image.asset(
               'assets/images/circum_wordmark.png',
               width: 116,
               height: 28,
               fit: BoxFit.contain,
-            ),
+            )),
             const Spacer(),
             if (onProfile != null)
               IconButton(
@@ -19033,7 +19017,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM',
                 style: TextStyle(
                   color: const Color(0xff2fae8c),
@@ -19041,7 +19025,7 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
                   fontWeight: FontWeight.w900,
                   fontFamily: 'D-DIN-Bold',
                 ),
-              ),
+              )),
               const SizedBox(height: 4),
               Text(
                 'HEALTH+ - GUIDED PICKUP',
@@ -25796,483 +25780,6 @@ class _MetricPill extends StatelessWidget {
   }
 }
 
-class _VanguardLandingPage extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onBack;
-
-  const _VanguardLandingPage({
-    super.key,
-    required this.colors,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Scaffold(
-      backgroundColor: colors.appBackground,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: colors.dark ? RadialGradient(
-                    center: const Alignment(0, -0.78),
-                    radius: 1.08,
-                    colors: [
-                      const Color(0xff0b3764).withValues(alpha: 0.74),
-                      const Color(0xff07192f).withValues(alpha: 0.93),
-                      const Color(0xff030812),
-                    ],
-                  ) : _websiteHeroGradient,
-                ),
-              ),
-            ),
-            ListView(
-              padding: EdgeInsets.fromLTRB(
-                narrow ? 22 : 40,
-                narrow ? 42 : 30,
-                narrow ? 22 : 40,
-                72,
-              ),
-              children: [
-                Row(
-                  children: [
-                    if (!narrow) ...[
-                      IconButton(
-                        tooltip: 'Back',
-                        onPressed: onBack,
-                        icon: Icon(Icons.arrow_back, color: colors.text),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Image.asset(
-                      'assets/images/circum_wordmark.png',
-                      width: narrow ? 142 : 154,
-                      errorBuilder: (context, error, stackTrace) => Text(
-                        'CIRCUM',
-                        style: TextStyle(
-                          color: Color(0xff0a84ff),
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 3,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: narrow ? 118 : 64),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 860),
-                    child: Column(
-                      children: [
-                        const _VanguardShieldFallback(size: 148),
-                        const SizedBox(height: 54),
-                        Text(
-                          'Vanguard',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontFamily: 'D-DIN-Bold',
-                            fontSize: narrow ? 68 : 88,
-                            height: 0.96,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Vanguard gives your delivery enhanced\nhandling, priority support, trusted Circum Rider\nprioritisation, and stronger custody tracking\nfor important items.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: narrow ? 26 : 30,
-                            height: 1.55,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        Text(
-                          'Optional add-on at checkout — £1.99',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: narrow ? 20 : 23,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: narrow ? 88 : 78),
-                        Text(
-                          'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontFamily: 'D-DIN-Bold',
-                            fontSize: narrow ? 45 : 62,
-                            height: 1.18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 46),
-                        _VanguardFeatureCard(
-                          icon: Icons.verified_user_outlined,
-                          title: 'Trusted Rider Prioritisation',
-                          body:
-                              'Circum prioritises experienced and highly trusted Circum Riders during assignment. Customers do not choose Circum Riders.',
-                        ),
-                        const SizedBox(height: 24),
-                        _VanguardFeatureCard(
-                          icon: Icons.support_agent,
-                          title: 'Priority support',
-                          body:
-                              'Vanguard deliveries receive priority support and dispute review.',
-                        ),
-                        const SizedBox(height: 24),
-                        _VanguardFeatureCard(
-                          icon: Icons.timeline_outlined,
-                          title: 'Enhanced custody tracking',
-                          body:
-                              'Clearer delivery milestones create stronger visibility from assignment to delivery.',
-                        ),
-                        const SizedBox(height: 40),
-                        const _VanguardTimelineCard(),
-                        const SizedBox(height: 40),
-                        const _VanguardChecklistCard(
-                          title: 'When to use it',
-                          items: [
-                            'Gifts and keepsakes',
-                            'Signed documents',
-                            'Passports and travel documents',
-                            'Electronics and valuable items',
-                            'Fragile items',
-                            'Sentimental items',
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        const _VanguardChecklistCard(
-                          title: 'What £1.99 adds',
-                          items: [
-                            'Trusted Rider Prioritisation',
-                            'Priority support',
-                            'Enhanced custody tracking',
-                            'Priority dispute review',
-                            'Better handling for important items',
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        const _VanguardImportantCard(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VanguardShieldFallback extends StatelessWidget {
-  final double size;
-
-  const _VanguardShieldFallback({this.size = 170});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            const Color(0xff1e88ff).withValues(alpha: 0.22),
-            const Color(0xff1e3a8a).withValues(alpha: 0.12),
-            const Color(0xff0a84ff).withValues(alpha: 0.03),
-          ],
-        ),
-        border: Border.all(
-          color: const Color(0xff0a84ff).withValues(alpha: 0.5),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff0a84ff).withValues(alpha: 0.13),
-            blurRadius: 48,
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          Icons.shield_outlined,
-          size: size * 0.48,
-          color: const Color(0xff0a84ff),
-        ),
-      ),
-    );
-  }
-}
-
-class _VanguardFeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _VanguardFeatureCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
-      padding: EdgeInsets.all(narrow ? 30 : 34),
-      decoration: _vanguardCardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: const Color(0xff0a84ff), size: 34),
-          const SizedBox(height: 28),
-          Text(
-            title,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: narrow ? 26 : 30,
-              height: 1.14,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            body,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: narrow ? 21 : 24,
-              height: 1.42,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardTimelineCard extends StatelessWidget {
-  const _VanguardTimelineCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    const steps = [
-      'Circum Rider assigned',
-      'Item collected',
-      'In transit',
-      'Delivery attempt',
-      'Delivered',
-    ];
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(context, darker: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Custody preview',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontFamily: 'D-DIN-Bold',
-              fontSize: narrow ? 42 : 52,
-              height: 1.02,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 34),
-          ...List.generate(steps.length, (index) {
-            final last = index == steps.length - 1;
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xff0a84ff),
-                      ),
-                    ),
-                    if (!last)
-                      Container(
-                        width: 2,
-                        height: 48,
-                        color: const Color(0xff475569).withValues(alpha: 0.5),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 24),
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Text(
-                    steps[index],
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: narrow ? 22 : 26,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardChecklistCard extends StatelessWidget {
-  final String title;
-  final List<String> items;
-
-  const _VanguardChecklistCard({required this.title, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontFamily: 'D-DIN-Bold',
-              fontSize: narrow ? 42 : 52,
-              height: 1.04,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 34),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.check_circle_outline,
-                    color: Color(0xff0a84ff),
-                    size: 28,
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: narrow ? 23 : 27,
-                        height: 1.18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardImportantCard extends StatelessWidget {
-  const _VanguardImportantCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(context, darker: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Important',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontFamily: 'D-DIN-Bold',
-              fontSize: narrow ? 42 : 52,
-              height: 1.04,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: narrow ? 22 : 27,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-BoxDecoration _vanguardCardDecoration(BuildContext context, {bool darker = false}) {
-  return BoxDecoration(
-    color: Theme.of(context).colorScheme.surface,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(
-      color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
-      width: 1.4,
-    ),
-    boxShadow: [
-      BoxShadow(
-        color: const Color(0xff0a84ff).withValues(alpha: 0.08),
-        blurRadius: 34,
-        offset: const Offset(0, 18),
-      ),
-    ],
-  );
-}
-
 class _ComplianceSection {
   final String title;
   final String body;
@@ -26322,7 +25829,7 @@ class _CompliancePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    CircumHomeLink(child: Text(
                       'CIRCUM',
                       style: TextStyle(
                         color: colourPop ? Colors.white : colors.text,
@@ -26330,7 +25837,7 @@ class _CompliancePage extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.5,
                       ),
-                    ),
+                    )),
                     SizedBox(height: colourPop ? 24 : 42),
                     Text(
                       title,
@@ -26905,12 +26412,12 @@ class _LandingFooter extends StatelessWidget {
                 spacing: 24,
                 runSpacing: 18,
                 children: [
-                  Image.asset(
+                  CircumHomeLink(child: Image.asset(
                     'assets/images/circum_wordmark.png',
                     width: 118,
                     height: 28,
                     fit: BoxFit.contain,
-                  ),
+                  )),
                   Wrap(
                     spacing: 14,
                     runSpacing: 8,
@@ -27684,7 +27191,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   onPressed: widget.onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                Image.asset('assets/images/circum_wordmark.png', width: 126),
+                CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png', width: 126)),
               ],
             ),
             const SizedBox(height: 22),
@@ -27695,11 +27202,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: Image.asset(
+                      child: CircumHomeLink(child: Image.asset(
                         'assets/images/gifts_by_circum_logo.jpg',
                         width: narrow ? 280 : 390,
                         semanticLabel: 'Gifts by Circum logo',
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -28482,12 +27989,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                     icon: const Icon(Icons.arrow_back),
                   ),
                   const SizedBox(width: 8),
-                  Image.asset(
+                  CircumHomeLink(child: Image.asset(
                     'assets/images/circum_wordmark.png',
                     width: 126,
                     height: 30,
                     fit: BoxFit.contain,
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -28524,11 +28031,11 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                         child: Semantics(
                           image: true,
                           label: 'Gifts by Circum logo',
-                          child: Image.asset(
+                          child: CircumHomeLink(child: Image.asset(
                             'assets/images/gifts_by_circum_logo.jpg',
                             fit: BoxFit.contain,
                             semanticLabel: 'Gifts by Circum logo',
-                          ),
+                          )),
                         ),
                       ),
                     ),
@@ -28838,7 +28345,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
+                          CircumHomeLink(child: Text(
                             'Circum',
                             style: TextStyle(
                               color: colors.mutedText,
@@ -28847,7 +28354,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
                             ),
-                          ),
+                          )),
                           const Spacer(),
                           IconButton(
                             tooltip: 'Close contact form',

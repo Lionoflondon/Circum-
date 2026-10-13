@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app_store_badge.dart';
@@ -146,9 +147,9 @@ class RiderRecruitmentPage extends StatelessWidget {
                               icon: const Icon(Icons.arrow_back, color: ink)),
                           const SizedBox(width: 8),
                           Flexible(
-                              child: Image.asset(
+                              child: CircumHomeLink(child: Image.asset(
                                   'assets/images/circum_wordmark.png',
-                                  width: wide ? 150 : 112)),
+                                  width: wide ? 150 : 112))),
                           const Spacer(),
                           TextButton(
                               onPressed: onLogin,
