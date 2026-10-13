@@ -1,3 +1,4 @@
+import 'rider_rank_journey.dart';
 import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -303,23 +304,7 @@ class RiderRecruitmentPage extends StatelessWidget {
                           child: _copy(
                               'The Circum Order recognises the people who build the network through trust, service and contribution. Discover the values behind each rank and the path from joining to lasting impact.')),
                       const SizedBox(height: 30),
-                      Wrap(spacing: 10, runSpacing: 10, children: [
-                        for (final rank in const [
-                          'Agent',
-                          'Sentinel',
-                          'Warden',
-                          'Knight',
-                          'Veteran'
-                        ])
-                          Chip(
-                              label: Text(rank),
-                              backgroundColor: Colors.white,
-                              labelStyle: const TextStyle(
-                                  color: ink, fontWeight: FontWeight.w700),
-                              side: const BorderSide(color: Color(0xffc4d5ee)),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10)),
-                      ]),
+                      const RiderRankJourney(),
                       const SizedBox(height: 24),
                       FilledButton.icon(
                           onPressed: onVision,
