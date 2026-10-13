@@ -57,7 +57,7 @@ void main() {
       captured = request;
       return http.Response(
           jsonEncode({
-            'result': {'ok': true}
+            'result': {'allowed': true}
           }),
           200);
     });
@@ -69,7 +69,7 @@ void main() {
       client: client,
     );
 
-    expect(result['ok'], isTrue);
+    expect(result['allowed'], isTrue);
     expect(captured.url.host, contains('circum-account-bootstrap'));
     expect(captured.headers['authorization'], 'Bearer auth-token');
     expect(jsonDecode(captured.body), {'data': {}});
