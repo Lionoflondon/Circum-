@@ -25,6 +25,12 @@ async function routeCheckoutSessionCompleted(
     return {handled: true, type};
   }
 
+  if (type === "website_roth_top_up") {
+    if (typeof deps.rothLedger?.recordWebsiteRothTopUpFromStripeSession !== "function") throw new Error("Website ROTH finalizer unavailable");
+    await deps.rothLedger.recordWebsiteRothTopUpFromStripeSession(sessionData, eventId);
+    return {handled: true, type};
+  }
+
   if (type === "wallet_top_up") {
     if (!deps.rothLedger ||
         typeof deps.rothLedger.recordWalletTopUpFromStripeSession !==

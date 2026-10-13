@@ -280,6 +280,7 @@ async function publishFromEvent({db, eventType, eventId, decoded}) {
   const walletTransactionId = asId(path, "walletTransactions");
   if (walletTransactionId && eventType === CREATED && lower(after.status) === "completed" &&
       lower(after.walletType || "sender") === "sender" && after.userId && after.userEmail) {
+    if (lower(after.metadata && after.metadata.source) === "website_roth") return {status: "ignored", reason: "website_roth_has_dedicated_receipt", eventId};
     const isStarterWelcome = lower(after.metadata && after.metadata.source) === "sender_welcome_roth" ||
       walletTransactionId.startsWith("sender_welcome_roth_");
     if (isStarterWelcome) return {status: "ignored", reason: "starter_welcome_has_dedicated_email", eventId};

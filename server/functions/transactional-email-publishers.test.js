@@ -387,3 +387,9 @@ test("Story unlock publishes sender delivery plus both role-specific Story email
     assert.equal(db.read("emailQueue", "delivery_booking_paid_excluded"), undefined);
   }
  });
+
+test("website ROTH ledger event leaves the receipt to its dedicated atomic outbox", async () => {
+  const db = fakeDb();
+  const result = await publishFromEvent({db, ...event("walletTransactions", "website_roth_test", null, {status: "completed", walletType: "sender", userId: "test", userEmail: "test@example.invalid", metadata: {source: "website_roth"}})});
+  assert.equal(result.reason, "website_roth_has_dedicated_receipt");
+});

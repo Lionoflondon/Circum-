@@ -1058,3 +1058,9 @@ exports.redeemGiftCard = senderPaymentCallable(async (data, context) => {
 
 exports.BALANCE_TYPES = BALANCE_TYPES;
 exports.TRANSACTION_TYPES = TRANSACTION_TYPES;
+
+// Called only through the canonical signed Stripe webhook router.
+exports.recordWebsiteRothTopUpFromStripeSession = (session) => require("./website-roth").finalizeWebsiteRoth({
+  db: getFirestore(), auth: getAuth(), credit: recordRothMovement,
+  live: process.env.STRIPE_MODE !== "TEST",
+}, session);
