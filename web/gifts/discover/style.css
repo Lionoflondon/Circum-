@@ -12,6 +12,7 @@
 @media(prefers-reduced-motion:reduce){.demo-slide.is-active>*{animation:none!important}.arrival-halo{animation:none!important}}
 .story-screen[data-playing="false"] .demo-slide.is-active>:not(.arrival-halo){animation:none!important}
 
+footer .store-links{display:flex;flex-wrap:wrap;gap:10px}footer .store-links a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;border:1px solid #b5d6d955;border-radius:8px;text-decoration:none;color:#f2f4ed;font-size:14px}footer .store-links a:hover{border-color:#b5d6d9;background:#b5d6d91a}footer .store-links a:focus-visible{outline:2px solid #b5d6d9;outline-offset:4px}
 /* Keep the complete campaign artwork visible, as on Business and Health+. */
 .moment-photo .image-caption{display:none}
 

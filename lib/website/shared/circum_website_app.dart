@@ -429,6 +429,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       theme: _websiteTheme(_darkMode),
       home: Scaffold(
         backgroundColor: colors.background,
+        bottomNavigationBar: _mode == _WebAppMode.landing
+            ? null
+            : const _StoreDownloadFooter(),
         body: Stack(
           children: [
             AnimatedSwitcher(
