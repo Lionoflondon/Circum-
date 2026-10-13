@@ -80,7 +80,7 @@ function production() {
     const result = await emails.processEmailQueueRecord({db, emailId: `website_roth_receipt_${session.id}`, eventId, apiKey: process.env.RESEND_API_KEY});
     if (!["sent", "duplicate"].includes(result.status)) throw new Error("Receipt delivery incomplete.");
   };
-  const service = createWebsiteRoth({db, auth, stripe, secret: process.env.WEBSITE_ROTH_OTP_SECRET, live: false, allowedUids: config.allowedUids,
+  const service = createWebsiteRoth({db, auth, stripe, secret: process.env.WEBSITE_ROTH_OTP_SECRET, live: false, allowedUids: config.allowedUids, testDatabase: config.databaseId,
     credit: (args) => require("./roth-ledger").recordRothMovement({...args, db}),
     sendCode: async ({uid, email, code, challengeId}) => {
       const id = `roth_verify_${challengeId}`;

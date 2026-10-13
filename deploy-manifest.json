@@ -189,6 +189,8 @@
         ".github/PULL_REQUEST_TEMPLATE/",
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js",
         ".github/workflows/deploy_firestore_rules.yml",
         ".github/workflows/deploy_functions.yml",
         ".github/workflows/rc1_deploy.yml",
@@ -527,7 +529,9 @@
         "web/roth/assets/circum-wordmark.png",
         "scripts/verify_roth_test_containment.py",
         "docs/ROTH_WEBSITE_TEST_RELEASE.md",
-        ".github/workflows/ci.yml"
+        ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js"
       ],
       "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
     }

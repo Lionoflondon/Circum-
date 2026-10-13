@@ -34,6 +34,18 @@ node scripts/deploy_guard.js --target=backend --base "$SHA"
 node --test scripts/website_roth_routes.test.mjs
 IMAGE="$ROTH_TEST_IMAGE_REPOSITORY/website-roth-test:$SHA"
 gcloud builds submit server/functions --project=circum-2797c --region=us-central1 --config=server/functions/cloudbuild.website-roth.yaml --substitutions="_IMAGE=$IMAGE,_SOURCE_SHA=$SHA"
+# Required TEST owner guard: preserve its env/secrets and verify TEST mode first.
+gcloud run services describe circum-stripe-webhook --project=circum-2797c --region=us-central1 --format=json > "$TMP/test-owner.json"
+node - "$TMP/test-owner.json" <<'NODE'
+const fs=require('fs');const s=JSON.parse(fs.readFileSync(process.argv[2]));
+const env=s.spec.template.spec.containers[0].env;
+if(!env.some(e=>e.name==='STRIPE_MODE'&&e.value==='test'))throw Error('Canonical owner must remain TEST');
+const key=env.find(e=>e.name==='STRIPE_SECRET_KEY');
+if(key?.valueFrom?.secretKeyRef?.name!=='STRIPE_SECRET_KEY'||key.valueFrom.secretKeyRef.key!=='2')throw Error('Unapproved TEST key');
+NODE
+gcloud run deploy circum-stripe-webhook --project=circum-2797c --region=us-central1 --image="$IMAGE" --command=node --args=cloud-run-stripe-server.js --update-env-vars="CIRCUM_SOURCE_SHA=$SHA,SOURCE_SHA=$SHA" --no-traffic
+REVISION="$(gcloud run services describe circum-stripe-webhook --project=circum-2797c --region=us-central1 --format='value(status.latestReadyRevisionName)')"
+gcloud run services update-traffic circum-stripe-webhook --project=circum-2797c --region=us-central1 --to-revisions="$REVISION=100"
 gcloud run deploy circum-website-roth-test --project=circum-2797c --region=us-central1 --image="$IMAGE" --service-account=circum-website-roth-test@circum-2797c.iam.gserviceaccount.com --min-instances=0 --max-instances=1 --concurrency=8 --cpu=1 --memory=256Mi --timeout=60 --no-cpu-boost --env-vars-file="$ROTH_TEST_ENV_FILE" --update-secrets="STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:2,WEBSITE_ROTH_OTP_SECRET=WEBSITE_ROTH_TEST_OTP_SECRET:$ROTH_TEST_OTP_VERSION,WEBSITE_ROTH_WEBHOOK_SECRET=WEBSITE_ROTH_TEST_WEBHOOK_SECRET:$ROTH_TEST_WEBHOOK_VERSION,RESEND_API_KEY=RESEND_API_KEY:latest" --allow-unauthenticated
 
 python3 scripts/verify_roth_test_containment.py

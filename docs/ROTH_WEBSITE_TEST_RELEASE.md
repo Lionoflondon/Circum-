@@ -1,6 +1,6 @@
 # Website ROTH TEST release
 
-Only Website and dedicated `circum-website-roth-test` runtime are released. Sender/Rider and existing TEST/LIVE webhook services are excluded. Startup refuses LIVE keys, LIVE enablement, any database except `roth-website-test`, and a missing approved UID allowlist.
+Only Website, dedicated `circum-website-roth-test` runtime and the required delegation guard in the existing canonical TEST webhook are released. Sender/Rider and LIVE webhook services are excluded. Startup refuses LIVE keys, LIVE enablement, any database except `roth-website-test`, and a missing approved UID allowlist.
 
 API challenges, orders, balances, canonical ledger and outbox use the named TEST database. The existing ledger receives this database explicitly. Firebase Auth remains the registered identity authority. The dedicated endpoint processes website ROTH orders only; subscribe to checkout.session.completed, checkout.session.async_payment_succeeded and checkout.session.async_payment_failed. Keep existing owners unchanged.
 
@@ -16,7 +16,7 @@ Private `ROTH_TEST_ENV_FILE` YAML must contain WEBSITE_ROTH_ENABLED=true, WEBSIT
 
 Supply ROTH_CONTAINMENT_BASELINE (reviewed snapshot with exact25 names), ROTH_TEST_IMAGE_REPOSITORY (existing project repository), ROTH_TEST_OTP_VERSION and ROTH_TEST_WEBHOOK_VERSION (dedicated pinned secret versions). Run `scripts/deploy_website_roth_test.sh <exact-approved-current-main-sha>`.
 
-The script checks containment and prerequisites, creates a clean temporary checkout, builds only Dockerfile.website-roth, deploys only circum-website-roth-test at min0/max1 and rechecks containment. It does not deploy Functions or update other services. Existing TEST Stripe key version2 must be verified privately before running.
+The script checks containment and prerequisites, creates a clean temporary checkout, builds only Dockerfile.website-roth, deploys only circum-website-roth-test at min0/max1 and rechecks containment. It first verifies the existing canonical TEST owner and stages its narrowly scoped website delegation guard, preserving TEST secrets/settings, before changing that TEST owner traffic. It never changes LIVE services or deploys Functions. Existing TEST Stripe key version2 must be verified privately before running.
 
 Verify the new runtime before dispatching the existing Deploy Website workflow at the same SHA with enable_roth_test=true. It deploys hosting:public only and uses Public Website App Check. Other website releases keep purchases disabled by default.
 
@@ -29,3 +29,5 @@ Preserve GBP6 CONFIGURED, GBP5 ENFORCED, exact25 holds, retry manual0 and #579 z
 The dedicated runtime service identity is `circum-website-roth-test`. Its datastore.user grant must use the documented IAM condition `resource.name=="projects/circum-2797c/databases/roth-website-test"`; no default-database write grant is permitted. Grant Firebase Auth viewer for registered identity lookup and Secret Manager access only to TEST key version2, dedicated OTP/webhook versions and the existing email-provider secret. No LIVE key access.
 
 For real provider retry certification, the operator may arm exactly one approved session with `{remaining:1}` in the named database's websiteRothCertificationFailures/sessionId document before paying. The signed TEST webhook atomically consumes this fixture and returns500 once before credit; subsequent automatic delivery processes normally. There is no public fixture route. Record both automatic attempts and do not manually replay to prove retry.
+
+Website checkout and PaymentIntent metadata explicitly identify the named TEST database. The canonical TEST owner must deploy the signed-event delegation guard before any new website purchase, preventing TEST review/ledger records in the default database. The dedicated website owner remains the only financial finalizer.

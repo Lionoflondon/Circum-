@@ -179,3 +179,14 @@ test("temporary failure returns to the caller and retry can complete without dup
   assert.equal((await processor(request)).status, 200);
   assert.equal(effects, 1);
 });
+
+test("signed isolated website TEST events are delegated without default database writes", async () => {
+  const writes = [];
+  const processor = createStripeWebhookProcessor(dependencies({db: reviewDb(writes)}));
+  for (const type of ["checkout.session.completed", "payment_intent.succeeded", "charge.succeeded"]) {
+    const fixture = event("evt_test_website", type);
+    fixture.data.object.metadata = {type: "website_roth_top_up", testDatabase: "roth-website-test"};
+    assert.equal((await processor(signed(fixture))).body.delegated, "website_roth_test");
+  }
+  assert.equal(writes.length, 0);
+});

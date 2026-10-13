@@ -8,7 +8,7 @@ const digest = (value) => crypto.createHash("sha256").update(value).digest("hex"
 const random = () => crypto.randomBytes(32).toString("hex");
 const equal = (a, b) => typeof a === "string" && typeof b === "string" && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Date.now, live = false, allowedUids = null, returnBase = "https://circumuk.com/roth/"}) {
+function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Date.now, live = false, allowedUids = null, testDatabase = null, returnBase = "https://circumuk.com/roth/"}) {
   if (!secret || secret.length < 32) throw new Error("A dedicated OTP secret of at least 32 characters is required.");
   if (returnBase !== "https://circumuk.com/roth/" && (live || returnBase !== "http://127.0.0.1:8779/roth/")) throw new Error("Unapproved return URL.");
   const mac = (value) => crypto.createHmac("sha256", secret).update(value).digest("hex");
@@ -90,12 +90,14 @@ function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Da
     const session = await stripe.checkout.sessions.create({mode: "payment", payment_method_types: ["card"], client_reference_id: identity.walletId, customer_email: identity.email,
       line_items: [{quantity: 1, price_data: {currency: "gbp", unit_amount: amountPence, product_data: {name: "ROTH top-up"}}}],
       success_url: `${returnBase}?payment=returned`, cancel_url: `${returnBase}?payment=cancelled`,
-      metadata: {type: "website_roth_top_up", orderId: challengeId}}, {idempotencyKey: `website_roth_${challengeId}`});
+      metadata: {type: "website_roth_top_up", orderId: challengeId, ...(testDatabase ? {testDatabase} : {})},
+      payment_intent_data: {metadata: {type: "website_roth_top_up", orderId: challengeId, ...(testDatabase ? {testDatabase} : {})}}}, {idempotencyKey: `website_roth_${challengeId}`});
     if (session.livemode !== live) throw fail("Payment environment mismatch.");
     await ref.update({sessionId: session.id});
     return {checkoutUrl: session.url, sessionId: session.id};
   }
   const finalize = async (session) => {
+    if (testDatabase && session.metadata?.testDatabase !== testDatabase) throw fail("TEST database binding mismatch.");
     if (allowedUids) {
       const order = (await orders.doc(session.metadata?.orderId || "unknown").get()).data();
       if (!order || !allowedUids.has(order.uid)) throw fail("Unknown TEST order.");
