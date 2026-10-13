@@ -6,7 +6,9 @@ function createWebsiteRothServer({service, stripe, webhookSecret, verifyAppCheck
   return http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Type", "application/json");
+    let signedEventId = null;
     const send = (code, value) => {
+      if (req.url.endsWith("/webhook")) console.info("website_roth_test_delivery", {eventId: signedEventId, httpStatus: code});
 res.statusCode = code; res.end(JSON.stringify(value));
 };
     if (req.method === "GET" && req.url === "/health") return send(200, {ok: true, environment: "test", sourceSHA: process.env.CIRCUM_SOURCE_SHA || "unknown"});
@@ -22,6 +24,7 @@ size += chunk.length; if (size > 16384) throw new Error("Request too large."); c
         let event;
         try {
  event = stripe.webhooks.constructEvent(raw, req.headers["stripe-signature"], webhookSecret);
+          signedEventId = event.id;
 } catch (_error) {
  return send(400, {error: "Invalid signature."});
 }
