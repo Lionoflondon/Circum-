@@ -46,14 +46,13 @@ class RiderRecruitmentPage extends StatelessWidget {
           letterSpacing: 2,
           fontWeight: FontWeight.w800));
 
-  Widget _join({bool inverse = false}) => FilledButton.icon(
+  Widget _join({bool inverse = false}) => FilledButton(
       onPressed: onJoin,
       style: FilledButton.styleFrom(
           backgroundColor: inverse ? Colors.white : blue,
           foregroundColor: inverse ? ink : Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22)),
-      icon: const Icon(Icons.arrow_outward, size: 20),
-      label: const Text('Join Circum Riders'));
+      child: const Text('Join Circum Riders'));
 
   Widget _section(
           {required Widget child, Color color = Colors.white}) =>
@@ -195,7 +194,7 @@ class RiderRecruitmentPage extends StatelessWidget {
                                         WrapCrossAlignment.center,
                                     children: [
                                       _join(),
-                                      TextButton.icon(
+                                      TextButton(
                                           onPressed: onVision,
                                           style: TextButton.styleFrom(
                                               foregroundColor: blue,
@@ -203,9 +202,7 @@ class RiderRecruitmentPage extends StatelessWidget {
                                                   const EdgeInsets.symmetric(
                                                       vertical: 20,
                                                       horizontal: 14)),
-                                          icon: const Icon(Icons.north_east,
-                                              size: 18),
-                                          label: const Text(
+                                          child: const Text(
                                               'Explore the Rider vision'))
                                     ]),
                               ]),

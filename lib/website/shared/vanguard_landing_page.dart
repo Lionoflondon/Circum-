@@ -60,7 +60,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
           height: 1.02,
           letterSpacing: -1.8,
           color: color));
-  Widget startButton() => FilledButton.icon(
+  Widget startButton() => FilledButton(
         onPressed: widget.onStart,
         style: FilledButton.styleFrom(
             backgroundColor: vanguardBlue,
@@ -68,9 +68,7 @@ class _VanguardLandingPageState extends State<VanguardLandingPage> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-        icon: const Icon(Icons.arrow_outward, size: 18),
-        iconAlignment: IconAlignment.end,
-        label: const Text('Plan a delivery'),
+        child: const Text('Plan a delivery'),
       );
 
   @override

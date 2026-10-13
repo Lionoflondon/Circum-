@@ -318,9 +318,7 @@ class _GiftsSignInState extends State<GiftsSignIn> {
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                              else
-                                const Icon(Icons.north_east, size: 21),
+                                        strokeWidth: 2)),
                             ]),
                       ),
                       const SizedBox(height: 18),
