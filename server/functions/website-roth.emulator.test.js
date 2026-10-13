@@ -45,7 +45,17 @@ test("verified email binds payment to Alice; Bob unchanged; unpaid and tampered 
   await assert.rejects(service.finalize({...session, payment_status: "paid", client_reference_id: walletIdForEmail(bob.email)}), /match/);
   await assert.rejects(service.finalize({...session, payment_status: "paid", livemode: true}), /match/);
   session.payment_status = "paid"; session.status = "complete";
-  await Promise.all([service.status(access), service.finalize(session), service.finalize(session)]);
+  assert.equal((await service.status(access)).status, "pending");
+  assert.equal((await db.collection("walletTransactions").where("uid", "==", alice.uid).get()).size, 0);
+  await Promise.all([service.finalize(session), service.finalize(session)]);
+  assert.equal((await service.status(access)).balance, 1);
+  assert.equal((await service.wallet(access)).balance, 1);
+  await assert.rejects(service.wallet({...access, token: "a".repeat(64)}));
+  await service.logout(access);
+  await assert.rejects(service.wallet(access));
+  const loginChallenge = await service.request({identifier: alice.email}, "returning-client");
+  const login = await service.verify({...loginChallenge, code: sent.code});
+  assert.equal((await service.wallet(login)).balance, 1);
   process.env.STRIPE_MODE = "test";
   await require("./roth-ledger").recordWebsiteRothTopUpFromStripeSession(session);
   const wallet = (await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data();
@@ -99,4 +109,39 @@ test("failure after committed credit retries without another ledger entry or rec
   assert.equal((await db.collection("walletTransactions").where("uid", "==", alice.uid).get()).size, 2);
   assert.equal((await db.collection("emailQueue").where("recipientId", "==", alice.uid).get()).size, 2);
   assert.equal((await db.collection("wallets").doc(walletIdForEmail(bob.email)).get()).data().rothCredit, 19);
+});
+
+test("named TEST ledger cannot change default production financial collections", async () => {
+  const testDb = getFirestore(app, "roth-website-test");
+  const productionBefore = (await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit;
+  await require("./roth-ledger").recordRothMovement({db: testDb, userId: walletIdForEmail(alice.email), userEmail: alice.email, uid: alice.uid, amount: 1, balanceType: "rothCredit", type: require("./roth-ledger-core").TRANSACTION_TYPES.userTopUp, reason: "Isolated TEST", transactionId: "isolated_named_test"});
+  assert.equal((await testDb.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit, 1);
+  assert.equal((await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data().rothCredit, productionBefore);
+  assert.equal((await db.collection("walletTransactions").doc("isolated_named_test").get()).exists, false);
+});
+
+test("operator-only TEST failure is consumed once for actual provider retry certification", async () => {
+  const testDb = getFirestore(app, "roth-website-test");
+  const {consumeTestFailure} = require("./cloud-run-website-roth");
+  await testDb.collection("websiteRothCertificationFailures").doc("cs_test_retry_cert").set({remaining: 1});
+  await assert.rejects(consumeTestFailure(testDb, "cs_test_retry_cert"), /Controlled/);
+  await consumeTestFailure(testDb, "cs_test_retry_cert");
+  await assert.rejects(consumeTestFailure(testDb, "cs_live_wrong"), /TEST/);
+});
+
+test("checkout accepts GBP100000 and rejects amounts above it, fractions and unsafe integers", async () => {
+  let captured;
+  const isolated = getFirestore(app, "roth-limit-test");
+  const limitService = createWebsiteRoth({db: isolated, auth: getAuth(), secret: "limit-test-secret-at-least-thirty-two-characters", sendCode: async (item) => {
+captured = item;
+}, credit: async () => {
+throw new Error("No credit expected");
+}, stripe: {checkout: {sessions: {create: async (input) => {
+    assert.equal(input.line_items[0].price_data.unit_amount, 10000000);
+    return {id: "cs_test_maximum", url: "https://checkout.stripe.com/test", livemode: false};
+  }}}}});
+  const challenge = await limitService.request({identifier: alice.email}, "limit-client");
+  const access = await limitService.verify({...challenge, code: captured.code});
+  for (const amountPence of [10000001, 10000100, 99, 101, Number.MAX_SAFE_INTEGER + 1]) await assert.rejects(limitService.checkout({...access, amountPence}));
+  assert.equal((await limitService.checkout({...access, amountPence: 10000000})).sessionId, "cs_test_maximum");
 });
