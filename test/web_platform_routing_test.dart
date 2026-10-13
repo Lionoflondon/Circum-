@@ -273,10 +273,13 @@ void main() {
       expect(source, contains("fragment: ''"));
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
-      expect(source, contains('Trusted Rider Prioritisation'));
-      expect(source, contains('Enhanced Custody Tracking'));
-      expect(source, contains('Priority Support'));
-      expect(source, contains('Priority Dispute Review'));
+      expect(shared, contains('_WebAppMode.vanguard => VanguardLandingPage('));
+      expect(shared, contains('_mode == _WebAppMode.vanguard))'));
+      final vanguard = File('lib/website/shared/vanguard_landing_page.dart').readAsStringSync();
+      expect(vanguard, contains('trusted Circum Riders prioritised'));
+      expect(vanguard, contains('Custody milestones'));
+      expect(vanguard, contains('Priority support and dispute review'));
+      expect(vanguard, contains('Optional upgrade per delivery'));
       expect(source, contains("label: 'Vanguard'"));
       expect(source, contains("label: 'Vanguard Included'"));
       expect(landing, contains('Built for business'));
@@ -351,21 +354,20 @@ void main() {
       );
     });
 
-    test('Vanguard copy avoids customer rider choice wording', () {
-      final source = File(
-        'lib/website/shared/circum_website_app.dart',
-      ).readAsStringSync();
-
+    test('Vanguard copy preserves assignment and pricing limitations', () {
+      final shared = File('lib/website/shared/circum_website_app.dart').readAsStringSync();
       final landing = File('lib/website/shared/premium_landing.dart').readAsStringSync();
+      final vanguard = File('lib/website/shared/vanguard_landing_page.dart').readAsStringSync();
+      final source = '$shared\n$landing\n$vanguard';
       expect(landing, contains('Circum assigns your rider'));
-      expect(source, contains('Vanguard is not insurance'));
-      expect(source, contains('Vanguard Handling'));
-      expect(source, contains('Custody preview'));
-      expect(source, contains('When to use it'));
-      expect(source, contains('What £1.99 adds'));
-      expect(source, contains('Gifts and keepsakes'));
-      expect(source, contains('Passports and travel documents'));
-      expect(source, contains('Better handling for important items'));
+      expect(vanguard, contains('Circum assigns your rider'));
+      expect(vanguard, contains('Vanguard is not insurance'));
+      expect(vanguard, contains('reimbursement, financial cover or guarantees'));
+      expect(vanguard, contains('Optional upgrade £1.99. Included when required.'));
+      expect(vanguard, contains('Gifts, Business, Health+'));
+      expect(vanguard, contains('Gifts & keepsakes'));
+      expect(vanguard, contains('collection PIN'));
+      expect(vanguard, contains('receiver PIN'));
       expect(source, isNot(contains('Preferred rider matching')));
       expect(source, isNot(contains('Choose your rider')));
       expect(source, isNot(contains('Pick a rider')));

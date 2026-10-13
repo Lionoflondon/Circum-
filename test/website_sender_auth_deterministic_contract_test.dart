@@ -94,7 +94,8 @@ void main() {
     expect(authBloc, contains('createUserWithEmailAndPassword'));
     expect(authBloc, contains('sendSenderVerificationEmailViaCloudRun(auth: auth)'));
     expect(authBloc, isNot(contains('sendEmailVerification()')));
-    expect(authBloc, contains('sendPasswordResetEmail'));
+    expect(authBloc, contains('requestCircumPasswordReset'));
+    expect(authBloc, isNot(contains('sendPasswordResetEmail')));
     expect(authBloc, contains('.timeout(_authOperationTimeout)'));
     expect(
         authBloc, isNot(contains('throw Exception(err.message.toString())')));

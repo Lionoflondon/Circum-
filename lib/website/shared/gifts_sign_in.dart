@@ -1,3 +1,4 @@
+import 'circum_home_link.dart';
 import 'package:flutter/material.dart';
 
 /// Presentation for the existing Gifts authentication owner. Controllers and
@@ -90,22 +91,18 @@ class _GiftsSignInState extends State<GiftsSignIn> {
                   padding: EdgeInsets.symmetric(
                       horizontal: narrow ? 24 : 64, vertical: 22),
                   child: Row(children: [
-                    Semantics(
-                      label: 'Gifts by Circum',
-                      image: true,
-                      child: ExcludeSemantics(
-                        child: SizedBox(
-                          width: 150,
-                          height: 62,
-                          child: ClipRect(
-                            child: OverflowBox(
-                              maxWidth: 178,
-                              maxHeight: 178,
-                              child: Image.asset(
-                                  'assets/images/gifts_by_circum_logo.jpg',
-                                  width: 178,
-                                  height: 178),
-                            ),
+                    CircumHomeLink(
+                      child: SizedBox(
+                        width: 150,
+                        height: 62,
+                        child: ClipRect(
+                          child: OverflowBox(
+                            maxWidth: 178,
+                            maxHeight: 178,
+                            child: Image.asset(
+                                'assets/images/gifts_by_circum_logo.jpg',
+                                width: 178,
+                                height: 178),
                           ),
                         ),
                       ),
@@ -183,8 +180,8 @@ class _GiftsSignInState extends State<GiftsSignIn> {
                           letterSpacing: -1.8)),
                   Text('With every\ndelivery.',
                       style: TextStyle(
-                          fontFamily: 'GiftsSerif',
-                          fontStyle: FontStyle.italic,
+                          fontFamily: 'D-DIN',
+                          fontStyle: FontStyle.normal,
                           fontSize: narrow ? 42 : 61,
                           height: 1.06,
                           letterSpacing: -1.8,

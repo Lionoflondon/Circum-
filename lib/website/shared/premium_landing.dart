@@ -110,7 +110,6 @@ class _PremiumLanding extends StatelessWidget {
       final wide = constraints.maxWidth >= 900;
       final small = constraints.maxWidth < 600;
       final headlineSize = small ? 60.0 : 80.0;
-      const handoverPhoto = _ServiceImageSelector();
       final actionWidth = small
           ? (constraints.maxWidth < 378
               ? constraints.maxWidth - 48
@@ -177,8 +176,8 @@ class _PremiumLanding extends StatelessWidget {
       return Column(children: [
         _section(
             Row(children: [
-              Image.asset('assets/images/circum_wordmark.png',
-                  width: small ? 106 : 134, height: 32, fit: BoxFit.contain),
+              CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png',
+                  width: small ? 106 : 134, height: 32, fit: BoxFit.contain)),
               const Spacer(),
               if (wide) ...[
                 _link('Business', '/business/discover/', onBusiness),
@@ -244,7 +243,6 @@ class _PremiumLanding extends StatelessWidget {
             colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
           ),
         ),
-        handoverPhoto,
         _section(
             Container(
               padding: const EdgeInsets.symmetric(vertical: 25),
@@ -855,150 +853,6 @@ class _PlayIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PlayIconPainter oldDelegate) => false;
-}
-
-class _ServiceImageSelector extends StatefulWidget {
-  const _ServiceImageSelector();
-
-  @override
-  State<_ServiceImageSelector> createState() => _ServiceImageSelectorState();
-}
-
-class _ServiceImageSelectorState extends State<_ServiceImageSelector> {
-  int _selected = 0;
-  int _previous = 0;
-  Timer? _rotation;
-  bool _reduceMotion = false;
-  bool _preloaded = false;
-
-  static const _images = [
-    'send-campaign.jpg',
-    'gifts-campaign.jpg',
-    'health-campaign.jpg',
-    'business-campaign.jpg'
-  ];
-  static const _descriptions = [
-    'Send: Move what matters. Everyday parcels. Made simple. Send a parcel in the Circum app.',
-    'Gifts: Make their day. Thoughtfully delivered. Explore Gifts in the Circum app.',
-    'Health: Care, delivered. For what matters most. Explore Health in the Circum app.',
-    'Business: Keep business moving. Deliveries that work for you. Explore Business in the Circum app.',
-  ];
-
-  ImageProvider _image(int index) =>
-      NetworkImage(Uri.base.resolve('/images/${_images[index]}').toString());
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (!_preloaded) {
-      _preloaded = true;
-      unawaited(_preload());
-    } else {
-      _restartRotation();
-    }
-  }
-
-  Future<void> _preload() async {
-    await Future.wait([
-      for (var index = 0; index < _images.length; index++)
-        precacheImage(_image(index), context),
-    ]);
-    if (mounted) _restartRotation();
-  }
-
-  void _restartRotation() {
-    _rotation?.cancel();
-    if (_reduceMotion) return;
-    _rotation = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted || web.document.visibilityState == 'hidden') return;
-      setState(() {
-        _previous = _selected;
-        _selected = (_selected + 1) % _images.length;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _rotation?.cancel();
-    super.dispose();
-  }
-
-  Widget _frame(int index, bool portrait) {
-    final photo = Image(
-      image: _image(index),
-      width: 1122,
-      height: 1402,
-      fit: BoxFit.fill,
-      errorBuilder: (_, __, ___) => const ColoredBox(color: _landingPaper),
-    );
-    // The existing posters all use a 1122 x 1402 canvas. Show the
-    // photographic region on desktop, without changing any source asset.
-    const photoTop = [450.0, 440.0, 440.0, 500.0];
-    final croppedHeight = 1240 - photoTop[index];
-    return Semantics(
-      image: true,
-      label: _descriptions[index],
-      child: ExcludeSemantics(
-        child: portrait
-            ? Image(
-                image: _image(index),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                    const ColoredBox(color: _landingPaper),
-              )
-            : ClipRect(
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: 1122,
-                    height: croppedHeight,
-                    child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.topCenter,
-                        minWidth: 1122,
-                        maxWidth: 1122,
-                        minHeight: 1402,
-                        maxHeight: 1402,
-                        child: Transform.translate(
-                          offset: Offset(0, -photoTop[index]),
-                          child: photo,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (_, box) {
-      final portrait = box.maxWidth < 600;
-      return SizedBox(
-        width: double.infinity,
-        height:
-            portrait ? box.maxWidth * 1.25 : MediaQuery.sizeOf(context).height,
-        child: Stack(fit: StackFit.expand, children: [
-          ExcludeSemantics(child: _frame(_previous, portrait)),
-          TweenAnimationBuilder<double>(
-            key: ValueKey(_selected),
-            tween: Tween(begin: 0, end: 1),
-            duration: _reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 1000),
-            curve: Curves.easeInOut,
-            builder: (_, opacity, child) =>
-                Opacity(opacity: opacity, child: child),
-            child: _frame(_selected, portrait),
-          ),
-        ]),
-      );
-    });
-  }
 }
 
 class _LandingBookingPanel extends StatefulWidget {
