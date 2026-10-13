@@ -1,3 +1,4 @@
+import '../../../helper/password_recovery.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -748,23 +749,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleResetPassword(
       ResetPassword event, Emitter<AuthState> emit) async {
+    if (state.status == Status.loading) return;
     try {
-      emit(state.copyWith(status: Status.loading));
-      await auth
-          .sendPasswordResetEmail(email: event.email)
-          .timeout(_authOperationTimeout);
+      emit(state.copyWith(status: Status.loading, errorMessage: ''));
+      await requestCircumPasswordReset(
+          email: event.email, application: 'sender');
       emit(state.copyWith(status: Status.passwordResetEmailSent));
-    } on FirebaseAuthException catch (err) {
-      emit(state.copyWith(status: Status.failure));
-      if (err.code == 'invalid-email') {
-        emit(state.copyWith(errorMessage: 'Invalid email'));
-      }
-
-      if (err.code == 'user-not-found') {
-        emit(state.copyWith(errorMessage: 'User not found'));
-      }
-    } catch (err) {
-      emit(state.copyWith(status: Status.failure));
+    } on PasswordRecoveryException catch (error) {
+      emit(state.copyWith(status: Status.failure, errorMessage: error.message));
     }
   }
 
