@@ -78,7 +78,7 @@ function createWebsiteRoth({db, auth, stripe, sendCode, credit, secret, now = Da
     return item;
   }
   async function checkout({challengeId, token, amountPence}) {
-    if (!Number.isSafeInteger(amountPence) || amountPence < 100 || amountPence > 10000) throw fail("Choose between £1 and £100.");
+    if (!Number.isSafeInteger(amountPence) || amountPence < 100 || amountPence % 100 !== 0 || amountPence > 10000000) throw fail("Choose a whole-pound amount between £1 and £100,000.");
     const identity = await verified(challengeId, token);
     // One verified challenge owns one immutable order and one Stripe idempotency key.
     const ref = orders.doc(challengeId);

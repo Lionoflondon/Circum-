@@ -9,12 +9,12 @@ let busy = false;
 let appCheckPromise;
 const panel = document.createElement('div');
 panel.hidden = true;
-panel.innerHTML = '<p id="balance" aria-live="polite"></p><label for="amount">Test top-up amount (£)</label><input id="amount" type="number" min="1" max="100" step="1" value="1"><p id="quote">£1 adds 1 test ROTH.</p><button class="button" id="pay">Continue to Stripe TEST</button><button class="back" id="refresh-wallet">Refresh balance and payment</button><button class="back" id="logout">Log out</button>';
+panel.innerHTML = '<p id="balance" aria-live="polite"></p><label for="amount">Test top-up amount (£)</label><input id="amount" type="number" min="1" max="100000" step="1" value="1"><p id="quote">£1 adds 1 test ROTH.</p><button class="button" id="pay">Continue to Stripe TEST</button><button class="back" id="refresh-wallet">Refresh balance and payment</button><button class="back" id="logout">Log out</button>';
 verification.after(panel);
 const amount = document.querySelector('#amount');
 amount.addEventListener('input', () => {
   const n = Number(amount.value);
-  document.querySelector('#quote').textContent = Number.isInteger(n) && n >= 1 && n <= 100 ? `£${n} adds ${n} test ROTH.` : 'Choose a whole-pound amount between £1 and £100.';
+  document.querySelector('#quote').textContent = Number.isInteger(n) && n >= 1 && n <= 100000 ? `£${n.toLocaleString("en-GB")} adds ${n.toLocaleString("en-GB")} test ROTH.` : 'Choose a whole-pound amount between £1 and £100,000.';
 });
 async function secureToken() {
   if (!config.appCheckSiteKey || !config.firebaseAppId) throw Error('Secure verification is unavailable.');

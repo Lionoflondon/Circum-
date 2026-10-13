@@ -128,3 +128,20 @@ test("operator-only TEST failure is consumed once for actual provider retry cert
   await consumeTestFailure(testDb, "cs_test_retry_cert");
   await assert.rejects(consumeTestFailure(testDb, "cs_live_wrong"), /TEST/);
 });
+
+test("checkout accepts GBP100000 and rejects amounts above it, fractions and unsafe integers", async () => {
+  let captured;
+  const isolated = getFirestore(app, "roth-limit-test");
+  const limitService = createWebsiteRoth({db: isolated, auth: getAuth(), secret: "limit-test-secret-at-least-thirty-two-characters", sendCode: async (item) => {
+captured = item;
+}, credit: async () => {
+throw new Error("No credit expected");
+}, stripe: {checkout: {sessions: {create: async (input) => {
+    assert.equal(input.line_items[0].price_data.unit_amount, 10000000);
+    return {id: "cs_test_maximum", url: "https://checkout.stripe.com/test", livemode: false};
+  }}}}});
+  const challenge = await limitService.request({identifier: alice.email}, "limit-client");
+  const access = await limitService.verify({...challenge, code: captured.code});
+  for (const amountPence of [10000001, 10000100, 99, 101, Number.MAX_SAFE_INTEGER + 1]) await assert.rejects(limitService.checkout({...access, amountPence}));
+  assert.equal((await limitService.checkout({...access, amountPence: 10000000})).sessionId, "cs_test_maximum");
+});
