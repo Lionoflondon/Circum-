@@ -1062,5 +1062,5 @@ exports.TRANSACTION_TYPES = TRANSACTION_TYPES;
 // Called only through the canonical signed Stripe webhook router.
 exports.recordWebsiteRothTopUpFromStripeSession = (session) => require("./website-roth").finalizeWebsiteRoth({
   db: getFirestore(), auth: getAuth(), credit: recordRothMovement,
-  live: process.env.STRIPE_MODE !== "TEST",
+  live: `${process.env.STRIPE_MODE || ""}`.trim().toUpperCase() !== "TEST",
 }, session);

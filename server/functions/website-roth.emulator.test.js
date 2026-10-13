@@ -46,6 +46,8 @@ test("verified email binds payment to Alice; Bob unchanged; unpaid and tampered 
   await assert.rejects(service.finalize({...session, payment_status: "paid", livemode: true}), /match/);
   session.payment_status = "paid"; session.status = "complete";
   await Promise.all([service.status(access), service.finalize(session), service.finalize(session)]);
+  process.env.STRIPE_MODE = "test";
+  await require("./roth-ledger").recordWebsiteRothTopUpFromStripeSession(session);
   const wallet = (await db.collection("wallets").doc(walletIdForEmail(alice.email)).get()).data();
   assert.equal(wallet.rothCredit, 1);
   assert.equal((await db.collection("senderWallets").doc(alice.uid).get()).data().balance, 1);
