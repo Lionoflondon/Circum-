@@ -94,7 +94,7 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
           body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 25));
-    return _decodeAccountResponse(response);
+    return _decodeAccountResponse(response, operation);
   } on TimeoutException {
     throw const AccountBootstrapException(
       'DEADLINE_EXCEEDED',
@@ -110,7 +110,8 @@ Future<Map<String, dynamic>> invokeAccountBootstrap(
   }
 }
 
-Map<String, dynamic> _decodeAccountResponse(http.Response response) {
+Map<String, dynamic> _decodeAccountResponse(
+    http.Response response, String operation) {
   final fallbackStatus = switch (response.statusCode) {
     401 => 'UNAUTHENTICATED',
     403 => 'PERMISSION_DENIED',
@@ -142,6 +143,37 @@ Map<String, dynamic> _decodeAccountResponse(http.Response response) {
   }
   final result = decoded['result'];
   if (result is! Map<String, dynamic>) {
+    throw const AccountBootstrapException('INTERNAL', fallbackMessage);
+  }
+  // Validate the outcome used by the caller, not just its JSON envelope.
+  final confirmed = switch (operation) {
+    'ensureSenderAccount' => result['allowed'] is bool,
+    'verifyRiderAccountAccess' ||
+    'updateRiderProfile' ||
+    'updateSenderNotificationState' =>
+      result['ok'] == true,
+    'submitRiderApplication' => result['applicationId'] is String &&
+        (result['applicationId'] as String).trim().isNotEmpty &&
+        const {
+          'submitted',
+          'resubmitted',
+          'under_review',
+          'approved',
+          'suspended',
+          'archived'
+        }.contains(result['status']),
+    'sendCircumVerificationEmail' => result['ok'] == true &&
+        (result['queued'] == true || result['alreadyVerified'] == true),
+    'getSenderWallet' =>
+      result['balance'] is num && (result['balance'] as num).isFinite,
+    'listSenderPaymentMethods' => result['paymentMethods'] is List &&
+        (result['paymentMethods'] as List).every((method) =>
+            method is Map &&
+            method['id'] is String &&
+            (method['id'] as String).isNotEmpty),
+    _ => false,
+  };
+  if (!confirmed) {
     throw const AccountBootstrapException('INTERNAL', fallbackMessage);
   }
   return result;
