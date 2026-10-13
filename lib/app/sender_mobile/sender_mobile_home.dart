@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
+import '../authentication/view/forgot_password.dart';
 import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
@@ -871,6 +872,27 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               ),
               onChanged: (_) => setState(() {}),
             ),
+            if (_isSignIn)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('senderForgotPasswordButton'),
+                  onPressed: _busy || providerBusy
+                      ? null
+                      : () {
+                          final auth = context.read<AuthBloc>();
+                          auth.add(ResetStatus());
+                          auth.add(SignupEmailChanged(email: _identity.text));
+                          Navigator.of(context).push(MaterialPageRoute<void>(
+                            builder: (_) => BlocProvider<AuthBloc>.value(
+                              value: auth,
+                              child: const ForgotPasswordView(),
+                            ),
+                          ));
+                        },
+                  child: const Text('Forgot password?'),
+                ),
+              ),
             if (!_isSignIn) ...[
               const SizedBox(height: 14),
               _AuthField(
