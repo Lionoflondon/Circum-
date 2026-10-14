@@ -22,3 +22,5 @@ h1 em{letter-spacing:inherit}
 
 /* Consistent Circum home icon across discovery headers. */
 .header .home-icon{display:inline-flex;align-items:center;gap:12px;width:auto;height:auto;overflow:visible;flex-shrink:0}.header .home-icon img{position:static;width:44px;height:44px;max-width:44px;object-fit:contain;mix-blend-mode:normal}.header .home-icon strong{font-family:inherit;font-weight:400;font-size:26px;letter-spacing:-.6px;color:#f4f3f0}@media(max-width:650px){.header .home-icon{gap:9px}.header .home-icon img{width:36px;height:36px;max-width:36px}.header .home-icon strong{font-size:20px}}@media(max-width:420px){.business .header .home-icon strong{font-size:17px}.business .header .home-icon{gap:7px}}
+
+@media(max-width:1000px){.header nav{display:none}}
