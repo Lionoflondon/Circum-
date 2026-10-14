@@ -30,7 +30,7 @@ def verify_controls(retry, subscriptions, budgets, names, profile):
     assert all(name in by_name and not by_name[name].get('pushConfig') for name in names if not (active and name == released))
     if active:
         assert released in names
-        assert by_name[released].get('pushConfig') == {'oidcToken': {'audience': 'https://circum-notification-retries-j2b7cicfwq-uc.a.run.app', 'serviceAccountEmail': 'circum-notification-retries@circum-2797c.iam.gserviceaccount.com'}, 'pushEndpoint': 'https://circum-notification-retries-516426305461.us-central1.run.app/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-processNotificationRetries-us-central1'}
+        assert by_name[released].get('pushConfig') == {'attributes': {'x-goog-version': 'v1'}, 'oidcToken': {'audience': 'https://circum-notification-retries-j2b7cicfwq-uc.a.run.app', 'serviceAccountEmail': 'circum-notification-retries@circum-2797c.iam.gserviceaccount.com'}, 'pushEndpoint': 'https://circum-notification-retries-516426305461.us-central1.run.app/?__GCP_CloudEventsMode=CUSTOM_PUBSUB_projects%2Fcircum-2797c%2Ftopics%2Ffirebase-schedule-processNotificationRetries-us-central1'}
     for service, units, state in [('services/152E-C115-5142', '10' if active else '6', 'CONFIGURED'), ('services/29E7-DA93-CA13', '5', 'ENFORCED')]:
         matches = [b for b in budgets['budgets'] if service in b.get('budgetFilter', {}).get('services', []) and 'projects/516426305461' in b['budgetFilter']['projects']]
         assert len(matches) == 1
