@@ -69,9 +69,9 @@ function testRuntimeConfig(env) {
   return {allowedUids, databaseId: "roth-website-test"};
 }
 async function verifyTestDatabaseIsolation(testDb, defaultDb) {
-  await testDb.collection("__rothPermissionProbe__").doc("nonexistent").get();
+  await testDb.collection("rothPermissionProbe").doc("nonexistent").get();
   try {
-    await defaultDb.collection("__rothPermissionProbe__").doc("nonexistent").get();
+    await defaultDb.collection("rothPermissionProbe").doc("nonexistent").get();
   } catch (error) {
     if (error.code === 7) return true;
     throw error;

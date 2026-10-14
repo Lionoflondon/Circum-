@@ -33,3 +33,5 @@ For real provider retry certification, the operator may arm exactly one approved
 Website checkout and PaymentIntent metadata explicitly identify the named TEST database. The canonical TEST owner must deploy the signed-event delegation guard before any new website purchase, preventing TEST review/ledger records in the default database. The dedicated website owner remains the only financial finalizer.
 
 Runtime startup independently probes named-database read access and requires an actual PERMISSION_DENIED for a non-customer probe in the default database. It refuses to start otherwise. Public release also requires this isolationVerified health flag at the exact approved SHA.
+
+The builder uses E2_MEDIUM because this project rejects the high-CPU regional builder. The dedicated runtime must pass its real IAM isolation probe and exact-SHA health check before the canonical TEST owner is staged. Traffic targets the explicit SHA-derived staged revision, never a possibly stale latestReadyRevisionName.

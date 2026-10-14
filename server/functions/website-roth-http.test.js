@@ -45,7 +45,11 @@ test("runtime refuses default database, LIVE keys, missing allowlist and live en
 
 test("runtime isolation requires actual named read permission and explicit default permission denial", async () => {
   const {verifyTestDatabaseIsolation} = require("./cloud-run-website-roth");
-  const database = (read) => ({collection: () => ({doc: () => ({get: read})})});
+  const database = (read) => ({collection: (name) => {
+    assert.equal(name, "rothPermissionProbe");
+    assert.ok(!/^__.*__$/.test(name));
+    return {doc: () => ({get: read})};
+  }});
   const allowed = database(async () => ({}));
   const denied = database(async () => {
 throw Object.assign(new Error("denied"), {code: 7});
