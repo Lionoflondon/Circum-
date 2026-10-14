@@ -37,3 +37,8 @@ test('wallet realms remain distinct for LIVE and TEST responses',()=>{
  const app=fs.readFileSync(new URL('../web/roth/app.js',import.meta.url),'utf8');
  assert(app.includes('roth-live-verification'));
 });
+
+test('release controls reject unapproved caps, routes and queue changes', async () => {
+ const {execFileSync}=await import('node:child_process');
+ execFileSync('python3',['-m','unittest','scripts/test_roth_release_controls.py'],{cwd:new URL('..',import.meta.url)});
+});
