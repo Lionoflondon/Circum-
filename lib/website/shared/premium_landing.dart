@@ -733,12 +733,13 @@ class _StoreDownloadFooter extends StatelessWidget {
 }
 
 class _StoreDownloads extends StatelessWidget {
-  const _StoreDownloads({this.compact = false});
+  const _StoreDownloads({this.compact = false, this.inFooter = false});
+  final bool inFooter;
   final bool compact;
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        padding: compact
+        padding: inFooter ? EdgeInsets.zero : compact
             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
             : const EdgeInsets.only(top: 38, bottom: 30),
         child: compact
@@ -763,14 +764,14 @@ class _StoreDownloads extends StatelessWidget {
   Widget _app(String title, String description, String apple, String google) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Download $title',
-            style: const TextStyle(
-                color: _landingInk,
+            style: TextStyle(
+                color: inFooter ? Colors.white : _landingInk,
                 fontSize: 20,
                 fontFamily: 'D-DIN-Bold',
                 fontWeight: FontWeight.w400)),
         const SizedBox(height: 8),
         Text(description,
-            style: const TextStyle(color: _landingMuted, fontSize: 14)),
+            style: TextStyle(color: inFooter ? Colors.white70 : _landingMuted, fontSize: 14)),
         const SizedBox(height: 18),
         Wrap(spacing: 10, runSpacing: 10, children: [
           _storeLink('App Store', 'Download on the', Icons.apple, apple, title),
