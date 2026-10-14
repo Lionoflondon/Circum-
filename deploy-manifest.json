@@ -23,7 +23,10 @@
         "scripts/deploy_public_web.sh",
         "scripts/deploy_website_roth_test.sh",
         "scripts/verify_roth_test_containment.py",
-        "scripts/website_roth_routes.test.mjs"
+        "scripts/website_roth_routes.test.mjs",
+        "scripts/deploy_website_roth_live_candidate.sh",
+        "scripts/prepare_roth_live_overlays.py",
+        "scripts/test_roth_live_overlays.cjs"
       ],
       "forbiddenPrefixes": [
         "lib/main.dart",
@@ -531,7 +534,13 @@
         "docs/ROTH_WEBSITE_TEST_RELEASE.md",
         ".github/workflows/ci.yml",
         "server/functions/stripe-webhook-core.js",
-        "server/functions/stripe-webhook-core.test.js"
+        "server/functions/stripe-webhook-core.test.js",
+        "scripts/deploy_website_roth_live_candidate.sh",
+        "scripts/prepare_roth_live_overlays.py",
+        "scripts/test_roth_live_overlays.cjs",
+        "server/functions/cloud-run-website-roth-live.js",
+        "server/functions/website-roth-live.test.js",
+        "server/functions/cloudbuild.website-roth-live.yaml"
       ],
       "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
     }

@@ -3,18 +3,35 @@ const form = document.querySelector('#account-form');
 const verification = document.querySelector('#verification');
 const statusLine = document.querySelector('#status');
 const config = window.ROTH_CONFIG || {};
+const environment = config.environment === 'live' ? 'live' : 'test';
+const test = environment === 'test';
+const storageKey = test ? 'roth-verification' : 'roth-live-verification';
+const apiPath = test ? '/api/roth' : '/api/roth-live';
+if (!test) statusLine.textContent = 'Verify your registered Circum account to buy ROTH.';
 let access = null;
 let challenge = null;
 let busy = false;
+let completedOrder = false;
 let appCheckPromise;
 const panel = document.createElement('div');
 panel.hidden = true;
 panel.innerHTML = '<p id="balance" aria-live="polite"></p><label for="amount">Test top-up amount (£)</label><input id="amount" type="number" min="1" max="100000" step="1" value="1"><p id="quote">£1 adds 1 test ROTH.</p><button class="button" id="pay">Continue to Stripe TEST</button><button class="back" id="refresh-wallet">Refresh balance and payment</button><button class="back" id="logout">Log out</button>';
+if (!test) {
+  panel.querySelector('label').textContent = 'Top-up amount (£)';
+  panel.querySelector('#quote').textContent = '£1 adds 1 ROTH.';
+  panel.querySelector('#pay').textContent = 'Continue to Stripe';
+}
 verification.after(panel);
+if (config.privateCertification) {
+  const notice=document.createElement('p');
+  notice.className='preview-note';
+  notice.textContent='LIVE verification: this purchase uses real money. Public purchases remain unavailable.';
+  panel.before(notice);
+}
 const amount = document.querySelector('#amount');
 amount.addEventListener('input', () => {
   const n = Number(amount.value);
-  document.querySelector('#quote').textContent = Number.isInteger(n) && n >= 1 && n <= 100000 ? `£${n.toLocaleString("en-GB")} adds ${n.toLocaleString("en-GB")} test ROTH.` : 'Choose a whole-pound amount between £1 and £100,000.';
+  document.querySelector('#quote').textContent = Number.isInteger(n) && n >= 1 && n <= 100000 ? `£${n.toLocaleString("en-GB")} adds ${n.toLocaleString("en-GB")}${test ? ' test' : ''} ROTH.` : 'Choose a whole-pound amount between £1 and £100,000.';
 });
 async function secureToken() {
   if (!config.appCheckSiteKey || !config.firebaseAppId) throw Error('Secure verification is unavailable.');
@@ -31,7 +48,7 @@ async function secureToken() {
 }
 async function api(action, data) {
   if (!config.enabled) throw Error('Top-ups are not available yet. Nothing has been charged.');
-  const response = await fetch(`/api/roth/${action}`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Firebase-AppCheck': await secureToken()}, body: JSON.stringify(data)});
+  const response = await fetch(`${apiPath}/${action}`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Firebase-AppCheck': await secureToken()}, body: JSON.stringify(data)});
   let value;
   try {value = await response.json();} catch (_) {throw Error('Unable to read the server response.');}
   if (!response.ok) {
@@ -48,17 +65,19 @@ async function run(operation) {
   finally {busy = false; document.querySelectorAll('.checkout button').forEach(b => b.disabled = false);}
 }
 function reset() {
-  access = null; challenge = null;
-  sessionStorage.removeItem('roth-verification');
+  access = null; challenge = null; completedOrder = false;
+  sessionStorage.removeItem(storageKey);
   panel.hidden = true; verification.hidden = true; form.hidden = false;
   document.querySelector('#balance').textContent = '';
   document.querySelector('#code').value = '';
-  statusLine.textContent = 'Verify your registered account to view your test wallet.';
+  statusLine.textContent = `Verify your registered account to view your ${test ? 'test ' : ''}wallet.`;
 }
 async function refresh() {
   const state = await api('status', validateAccess(access));
-  statusLine.textContent = paymentMessage(state);
-  document.querySelector('#balance').textContent = `Test wallet balance: ${validateWallet(state).balance} ROTH`;
+  statusLine.textContent = paymentMessage(state, environment);
+  completedOrder = ['credited', 'failed', 'cancelled'].includes(state.status);
+  document.querySelector('#pay').textContent = completedOrder ? 'Start a new top-up' : (test ? 'Continue to Stripe TEST' : 'Continue to Stripe');
+  document.querySelector('#balance').textContent = `${test ? 'Test wallet' : 'Wallet'} balance: ${validateWallet(state, environment).balance} ROTH`;
 }
 form.addEventListener('submit', event => {
   event.preventDefault();
@@ -73,21 +92,22 @@ form.addEventListener('submit', event => {
 });
 document.querySelector('#verify-code').addEventListener('click', () => run(async () => {
   access = validateAccess(await api('verify', {...challenge, code: document.querySelector('#code').value}));
-  sessionStorage.setItem('roth-verification', JSON.stringify(access));
+  sessionStorage.setItem(storageKey, JSON.stringify(access));
   verification.hidden = true; panel.hidden = false;
-  const wallet = validateWallet(await api('wallet', access));
-  document.querySelector('#balance').textContent = `Test wallet balance: ${wallet.balance} ROTH`;
-  statusLine.textContent = 'Account verified. Stripe TEST only; your real wallet remains separate.';
+  const wallet = validateWallet(await api('wallet', access), environment);
+  document.querySelector('#balance').textContent = `${test ? 'Test wallet' : 'Wallet'} balance: ${wallet.balance} ROTH`;
+  statusLine.textContent = test ? 'Account verified. Stripe TEST only; your real wallet remains separate.' : 'Account verified. Choose your ROTH top-up.';
 }));
 document.querySelector('#back').addEventListener('click', reset);
 document.querySelector('#pay').addEventListener('click', () => run(async () => {
+  if (completedOrder) {reset(); return;}
   if (!amount.reportValidity()) return;
   const result = await api('checkout', {...validateAccess(access), amountPence: Math.round(Number(amount.value) * 100)});
   location.assign(checkoutDestination(result.checkoutUrl));
 }));
 document.querySelector('#refresh-wallet').addEventListener('click', () => run(refresh));
 document.querySelector('#logout').addEventListener('click', () => run(async () => {try {await api('logout', validateAccess(access));} finally {reset();}}));
-try {access = validateAccess(JSON.parse(sessionStorage.getItem('roth-verification')));} catch (_) {access = null; sessionStorage.removeItem('roth-verification');}
+try {access = validateAccess(JSON.parse(sessionStorage.getItem(storageKey)));} catch (_) {access = null; sessionStorage.removeItem(storageKey);}
 if (access) {
   form.hidden = true; panel.hidden = false;
   run(async () => {

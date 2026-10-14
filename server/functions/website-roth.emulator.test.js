@@ -145,3 +145,24 @@ throw new Error("No credit expected");
   for (const amountPence of [10000001, 10000100, 99, 101, Number.MAX_SAFE_INTEGER + 1]) await assert.rejects(limitService.checkout({...access, amountPence}));
   assert.equal((await limitService.checkout({...access, amountPence: 10000000})).sessionId, "cs_test_maximum");
 });
+
+test("LIVE credit guard rejects changed owners and frozen purchases atomically while preserving completed-payment idempotency", async () => {
+  const {guardedWalletDatabase} = require("./cloud-run-website-roth-live");
+  const {recordRothMovement} = require("./roth-ledger");
+  const walletRef = db.collection("wallets").doc(walletIdForEmail(alice.email));
+  const args = {db: guardedWalletDatabase(db, alice.uid), userId: walletIdForEmail(alice.email), userEmail: alice.email, uid: alice.uid, amount: 1, balanceType: "rothCredit", type: require("./roth-ledger-core").TRANSACTION_TYPES.userTopUp, reason: "Owned LIVE guard fixture", transactionId: "website_live_owned_guard"};
+  await walletRef.set({uid: bob.uid, balance: 10, rothCredit: 10});
+  await assert.rejects(recordRothMovement(args), /ownership/);
+  assert.equal((await db.collection("walletTransactions").doc(args.transactionId).get()).exists, false);
+  assert.equal((await walletRef.get()).data().balance, 10);
+  await walletRef.set({uid: alice.uid, balance: 10, rothCredit: 10});
+  await db.collection("senderWallets").doc(alice.uid).set({balance: 10});
+  await Promise.all([recordRothMovement(args), recordRothMovement(args)]);
+  assert.equal((await walletRef.get()).data().balance, 11);
+  await walletRef.update({isFrozen: true});
+  await recordRothMovement(args);
+  await assert.rejects(recordRothMovement({...args, transactionId: "website_live_frozen_new"}), /availability/);
+  assert.equal((await db.collection("walletTransactions").doc("website_live_frozen_new").get()).exists, false);
+  assert.equal((await walletRef.get()).data().balance, 11);
+  assert.equal((await db.collection("wallets").doc(walletIdForEmail(bob.email)).get()).data().rothCredit, 19);
+});
