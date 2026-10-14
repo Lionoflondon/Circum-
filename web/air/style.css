@@ -32,3 +32,5 @@
 .zones article>div{min-height:36px}
 
 .image-tag{right:auto;left:28px;bottom:55px;padding:10px 12px;background:#e3f2fff2;border-radius:5px;text-shadow:none}.image-tag .picture-logo{width:180px;height:auto;object-fit:contain;border-radius:0}@media(max-width:760px){.image-tag{left:15px;padding:8px 10px}.image-tag .picture-logo{width:145px;height:auto}}
+
+.image-tag{background:none;border-radius:0}
