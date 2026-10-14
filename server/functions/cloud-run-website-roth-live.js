@@ -77,10 +77,10 @@ await testDb.collection("rothPermissionProbe").doc("nonexistent").get();
   }
   throw new Error("LIVE identity must not access TEST financial records.");
 }
-function assertWalletOwner(snapshot, uid, {requireAvailable = false} = {}) {
+function assertWalletOwner(snapshot, uid, {requireAvailable = false, uidDocument = false} = {}) {
   if (!snapshot.exists) return;
   const item = snapshot.data();
-  if (item.uid !== uid || (requireAvailable && (item.isFrozen === true || item.frozen === true))) throw Object.assign(new Error("Wallet ownership or availability needs review."), {statusCode: 400});
+  if ((item.uid !== uid && !(uidDocument && item.uid == null && snapshot.id === uid)) || (requireAvailable && (item.isFrozen === true || item.frozen === true))) throw Object.assign(new Error("Wallet ownership or availability needs review."), {statusCode: 400});
 }
 function assertWalletAccounting(wallet, projection) {
   const legacy = wallet?.exists ? wallet.data() : {};
@@ -103,7 +103,7 @@ return async (...refs) => {
         const snapshots = await transaction.getAll(...refs);
         const completed = snapshots.some((s, i) => refs[i].parent.id === "walletTransactions" && s.exists && s.data().uid === uid && s.data().status === "completed");
         snapshots.forEach((s, i) => {
-if (["wallets", "senderWallets"].includes(refs[i].parent.id)) assertWalletOwner(s, uid, {requireAvailable: !completed});
+if (["wallets", "senderWallets"].includes(refs[i].parent.id)) assertWalletOwner(s, uid, {requireAvailable: !completed, uidDocument: refs[i].parent.id === "senderWallets"});
 });
         const walletIndex = refs.findIndex((r) => r.parent.id === "wallets");
         const projectionIndex = refs.findIndex((r) => r.parent.id === "senderWallets");
@@ -151,7 +151,7 @@ async function production() {
     const id = require("./wallet-core").walletIdForEmail(user.email);
     const [wallet, projection] = await Promise.all([db.collection("wallets").doc(id).get(), db.collection("senderWallets").doc(user.uid).get()]);
     assertWalletOwner(wallet, user.uid);
-    assertWalletOwner(projection, user.uid);
+    assertWalletOwner(projection, user.uid, {uidDocument: true});
     assertWalletAccounting(wallet, projection);
     return user;
   };

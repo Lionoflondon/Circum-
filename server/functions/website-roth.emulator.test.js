@@ -156,7 +156,7 @@ test("LIVE credit guard rejects changed owners and frozen purchases atomically w
   assert.equal((await db.collection("walletTransactions").doc(args.transactionId).get()).exists, false);
   assert.equal((await walletRef.get()).data().balance, 10);
   await walletRef.set({uid: alice.uid, balance: 10, rothCredit: 10});
-  await db.collection("senderWallets").doc(alice.uid).set({uid: alice.uid, balance: 10});
+  await db.collection("senderWallets").doc(alice.uid).set({balance: 10});
   await Promise.all([recordRothMovement(args), recordRothMovement(args)]);
   assert.equal((await walletRef.get()).data().balance, 11);
   await walletRef.update({isFrozen: true});

@@ -29,6 +29,9 @@ test("wallet owner and freeze checks guard the financial transaction before writ
   assertWalletOwner({exists: true, data: () => ({uid: "owner"})}, "owner");
   assert.throws(() => assertWalletOwner({exists: true, data: () => ({uid: "other"})}, "owner"));
   assert.throws(() => assertWalletOwner({exists: true, data: () => ({uid: "owner", isFrozen: true})}, "owner", {requireAvailable: true}));
+  assertWalletOwner({exists: true, id: "owner", data: () => ({balance: 10})}, "owner", {uidDocument: true});
+  assert.throws(() => assertWalletOwner({exists: true, id: "other", data: () => ({balance: 10})}, "owner", {uidDocument: true}));
+  assert.throws(() => assertWalletOwner({exists: true, id: "owner", data: () => ({uid: "other"})}, "owner", {uidDocument: true}));
   let writes = 0;
   const db = {runTransaction: (fn) => fn({getAll: async () => [{exists: true, data: () => ({uid: "other"})}], create: () => {
 writes++;
