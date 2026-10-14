@@ -6,3 +6,5 @@
 /* Ice-blue canvas across all formerly white surfaces. */
 :root{--paper:#e2f2ff}body,header,.how,.hub,.closing,footer{background:#e2f2ff}.hero{background:linear-gradient(125deg,#e2f2ff,#deebff 55%,#e9e8ff)}.london{background:linear-gradient(120deg,#d5ebff,#e0e9ff 57%,#e9e8ff)}.zones article{background:#eaf6ff}.steps article:nth-child(1){background:#d0e9ff}.steps article:nth-child(2){background:#e0e5ff}.steps article:nth-child(3){background:#ece6ff}.resources span{background:#d2e9ff}.resources span:nth-child(2){background:#dde4ff}.resources span:nth-child(3){background:#e7e5ff}.resources span:nth-child(4){background:#dbefff}
 .air-wordmark{gap:7px}.air-wordmark>span{border-left:0;padding-left:0;letter-spacing:2px;font-size:32px;line-height:1}.air-wordmark img{width:162px}@media(max-width:760px){.air-wordmark{gap:6px}.air-wordmark>span{font-size:28px;letter-spacing:1.5px;padding-left:0}.air-wordmark img{width:139px}}
+
+.air-wordmark{display:block}.air-wordmark img{width:252px;height:auto;display:block}@media(max-width:760px){.air-wordmark img{width:224px}}
