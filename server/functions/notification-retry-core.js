@@ -6,6 +6,7 @@ const {getFirestore, FieldPath, FieldValue, Timestamp} = require("firebase-admin
 const {getMessaging} = require("firebase-admin/messaging");
 const deviceTokenAuthority = require("./device-token-authority");
 const {pushMessageFor} = require("./communication-engine");
+const {reserveRetryDeliveries} = require("./notification-retry-rate-limit");
 
 const PAGE_LIMIT = 100;
 const LEGACY_PAGE_LIMIT = 10;
@@ -173,7 +174,7 @@ return {scanned: page.size + scheduled.size, due: docs.length,
     wouldSkipStale: docs.filter((doc) => isStale(doc.data() || {}, now)).length, dryRun: true};
 }
   const result = {scanned: page.size + scheduled.size, sent: 0, exhausted: 0, retriedLater: 0,
-    skipped: 0, uncertain: recovery.uncertain, recovered: recovery.recovered, invalidTokenCleanupFailed: 0};
+    skipped: 0, uncertain: recovery.uncertain, recovered: recovery.recovered, invalidTokenCleanupFailed: 0, rateLimited: 0};
   for (const doc of docs) {
     // Non-due rows need no claim transaction; claim still rechecks fresh state.
     if (!due(doc.data() || {}, now)) continue;
@@ -208,6 +209,18 @@ return {scanned: page.size + scheduled.size, due: docs.length,
         retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
       });
       result.skipped++;
+      continue;
+    }
+    const reservation = await reserveRetryDeliveries(db, Array.isArray(token) ? token.length : 1);
+    if (!reservation.allowed) {
+      await writeClaim(db, doc.ref, claimId, {
+        pushDeliveryStatus: reservation.oversized ? "manual_review" : "failed",
+        retryable: !reservation.oversized,
+        nextRetryAt: reservation.oversized ? null : Timestamp.fromMillis(reservation.retryAt),
+        failureReason: reservation.oversized ? "recipient_batch_exceeds_retry_limit" : row.failureReason,
+        retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
+      });
+      result.rateLimited++;
       continue;
     }
     const attempts = Number(row.deliveryAttempts || 0) + 1;
