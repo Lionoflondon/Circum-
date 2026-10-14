@@ -20,3 +20,5 @@
 .air-wordmark{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:0}.air-wordmark>.drone-wordmark{font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:400;letter-spacing:1.2px;line-height:1.2;padding:0;border:0;background:linear-gradient(100deg,#2d89d4,#2455f5 58%,#8c28ff);background-clip:text;-webkit-background-clip:text;color:transparent}@media(max-width:760px){.air-wordmark>.drone-wordmark{font-size:28px;letter-spacing:1px}}
 
 .air-wordmark>.drone-wordmark{font-family:DDIN,Arial,sans-serif}
+
+.air-wordmark img{width:217.7px;height:25.2px;display:block}@media(max-width:760px){.air-wordmark img{width:217.7px;height:25.2px}}
