@@ -154,3 +154,43 @@ test("due timestamp work bypasses a full page of future retries and preserves le
   assert.deepEqual(sent.sort(), ["0-legacy", "z-due"]);
   assert.equal((await db.doc("notifications/a-future-000").get()).data().pushDeliveryStatus, "failed");
 }));
+
+test("global rolling limit caps concurrent retries and preserves deferred work", async () => withDb("rate", async (db) => {
+  const {reserveRetryDeliveries} = require("./notification-retry-rate-limit");
+  const base = Date.now();
+  const grants = await Promise.all(Array.from({length: 16}, () => reserveRetryDeliveries(db, 1, () => base)));
+  assert.equal(grants.filter((r) => r.allowed).length, 10);
+  assert.equal((await reserveRetryDeliveries(db, 1, () => base + 59999)).allowed, false);
+  assert.equal((await reserveRetryDeliveries(db, 10, () => base + 60000)).allowed, true);
+  await seed(db, "limited", {type: "chat_message"});
+  let sends = 0;
+  const result = await processNotificationRetriesCore({db, ownedToken: async () => "token-1", sendPush: async () => {
+    sends++; return "unexpected";
+  }});
+  assert.equal(sends, 0);
+  assert.equal(result.rateLimited, 1);
+  const row = (await db.doc("notifications/limited").get()).data();
+  assert.equal(row.retryable, true);
+  assert.equal(row.pushDeliveryStatus, "failed");
+  assert.equal(row.deliveryAttempts, 1);
+  assert.equal(row.failureReason, "messaging/quota-exceeded");
+  assert.equal(row.retryClaimId, undefined);
+  assert.ok(row.nextRetryAt.toMillis() > Date.now());
+}));
+
+test("rate admission counts multicast recipients and fails closed on corrupted state", async () => withDb("rate-multi", async (db) => {
+  const {reserveRetryDeliveries} = require("./notification-retry-rate-limit");
+  const now = Date.now();
+  assert.equal((await reserveRetryDeliveries(db, 8, () => now)).allowed, true);
+  assert.equal((await reserveRetryDeliveries(db, 3, () => now)).allowed, false);
+  assert.equal((await reserveRetryDeliveries(db, 2, () => now)).allowed, true);
+  assert.equal((await reserveRetryDeliveries(db, 11, () => now)).oversized, true);
+  await db.doc("operationsState/notification_retry_rate_limit_v1").set({attemptTimes: "corrupt"});
+  await assert.rejects(reserveRetryDeliveries(db, 1, () => now), /rate_limit_invalid/);
+  await seed(db, "fail-closed", {type: "chat_message"});
+  let sends = 0;
+  await assert.rejects(processNotificationRetriesCore({db, ownedToken: async () => "token", sendPush: async () => {
+    sends++; return "unexpected";
+  }}), /rate_limit_invalid/);
+  assert.equal(sends, 0);
+}));
