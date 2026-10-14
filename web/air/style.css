@@ -8,3 +8,7 @@
 .air-wordmark{gap:7px}.air-wordmark>span{border-left:0;padding-left:0;letter-spacing:2px;font-size:32px;line-height:1}.air-wordmark img{width:162px}@media(max-width:760px){.air-wordmark{gap:6px}.air-wordmark>span{font-size:28px;letter-spacing:1.5px;padding-left:0}.air-wordmark img{width:139px}}
 
 .air-wordmark{display:block}.air-wordmark img{width:252px;height:auto;display:block}@media(max-width:760px){.air-wordmark img{width:224px}}
+
+.air-wordmark img{width:278px}@media(max-width:760px){.air-wordmark img{width:238px}}
+
+.air-wordmark{display:flex;justify-content:center;width:100%}
