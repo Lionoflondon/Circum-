@@ -27,8 +27,3 @@ footer .store-links{display:flex;flex-wrap:wrap;gap:10px}footer .store-links a{d
 
 /* Slate blue ties the Business discovery page to its account entry. */
 .business .light-dot{background:var(--accent);box-shadow:0 0 9px var(--accent)}.business .bright:hover{background:#dce5f2}.business .bright{color:#142238}.business .moment{background:#e7edf5}.business .moment-copy{color:#24364f}.business .moment .eyebrow{color:#526b8e}.business .journey-panel{background:radial-gradient(ellipse at top right,#526b8e40,transparent 75%),#0a101a}.business .closing{background:radial-gradient(ellipse at top,#526b8e40,transparent 70%)}.business ::selection{background:#90a8cb;color:#030506}.business :focus-visible{outline-color:#90a8cb}
-
-/* Consistent Circum home icon across discovery headers. */
-.header .home-icon{display:inline-flex;align-items:center;gap:12px;width:auto;height:auto;overflow:visible;flex-shrink:0}.header .home-icon img{position:static;width:44px;height:44px;max-width:44px;object-fit:contain;mix-blend-mode:normal}.header .home-icon strong{font-family:inherit;font-weight:400;font-size:26px;letter-spacing:-.6px;color:#f4f3f0}@media(max-width:650px){.header .home-icon{gap:9px}.header .home-icon img{width:36px;height:36px;max-width:36px}.header .home-icon strong{font-size:20px}}@media(max-width:420px){.business .header .home-icon strong{font-size:17px}.business .header .home-icon{gap:7px}}
-
-@media(max-width:1000px){.header nav{display:none}}

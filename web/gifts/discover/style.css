@@ -20,7 +20,5 @@ footer .store-links{display:flex;flex-wrap:wrap;gap:10px}footer .store-links a{d
 em,i{font-family:inherit;font-style:normal}
 h1 em{letter-spacing:inherit}
 
-/* Consistent Circum home icon across discovery headers. */
-.header .home-icon{display:inline-flex;align-items:center;gap:12px;width:auto;height:auto;overflow:visible;flex-shrink:0}.header .home-icon img{position:static;width:44px;height:44px;max-width:44px;object-fit:contain;mix-blend-mode:normal}.header .home-icon strong{font-family:inherit;font-weight:400;font-size:26px;letter-spacing:-.6px;color:#f4f3f0}@media(max-width:650px){.header .home-icon{gap:9px}.header .home-icon img{width:36px;height:36px;max-width:36px}.header .home-icon strong{font-size:20px}}@media(max-width:420px){.business .header .home-icon strong{font-size:17px}.business .header .home-icon{gap:7px}}
-
-@media(max-width:1000px){.header nav{display:none}}
+/* Match the Health+ and Circum Business header treatment. */
+.header .service-brand{width:auto;height:auto;font-size:28px;letter-spacing:-1px;line-height:1;overflow:visible}.header .service-brand strong{font-weight:400;color:#d2f6ee}@media(max-width:800px){.header .service-brand{font-size:23px}}@media(max-width:420px){.header .service-brand{font-size:21px}}
