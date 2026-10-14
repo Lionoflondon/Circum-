@@ -35,3 +35,13 @@ Website checkout and PaymentIntent metadata explicitly identify the named TEST d
 Runtime startup independently probes named-database read access and requires an actual PERMISSION_DENIED for a non-customer probe in the default database. It refuses to start otherwise. Public release also requires this isolationVerified health flag at the exact approved SHA.
 
 The builder uses E2_MEDIUM because this project rejects the high-CPU regional builder. The dedicated runtime must pass its real IAM isolation probe and exact-SHA health check before the canonical TEST owner is staged. Traffic targets the explicit SHA-derived staged revision, never a possibly stale latestReadyRevisionName.
+
+## Restricted LIVE certification candidate
+
+TEST certification must independently prove automatic signed delivery, provider retry, exactly one canonical credit and receipt, and isolation. The candidate deploy script requires that report, the exact protected main SHA, a private UID allowlist, pinned LIVE-only secrets, and the reviewed containment baseline. Public LIVE stays disabled.
+
+The LIVE service reads the default database and must be denied the named TEST database. It validates the merchant, verified account owner, wallet ownership, freeze state and balance agreement before issuing or finalizing Checkout. Return pages only read status. TEST and LIVE capabilities use different browser storage and endpoints.
+
+Healthy Stripe and password-recovery email owners use immutable existing images with one-file overlays. The build rejects source hash drift; original source SHAs and other routes stay intact. Website artifacts delegate to the dedicated owner; existing refund handlers remain unchanged. The email publisher excludes the dedicated website receipt. Run `python3 scripts/prepare_roth_live_overlays.py` and `node scripts/test_roth_live_overlays.cjs` before release. Generated overlay files are build artifacts.
+
+Publish `/roth/live-cert/` using `enable_roth_live_candidate=true`, `enable_roth_test=true` and the independently certified TEST runtime SHA. This is an explicitly versioned interface pair; it does not redeploy TEST or native apps. The LIVE endpoint permits only the private account. Complete a real purchase through a human-controlled payment step and reconcile delivery, wallet, ledger and email before setting public mode with the exact certified source SHA. Public Hosting activation requires matching healthy public LIVE runtime. Never bypass that gate or release held queues.

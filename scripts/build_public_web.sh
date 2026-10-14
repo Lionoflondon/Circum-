@@ -43,7 +43,12 @@ rm -rf "$OUTPUT_DIR"
 node "$ROOT_DIR/scripts/finalize_web_artifact.js" website "$OUTPUT_DIR"
 node "$ROOT_DIR/scripts/validate_web_artifacts.js" --surface=website
 
-# ROTH purchases remain disabled unless this exact TEST release is requested.
+# Public LIVE is gated separately from the restricted certification page.
+if [[ "${WEBSITE_ROTH_TEST_ENABLED:-false}" == "true" && "${WEBSITE_ROTH_LIVE_PUBLIC_ENABLED:-false}" == "true" ]]; then
+  echo 'Choose one canonical ROTH wallet realm.' >&2
+  exit 1
+fi
+# ROTH purchases remain disabled unless an explicit release mode is requested.
 if [[ "${WEBSITE_ROTH_TEST_ENABLED:-false}" == "true" ]]; then
   ROTH_APP_CHECK_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" node - <<'NODE'
 const fs = require('fs');
@@ -53,5 +58,25 @@ const publicOptions = fs.readFileSync('lib/website/shared/firebase/website_fireb
 const firebaseAppId = /appId:\s*'([^']+)'/.exec(publicOptions)?.[1];
 if (!firebaseAppId || !firebaseAppId.startsWith('1:516426305461:web:')) throw Error('Public Website Firebase app identity required');
 fs.writeFileSync('build/public_web/roth/config.js', 'window.ROTH_CONFIG = ' + JSON.stringify({enabled:true,environment:'test',firebaseAppId,appCheckSiteKey:siteKey}) + ';\n');
+NODE
+fi
+
+# Restricted LIVE certification page; canonical ROTH remains on its selected realm.
+if [[ "${WEBSITE_ROTH_LIVE_CANDIDATE_ENABLED:-false}" == "true" ]]; then
+  ROTH_APP_CHECK_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" node - <<'NODE'
+const fs=require('fs');
+const firebaseAppId=/appId:\s*'([^']+)'/.exec(fs.readFileSync('lib/website/shared/firebase/website_firebase_options.dart','utf8'))?.[1];
+if(!firebaseAppId || !process.env.ROTH_APP_CHECK_SITE_KEY) throw Error('Public Website identity required');
+fs.cpSync('web/roth','build/public_web/roth/live-cert',{recursive:true});
+fs.writeFileSync('build/public_web/roth/live-cert/config.js','window.ROTH_CONFIG = '+JSON.stringify({enabled:true,environment:'live',privateCertification:true,firebaseAppId,appCheckSiteKey:process.env.ROTH_APP_CHECK_SITE_KEY})+';\n');
+NODE
+fi
+
+if [[ "${WEBSITE_ROTH_LIVE_PUBLIC_ENABLED:-false}" == "true" ]]; then
+  ROTH_APP_CHECK_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" node - <<'NODE'
+const fs=require('fs');
+const firebaseAppId=/appId:\s*'([^']+)'/.exec(fs.readFileSync('lib/website/shared/firebase/website_firebase_options.dart','utf8'))?.[1];
+if(!firebaseAppId || !process.env.ROTH_APP_CHECK_SITE_KEY) throw Error('Public Website identity required');
+fs.writeFileSync('build/public_web/roth/config.js','window.ROTH_CONFIG = '+JSON.stringify({enabled:true,environment:'live',firebaseAppId,appCheckSiteKey:process.env.ROTH_APP_CHECK_SITE_KEY})+';\n');
 NODE
 fi
