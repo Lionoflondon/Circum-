@@ -3,6 +3,7 @@
 const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {processNotificationRetriesCore} = require("./notification-retry-core");
+const {LIMIT, WINDOW_MS} = require("./notification-retry-rate-limit");
 
 const {handleMaintenance} = require("./delivery-maintenance-http");
 
@@ -24,7 +25,8 @@ function createServer(run = processNotificationRetriesCore) {
     const path = new URL(req.url, "http://localhost").pathname;
     if (req.method === "GET" && ["/health", "/healthz"].includes(path)) {
       res.writeHead(200, {"content-type": "application/json"});
-      res.end(JSON.stringify({ok: true, service: "notification-retries", sourceSha: process.env.SOURCE_SHA || "unknown"}));
+      res.end(JSON.stringify({ok: true, service: "notification-retries", sourceSha: process.env.SOURCE_SHA || "unknown",
+        retryRateLimit: {deviceAttempts: LIMIT, windowSeconds: WINDOW_MS / 1000}}));
       return;
     }
     if (req.method === "POST" && path === "/dry-run") {
