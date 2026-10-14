@@ -454,7 +454,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
                 onAccept: () => _setCookiePreferences(true, true),
                 onManage: _showConsentPreferences,
               ),
-            if (kIsWeb && _cookieConsent != null)
+            if (kIsWeb && _cookieConsent != null && _mode != _WebAppMode.landing)
               Positioned(left: 16, bottom: 16, child: SafeArea(
                 child: Material(color: _landingPaper,
                   borderRadius: BorderRadius.circular(20),
@@ -564,6 +564,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           newsletterSource: _newsletterSource,
           analyticsAllowed: () => _readCookiePreferences()?.analytics == true,
           onNewsletter: _scrollToNewsletter,
+          onCookieSettings: _showConsentPreferences,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
     };
@@ -1069,6 +1070,7 @@ class _LandingPage extends StatelessWidget {
   final String newsletterSource;
   final bool Function() analyticsAllowed;
   final VoidCallback onNewsletter;
+  final VoidCallback onCookieSettings;
 
   const _LandingPage({
     super.key,
@@ -1084,6 +1086,7 @@ class _LandingPage extends StatelessWidget {
     required this.newsletterSource,
     required this.analyticsAllowed,
     required this.onNewsletter,
+    required this.onCookieSettings,
     required this.onToggleTheme,
   });
 
@@ -1139,6 +1142,7 @@ class _LandingPage extends StatelessWidget {
                   onBusiness: onBusiness,
                   onVanguard: onVanguard,
                   onNewsletter: onNewsletter,
+                  onCookieSettings: onCookieSettings,
                 ),
               ],
             ),
@@ -26367,254 +26371,150 @@ class _LandingFooter extends StatelessWidget {
   final VoidCallback onBusiness;
   final VoidCallback onVanguard;
   final VoidCallback onNewsletter;
+  final VoidCallback onCookieSettings;
 
-  const _LandingFooter({
-    required this.colors,
-    required this.onDeliveries,
-    required this.onHealthPlus,
-    required this.onGifts,
-    required this.onBusiness,
-    required this.onVanguard,
-    required this.onNewsletter,
-  });
+  const _LandingFooter(
+      {required this.colors,
+      required this.onDeliveries,
+      required this.onHealthPlus,
+      required this.onGifts,
+      required this.onBusiness,
+      required this.onVanguard,
+      required this.onNewsletter,
+      required this.onCookieSettings});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _StoreDownloads(),
-              const SizedBox(height: 12),
-              Text('STAY IN THE CIRCUM',
-                style: TextStyle(color: colors.text, fontSize: 14,
-                  letterSpacing: 1.4, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 14),
-              const Wrap(spacing: 12, runSpacing: 12, children: [
-                _FooterSocialLink(label: 'Instagram',
-                  url: 'https://www.instagram.com/circumuk/',
-                  icon: Icons.camera_alt_outlined,
-                  colours: [Color(0xff7937c8), Color(0xffc32e79), Color(0xffa94a00)]),
-                _FooterSocialLink(label: 'TikTok',
-                  url: 'https://www.tiktok.com/@circumuk',
-                  icon: Icons.music_note_rounded,
-                  colours: [Color(0xff007981), Color(0xff2455f5), Color(0xffb72273)]),
-                _FooterSocialLink(label: 'X',
-                  url: 'https://x.com/circumuk',
-                  colours: [Color(0xff2455f5), Color(0xff7937c8)]),
-              ]),
-              const SizedBox(height: 32),
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 24,
-                runSpacing: 18,
-                children: [
-                  CircumHomeLink(child: Image.asset(
-                    'assets/images/circum_wordmark.png',
-                    width: 118,
-                    height: 28,
-                    fit: BoxFit.contain,
-                  )),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 8,
-                    children: [
-                      if (newsletterSignupEnabled)
-                        _FooterServiceLink(
-                          label: 'Newsletter',
-                          uri: _CircumWebsiteAppState._canonicalWebUri('/'),
-                          onPressed: onNewsletter,
-                          localAction: true,
-                        ),
-                      _FooterServiceLink(
-                        label: 'Support',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/support',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/support',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Privacy Policy',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/privacy_policy',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/privacy_policy',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Terms of Service',
-                        uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Cookie Policy',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/cookie_policy',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/cookie_policy',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Account deletion',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/delete_account',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/delete_account',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '© ${DateTime.now().year} Circum Technologies Ltd.',
-                    style: TextStyle(color: colors.mutedText),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Services',
+  Widget _link(String label, String path, VoidCallback action) =>
+      _FooterServiceLink(
+          label: label,
+          uri: _CircumWebsiteAppState._canonicalWebUri(path),
+          onPressed: action, foregroundColor: Colors.white);
+
+  Widget _page(String label, String path) => _link(label, path, () {
+        unawaited(launchUrl(_CircumWebsiteAppState._canonicalWebUri(path),
+            webOnlyWindowName: '_self'));
+      });
+
+  Widget _group(String title, List<Widget> children) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Semantics(
+            header: true,
+            child: Text(title,
                 style: TextStyle(
-                  color: colors.text,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _FooterServiceLink(
-                    label: 'Deliveries',
-                    uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
-                    onPressed: onDeliveries,
-                  ),
-                  _FooterServiceLink(
-                    label: 'Health+',
-                    uri: _CircumWebsiteAppState._canonicalWebUri(
-                      '/send/health',
-                    ),
-                    onPressed: onHealthPlus,
-                  ),
-                  if (onGifts != null)
-                    _FooterServiceLink(
-                      label: 'Gifts',
-                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts/discover/'),
-                      onPressed: onGifts!,
-                    ),
-                  _FooterServiceLink(
-                    label: 'Business',
-                    uri: _CircumWebsiteAppState._canonicalWebUri(
-                      '/send/business',
-                    ),
-                    onPressed: onBusiness,
-                  ),
-                  _FooterServiceLink(
-                    label: 'Vanguard',
-                    uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
-                    onPressed: onVanguard,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FooterSocialLink extends StatelessWidget {
-  final String label;
-  final String url;
-  final IconData? icon;
-  final List<Color> colours;
-
-  const _FooterSocialLink({required this.label, required this.url,
-    required this.colours, this.icon});
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700))),
+        const SizedBox(height: 12),
+        ...children
+      ]);
 
   @override
-  Widget build(BuildContext context) {
-    return Link(
-      uri: Uri.parse(url),
-      target: LinkTarget.blank,
-      builder: (context, followLink) => Container(
-        width: 200,
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 28),
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: colours),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: colours.first.withValues(alpha: 0.22),
-            blurRadius: 14, offset: const Offset(0, 5))],
-        ),
-        child: TextButton(
-          onPressed: followLink,
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
-            minimumSize: const Size(170, 56),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            overlayColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) Icon(icon, size: 22)
-            else const Text('X', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(width: 10),
-            Text(icon == null ? 'Follow on X' : label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          ]),
-        ),
-      ),
-    );
-  }
+            color: const Color(0xff071c27),
+            border: Border(top: BorderSide(color: Colors.white12))),
+        child: Center(
+            child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 1000;
+            final narrow = constraints.maxWidth < 560;
+            final columnWidth = (constraints.maxWidth - 24) / 2;
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(spacing: 24, runSpacing: 32, children: [
+                    SizedBox(
+                        width: wide ? 270 : narrow ? constraints.maxWidth : columnWidth,
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircumHomeLink(
+                                  child: Image.asset(
+                                      'assets/images/circum_wordmark.png',
+                                      width: 156,
+                                      height: 38,
+                                      fit: BoxFit.contain, color: Colors.white)),
+                              const SizedBox(height: 16),
+                              Text('Your world. Connected.',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 16)),
+                              const SizedBox(height: 16),
+                              Wrap(spacing: 16, runSpacing: 4, children: [
+                                Link(
+                                    uri: Uri.parse(
+                                        'https://www.instagram.com/circumuk/'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('Instagram'))),
+                                Link(
+                                    uri: Uri.parse(
+                                        'https://www.tiktok.com/@circumuk'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('TikTok'))),
+                                Link(
+                                    uri: Uri.parse('https://x.com/circumuk'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('X'))),
+                              ]),
+                            ])),
+                    SizedBox(
+                        width: wide ? 170 : columnWidth,
+                        child: _group('Services', [
+                          _link('Deliveries', '/send', onDeliveries),
+                          _link('Health+', '/health/discover/', onHealthPlus),
+                          if (onGifts != null)
+                            _link('Gifts', '/gifts/discover/', onGifts!),
+                          _link('Circum Business', '/business/discover/',
+                              onBusiness),
+                          _page('ROTH', '/roth/'),
+                          _page('Riders', '/rider'),
+                          _link('Vanguard', '/vanguard', onVanguard),
+                        ])),
+                    SizedBox(
+                        width: wide ? 190 : columnWidth,
+                        child: _group('Help & privacy', [
+                          _page('Support', '/support'),
+                          if (newsletterSignupEnabled)
+                            _FooterServiceLink(
+                                label: 'Newsletter',
+                                uri: _CircumWebsiteAppState._canonicalWebUri(
+                                    '/'),
+                                onPressed: onNewsletter,
+                                localAction: true, foregroundColor: Colors.white),
+                          _page('Privacy Policy', '/privacy_policy'),
+                          _page('Terms of Service', '/terms'),
+                          _page('Cookie Policy', '/cookie_policy'),
+                          _FooterServiceLink(
+                              label: 'Cookie settings',
+                              uri: _CircumWebsiteAppState._canonicalWebUri(
+                                  '/cookie_policy'),
+                              onPressed: onCookieSettings,
+                              localAction: true, foregroundColor: Colors.white),
+                          _page('Account deletion', '/delete_account'),
+                        ])),
+                    SizedBox(
+                        width: wide ? constraints.maxWidth - 702 : narrow ? constraints.maxWidth : columnWidth,
+                        child: const _StoreDownloads(inFooter: true)),
+                  ]),
+                  const SizedBox(height: 32),
+                  Divider(color: Colors.white12),
+                  const SizedBox(height: 16),
+                  Text('© ${DateTime.now().year} Circum Technologies Ltd.',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ]);
+          }),
+        )),
+      );
 }
 
 class _FooterServiceLink extends StatelessWidget {
@@ -26622,12 +26522,14 @@ class _FooterServiceLink extends StatelessWidget {
   final Uri uri;
   final VoidCallback onPressed;
   final bool localAction;
+  final Color foregroundColor;
 
   const _FooterServiceLink({
     required this.label,
     required this.uri,
     required this.onPressed,
     this.localAction = false,
+    this.foregroundColor = _landingInk,
   });
 
   @override
@@ -26641,7 +26543,7 @@ class _FooterServiceLink extends StatelessWidget {
               ? () => web.window.location.assign(uri.toString())
               : onPressed,
           style: TextButton.styleFrom(
-            foregroundColor: _landingInk,
+            foregroundColor: foregroundColor,
             padding: EdgeInsets.zero,
             minimumSize: const Size(0, 48),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
