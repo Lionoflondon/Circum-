@@ -22,3 +22,7 @@
 .air-wordmark>.drone-wordmark{font-family:DDIN,Arial,sans-serif}
 
 .air-wordmark img{width:217.7px;height:25.2px;display:block}@media(max-width:760px){.air-wordmark img{width:217.7px;height:25.2px}}
+
+.one-wordmark{display:flex;justify-content:center;margin-bottom:36px}.one-wordmark img{display:block;width:236.6px;height:25.2px}
+
+.zones article{border:1px solid #2455f533;border-top:5px solid #2455f5;background:linear-gradient(145deg,#d9edff,#e7efff);box-shadow:0 6px 18px #2455f50b}.zones article:nth-child(1) h3,.zones article:nth-child(1)>div>span{color:#2455f5}.zones article:nth-child(2){border-color:#8c28ff40;border-top-color:#8c28ff;background:linear-gradient(145deg,#dfe9ff,#e9e5ff)}.zones article:nth-child(2) h3,.zones article:nth-child(2)>div>span{color:#7134cd}.zones article:nth-child(3){border-color:#ff00a033;border-top-color:#ff00a0;background:linear-gradient(145deg,#e0ecff,#eee5ff)}.zones article:nth-child(3) h3,.zones article:nth-child(3)>div>span{color:#b50075}.zones article:nth-child(4){border-color:#ff8c0040;border-top-color:#ff8c00;background:linear-gradient(145deg,#daedff,#e8eeff)}.zones article:nth-child(4) h3,.zones article:nth-child(4)>div>span{color:#a94b00}.zones article>div>span{font-size:12px;font-weight:700;letter-spacing:1.5px}.zones h3{font-weight:700}
