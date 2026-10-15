@@ -54,6 +54,8 @@ function build(out){
  }
  fs.writeFileSync(path.join(out,'robots.txt'),'User-agent: *\nAllow: /\nDisallow: /seo/routes/\nDisallow: /seo/account.html\n\nSitemap: '+origin+'/sitemap.xml\n');
  fs.writeFileSync(path.join(out,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+Object.keys(pages).map(r=>`  <url><loc>${origin+r}</loc></url>`).join('\n')+'\n</urlset>\n');
+ // Keep the previously submitted Search Console sitemap address valid.
+ fs.copyFileSync(path.join(out,'sitemap.xml'),path.join(out,'sitemap.website.xml'));
 }
 module.exports={build,metadata,pages,privateRoutes};
 if(require.main===module)build(process.argv[2]);
