@@ -71,13 +71,15 @@ void main() {
         contains('onConfirmVerification: _confirmSenderEmailVerification'));
   });
 
-  test('Sender web payment sheet uses the legal company display name', () {
-    expect(website, contains("merchantDisplayName: 'Circum Technologies'"));
-    expect(
-      RegExp(r"merchantDisplayName: 'Circum'(?! Technologies)")
-          .hasMatch(website),
-      isFalse,
-    );
+  test(
+      'Website adjustment payment uses hosted Checkout rather than native Stripe',
+      () {
+    expect(website, contains('WebsiteAdjustmentCheckout.pay'));
+    expect(website,
+        isNot(contains("import 'package:flutter_stripe/flutter_stripe.dart'")));
+    final checkout =
+        File('lib/website/shared/adjustment_checkout.dart').readAsStringSync();
+    expect(checkout, contains("uri.host != 'checkout.stripe.com'"));
   });
 
   test('Sender AuthBloc requires canonical account bootstrap before entry', () {
@@ -92,7 +94,8 @@ void main() {
     expect(authBloc, contains('SenderProfileAuthority'));
     expect(authBloc, contains('signInWithEmailAndPassword'));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
-    expect(authBloc, contains('sendSenderVerificationEmailViaCloudRun(auth: auth)'));
+    expect(authBloc,
+        contains('sendSenderVerificationEmailViaCloudRun(auth: auth)'));
     expect(authBloc, isNot(contains('sendEmailVerification()')));
     expect(authBloc, contains('requestCircumPasswordReset'));
     expect(authBloc, isNot(contains('sendPasswordResetEmail')));

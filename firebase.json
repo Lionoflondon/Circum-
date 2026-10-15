@@ -133,6 +133,11 @@
           "source": "/cookie-policy",
           "destination": "/cookie_policy",
           "type": 308
+        },
+        {
+          "source": "/delete-account",
+          "destination": "/delete_account",
+          "type": 308
         }
       ],
       "rewrites": [
@@ -158,8 +163,80 @@
           }
         },
         {
-          "source": "**",
-          "destination": "/index.html"
+          "source": "/rider{,/}",
+          "destination": "/seo/routes/rider.html"
+        },
+        {
+          "source": "/vanguard{,/}",
+          "destination": "/seo/routes/vanguard.html"
+        },
+        {
+          "source": "/support{,/}",
+          "destination": "/seo/routes/support.html"
+        },
+        {
+          "source": "/privacy_policy{,/}",
+          "destination": "/seo/routes/privacy_policy.html"
+        },
+        {
+          "source": "/terms{,/}",
+          "destination": "/seo/routes/terms.html"
+        },
+        {
+          "source": "/cookie_policy{,/}",
+          "destination": "/seo/routes/cookie_policy.html"
+        },
+        {
+          "source": "/delete_account{,/}",
+          "destination": "/seo/routes/delete_account.html"
+        },
+        {
+          "source": "/send{,/}",
+          "destination": "/seo/routes/send.html"
+        },
+        {
+          "source": "/send/profile{,/}",
+          "destination": "/seo/routes/send/profile.html"
+        },
+        {
+          "source": "/send/health{,/}",
+          "destination": "/seo/routes/send/health.html"
+        },
+        {
+          "source": "/send/business{,/}",
+          "destination": "/seo/routes/send/business.html"
+        },
+        {
+          "source": "/gifts{,/}",
+          "destination": "/seo/routes/gifts.html"
+        },
+        {
+          "source": "/rider/onboarding{,/}",
+          "destination": "/seo/routes/rider/onboarding.html"
+        },
+        {
+          "source": "/unsubscribe{,/}",
+          "destination": "/seo/routes/unsubscribe.html"
+        },
+        {
+          "source": "/newsletter{,/}",
+          "destination": "/seo/routes/newsletter.html"
+        },
+        {
+          "source": "/send/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/rider/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/gifts/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/join/**",
+          "destination": "/seo/account.html"
         }
       ]
     },

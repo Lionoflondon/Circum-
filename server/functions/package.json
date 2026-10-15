@@ -26,6 +26,7 @@
   },
   "main": "index.js",
   "dependencies": {
+    "@google-cloud/storage": "8.2.0",
     "@google-cloud/tasks": "^6.3.0",
     "firebase-admin": "14.4.0",
     "firebase-functions": "7.4.0",

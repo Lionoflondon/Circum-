@@ -21,7 +21,6 @@ void main() {
       'lib/app/sender_mobile/sender_wallet.dart',
       'lib/app/send_package/view/ratings.dart',
       'lib/app/account/bloc/account_bloc.dart',
-      'lib/website/shared/circum_website_app.dart',
     ]) {
       final source = File(path).readAsStringSync();
       expect(source, contains('PaymentSheet'));

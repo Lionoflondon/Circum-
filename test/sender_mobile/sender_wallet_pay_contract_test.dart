@@ -52,7 +52,7 @@ void main() {
         source.indexOf('void _createPaidDelivery'),
       );
 
-      expect(source, contains('isPlatformPaySupported'));
+      expect(source, contains('senderDeviceWalletSupported'));
       expect(confirmation, contains('testEnv: Env.googlePayTestEnvironment'));
       expect(
         confirmation,
@@ -85,7 +85,7 @@ void main() {
       'lib/app/sender_mobile/sender_wallet.dart',
     ).readAsStringSync();
 
-    expect(source, contains('isPlatformPaySupported()'));
+    expect(source, contains('senderDeviceWalletSupported()'));
     expect(source, contains('testEnv: Env.googlePayTestEnvironment'));
     expect(source, contains('_senderWalletActionTimeout'));
     expect(source, contains('.timeout(_senderWalletActionTimeout)'));

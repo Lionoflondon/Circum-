@@ -3330,10 +3330,11 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryAdjustments.createDeliveryAdjustmentPayment",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
+        "lib/website/shared/adjustment_checkout.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
-        "server/functions/sender-payment-app-check.test.js"
+        "server/functions/sender-payment-app-check.test.js",
+        "test/website_adjustment_checkout_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -3619,7 +3620,9 @@
         "lib/app/health_plus/view/health_plus.dart",
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-payment-family.js",
-        "server/functions/payment-runtime-bindings.test.js"
+        "server/functions/payment-runtime-bindings.test.js",
+        "test/sender_mobile/health_payment_app_check_contract_test.dart",
+        "test/website_health_payment_app_check_test.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
@@ -4787,7 +4790,6 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryAdjustments.finalizeDeliveryAdjustmentPayment",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/sender-payment-app-check.test.js"
@@ -5950,6 +5952,7 @@
         "docs/BACKEND_REMEDIATION_2026-09-21.md",
         "server/functions/cloud-run-stripe-connect-webhook.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/rider-connect-webhook-security.test.js",
         "server/functions/rider-payout-allocation.emulator.test.js"
       ],
       "criticality": "P0/P1-review-required",

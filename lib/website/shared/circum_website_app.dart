@@ -1,3 +1,5 @@
+import 'adjustment_checkout.dart';
+import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
 import 'privacy/consent_tracking_gate.dart';
@@ -39,7 +41,6 @@ import 'package:circum/website/shared/policies/role_access.dart';
 import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
-import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'sender_notification_destination.dart';
@@ -58,7 +59,6 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web/web.dart' as web;
@@ -1780,10 +1780,22 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'CIRCUM BUSINESS INVOICE',
       displayNumber,
       '',
+      ...businessInvoiceIdentityLines(invoice),
+      '',
       'Status: $status',
       'Issued: $issued',
       'Due: $due',
+      'Bill to: ${invoice['businessName'] ?? 'Business account'}',
+      if ('${invoice['billingEmail'] ?? ''}'.trim().isNotEmpty)
+        'Billing email: ${invoice['billingEmail']}',
       '',
+      if (invoice['lineItems'] is List) ...[
+        'Items',
+        for (final item in invoice['lineItems'] as List)
+          if (item is Map)
+            '${item['description'] ?? 'Business service'}: GBP ${_pdfMoney(item['amount'])}',
+        '',
+      ],
       'Summary',
       'Total: GBP $total',
       'Paid: GBP $paid',
@@ -1799,7 +1811,7 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'This copy is provided for business records and may be printed or saved as PDF.',
     ],
     title: 'CIRCUM BUSINESS INVOICE',
-    sectionTitles: const {'Summary', 'Payment', 'Records'},
+    sectionTitles: const {'Items', 'Summary', 'Payment', 'Records'},
   );
 }
 
@@ -9524,51 +9536,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           error = null;
                         });
                         try {
-                          if (Env.stripePublishableKey.trim().isEmpty) {
-                            throw StateError(
-                              'Stripe publishable key is not configured.',
-                            );
+                          final paid = await WebsiteAdjustmentCheckout.pay(adjustmentId);
+                          if (!paid) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                busy = false;
+                                error = 'Complete secure checkout, then return here to check your payment.';
+                              });
+                            }
+                            return;
                           }
-                          Stripe.publishableKey = Env.stripePublishableKey;
-                          await Stripe.instance.applySettings();
-                          final data = await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'createDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
-                          await Stripe.instance
-                              .initPaymentSheet(
-                                paymentSheetParameters:
-                                    SetupPaymentSheetParameters(
-                                  paymentIntentClientSecret:
-                                      '${data['clientSecret']}',
-                                  merchantDisplayName: 'Circum Technologies',
-                                  style: ThemeMode.dark,
-                                ),
-                              )
-                              .timeout(const Duration(seconds: 20));
-                          await Stripe.instance.presentPaymentSheet().timeout(
-                                const Duration(seconds: 90),
-                              );
-                          await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'finalizeDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
                           final uid = _senderUser?.uid;
                           if (uid != null) await _loadSenderDeliveries(uid);
                         } catch (exception) {
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             busy = false;
                             error = exception is FirebaseFunctionsException
                                 ? exception.message
-                                : 'Payment was not completed. Please try again.';
+                                : 'Payment is not confirmed yet. Check its status before starting another payment.';
                           });
                         }
                       },
-                child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+                child: Text(busy ? 'Please wait...' : 'Pay or check payment'),
               ),
           ],
         ),
@@ -12193,16 +12185,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required HealthPlusPriceBreakdown quote,
   }) async {
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final response = await http.post(
-        Uri.parse(
-          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      return await WebsiteProductionPaymentApi.call(
+        'health_plus',
+        'createHealthPlusCheckoutSession',
+        {
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _healthEmail.text.trim(),
@@ -12217,13 +12203,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               'https://circum-2797c.web.app/send/health?health=success',
           'cancelUrl':
               'https://circum-2797c.web.app/send/health?health=cancelled',
-        }),
+        },
+        callable: false,
       );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data;
     } catch (_) {
       return null;
     }
@@ -26471,6 +26453,7 @@ class _LandingFooter extends StatelessWidget {
                         width: wide ? 170 : columnWidth,
                         child: _group('Services', [
                           _link('Deliveries', '/send', onDeliveries),
+                          _page('London delivery services', '/delivery/'),
                           _link('Health+', '/health/discover/', onHealthPlus),
                           if (onGifts != null)
                             _link('Gifts', '/gifts/discover/', onGifts!),
@@ -26478,6 +26461,7 @@ class _LandingFooter extends StatelessWidget {
                               onBusiness),
                           _page('ROTH', '/roth/'),
                           _page('Riders', '/rider'),
+                          _page('The Future', '/air/'),
                           _link('Vanguard', '/vanguard', onVanguard),
                         ])),
                     SizedBox(
