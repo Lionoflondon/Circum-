@@ -497,6 +497,9 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   const lineItems = normaliseLineItems(data.lineItems, data.description, total);
   const subtotal = money(lineItems.reduce((sum, item) => sum + item.amount, 0));
   const invoiceTotal = money(total || subtotal);
+  if (Math.round(subtotal * 100) !== Math.round(invoiceTotal * 100)) {
+    throw new functions.https.HttpsError("invalid-argument", "Invoice line items must add up to the invoice total.");
+  }
   const now = FieldValue.serverTimestamp();
   const dueDate = text(data.dueDate, 40) || null;
   const invoice = {
