@@ -1,5 +1,5 @@
 import 'adjustment_checkout.dart';
-import 'sender_checkout_return.dart';
+import 'website_checkout_return.dart';
 import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
@@ -10592,7 +10592,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'businessId': businessId,
           'invoiceId': invoiceId,
           'useRoth': useRoth,
-          'returnUrl': 'https://circumuk.com/?app=business',
+          'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
         },
       );
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -10646,7 +10646,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'businessId': businessId,
         'amount': rawAmount,
         'idempotencyKey': _businessRothCheckoutKey,
-        'returnUrl': 'https://circumuk.com/?app=business',
+        'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
       }).timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -11790,7 +11790,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'checkoutMode': 'web_checkout',
             'requestId': id,
             'idempotencyKey': id,
-            'returnUrl': senderWebsiteCheckoutReturn(Uri.base).toString(),
+            'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.sender).toString(),
             'deliveryPayload': deliveryPayload,
           });
           session = Map<String, dynamic>.from(sessionResult.data as Map);
@@ -12201,9 +12201,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
-              'https://circum-2797c.web.app/send/health?health=success',
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthSuccess).toString(),
           'cancelUrl':
-              'https://circum-2797c.web.app/send/health?health=cancelled',
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthCancelled).toString(),
         },
         callable: false,
       );
