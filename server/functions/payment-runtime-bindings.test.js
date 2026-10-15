@@ -57,3 +57,8 @@ test("non-payment Sender functions do not inherit a Stripe secret", () => {
   assert.deepEqual(secretKeys(require("./sender-finance").saveSenderCheckoutPreference), []);
   assert.deepEqual(secretKeys(booking.getSenderRoutePreview), ["GOOGLE_MAPS_DIRECTIONS_API_KEY"]);
 });
+
+test("Gift finalization can instantiate its required Storage client after a clean install", () => {
+  const storage = require("firebase-admin/storage").getStorage();
+  assert.equal(storage.bucket("demo-payment-runtime.appspot.com").name, "demo-payment-runtime.appspot.com");
+});
