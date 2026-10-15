@@ -90,6 +90,22 @@ test("CORS allows only approved Sender Web origins", async () => {
   });
 });
 
+test("public website QA capability preflight and rejection retain trusted CORS", async () => {
+  await withServer(dependencies(async () => ({enabled: false})), async (base) => {
+    for (const origin of ["https://circumuk.com", "https://www.circumuk.com", "https://circum-2797c.web.app", "https://circum-2797c.firebaseapp.com"]) {
+      const response = await fetch(`${base}/qaSpecialFlowFixture`, {method: "OPTIONS", headers: {origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization,x-firebase-appcheck,content-type"}});
+      assert.equal(response.status, 204);
+      assert.equal(response.headers.get("access-control-allow-origin"), origin);
+      assert.match(response.headers.get("access-control-allow-headers"), /X-Firebase-AppCheck/);
+      const rejected = await request(base, {omitAuth: true, headers: {origin}});
+      assert.equal(rejected.status, 401);
+      assert.equal(rejected.headers.get("access-control-allow-origin"), origin);
+    }
+    const evil = await fetch(`${base}/qaSpecialFlowFixture`, {method: "OPTIONS", headers: {origin: "https://circumuk.com.example.invalid"}});
+    assert.equal(evil.headers.get("access-control-allow-origin"), null);
+  });
+});
+
 test("route is limited to the QA callable", () => {
   assert.equal(routeName("/qaSpecialFlowFixture"), "qaSpecialFlowFixture");
   assert.equal(routeName("/v1/callable/qaSpecialFlowFixture"), "qaSpecialFlowFixture");
