@@ -9551,15 +9551,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           final uid = _senderUser?.uid;
                           if (uid != null) await _loadSenderDeliveries(uid);
                         } catch (exception) {
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             busy = false;
                             error = exception is FirebaseFunctionsException
                                 ? exception.message
-                                : 'Payment was not completed. Please try again.';
+                                : 'Payment is not confirmed yet. Check its status before starting another payment.';
                           });
                         }
                       },
-                child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+                child: Text(busy ? 'Please wait...' : 'Pay or check payment'),
               ),
           ],
         ),
