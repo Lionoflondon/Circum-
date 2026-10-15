@@ -12,6 +12,7 @@ const {requireAdmin} = require("./admin-auth");
 const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const communicationEngine = require("./communication-engine");
 const checkoutReservations = require("./business-checkout-reservations");
+const {businessInvoiceIdentity} = require("./business-invoice-identity");
 const BUSINESS_ROTH_SELF_SERVE_CAP_GBP = 1000000;
 const BUSINESS_ROTH_CHECKOUT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -504,6 +505,7 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   const dueDate = text(data.dueDate, 40) || null;
   const invoice = {
     invoiceId: invoiceRef.id,
+    ...businessInvoiceIdentity(),
     invoiceNumber,
     businessId,
     businessName: business.businessName || business.companyName || "Business",
@@ -554,6 +556,7 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   });
   return {
     invoiceId: invoiceRef.id,
+    ...businessInvoiceIdentity(),
     invoiceNumber,
     businessId,
     total: invoiceTotal,
