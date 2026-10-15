@@ -3620,7 +3620,11 @@
         "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
+<<<<<<< HEAD
         "test/sender_mobile/health_payment_app_check_contract_test.dart"
+=======
+        "test/website_health_payment_app_check_test.dart"
+>>>>>>> origin/main
       ],
       "criticality": "review-required",
       "authRequired": true,
