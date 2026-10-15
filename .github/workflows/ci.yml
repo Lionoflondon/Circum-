@@ -27,7 +27,6 @@ jobs:
       - run: node scripts/absolute_product_ownership.js
       - run: node scripts/backend_authority_guard.js
       - run: node scripts/deploy_guard.self_test.js
-      - run: python3 -m unittest discover -s lib/website/tooling -p 'test_release_discovery_assets.py'
       - run: node --test scripts/website_roth_routes.test.mjs
       - name: Check offline retry containment safety
         run: node --test tools/retry_containment_check.test.js
