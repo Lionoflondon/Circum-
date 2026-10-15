@@ -37,7 +37,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
