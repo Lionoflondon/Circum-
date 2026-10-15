@@ -1403,6 +1403,10 @@ function handleStripeConnectWebhook(stripeOrFactory) {
         return;
       }
       event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+      const mode = stripeClientMode(stripe);
+      if (!["test", "live"].includes(mode) || typeof event.livemode !== "boolean" || event.livemode !== (mode === "live")) {
+        throw new Error("Stripe Connect event mode does not match the configured runtime.");
+      }
     } catch (error) {
       console.error("Stripe Connect webhook signature failed", error.message);
       res.status(400).send("Invalid signature");
