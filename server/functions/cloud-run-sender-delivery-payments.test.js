@@ -72,3 +72,18 @@ test("Sender delivery payment wrapper answers the hosted Web preflight", async (
     assert.match(response.headers.get("access-control-allow-headers"), /Authorization/);
   });
 });
+
+for (const origin of ["https://circumuk.com", "https://www.circumuk.com", "https://circum-2797c.web.app", "https://circum-2797c.firebaseapp.com", "https://untrusted.invalid", "https://circumuk.com.untrusted.invalid"]) {
+  test(`payment preflight allows only reviewed product origins: ${origin}`, async () => {
+    let invoked = 0;
+    await withServer(handlers(() => invoked++), async (url) => {
+      const response = await fetch(`${url}/createSenderPaymentSession`, {
+        method: "OPTIONS", headers: {origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization,x-firebase-appcheck,content-type"},
+      });
+      assert.equal(response.status, 204);
+      assert.equal(response.headers.get("access-control-allow-origin"), origin.includes("untrusted.invalid") ? null : origin);
+      assert.match(response.headers.get("access-control-allow-headers"), /X-Firebase-AppCheck/);
+      assert.equal(invoked, 0);
+    });
+  });
+}

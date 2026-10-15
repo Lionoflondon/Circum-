@@ -5952,6 +5952,7 @@
         "docs/BACKEND_REMEDIATION_2026-09-21.md",
         "server/functions/cloud-run-stripe-connect-webhook.js",
         "server/functions/production-functions-inventory.json",
+        "server/functions/rider-connect-webhook-security.test.js",
         "server/functions/rider-payout-allocation.emulator.test.js"
       ],
       "criticality": "P0/P1-review-required",
