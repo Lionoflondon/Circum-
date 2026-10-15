@@ -185,3 +185,15 @@ received = value;
   assert.equal(received, session);
   await assert.rejects(routeCheckoutSessionCompleted(session, "evt_test", {}), /finalizer unavailable/);
 });
+
+test("delivery adjustment Checkout dispatches its bound finalizer", async () => {
+  const session = {id: "cs_adjustment", metadata: {type: "delivery_adjustment"}};
+  const db = {}; const stripe = {}; let calls = 0;
+  const result = await routeCheckoutSessionCompleted(session, "evt_adjustment", {
+    db, stripe, deliveryAdjustmentPayments: {finalizeCheckout: async (args) => {
+      calls++; assert.equal(args.db, db); assert.equal(args.stripe, stripe); assert.equal(args.session, session);
+    }},
+  });
+  assert.deepEqual(result, {handled: true, type: "delivery_adjustment"}); assert.equal(calls, 1);
+  await assert.rejects(routeCheckoutSessionCompleted(session, "evt_adjustment", {}), /finalizer unavailable/);
+});

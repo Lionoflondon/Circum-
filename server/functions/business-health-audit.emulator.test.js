@@ -414,3 +414,46 @@ test("private Health+ membership certification uses canonical handlers with no p
   assert.equal(result.providerCalls, 0);
   assert.equal(result.checks.length, 7);
 });
+
+
+test("mismatched Business invoice lines cannot create debt, invoice or audit records", async () => {
+  const payments = require("./business-payments");
+  const businessId = "invoice-mismatch-audit";
+  await db.doc(`businessAccounts/${businessId}`).set({businessName: "Demo Business", outstandingInvoiceAmount: 0});
+  const admin = {auth: {uid: "invoice-admin", token: {admin: true, role: "super_admin"}}, app: {appId: "audit"}};
+  const beforeAudit = (await db.collection("adminAuditLogs").get()).size;
+  for (const lineAmount of [9, 11]) {
+    await assert.rejects(payments.adminCreateBusinessInvoice.run({businessId, total: 10, reason: "Arithmetic test", lineItems: [{description: "Delivery", amount: lineAmount}]}, admin), {code: "invalid-argument"});
+  }
+  assert.equal((await db.doc(`businessAccounts/${businessId}`).get()).data().outstandingInvoiceAmount, 0);
+  assert.equal((await db.collection("businessInvoices").where("businessId", "==", businessId).get()).size, 0);
+  assert.equal((await db.collection("adminAuditLogs").get()).size, beforeAudit);
+});
+
+test("matching decimal Business invoice lines create exactly the stated debt", async () => {
+  const payments = require("./business-payments");
+  const businessId = "invoice-matching-audit";
+  await db.doc(`businessAccounts/${businessId}`).set({businessName: "Demo Business", outstandingInvoiceAmount: 0});
+  const admin = {auth: {uid: "invoice-admin", token: {admin: true, role: "super_admin"}}, app: {appId: "audit"}};
+  await payments.adminCreateBusinessInvoice.run({businessId, total: 0.3, reason: "Pence precision test", supplier: {legalName: "Forged supplier"}, tax: {vatAmount: 99}, lineItems: [{description: "A", amount: 0.1}, {description: "B", amount: 0.2}]}, admin);
+  const invoices = await db.collection("businessInvoices").where("businessId", "==", businessId).get();
+  assert.equal(invoices.size, 1);
+  assert.equal(invoices.docs[0].data().total, 0.3);
+  assert.deepEqual(invoices.docs[0].data().supplier, {legalName: "Circum Technologies Ltd", tradingName: "Circum", companyNumber: "13931698", registeredAddress: "124 City Road, London, England EC1V 2NX", vatRegistrationStatus: "not_registered", vatRegistrationNumber: null});
+  assert.deepEqual(invoices.docs[0].data().tax, {treatment: "not_vat_registered", vatAmount: 0, currency: "GBP"});
+  assert.equal(invoices.docs[0].data().balanceDue, 0.3);
+  assert.equal(invoices.docs[0].data().amountPaid, 0);
+  assert.equal((await db.doc(`businessAccounts/${businessId}`).get()).data().outstandingInvoiceAmount, 0.3);
+});
+
+test("Business invoice without explicit lines preserves its matching fallback line", async () => {
+  const payments = require("./business-payments");
+  const businessId = "invoice-fallback-audit";
+  await db.doc(`businessAccounts/${businessId}`).set({businessName: "Demo Business", outstandingInvoiceAmount: 0});
+  const admin = {auth: {uid: "invoice-admin", token: {admin: true, role: "super_admin"}}, app: {appId: "audit"}};
+  await payments.adminCreateBusinessInvoice.run({businessId, total: 12.5, reason: "Fallback test", description: "Services"}, admin);
+  const invoices = await db.collection("businessInvoices").where("businessId", "==", businessId).get();
+  assert.equal(invoices.size, 1);
+  assert.deepEqual(invoices.docs[0].data().lineItems, [{description: "Services", amount: 12.5}]);
+  assert.equal((await db.doc(`businessAccounts/${businessId}`).get()).data().outstandingInvoiceAmount, 12.5);
+});

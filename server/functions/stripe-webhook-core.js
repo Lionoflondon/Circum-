@@ -23,6 +23,7 @@ function createStripeWebhookProcessor(deps) {
     stripeRefunds,
     senderBooking,
     businessPayments,
+    deliveryAdjustmentPayments,
     healthPlus,
     healthMembershipLifecycle,
     rothLedger,
@@ -96,6 +97,15 @@ function createStripeWebhookProcessor(deps) {
       return finish({success: true, refund: refundResult}, "payment_refund");
     }
     if (["payment_intent.succeeded", "payment_intent.processing", "payment_intent.payment_failed", "payment_intent.canceled"].includes(event.type)) {
+      if (deliveryAdjustmentPayments && typeof deliveryAdjustmentPayments.handlePaymentIntent === "function") {
+        try {
+          const adjustment = await deliveryAdjustmentPayments.handlePaymentIntent({db, stripe, intent: event.data.object, eventType: event.type});
+          if (adjustment.handled) return finish({success: true, adjustment}, "delivery_adjustment_intent");
+        } catch (error) {
+          logger.error("adjustment_payment_intent_failed", {eventId: event.id, errorType: error.name || "Error"});
+          return response(500, {success: false, error: "adjustment_payment_intent_failed"});
+        }
+      }
       if (businessPayments && typeof businessPayments.handleBusinessPaymentIntent === "function") {
         const businessIntent = await businessPayments.handleBusinessPaymentIntent({
           db,
@@ -145,6 +155,8 @@ function createStripeWebhookProcessor(deps) {
         membershipResult = await healthMembershipLifecycle.handleHealthMembershipCheckoutSession({db, session, event});
         routed = await routeCheckoutSessionCompleted(session, event.id, {
           businessPayments,
+          deliveryAdjustmentPayments,
+          db,
           giftsPayment,
           stripe,
           healthPlus,

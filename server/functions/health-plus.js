@@ -35,11 +35,7 @@ const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
 
-function allowCors(res) {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-}
+const allowCors = require("./health-payment-cors");
 
 const {tokenRoles: healthAdminRoles, hasPermission: healthAdminPermission} = require("./admin-permissions");
 
