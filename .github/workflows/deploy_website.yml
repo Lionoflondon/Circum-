@@ -1,6 +1,12 @@
 name: Deploy Website
 
 on:
+  pull_request:
+    paths:
+      - "lib/website/tooling/**"
+      - "web/**"
+      - "firebase.json"
+      - ".github/workflows/deploy_website.yml"
   workflow_dispatch:
     inputs:
       enable_roth_test:
@@ -35,7 +41,21 @@ on:
         type: boolean
 
 jobs:
+  seo-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test lib/website/tooling/public_site_seo.test.cjs
   deploy-website:
+    if: github.event_name == 'workflow_dispatch'
+    needs: seo-tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
