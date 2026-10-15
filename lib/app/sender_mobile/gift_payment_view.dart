@@ -1,3 +1,4 @@
+import 'sender_platform_pay.dart';
 import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 
@@ -145,7 +146,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           .timeout(_backendTimeout);
       final platformPay = kIsWeb
           ? false
-          : await Stripe.instance.isPlatformPaySupported().timeout(
+          : await senderDeviceWalletSupported().timeout(
                 const Duration(seconds: 4),
               );
       if (!mounted) return;
