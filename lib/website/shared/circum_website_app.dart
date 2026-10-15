@@ -1,4 +1,5 @@
 import 'adjustment_checkout.dart';
+import 'website_checkout_return.dart';
 import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
@@ -454,14 +455,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
                 onAccept: () => _setCookiePreferences(true, true),
                 onManage: _showConsentPreferences,
               ),
-            if (kIsWeb && _cookieConsent != null && _mode != _WebAppMode.landing)
-              Positioned(left: 16, bottom: 16, child: SafeArea(
-                child: Material(color: _landingPaper,
-                  borderRadius: BorderRadius.circular(20),
-                  child: TextButton.icon(onPressed: _showConsentPreferences,
-                    style: TextButton.styleFrom(foregroundColor: _landingInk),
-                    icon: const Icon(Icons.tune, size: 18),
-                    label: const Text('Cookie settings'))))),
+
           ],
         ),
       ),
@@ -10591,7 +10585,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'businessId': businessId,
           'invoiceId': invoiceId,
           'useRoth': useRoth,
-          'returnUrl': 'https://circumuk.com/?app=business',
+          'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
         },
       );
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -10645,7 +10639,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'businessId': businessId,
         'amount': rawAmount,
         'idempotencyKey': _businessRothCheckoutKey,
-        'returnUrl': 'https://circumuk.com/?app=business',
+        'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
       }).timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -11789,7 +11783,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'checkoutMode': 'web_checkout',
             'requestId': id,
             'idempotencyKey': id,
-            'returnUrl': 'https://circum-2797c.web.app/send',
+            'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.sender).toString(),
             'deliveryPayload': deliveryPayload,
           });
           session = Map<String, dynamic>.from(sessionResult.data as Map);
@@ -12200,9 +12194,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
-              'https://circum-2797c.web.app/send/health?health=success',
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthSuccess).toString(),
           'cancelUrl':
-              'https://circum-2797c.web.app/send/health?health=cancelled',
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthCancelled).toString(),
         },
         callable: false,
       );
@@ -26170,7 +26164,7 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Your choices',
-            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from any page or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
+            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from the website footer or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
           ),
           _ComplianceSection(
             'Relationship with privacy information',
