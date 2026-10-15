@@ -19,6 +19,7 @@ const pages={
 const privateRoutes=['/send','/send/profile','/send/health','/send/business','/gifts','/rider/onboarding','/unsubscribe','/newsletter'];
 const esc=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
 function metadata(html,route,title,description,noindex=false){
+ html=html.replace(/<html>/i,'<html lang="en-GB">');
  html=html.replace(/<title>[^<]*<\/title>/i,'').replace(/<meta\b[^>]*name=["'](?:description|robots)["'][^>]*>/gi,'').replace(/<link\b[^>]*rel=["']canonical["'][^>]*>/gi,'');
  const url=origin+route;
  const graph=[{'@type':'Organization','@id':origin+'/#organization',name:'Circum Technologies Ltd',url:origin+'/',logo:origin+'/icons/Icon-192.png',sameAs:['https://www.instagram.com/circumuk/','https://www.tiktok.com/@circumuk','https://x.com/circumuk']},{'@type':'WebSite','@id':origin+'/#website',url:origin+'/',name:'CIRCUM',publisher:{'@id':origin+'/#organization'}},{'@type':'WebPage','@id':url+'#page',url,name:title,description,isPartOf:{'@id':origin+'/#website'},inLanguage:'en-GB'}];
@@ -51,7 +52,7 @@ function build(out){
   const filename=path.join(out,'seo/routes',route.slice(1)+'.html');fs.mkdirSync(path.dirname(filename),{recursive:true});
   fs.writeFileSync(filename,metadata(shell,route,'Your Account | CIRCUM','Access your CIRCUM account and services.',true));
  }
- fs.writeFileSync(path.join(out,'robots.txt'),'User-agent: *\nAllow: /\n\nSitemap: '+origin+'/sitemap.xml\n');
+ fs.writeFileSync(path.join(out,'robots.txt'),'User-agent: *\nAllow: /\nDisallow: /seo/routes/\nDisallow: /seo/account.html\n\nSitemap: '+origin+'/sitemap.xml\n');
  fs.writeFileSync(path.join(out,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+Object.keys(pages).map(r=>`  <url><loc>${origin+r}</loc></url>`).join('\n')+'\n</urlset>\n');
 }
 module.exports={build,metadata,pages,privateRoutes};
