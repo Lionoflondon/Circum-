@@ -51,6 +51,7 @@ async function createPayment({db, stripe, adjustmentId, senderId, hosted = false
   const intent = row.paymentIntentId ? await stripe.paymentIntents.retrieve(row.paymentIntentId) :
     await stripe.paymentIntents.create({amount, currency: "gbp", payment_method_types: ["card"], metadata}, {idempotencyKey: `delivery-adjustment-${adjustmentId}`});
   if (intent.amount !== amount || intent.currency !== "gbp" || intent.metadata?.adjustmentId !== adjustmentId || intent.metadata?.senderId !== senderId || intent.metadata?.bookingId !== row.bookingId) throw new HttpsError("failed-precondition", "Existing payment does not match this adjustment.");
+  if (intent.status === "canceled") throw new HttpsError("failed-precondition", "This payment is closed; reconcile it before starting another.");
   await ref.update({paymentIntentId: intent.id, paymentStatus: intent.status, updatedAt: Date.now()});
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
 }

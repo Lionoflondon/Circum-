@@ -65,3 +65,9 @@ test("signed-event path validates bound intent and settles without client return
   assert.equal(f.rows.get("deliveryAdjustments/adj").status, "paid");
   await assert.rejects(handlePaymentIntent({db: f.db, stripe: f.stripe, intent: {...f.intent, id: "pi_wrong"}, eventType: "payment_intent.succeeded"}), /does not match checkout/);
 });
+
+test("canceled native intent cannot be reopened or replaced", async () => {
+  const f = fixture(); await createPayment(f.args); f.intent.status = "canceled";
+  await assert.rejects(createPayment(f.args), /payment is closed/);
+  assert.equal(f.creations(), 1);
+});
