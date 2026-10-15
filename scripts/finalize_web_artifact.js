@@ -132,10 +132,6 @@ fs.writeFileSync(
   }, null, 2)}\n`,
 );
 
-if (surfaceName === 'website') {
-  require('./public_site_seo.cjs').build(absoluteOut);
-}
-
 console.log(JSON.stringify({
   surface: surfaceName,
   identity: surface.identity,

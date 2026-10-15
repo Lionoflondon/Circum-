@@ -56,6 +56,7 @@ jobs:
       - run: node scripts/deploy_guard.js --target=website --base HEAD
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
       - run: WEBSITE_ROTH_TEST_ENABLED="${{ inputs.enable_roth_test }}" WEBSITE_ROTH_LIVE_CANDIDATE_ENABLED="${{ inputs.enable_roth_live_candidate }}" WEBSITE_ROTH_LIVE_PUBLIC_ENABLED="${{ inputs.enable_roth_live }}" NEWSLETTER_SIGNUP_ENABLED="${{ inputs.enable_newsletter }}" PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" PUBLIC_WEB_STATIC_MAPS_API_KEY="${{ secrets.PUBLIC_WEB_STATIC_MAPS_API_KEY }}" scripts/build_public_web.sh
+      - run: node scripts/public_site_seo.cjs build/public_web
       - run: node --test scripts/website_roth_routes.test.mjs
       - run: node scripts/validate_web_artifacts.js --surface=website
       - uses: google-github-actions/auth@v2

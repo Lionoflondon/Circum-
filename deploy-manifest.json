@@ -28,7 +28,6 @@
         "scripts/deploy_website_roth_live_candidate.sh",
         "scripts/prepare_roth_live_overlays.py",
         "scripts/test_roth_live_overlays.cjs",
-        "scripts/finalize_web_artifact.js",
         "scripts/public_site_seo.cjs",
         "scripts/public_site_seo.test.cjs",
         "scripts/validate_website_hosting_change.cjs"
