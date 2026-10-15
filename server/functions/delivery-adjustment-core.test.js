@@ -41,7 +41,8 @@ test("delivery adjustment callable requires Admin review before sender payment",
   assert.match(source, /status: "awaiting_admin_review"/);
   assert.match(source, /status: "awaiting_adjustment_review"/);
   assert.match(source, /status: "awaiting_sender_payment"/);
-  assert.match(source, /adminDecision !== "approve"/);
+  const checkout = fs.readFileSync(path.join(__dirname, "delivery-adjustment-checkout.js"), "utf8");
+  assert.match(checkout, /adminDecision !== "approve"/);
   assert.match(source, /request_more_evidence/);
 });
 
