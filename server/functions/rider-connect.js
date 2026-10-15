@@ -1446,6 +1446,40 @@ function handleStripeConnectWebhook(stripeOrFactory) {
           }
         }
       }
+      if (event.type === "transfer.reversed") {
+        // Reversal policy must be reviewed; never infer a wallet credit from metadata.
+        await processStripeConnectEventOnce(db, event, async (transaction) => {
+          const claimedRequestId = text(object.metadata && object.metadata.payoutRequestId);
+          const transferId = text(object.id);
+          const destination = typeof object.destination === "string" ? object.destination : text(object.destination && object.destination.id);
+          const safeRequestId = claimedRequestId && !claimedRequestId.includes("/") && ![".", ".."].includes(claimedRequestId);
+          const request = safeRequestId ? await transaction.get(db.collection("payoutRequests").doc(claimedRequestId)) : null;
+          const stored = request && request.exists ? request.data() || {} : {};
+          const amountReversed = Number(object.amount_reversed);
+          const originalAmount = Number(object.amount);
+          const amountValid = Number.isSafeInteger(originalAmount) && originalAmount > 0 && Number.isSafeInteger(amountReversed) && amountReversed > 0 && amountReversed <= originalAmount && object.currency === "gbp";
+          const bound = Boolean(request && request.exists && transferId && destination && stored.stripeTransferId === transferId && stored.stripeAccountId === destination && amountValid);
+          const reason = bound ? "transfer_reversed_requires_accounting_review" : "unbound_transfer_reversal";
+          transaction.create(db.collection("riderPayoutAudit").doc(`transfer_reversal_${event.id}`), {
+            action: "transfer_reversal_requires_review",
+            status: "action_required",
+            reviewRequired: true,
+            reason,
+            stripeEventId: event.id,
+            stripeTransferId: transferId || null,
+            stripeAccountId: text(event.account) || null,
+            destinationAccountId: destination || null,
+            claimedPayoutRequestId: claimedRequestId || null,
+            payoutRequestId: bound ? claimedRequestId : null,
+            riderId: bound ? text(stored.riderId) : null,
+            amountReversedPence: amountValid ? amountReversed : null,
+            currency: text(object.currency) || null,
+            financialMutationPerformed: false,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+          return {reviewRequired: true, reason, financialMutationPerformed: false};
+        });
+      }
       if (event.type === "payout.created" ||
         event.type === "payout.paid" ||
         event.type === "payout.failed" ||
