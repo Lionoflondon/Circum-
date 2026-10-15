@@ -3,6 +3,16 @@ name: Deploy Website
 on:
   workflow_dispatch:
     inputs:
+      discovery_assets_only:
+        description: "Clone current public release and replace only approved Gifts/Business assets"
+        required: true
+        default: false
+        type: boolean
+      expected_discovery_version:
+        description: "Exact current sites/circum-2797c/versions/... for asset-only release"
+        required: false
+        default: ""
+        type: string
       enable_roth_test:
         description: "Enable approved isolated ROTH TEST checkout only"
         required: true
@@ -36,6 +46,7 @@ on:
 
 jobs:
   deploy-website:
+    if: ${{ !inputs.discovery_assets_only }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -96,3 +107,32 @@ jobs:
           curl --fail --silent --show-error https://circum-website-roth-live-516426305461.us-central1.run.app/health > /tmp/roth-live-public-health.json
           node -e 'const h=JSON.parse(require("fs").readFileSync("/tmp/roth-live-public-health.json"));if(h.environment!=="live"||h.sourceSHA!==process.env.EXPECTED_SHA||!h.ok||!h.isolationVerified||h.publicPurchasesEnabled!==true)throw Error("Uncertified public LIVE runtime")'
       - run: firebase deploy --only hosting:public --project circum-2797c
+
+  deploy-discovery-assets:
+    if: inputs.discovery_assets_only
+    concurrency:
+      group: public-website-discovery-release
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s lib/website/tooling -p 'test_release_discovery_assets.py'
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
+          token_format: access_token
+      - name: Clone current public Hosting version and replace approved assets only
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          EXPECTED_VERSION: ${{ inputs.expected_discovery_version }}
+        run: python lib/website/tooling/release_discovery_assets.py --expected-version "$EXPECTED_VERSION" --evidence-dir release-evidence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discovery-hosting-release
+          path: release-evidence/
