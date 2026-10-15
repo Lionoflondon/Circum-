@@ -36,7 +36,7 @@ function addExpressCompatibility(req, res) {
 
 function applyCors(req, res) {
   const origin = String(req.headers.origin || "");
-  if (origin === "https://circum-app-2797c.web.app") {
+  if (["https://circum-app-2797c.web.app", "https://circumuk.com", "https://www.circumuk.com", "https://circum-2797c.web.app", "https://circum-2797c.firebaseapp.com"].includes(origin)) {
     res.setHeader("access-control-allow-origin", origin);
   }
   res.setHeader("vary", "Origin");
