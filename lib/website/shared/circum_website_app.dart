@@ -1,3 +1,4 @@
+import 'adjustment_checkout.dart';
 import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
@@ -40,7 +41,6 @@ import 'package:circum/website/shared/policies/role_access.dart';
 import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
-import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'sender_notification_destination.dart';
@@ -59,7 +59,6 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web/web.dart' as web;
@@ -9537,51 +9536,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           error = null;
                         });
                         try {
-                          if (Env.stripePublishableKey.trim().isEmpty) {
-                            throw StateError(
-                              'Stripe publishable key is not configured.',
-                            );
+                          final paid = await WebsiteAdjustmentCheckout.pay(adjustmentId);
+                          if (!paid) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                busy = false;
+                                error = 'Complete secure checkout, then return here to check your payment.';
+                              });
+                            }
+                            return;
                           }
-                          Stripe.publishableKey = Env.stripePublishableKey;
-                          await Stripe.instance.applySettings();
-                          final data = await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'createDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
-                          await Stripe.instance
-                              .initPaymentSheet(
-                                paymentSheetParameters:
-                                    SetupPaymentSheetParameters(
-                                  paymentIntentClientSecret:
-                                      '${data['clientSecret']}',
-                                  merchantDisplayName: 'Circum Technologies',
-                                  style: ThemeMode.dark,
-                                ),
-                              )
-                              .timeout(const Duration(seconds: 20));
-                          await Stripe.instance.presentPaymentSheet().timeout(
-                                const Duration(seconds: 90),
-                              );
-                          await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'finalizeDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
                           final uid = _senderUser?.uid;
                           if (uid != null) await _loadSenderDeliveries(uid);
                         } catch (exception) {
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             busy = false;
                             error = exception is FirebaseFunctionsException
                                 ? exception.message
-                                : 'Payment was not completed. Please try again.';
+                                : 'Payment is not confirmed yet. Check its status before starting another payment.';
                           });
                         }
                       },
-                child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+                child: Text(busy ? 'Please wait...' : 'Pay or check payment'),
               ),
           ],
         ),
