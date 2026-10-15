@@ -26471,6 +26471,7 @@ class _LandingFooter extends StatelessWidget {
                         width: wide ? 170 : columnWidth,
                         child: _group('Services', [
                           _link('Deliveries', '/send', onDeliveries),
+                          _page('London delivery services', '/delivery/'),
                           _link('Health+', '/health/discover/', onHealthPlus),
                           if (onGifts != null)
                             _link('Gifts', '/gifts/discover/', onGifts!),

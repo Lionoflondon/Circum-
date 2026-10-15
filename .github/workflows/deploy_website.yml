@@ -51,6 +51,7 @@ jobs:
         with:
           node-version: 20
       - run: flutter pub get
+      - run: node --test scripts/public_site_seo.test.cjs
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=website --base HEAD
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
@@ -84,7 +85,8 @@ jobs:
         run: |
           [[ "$CERTIFIED_SHA" =~ ^[a-f0-9]{40}$ ]]
           git merge-base --is-ancestor "$CERTIFIED_SHA" HEAD
-          git diff --exit-code "$CERTIFIED_SHA" HEAD -- server scripts/build_public_web.sh web/roth web/roth-live-certification firebase.json firestore.rules
+          git diff --exit-code "$CERTIFIED_SHA" HEAD -- server scripts/build_public_web.sh web/roth web/roth-live-certification firestore.rules
+          node scripts/validate_website_hosting_change.cjs "$CERTIFIED_SHA"
       - name: Verify certified public LIVE runtime before activation
         if: inputs.enable_roth_live
         env:
