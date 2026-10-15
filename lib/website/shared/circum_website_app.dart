@@ -1,4 +1,5 @@
 import 'adjustment_checkout.dart';
+import 'sender_checkout_return.dart';
 import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
@@ -11789,7 +11790,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'checkoutMode': 'web_checkout',
             'requestId': id,
             'idempotencyKey': id,
-            'returnUrl': 'https://circum-2797c.web.app/send',
+            'returnUrl': senderWebsiteCheckoutReturn(Uri.base).toString(),
             'deliveryPayload': deliveryPayload,
           });
           session = Map<String, dynamic>.from(sessionResult.data as Map);
