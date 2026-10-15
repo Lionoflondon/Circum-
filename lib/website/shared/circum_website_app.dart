@@ -1,3 +1,4 @@
+import 'business_invoice_document.dart';
 import '../../helper/password_recovery.dart';
 import 'circum_home_link.dart';
 import 'privacy/consent_tracking_gate.dart';
@@ -1780,10 +1781,22 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'CIRCUM BUSINESS INVOICE',
       displayNumber,
       '',
+      ...businessInvoiceIdentityLines(invoice),
+      '',
       'Status: $status',
       'Issued: $issued',
       'Due: $due',
+      'Bill to: ${invoice['businessName'] ?? 'Business account'}',
+      if ('${invoice['billingEmail'] ?? ''}'.trim().isNotEmpty)
+        'Billing email: ${invoice['billingEmail']}',
       '',
+      if (invoice['lineItems'] is List) ...[
+        'Items',
+        for (final item in invoice['lineItems'] as List)
+          if (item is Map)
+            '${item['description'] ?? 'Business service'}: GBP ${_pdfMoney(item['amount'])}',
+        '',
+      ],
       'Summary',
       'Total: GBP $total',
       'Paid: GBP $paid',
@@ -1799,7 +1812,7 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'This copy is provided for business records and may be printed or saved as PDF.',
     ],
     title: 'CIRCUM BUSINESS INVOICE',
-    sectionTitles: const {'Summary', 'Payment', 'Records'},
+    sectionTitles: const {'Items', 'Summary', 'Payment', 'Records'},
   );
 }
 
