@@ -45,7 +45,11 @@ class Hosting:
         url = path if path.startswith('https://') else API + path
         if not (url.startswith(API) or url.startswith('https://upload-firebasehosting.googleapis.com/')):
             raise ValueError('Unexpected API host')
-        headers = {'Authorization': 'Bearer ' + self.token, 'x-goog-user-project': 'circum-2797c'}
+        headers = {'Authorization': 'Bearer ' + self.token}
+        # User ADC needs an explicit quota project; the existing CI service account
+        # uses its own project and must not require a new Service Usage grant.
+        if not os.environ.get('GOOGLE_OAUTH_ACCESS_TOKEN'):
+            headers['x-goog-user-project'] = 'circum-2797c'
         if data is not None:
             headers['Content-Type'] = 'application/octet-stream' if raw else 'application/json'
             if not raw:
