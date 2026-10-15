@@ -82,6 +82,16 @@ class Hosting:
         raise TimeoutError('Clone not complete; no public release made')
 
 
+def asset_bytes(path):
+    source = ROOT / ('web' + path)
+    if not path.endswith('.html'):
+        return source.read_bytes()
+    # Apply the same metadata transform as the established public-site build.
+    # This preserves existing canonical, social and structured-data treatment.
+    script = "const fs=require('fs');const {metadata,pages}=require('./lib/website/tooling/public_site_seo.cjs');const route=process.argv[1];process.stdout.write(metadata(fs.readFileSync(process.argv[2],'utf8'),route,...pages[route]));"
+    return subprocess.check_output(['node', '-e', script, path.removesuffix('index.html'), str(source)], cwd=ROOT)
+
+
 def release(hosting, expected_version, evidence_dir):
     if not expected_version.startswith(SITE + '/versions/'):
         raise ValueError('Wrong Hosting site')
@@ -90,7 +100,7 @@ def release(hosting, expected_version, evidence_dir):
         raise ValueError('Current public version changed; review again')
     before = hosting.files(expected_version)
     config = hosting.request(expected_version).get('config', {})
-    compressed = {path: gzip.compress((ROOT / ('web' + path)).read_bytes(), mtime=0) for path in FILES}
+    compressed = {path: gzip.compress(asset_bytes(path), mtime=0) for path in FILES}
     hashes = {path: hashlib.sha256(data).hexdigest() for path, data in compressed.items()}
     verify_manifest(before, {**before, **hashes}, hashes)
     clone = hosting.complete(hosting.request(SITE + '/versions:clone', 'POST', {

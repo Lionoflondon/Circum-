@@ -2,7 +2,7 @@ import unittest
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-from release_discovery_assets import FILES, verify_manifest, verify_config, release, SITE
+from release_discovery_assets import FILES, verify_manifest, verify_config, release, SITE, asset_bytes
 
 class ReleaseBoundaryTests(unittest.TestCase):
     def setUp(self):
@@ -10,6 +10,12 @@ class ReleaseBoundaryTests(unittest.TestCase):
         self.before.update({'/main.dart.js': 'compiled-app', '/roth/config.js': 'live-config', '/roth/app.js': 'payment-code'})
         self.replacements = {path: 'new' for path in FILES}
         self.after = {**self.before, **self.replacements}
+
+    def test_html_keeps_existing_seo_metadata(self):
+        html=asset_bytes("/gifts/discover/index.html").decode()
+        self.assertIn('property="og:title"',html)
+        self.assertIn('application/ld+json',html)
+        self.assertIn('gift-service-icon',html)
 
     def test_only_approved_assets_change(self):
         verify_manifest(self.before, self.after, self.replacements)
@@ -65,7 +71,7 @@ class FakeHosting:
 class ReleaseSequenceTests(unittest.TestCase):
     def test_publishes_only_verified_manifest(self):
         h=FakeHosting()
-        with tempfile.TemporaryDirectory() as tmp, patch('subprocess.check_output',return_value='a'*40):
+        with tempfile.TemporaryDirectory() as tmp, patch('release_discovery_assets.asset_bytes',return_value=b'asset'), patch('subprocess.check_output',return_value='a'*40):
             report=release(h,SITE+'/versions/old',Path(tmp))
         self.assertTrue(h.published)
         self.assertEqual(report['untouchedFiles'],1)
@@ -77,7 +83,7 @@ class ReleaseSequenceTests(unittest.TestCase):
     def test_mutation_or_concurrent_release_never_publishes(self):
         for mutation in ['payment','config','concurrent']:
             h=FakeHosting(mutation)
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp, patch('subprocess.check_output',return_value='a'*40), self.assertRaises(ValueError):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp, patch('release_discovery_assets.asset_bytes',return_value=b'asset'), patch('subprocess.check_output',return_value='a'*40), self.assertRaises(ValueError):
                 release(h,SITE+'/versions/old',Path(tmp))
             self.assertFalse(h.published)
 
