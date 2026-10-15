@@ -12193,16 +12193,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required HealthPlusPriceBreakdown quote,
   }) async {
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final response = await http.post(
-        Uri.parse(
-          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      return await WebsiteProductionPaymentApi.call(
+        'health_plus',
+        'createHealthPlusCheckoutSession',
+        {
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _healthEmail.text.trim(),
@@ -12217,13 +12211,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               'https://circum-2797c.web.app/send/health?health=success',
           'cancelUrl':
               'https://circum-2797c.web.app/send/health?health=cancelled',
-        }),
+        },
+        callable: false,
       );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data;
     } catch (_) {
       return null;
     }
