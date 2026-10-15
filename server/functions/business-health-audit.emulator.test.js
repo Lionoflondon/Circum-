@@ -205,6 +205,8 @@ test("cancelled Health+ membership resists equal/later stale activation but perm
 
 test("Health+ checkout blocks an existing subscription before charging and reuses the cancelled member's customer", async (t) => {
   const uid = "resubscribe-owner";
+  const appCheck = require("firebase-admin/app-check").getAppCheck();
+  t.mock.method(appCheck, "verifyToken", async () => ({appId: "emulator-health-app"}));
   const auth = require("firebase-admin/auth").getAuth();
   t.mock.method(auth, "verifyIdToken", async () => ({uid, email: "qa@example.invalid"}));
   process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-test";
@@ -223,7 +225,7 @@ code = value; return this;
 }, send(value) {
 body = value; return this;
 }};
-  const req = {method: "POST", headers: {authorization: "Bearer emulator-test"}, body: {bookingId, profileId: uid}};
+  const req = {method: "POST", headers: {authorization: "Bearer emulator-test", "x-firebase-appcheck": "emulator-health-token"}, body: {bookingId, profileId: uid}};
   await health._qaHandlers.createHealthPlusCheckoutHandler(req, res, {db, stripe});
   assert.equal(code, 403);
   assert.equal(body.code, "failed-precondition");
