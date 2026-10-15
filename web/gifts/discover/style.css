@@ -19,3 +19,9 @@ footer .store-links{display:flex;flex-wrap:wrap;gap:10px}footer .store-links a{d
 /* Use the same upright typography as the other service pages. */
 em,i{font-family:inherit;font-style:normal}
 h1 em{letter-spacing:inherit}
+
+/* Match the Health+ and Circum Business header treatment. */
+.header .service-brand{width:auto;height:auto;font-size:28px;letter-spacing:-1px;line-height:1;overflow:visible}.header .service-brand strong{font-weight:400;color:#d2f6ee}@media(max-width:800px){.header .service-brand{font-size:23px}}@media(max-width:420px){.header .service-brand{font-size:21px}}
+
+/* Existing Sender Gifts badge: same artwork and iridescent palette. */
+.header .service-brand{display:inline-flex;align-items:center;gap:13px;min-height:48px}.header .service-brand strong{color:#f4f3f0}.gift-service-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:36%;background:linear-gradient(135deg,#a8edea,#c9b8ff,#ffd6e8,#b8f0d8,#d4c5ff);box-shadow:0 0 22px #c9b8ff2e;color:#1a1330;flex-shrink:0}.gift-service-icon svg{width:50%;height:50%;display:block}@media(max-width:650px){.gift-service-icon{width:40px;height:40px}.header .service-brand{gap:10px}}
