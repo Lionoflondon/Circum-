@@ -3330,10 +3330,11 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryAdjustments.createDeliveryAdjustmentPayment",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
+        "lib/website/shared/adjustment_checkout.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
-        "server/functions/sender-payment-app-check.test.js"
+        "server/functions/sender-payment-app-check.test.js",
+        "test/website_adjustment_checkout_test.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -4789,7 +4790,6 @@
       "generation": "Gen 1",
       "productionPurpose": "deliveryAdjustments.finalizeDeliveryAdjustmentPayment",
       "callers": [
-        "lib/website/shared/circum_website_app.dart",
         "server/functions/cloud-run-payment-family.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/sender-payment-app-check.test.js"
