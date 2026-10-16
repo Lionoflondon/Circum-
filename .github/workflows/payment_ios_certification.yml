@@ -19,7 +19,7 @@ jobs:
       - run: flutter pub get
       - name: Compile iOS TEST candidate without signing or execution
         env:
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.CIRCUM_CERT_STRIPE_TEST_PUBLISHABLE_KEY }}
           SENDER_IOS_GOOGLE_MAPS_API_KEY: ${{ secrets.CIRCUM_CERT_IOS_MAPS_API_KEY }}
           PAYMENT_ENVIRONMENT: test
         run: |
