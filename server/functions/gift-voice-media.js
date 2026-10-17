@@ -72,7 +72,8 @@ function sanitizeGiftVoiceNoteMetadata(voiceNote, senderId) {
 async function verifyGiftVoiceStorageObject({bucket, voiceNote, senderId}) {
   const sanitized = sanitizeGiftVoiceNoteMetadata(voiceNote, senderId);
   if (!sanitized) return null;
-  const file = bucket.file(sanitized.storagePath);
+  const resolvedBucket = typeof bucket === "function" ? bucket() : bucket;
+  const file = resolvedBucket.file(sanitized.storagePath);
   const [exists] = await file.exists();
   if (!exists) {
     throw new functions.https.HttpsError("failed-precondition", "Gift voice note upload was not found.");

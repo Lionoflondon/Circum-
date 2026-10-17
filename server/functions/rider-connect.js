@@ -138,7 +138,16 @@ function timestampMillis(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function lateBankPayoutFailure({request = {}, payout = {}, accountId, eventType}) {
+  return ["payout.failed", "payout.canceled"].includes(eventType) &&
+    text(request.status) === "paid" && text(request.stripePayoutId) === text(payout.id) &&
+    text(request.stripeAccountId) === text(accountId) && payout.currency === "gbp" &&
+    Number.isSafeInteger(payout.amount) && payout.amount > 0 &&
+    payout.amount === Math.round(Number(request.riderNetPayout) * 100);
+}
+
 function payoutRecoveryCandidate(record = {}, now = Date.now(), staleMs = payoutRecoveryStaleMs) {
+  if (record.payoutAccountingReviewRequired === true) return false;
   const status = text(record.status || record.payoutStatus).toLowerCase();
   if (!["reserved", "processing"].includes(status)) return false;
   if (record.fundsReserved !== true || record.cancelledAt || record.canceledAt) return false;
@@ -1504,7 +1513,10 @@ function handleStripeConnectWebhook(stripeOrFactory) {
           const query = await transaction.get(db.collection("payoutRequests")
               .where("stripeAccountId", "==", accountId)
               .where("status", "in", ["processing", "pending", "requested", "scheduled"]));
-          const matchedDocs = query.docs.filter((doc) => doc.id === payoutRequestId || (doc.data().destinationPaymentId && paidSources.has(doc.data().destinationPaymentId)));
+          const priorPayout = await transaction.get(db.collection("payoutRequests").where("stripePayoutId", "==", object.id));
+          const candidates = [...new Map([...query.docs, ...priorPayout.docs].map((doc) => [doc.id, doc])).values()];
+          const matchedDocs = candidates.filter((doc) => doc.data().stripeAccountId === accountId &&
+            (doc.id === payoutRequestId || doc.data().stripePayoutId === object.id || (doc.data().destinationPaymentId && paidSources.has(doc.data().destinationPaymentId))));
           const allocationDocs = new Map();
           for (const doc of matchedDocs) allocationDocs.set(doc.id, await payoutAllocation.readRequestAllocations(transaction, db, doc.id));
           let matched = 0;
@@ -1514,6 +1526,22 @@ function handleStripeConnectWebhook(stripeOrFactory) {
             const amount = Number(payout.amount || 0);
             const reserved = payout.fundsReserved === true;
             matched += 1;
+            if (payout.payoutAccountingReviewRequired === true) return;
+            if (text(payout.status) === "paid") {
+              if (lateBankPayoutFailure({request: payout, payout: object, accountId, eventType: event.type})) {
+                transaction.set(doc.ref, {status: "processing", payoutStatus: status, payoutAccountingReviewRequired: true,
+                  failureReason: object.failure_message || object.failure_code || "late_bank_payout_failure",
+                  failedAt: status === "failed" ? FieldValue.serverTimestamp() : null,
+                  canceledAt: status === "canceled" ? FieldValue.serverTimestamp() : null, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+                transaction.create(db.collection("riderPayoutAudit").doc(`late_bank_failure_${event.id}`), {
+                  action: "late_bank_payout_failure_requires_review", status: "action_required", reviewRequired: true,
+                  payoutRequestId: doc.id, riderId, stripeEventId: event.id, stripePayoutId: object.id,
+                  stripeAccountId: accountId, providerStatus: status, financialMutationPerformed: false,
+                  createdAt: FieldValue.serverTimestamp(),
+                });
+              }
+              return;
+            }
             if (status === "paid" || releaseBalance) payoutAllocation.setAllocationState(transaction, allocationDocs.get(doc.id), status === "paid" ? "paid" : "released", object.id);
             transaction.set(doc.ref, {
               status: ["failed", "canceled"].includes(status) ? "processing" : status,
@@ -1674,6 +1702,7 @@ module.exports = {
   scheduledRiderStripeStatusSyncCore,
   recoverRiderPayoutsCore,
   payoutRecoveryCandidate,
+  lateBankPayoutFailure,
   timestampMillis,
   redactLegacyPayoutBankFields,
   adminBaseUrl,

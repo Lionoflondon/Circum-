@@ -3841,6 +3841,7 @@
         "server/functions/cloud-run-sender-delivery-payments.js",
         "server/functions/cloud-run-sender-delivery-payments.test.js",
         "server/functions/core-payment-amount-security.test.js",
+        "server/functions/isolated-payment-certification-server.js",
         "server/functions/payment-runtime-bindings.test.js",
         "server/functions/qa-special-flow.js",
         "server/functions/sender-payment-app-check.test.js",
@@ -5951,6 +5952,7 @@
       "callers": [
         "docs/BACKEND_REMEDIATION_2026-09-21.md",
         "server/functions/cloud-run-stripe-connect-webhook.js",
+        "server/functions/isolated-payment-certification-server.js",
         "server/functions/production-functions-inventory.json",
         "server/functions/rider-connect-webhook-security.test.js",
         "server/functions/rider-payout-allocation.emulator.test.js"

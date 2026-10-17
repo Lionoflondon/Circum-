@@ -199,6 +199,7 @@
         ".github/workflows/deploy_functions.yml",
         ".github/workflows/rc1_deploy.yml",
         ".github/workflows/rc1_release_build.yml",
+        ".github/workflows/payment_ios_certification.yml",
         ".github/workflows/repository_flutter_ci.yml",
         "BREAK_GLASS_DEPLOY.md",
         "PRODUCTION_DIAGNOSTICS.md",

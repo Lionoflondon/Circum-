@@ -116,3 +116,20 @@ test("gift voice lifecycle audit records operational ownership and outcome", () 
   assert.equal(record.outcome, "success");
   assert.equal(record.reason, "client_payment_recovery");
 });
+
+
+test("payments without a voice note do not initialize optional Storage", async () => {
+  let initialized = 0;
+  const bucket = () => {
+ initialized += 1; throw new Error("storage_required");
+};
+  assert.equal(await media.verifyGiftVoiceStorageObject({bucket, voiceNote: undefined, senderId: "sender-1"}), null);
+  assert.equal(initialized, 0);
+  await assert.rejects(media.verifyGiftVoiceStorageObject({bucket, senderId: "sender-1", voiceNote: {
+    durationSeconds: 12,
+    storagePath: "gift_requests/sender-1_1784583541000/voice/original.webm",
+    downloadUrl: "https://storage.example/voice.webm",
+    mimeType: "audio/webm",
+  }}), /storage_required/);
+  assert.equal(initialized, 1);
+});
