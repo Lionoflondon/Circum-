@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {healthRouteDistance, healthDirectionsKey} = require("./health-route-authority");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
+const {getAppCheck} = require("firebase-admin/app-check");
 const {FieldValue} = require("firebase-admin/firestore");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 let cachedStripe = null;
@@ -106,7 +107,21 @@ async function verifySenderRequest(req) {
         "Sender authentication is required.",
     );
   }
-  const decoded = await getAuth().verifyIdToken(header.substring("Bearer ".length));
+  const appCheckToken = req.headers["x-firebase-appcheck"];
+  if (typeof appCheckToken !== "string" || !appCheckToken.trim()) {
+    throw new functions.https.HttpsError("unauthenticated", "Security verification is required.");
+  }
+  try {
+    await getAppCheck().verifyToken(appCheckToken);
+  } catch (_error) {
+    throw new functions.https.HttpsError("unauthenticated", "Security verification is invalid or expired.");
+  }
+  let decoded;
+  try {
+    decoded = await getAuth().verifyIdToken(header.substring("Bearer ".length));
+  } catch (_error) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in again to continue.");
+  }
   return {
     uid: decoded.uid,
     email: decoded.email || null,
@@ -1099,6 +1114,7 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
 
 // Explicit dependencies are used only by the allowlisted private QA callable.
 exports._qaHandlers = {
+  verifySenderRequest,
   createHealthPlusBookingHandler,
   createHealthPlusCheckoutHandler,
   createHealthPlusBillingPortalHandler,
