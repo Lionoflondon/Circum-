@@ -8,33 +8,85 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const EVENTS = new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 const FAILURE = new Set(["email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 const eventId = (value) => crypto.createHash("sha256").update(value).digest("hex");
-async function recordOutcome({db, event, deliveryId, log = console.log}) {
+function writeLog(log, value) {
+  const line = JSON.stringify(value);
+  if (typeof log === "function") log(line);
+  else console.log(line);
+}
+function millis(value) {
+  return value && typeof value.toMillis === "function" ? value.toMillis() : Date.parse(value || "") || 0;
+}
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function findQueueReceipt({db, providerId, wait = delay}) {
+  for (let attempt = 0; attempt < 9; attempt++) {
+    const queue = await db.collection("emailQueue").where("providerId", "==", providerId).limit(2).get();
+    if (queue.docs.length) return queue.docs;
+    if (attempt < 8) await wait(250);
+  }
+  return [];
+}
+async function applyLatestProviderOutcome({db, providerId, queueDocs}) {
+  const events = await db.collection("emailProviderEvents")
+      .where("providerId", "==", providerId).get();
+  if (!events.docs.length || !queueDocs.length) return {status: "pending_receipt"};
+  const latest = events.docs.reduce((winner, row) => {
+    return millis(row.data().providerEventAt) > millis(winner.data().providerEventAt) ? row : winner;
+  });
+  const latestEvent = latest.data();
+  await db.runTransaction(async (tx) => {
+    const snapshots = [];
+    for (const row of queueDocs) snapshots.push(await tx.get(row.ref));
+    for (const snap of snapshots) {
+      if (!snap.exists) continue;
+      const current = snap.data() || {};
+      const previous = current.providerEventAt && typeof current.providerEventAt.toMillis === "function" ? current.providerEventAt.toMillis() : Date.parse(current.providerEventAt || "") || 0;
+      const next = millis(latestEvent.providerEventAt);
+      if (next >= previous) tx.set(snap.ref, {providerDeliveryStatus: latestEvent.eventType.slice(6), providerEventAt: latestEvent.providerEventAt, providerOutcomeUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+  });
+  const pending = events.docs.filter((row) => row.data().matchedQueueCount === 0);
+  if (pending.length) {
+    await db.runTransaction(async (tx) => {
+      for (const row of pending) {
+        const snap = await tx.get(row.ref);
+        if (snap.exists && snap.data().matchedQueueCount === 0) tx.set(row.ref, {matchedQueueCount: queueDocs.length, receiptMatchedAt: FieldValue.serverTimestamp()}, {merge: true});
+      }
+    });
+  }
+  return {status: "recorded", matchedQueueCount: queueDocs.length};
+}
+async function recordOutcome({db, event, deliveryId, log = console.log, wait = delay}) {
   if (!event || !EVENTS.has(event.type)) return {status: "ignored"};
   const providerId = String(event.data && event.data.email_id || "");
   const at = Date.parse(event.created_at);
   if (!/^[a-f0-9-]{36}$/i.test(providerId) || !Number.isFinite(at)) throw Object.assign(new Error("invalid_event"), {statusCode: 400});
+  if (typeof deliveryId !== "string" || !deliveryId) throw Object.assign(new Error("invalid_event"), {statusCode: 400});
   const ref = db.collection("emailProviderEvents").doc(eventId(deliveryId));
   const queue = await db.collection("emailQueue").where("providerId", "==", providerId).limit(2).get();
-  if (!queue.docs.length) throw Object.assign(new Error("queue_receipt_not_ready"), {statusCode: 503});
   const result = await db.runTransaction(async (tx) => {
     const old = await tx.get(ref);
     if (old.exists) return {status: "duplicate"};
-    const snapshots = [];
-    for (const row of queue.docs) snapshots.push(await tx.get(row.ref));
-    tx.create(ref, {provider: "resend", providerId, eventType: event.type, providerEventAt: new Date(at), receivedAt: FieldValue.serverTimestamp(), matchedQueueCount: snapshots.length});
-    for (const snap of snapshots) {
-      const current = snap.data() || {};
-      const previous = current.providerEventAt && typeof current.providerEventAt.toMillis === "function" ? current.providerEventAt.toMillis() : Date.parse(current.providerEventAt || "") || 0;
-      if (at >= previous) tx.set(snap.ref, {providerDeliveryStatus: event.type.slice(6), providerEventAt: new Date(at), providerOutcomeUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
-    }
-    return {status: "recorded", matchedQueueCount: snapshots.length};
+    tx.create(ref, {provider: "resend", providerId, eventType: event.type, providerEventAt: new Date(at), receivedAt: FieldValue.serverTimestamp(), matchedQueueCount: queue.docs.length});
+    return {status: "recorded", matchedQueueCount: queue.docs.length};
   });
-  if (result.status === "recorded" && FAILURE.has(event.type)) log(JSON.stringify({severity: "ERROR", event: "transactional_email_delivery_failure", provider: "resend", providerId, eventType: event.type, matchedQueueCount: result.matchedQueueCount}));
-  return result;
+  if (result.status === "recorded" && FAILURE.has(event.type)) writeLog(log, {severity: "ERROR", event: "transactional_email_delivery_failure", provider: "resend", providerId, eventType: event.type, matchedQueueCount: queue.docs.length});
+  if (result.status === "duplicate") {
+    if (queue.docs.length) await applyLatestProviderOutcome({db, providerId, queueDocs: queue.docs});
+  }
+  if (!queue.docs.length) {
+    writeLog(log, {severity: "WARNING", event: "email_provider_event_waiting_for_queue_receipt", provider: "resend", providerId, eventType: event.type});
+    // Keep the single webhook service as the only delivery-event owner. Wait
+    // briefly for the sender's Firestore receipt; if it remains absent, leave
+    // the minimal event record durable and return retryable 503 so Resend retries.
+    const appeared = await findQueueReceipt({db, providerId, wait});
+    if (!appeared.length) throw Object.assign(new Error("queue_receipt_not_ready"), {statusCode: 503, code: "queue_receipt_not_ready"});
+    return applyLatestProviderOutcome({db, providerId, queueDocs: appeared});
+  }
+  return result.status === "duplicate" ? result : applyLatestProviderOutcome({db, providerId, queueDocs: queue.docs});
 }
 function createServer({dbFactory = () => {
 if (!getApps().length) initializeApp(); return getFirestore();
-}, secret = process.env.RESEND_WEBHOOK_SECRET, log} = {}) {
+}, secret = process.env.RESEND_WEBHOOK_SECRET, log, wait} = {}) {
   let db;
   return http.createServer((req, res) => {
     const reply = (status, value) => {
@@ -57,12 +109,12 @@ return reply(401, {error: "invalid_signature"});
 }
       try {
         if (!db) db = dbFactory();
-        return reply(200, await recordOutcome({db, event, deliveryId: req.headers["svix-id"], log}));
+        return reply(200, await recordOutcome({db, event, deliveryId: req.headers["svix-id"], log, wait}));
       } catch (error) {
-console.error("email_outcome_record_failed"); return reply(error.statusCode || 503, {error: error.statusCode === 400 ? "invalid_event" : "retry_required"});
+writeLog(log, {severity: "ERROR", event: "email_outcome_record_failed", operation: "record_or_reconcile", code: String(error.code || error.statusCode || "unknown")}); return reply(error.statusCode || 503, {error: error.statusCode === 400 ? "invalid_event" : "retry_required"});
 }
     });
   });
 }
 if (require.main === module) createServer().listen(Number(process.env.PORT || 8080), "0.0.0.0");
-module.exports = {createServer, recordOutcome};
+module.exports = {createServer, recordOutcome, applyLatestProviderOutcome, findQueueReceipt};
