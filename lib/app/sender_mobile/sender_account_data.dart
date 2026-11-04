@@ -66,9 +66,11 @@ class SenderAccountDataRepository {
   }
 
   Future<ShareResult> shareExport(Map<String, dynamic> data) {
-    return Share.shareWithResult(
-      const JsonEncoder.withIndent('  ').convert(data),
-      subject: 'Circum Sender data export',
+    return SharePlus.instance.share(
+      ShareParams(
+        text: const JsonEncoder.withIndent('  ').convert(data),
+        subject: 'Circum Sender data export',
+      ),
     );
   }
 }

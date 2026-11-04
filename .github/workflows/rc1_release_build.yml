@@ -34,6 +34,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.8'
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -78,6 +79,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.8'
       - name: Install bundletool
         run: |
           set -euo pipefail
@@ -210,6 +212,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.8'
       - name: Flutter prerequisite gates
         run: |
           set -euo pipefail

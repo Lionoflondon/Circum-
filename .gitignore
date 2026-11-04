@@ -46,3 +46,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated Kotlin compiler cache.
+android/.kotlin/
+
+# Local restricted provider build settings.
+ios/Flutter/ProviderKeys.xcconfig
+.provider-build-*/
