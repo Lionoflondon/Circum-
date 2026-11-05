@@ -186,6 +186,8 @@ exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
 exports.submitWebsiteSupportRequest =
   communicationEngine.submitWebsiteSupportRequest;
+exports.submitWebsiteContactEmail =
+  communicationEngine.submitWebsiteContactEmail;
 exports.updateSupportConversationStatus =
   communicationEngine.updateSupportConversationStatus;
 exports.reportCircumMessage = communicationEngine.reportCircumMessage;

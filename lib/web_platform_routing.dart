@@ -5,6 +5,7 @@ enum CircumWebSurface {
   gifts,
   vanguard,
   support,
+  contact,
   deleteAccount,
   privacyPolicy,
   terms,
@@ -105,6 +106,11 @@ CircumWebRouteResolution resolveCircumWebRoute(
       return const CircumWebRouteResolution(
         surface: CircumWebSurface.support,
         canonicalPath: '/support',
+      );
+    case 'contact':
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.contact,
+        canonicalPath: '/contact',
       );
     case 'delete_account':
     case 'delete-account':

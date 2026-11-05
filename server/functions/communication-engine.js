@@ -763,6 +763,37 @@ async function submitWebsiteSupportRequest(data, context) {
   return {ok: true, ticketId: ticketRef.id, chatId};
 }
 
+async function submitWebsiteContactEmail(data) {
+  const name = clean(data.name).slice(0, 120);
+  const email = clean(data.email).slice(0, 180).toLowerCase();
+  const subject = clean(data.subject).slice(0, 180) || "Website contact request";
+  const message = clean(data.message).slice(0, 4000);
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !message) {
+    throw new functions.https.HttpsError("invalid-argument", "Name, valid email, and message are required.");
+  }
+  const apiKey = clean(process.env.RESEND_API_KEY);
+  if (!apiKey) {
+    throw new functions.https.HttpsError("failed-precondition", "Contact email is not configured.");
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json"},
+    body: JSON.stringify({
+      from: "Circum <info@circumuk.com>",
+      to: ["support@circumuk.com"],
+      bcc: ["ayojason600@gmail.com"],
+      reply_to: email,
+      subject,
+      text: `From: ${name} <${email}>\n\n${message}`,
+    }),
+  });
+  if (!response.ok) {
+    console.error("Website contact email provider rejected request", response.status);
+    throw new functions.https.HttpsError("unavailable", "We could not send your message. Please try again.");
+  }
+  return {ok: true};
+}
+
 async function updateSupportConversationStatus(data, context) {
   if (!canAdmin(context, "support.manage")) throw new functions.https.HttpsError("permission-denied", "Support Admin access is required.");
   const ticketId = clean(data.ticketId);
@@ -813,6 +844,8 @@ exports.sendCircumMessage = functions.https.onCall(sendMessage);
 exports.startAdminConversation = adminCallable(startAdminConversation);
 exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
 exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
+exports.submitWebsiteContactEmail = functions.runWith({secrets: ["RESEND_API_KEY"]})
+    .https.onCall(submitWebsiteContactEmail);
 exports.updateSupportConversationStatus = adminCallable(updateSupportConversationStatus);
 exports.markConversationRead = functions.https.onCall(markConversationRead);
 exports.setConversationTyping = functions.https.onCall(setConversationTyping);
