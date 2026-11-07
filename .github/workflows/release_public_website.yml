@@ -1,4 +1,4 @@
-name: Deploy Website
+name: Release Public Website
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
       - "lib/website/tooling/**"
       - "web/**"
       - "firebase.json"
-      - ".github/workflows/deploy_website.yml"
+      - ".github/workflows/release_public_website.yml"
   workflow_dispatch:
     inputs:
       enable_roth_test:

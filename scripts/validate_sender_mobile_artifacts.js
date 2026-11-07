@@ -80,7 +80,7 @@ if (usesStaticMapsCredential) {
     'Public Web server-side Places details proxy');
   for (const file of [
     '.github/workflows/deploy_functions.yml',
-    '.github/workflows/deploy_website.yml',
+    '.github/workflows/release_public_website.yml',
     '.github/workflows/rc1_deploy.yml',
     '.github/workflows/rc1_release_build.yml',
   ]) {
