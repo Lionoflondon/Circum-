@@ -1,0 +1,12 @@
+# Historical workflow ID. Keep disabled in GitHub so old refs cannot publish.
+name: Retired Website Deployment
+on:
+  workflow_dispatch:
+jobs:
+  retired:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: |
+          echo 'Use Release Public Website from protected main.'
+          exit 1

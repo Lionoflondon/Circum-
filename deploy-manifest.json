@@ -12,6 +12,7 @@
       ],
       "ownedPrefixes": [
         ".github/workflows/deploy_website.yml",
+        ".github/workflows/release_public_website.yml",
         "lib/main_public_web.dart",
         "lib/website/",
         "lib/web_platform_routing.dart",
