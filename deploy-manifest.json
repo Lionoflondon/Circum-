@@ -546,6 +546,16 @@
         "server/functions/cloudbuild.website-roth-live.yaml"
       ],
       "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
+    },
+    {
+      "products": ["website", "backend"],
+      "files": [
+        ".github/workflows/release_public_website.yml",
+        "lib/website/tooling/public_site_seo.cjs",
+        "lib/website/tooling/validate_website_hosting_change.cjs",
+        "lib/website/tooling/verify_public_site_restore.cjs"
+      ],
+      "reason": "The public Hosting release workflow and artifact checks are reviewed with the shared deployment manifest. Production API rewrites and backend deployment paths retain their existing ownership."
     }
   ],
   "blockedPrefixes": [
