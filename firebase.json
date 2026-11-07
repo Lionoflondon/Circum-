@@ -138,6 +138,16 @@
           "source": "/delete-account",
           "destination": "/delete_account",
           "type": 308
+        },
+        {
+          "source": "/AIR{,/}",
+          "destination": "/air/",
+          "type": 301
+        },
+        {
+          "source": "/air",
+          "destination": "/air/",
+          "type": 301
         }
       ],
       "rewrites": [
@@ -173,6 +183,10 @@
         {
           "source": "/support{,/}",
           "destination": "/seo/routes/support.html"
+        },
+        {
+          "source": "/contact{,/}",
+          "destination": "/seo/routes/contact.html"
         },
         {
           "source": "/privacy_policy{,/}",

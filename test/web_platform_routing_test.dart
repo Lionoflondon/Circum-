@@ -40,6 +40,18 @@ void main() {
       expect(route.canonicalPath, '/terms');
     });
 
+    test('contact routes resolve to the restored contact page', () {
+      for (final path in ['/contact', '/contact/']) {
+        final route = resolveCircumWebRoute(
+          Uri.parse('https://circumuk.com$path'),
+          adminHostingTarget: false,
+          publicHostingHost: true,
+        );
+        expect(route.surface, CircumWebSurface.contact);
+        expect(route.canonicalPath, '/contact');
+      }
+    });
+
     test('/support selects the dedicated public support page', () {
       final route = resolveCircumWebRoute(
         Uri.parse('https://circumuk.com/support'),
