@@ -85,7 +85,7 @@ jobs:
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
       - run: WEBSITE_ROTH_TEST_ENABLED="${{ inputs.enable_roth_test }}" WEBSITE_ROTH_LIVE_CANDIDATE_ENABLED="${{ inputs.enable_roth_live_candidate }}" WEBSITE_ROTH_LIVE_PUBLIC_ENABLED="${{ inputs.enable_roth_live }}" NEWSLETTER_SIGNUP_ENABLED="${{ inputs.enable_newsletter }}" PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" PUBLIC_WEB_STATIC_MAPS_API_KEY="${{ secrets.PUBLIC_WEB_STATIC_MAPS_API_KEY }}" scripts/build_public_web.sh
       - run: node lib/website/tooling/public_site_seo.cjs build/public_web
-      - run: node --test scripts/website_roth_routes.test.mjs scripts/verify_roth_live_release_owners.test.cjs
+      - run: node --test scripts/website_roth_routes.test.mjs lib/website/tooling/verify_roth_live_release_owners.test.cjs
       - run: node scripts/validate_web_artifacts.js --surface=website
       - name: Verify homepage and CIRCUM AIR in the release artifact
         run: node lib/website/tooling/verify_public_site_restore.cjs build/public_web
@@ -153,10 +153,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/roth-live-owners"
           for SERVICE in circum-stripe-webhook-live circum-transactional-email; do
             gcloud run services describe "$SERVICE" --project=circum-2797c --region=us-central1 --format=json > "$RUNNER_TEMP/roth-live-owners/$SERVICE.service.json"
-            REVISION="$(node scripts/verify_roth_live_release_owners.cjs service "$SERVICE" "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/$SERVICE.service.json")"
+            REVISION="$(node lib/website/tooling/verify_roth_live_release_owners.cjs service "$SERVICE" "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/$SERVICE.service.json")"
             gcloud run revisions describe "$REVISION" --project=circum-2797c --region=us-central1 --format=json > "$RUNNER_TEMP/roth-live-owners/$SERVICE.revision.json"
           done
-          node scripts/verify_roth_live_release_owners.cjs revisions "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/circum-stripe-webhook-live.revision.json" "$RUNNER_TEMP/roth-live-owners/circum-transactional-email.revision.json"
+          node lib/website/tooling/verify_roth_live_release_owners.cjs revisions "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/circum-stripe-webhook-live.revision.json" "$RUNNER_TEMP/roth-live-owners/circum-transactional-email.revision.json"
       - name: Publish current main to public Hosting
         run: |
           git fetch --no-tags origin refs/heads/main
