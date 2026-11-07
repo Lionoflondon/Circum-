@@ -143,11 +143,6 @@
           "source": "/AIR{,/}",
           "destination": "/air/",
           "type": 301
-        },
-        {
-          "source": "/air",
-          "destination": "/air/",
-          "type": 301
         }
       ],
       "rewrites": [
