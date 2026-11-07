@@ -145,6 +145,7 @@ enum _WebAppMode {
   gifts,
   vanguard,
   support,
+  contact,
   deleteAccount,
   privacyPolicy,
   terms,
@@ -224,6 +225,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.gifts => _WebAppMode.gifts,
       CircumWebSurface.vanguard => _WebAppMode.vanguard,
       CircumWebSurface.support => _WebAppMode.support,
+      CircumWebSurface.contact => _WebAppMode.contact,
       CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
       CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.terms => _WebAppMode.terms,
@@ -306,6 +308,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.gifts => '/gifts/discover/',
       _WebAppMode.vanguard => '/vanguard',
       _WebAppMode.support => '/support',
+      _WebAppMode.contact => '/contact',
       _WebAppMode.deleteAccount => '/delete_account',
       _WebAppMode.privacyPolicy => '/privacy_policy',
       _WebAppMode.terms => '/terms',
@@ -515,6 +518,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
         ),
       _WebAppMode.support => _SupportPage(
           key: const ValueKey('support-page'),
+          colors: colors,
+        ),
+      _WebAppMode.contact => _ContactUsPage(
+          key: const ValueKey('contact-page'),
           colors: colors,
         ),
       _WebAppMode.deleteAccount => _AccountDeletionPage(
@@ -26005,6 +26012,214 @@ class _SupportPage extends StatelessWidget {
       );
 }
 
+class _ContactUsPage extends StatefulWidget {
+  final _CircumColors colors;
+  const _ContactUsPage({super.key, required this.colors});
+
+  @override
+  State<_ContactUsPage> createState() => _ContactUsPageState();
+}
+
+class _ContactUsPageState extends State<_ContactUsPage> {
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _subject = TextEditingController();
+  final _message = TextEditingController();
+  String? _note;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _subject.dispose();
+    _message.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_sending) return;
+    final email = _email.text.trim();
+    final message = _message.text.trim();
+    if (_name.text.trim().isEmpty || !email.contains('@') || message.isEmpty) {
+      setState(() => _note = 'Add your name, a valid email, and a message.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _note = 'Sending your message...';
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitWebsiteContactEmail').call({
+        'name': _name.text.trim(),
+        'email': email,
+        'subject': _subject.text.trim(),
+        'message': message,
+      });
+      if (!mounted) return;
+      _name.clear();
+      _email.clear();
+      _subject.clear();
+      _message.clear();
+      setState(() => _note = 'Your message has been sent. We’ll be in touch.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _note = 'We could not send your message. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CONTACT CIRCUM',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'We’re here to help.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Send us a message about your account, a delivery, or anything else.',
+                  style: TextStyle(color: colors.mutedText, fontSize: 16),
+                ),
+                const SizedBox(height: 28),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: colors.panel,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final narrow = constraints.maxWidth < 520;
+                          final name = _LiveChatField(
+                            colors: colors,
+                            controller: _name,
+                            label: 'Your name',
+                            icon: Icons.person_outline,
+                          );
+                          final email = _LiveChatField(
+                            colors: colors,
+                            controller: _email,
+                            label: 'Email address',
+                            icon: Icons.alternate_email,
+                          );
+                          return narrow
+                              ? Column(
+                                  children: [
+                                    name,
+                                    const SizedBox(height: 14),
+                                    email,
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Expanded(child: name),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: email),
+                                  ],
+                                );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _LiveChatField(
+                        colors: colors,
+                        controller: _subject,
+                        label: 'Subject (optional)',
+                        icon: Icons.short_text,
+                      ),
+                      const SizedBox(height: 14),
+                      _LiveChatField(
+                        colors: colors,
+                        controller: _message,
+                        label: 'How can we help?',
+                        icon: Icons.chat_bubble_outline,
+                        minLines: 5,
+                        maxLines: 8,
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _sending ? null : _send,
+                          icon: const Icon(Icons.email_outlined),
+                          label: const Text('Send message'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xff3b82f6),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                      if (_note != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_note!, style: TextStyle(color: colors.mutedText)),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    'Your message will be sent securely to the CIRCUM support team.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.mutedText, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: TextButton(
+                    onPressed: () => launchUrl(
+                      Uri.base.replace(
+                        path: '/',
+                        queryParameters: {},
+                        fragment: '',
+                      ),
+                      webOnlyWindowName: '_self',
+                    ),
+                    child: const Text('Back to CIRCUM'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PrivacyPolicyPage extends StatelessWidget {
   final _CircumColors colors;
   const _PrivacyPolicyPage({super.key, required this.colors});
@@ -26461,6 +26676,7 @@ class _LandingFooter extends StatelessWidget {
                     SizedBox(
                         width: wide ? 190 : columnWidth,
                         child: _group('Help & privacy', [
+                          _page('Contact us', '/contact'),
                           _page('Support', '/support'),
                           if (newsletterSignupEnabled)
                             _FooterServiceLink(
