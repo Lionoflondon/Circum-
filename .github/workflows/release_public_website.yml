@@ -85,13 +85,17 @@ jobs:
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
       - run: WEBSITE_ROTH_TEST_ENABLED="${{ inputs.enable_roth_test }}" WEBSITE_ROTH_LIVE_CANDIDATE_ENABLED="${{ inputs.enable_roth_live_candidate }}" WEBSITE_ROTH_LIVE_PUBLIC_ENABLED="${{ inputs.enable_roth_live }}" NEWSLETTER_SIGNUP_ENABLED="${{ inputs.enable_newsletter }}" PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" PUBLIC_WEB_STATIC_MAPS_API_KEY="${{ secrets.PUBLIC_WEB_STATIC_MAPS_API_KEY }}" scripts/build_public_web.sh
       - run: node lib/website/tooling/public_site_seo.cjs build/public_web
-      - run: node --test scripts/website_roth_routes.test.mjs
+      - run: node --test scripts/website_roth_routes.test.mjs scripts/verify_roth_live_release_owners.test.cjs
       - run: node scripts/validate_web_artifacts.js --surface=website
       - name: Verify homepage and CIRCUM AIR in the release artifact
         run: node lib/website/tooling/verify_public_site_restore.cjs build/public_web
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: inputs.enable_roth_live
+        with:
+          project_id: circum-2797c
       - run: npm install -g firebase-tools
       - name: Verify exact isolated ROTH TEST runtime before public release
         if: inputs.enable_roth_test
@@ -116,7 +120,23 @@ jobs:
         run: |
           [[ "$CERTIFIED_SHA" =~ ^[a-f0-9]{40}$ ]]
           git merge-base --is-ancestor "$CERTIFIED_SHA" HEAD
-          git diff --exit-code "$CERTIFIED_SHA" HEAD -- server scripts/build_public_web.sh web/roth web/roth-live-certification firestore.rules
+          # This job publishes Hosting only. Keep the ROTH client and every
+          # source file executed by its certified LIVE owner byte-for-byte
+          # aligned with that owner SHA. Other backend owners may evolve without
+          # changing this already deployed, separately guarded runtime.
+          git diff --exit-code "$CERTIFIED_SHA" HEAD -- \
+            scripts/build_public_web.sh \
+            web/roth \
+            web/roth-live-certification \
+            server/functions/cloud-run-website-roth-live.js \
+            server/functions/website-roth.js \
+            server/functions/roth-ledger.js \
+            server/functions/roth-ledger-core.js \
+            server/functions/wallet-core.js \
+            server/functions/roth-verification-email.js \
+            server/functions/cloud-run-transactional-email.js \
+            server/functions/transactional-email-publishers.js \
+            firestore.rules
           node lib/website/tooling/validate_website_hosting_change.cjs "$CERTIFIED_SHA"
       - name: Verify certified public LIVE runtime before activation
         if: inputs.enable_roth_live
@@ -125,6 +145,18 @@ jobs:
         run: |
           curl --fail --silent --show-error https://circum-website-roth-live-516426305461.us-central1.run.app/health > /tmp/roth-live-public-health.json
           node -e 'const h=JSON.parse(require("fs").readFileSync("/tmp/roth-live-public-health.json"));if(h.environment!=="live"||h.sourceSHA!==process.env.EXPECTED_SHA||!h.ok||!h.isolationVerified||h.publicPurchasesEnabled!==true)throw Error("Uncertified public LIVE runtime")'
+      - name: Verify active LIVE Stripe and receipt owners retain the certified ROTH guard
+        if: inputs.enable_roth_live
+        env:
+          CERTIFIED_SHA: ${{ inputs.certified_live_runtime_sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/roth-live-owners"
+          for SERVICE in circum-stripe-webhook-live circum-transactional-email; do
+            gcloud run services describe "$SERVICE" --project=circum-2797c --region=us-central1 --format=json > "$RUNNER_TEMP/roth-live-owners/$SERVICE.service.json"
+            REVISION="$(node scripts/verify_roth_live_release_owners.cjs service "$SERVICE" "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/$SERVICE.service.json")"
+            gcloud run revisions describe "$REVISION" --project=circum-2797c --region=us-central1 --format=json > "$RUNNER_TEMP/roth-live-owners/$SERVICE.revision.json"
+          done
+          node scripts/verify_roth_live_release_owners.cjs revisions "$CERTIFIED_SHA" "$RUNNER_TEMP/roth-live-owners/circum-stripe-webhook-live.revision.json" "$RUNNER_TEMP/roth-live-owners/circum-transactional-email.revision.json"
       - name: Publish current main to public Hosting
         run: |
           git fetch --no-tags origin refs/heads/main
