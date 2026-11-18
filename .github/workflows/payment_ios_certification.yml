@@ -1,0 +1,33 @@
+name: Payment iOS sandbox compile
+on:
+  workflow_dispatch:
+  push:
+    branches: [audit/isolated-payment-certification-20261016]
+    paths: [.github/workflows/payment_ios_certification.yml]
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter config --no-enable-swift-package-manager
+      - run: flutter pub get
+      - name: Compile iOS TEST candidate without signing or execution
+        env:
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.CIRCUM_CERT_STRIPE_TEST_PUBLISHABLE_KEY }}
+          SENDER_IOS_GOOGLE_MAPS_API_KEY: ${{ secrets.CIRCUM_CERT_IOS_MAPS_API_KEY }}
+          PAYMENT_ENVIRONMENT: test
+        run: |
+          set -euo pipefail
+          scripts/build_sender_ios.sh --validate-only
+          GOOGLE_MAPS_API_KEY="$SENDER_IOS_GOOGLE_MAPS_API_KEY" flutter build ios --release --no-codesign --target=lib/main.dart --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" --dart-define=PAYMENT_ENVIRONMENT=test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: circum-ios-unsigned-test-candidate
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 3

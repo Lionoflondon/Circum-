@@ -318,7 +318,7 @@ function createGiftPaymentHandler(stripe, injectedDb = null) {
 
   if (!split.stripeRequired) {
     const verifiedVoiceNote = await giftVoiceMedia.verifyGiftVoiceStorageObject({
-      bucket: getStorage().bucket(),
+      bucket: () => getStorage().bucket(),
       voiceNote: gift.voiceNote,
       senderId: gift.senderId,
     });
@@ -474,7 +474,7 @@ async function finalizeGiftPaymentAuthority({
   const preflightDraft = await draftRef.get();
   const checkedVoiceNote = verifiedVoiceNote !== undefined ? verifiedVoiceNote : preflightDraft.exists ?
     await giftVoiceMedia.verifyGiftVoiceStorageObject({
-      bucket: getStorage().bucket(),
+      bucket: () => getStorage().bucket(),
       voiceNote: preflightDraft.data() && preflightDraft.data().voiceNote,
       senderId: preflightDraft.data() && preflightDraft.data().senderId,
     }) :
