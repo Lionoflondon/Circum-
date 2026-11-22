@@ -1,11 +1,39 @@
 import 'dart:convert';
 
 import 'package:circum/app/sender_mobile/sender_wallet_cloud_run_api.dart';
+import 'package:circum/app/sender_mobile/sender_referral_cloud_run_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('Sender referrals use the authenticated Cloud Run route', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {
+            'referralCode': 'QA1234',
+            'referralLink': 'https://circumuk.com/join/QA1234',
+          },
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeSenderReferralCodeViaCloudRun(
+      idToken: 'auth-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(result['referralCode'], 'QA1234');
+    expect(captured.url.host, contains('circum-referral-callables'));
+    expect(captured.url.path, '/v1/callable/ensureReferralCode');
+    expect(captured.headers['authorization'], 'Bearer auth-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+  });
   test(
     'Sender Wallet activity uses the authenticated Cloud Run route',
     () async {

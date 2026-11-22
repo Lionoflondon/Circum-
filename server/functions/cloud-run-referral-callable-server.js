@@ -3,6 +3,7 @@
 
 const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
+const {getAppCheck} = require("firebase-admin/app-check");
 const {getAuth} = require("firebase-admin/auth");
 
 const MAX_BODY_BYTES = 32 * 1024;
@@ -11,6 +12,7 @@ const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",
   unauthenticated: "UNAUTHENTICATED",
   "permission-denied": "PERMISSION_DENIED",
+  "failed-precondition": "FAILED_PRECONDITION",
   "already-exists": "ALREADY_EXISTS",
   internal: "INTERNAL",
 };
@@ -19,6 +21,7 @@ function productionDependencies() {
   if (!getApps().length) initializeApp();
   return {
     verifyIdToken: (token) => getAuth().verifyIdToken(token, true),
+    verifyAppCheck: (token) => getAppCheck().verifyToken(token),
     handlers: require("./referrals").cloudRunHandlers,
   };
 }
@@ -62,13 +65,20 @@ function createServer(options = {}) {
         if (!token) return writeJson(response, 401, {error: {status: "UNAUTHENTICATED", message: "Sign in to use referrals."}});
         if (!dependencies) dependencies = dependenciesFactory();
         const decoded = await dependencies.verifyIdToken(token);
+        const appCheckToken = String(request.headers["x-firebase-appcheck"] || "").trim();
+        if (!appCheckToken) throw Object.assign(new Error("Circum security verification is required."), {code: "failed-precondition"});
+        const app = await dependencies.verifyAppCheck(appCheckToken);
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!Object.prototype.hasOwnProperty.call(payload, "data")) throw Object.assign(new Error("Callable request must contain data."), {code: "invalid-argument"});
-        const result = await dependencies.handlers[match[1]](payload.data, {auth: {uid: decoded.uid || decoded.sub, token: decoded}});
+        const result = await dependencies.handlers[match[1]](payload.data, {
+          auth: {uid: decoded.uid || decoded.sub, token: decoded},
+          app: {appId: app.appId || app.sub},
+        });
         return writeJson(response, 200, {result});
       } catch (error) {
-        const code = error.code && String(error.code).replace(/^functions\//, "") || "internal";
-        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "invalid-argument" ? 400 : 500;
+        const rawCode = error.code && String(error.code).replace(/^functions\//, "") || "internal";
+        const code = rawCode.startsWith("app-check/") ? "failed-precondition" : rawCode;
+        const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : ["invalid-argument", "failed-precondition"].includes(code) ? 400 : 500;
         if (status === 500) console.error("referral_callable_failed", {callable: match[1], reason: error.message || "internal_error"});
         return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Referral request failed." : error.message}});
       }
