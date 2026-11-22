@@ -4,6 +4,7 @@
 const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
+const {getAppCheck} = require("firebase-admin/app-check");
 
 const MAX_BODY_BYTES = 32 * 1024;
 const CALLABLES = new Set(["ensureReferralCode", "attachReferralCode", "activateReferral"]);
@@ -19,6 +20,7 @@ function productionDependencies() {
   if (!getApps().length) initializeApp();
   return {
     verifyIdToken: (token) => getAuth().verifyIdToken(token, true),
+    verifyAppCheck: (token) => getAppCheck().verifyToken(token),
     handlers: require("./referrals").cloudRunHandlers,
   };
 }
@@ -62,15 +64,19 @@ function createServer(options = {}) {
         if (!token) return writeJson(response, 401, {error: {status: "UNAUTHENTICATED", message: "Sign in to use referrals."}});
         if (!dependencies) dependencies = dependenciesFactory();
         const decoded = await dependencies.verifyIdToken(token);
+        const appCheckToken = String(request.headers["x-firebase-appcheck"] || "").trim();
+        if (!appCheckToken) return writeJson(response, 401, {error: {status: "UNAUTHENTICATED", message: "Circum security verification is required."}});
+        const app = await dependencies.verifyAppCheck(appCheckToken);
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (!Object.prototype.hasOwnProperty.call(payload, "data")) throw Object.assign(new Error("Callable request must contain data."), {code: "invalid-argument"});
-        const result = await dependencies.handlers[match[1]](payload.data, {auth: {uid: decoded.uid || decoded.sub, token: decoded}});
+        const result = await dependencies.handlers[match[1]](payload.data, {auth: {uid: decoded.uid || decoded.sub, token: decoded}, app: {appId: app.appId || app.sub}});
         return writeJson(response, 200, {result});
       } catch (error) {
-        const code = error.code && String(error.code).replace(/^functions\//, "") || "internal";
+        const rawCode = error.code && String(error.code).replace(/^functions\//, "") || "internal";
+        const code = rawCode.startsWith("app-check/") || rawCode.startsWith("auth/") ? "unauthenticated" : rawCode;
         const status = code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "invalid-argument" ? 400 : 500;
-        if (status === 500) console.error("referral_callable_failed", {callable: match[1], reason: error.message || "internal_error"});
-        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Referral request failed." : error.message}});
+        if (status === 500) console.error("referral_callable_failed", {callable: match[1], reason: STATUS[code] || "INTERNAL"});
+        return writeJson(response, status, {error: {status: STATUS[code] || "INTERNAL", message: status === 500 ? "Referral request failed." : code === "unauthenticated" ? "Circum security verification is required." : error.message}});
       }
     });
   });
