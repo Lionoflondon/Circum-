@@ -8,7 +8,7 @@ This branch adds an App Check enforced callable bridge for CIRCUM's company-scop
 - `getRothCentralCompanyBalance` reads CIRCUM's company allocation for the authenticated linked identity.
 - `issueRothFromCircum` permits an active company administrator to issue an idempotent reward against a verified linked identity.
 
-All requests are server-signed and use the staging-only ROTH API origin. The merchant signing secret is a Firebase Secret Manager parameter and is never returned to clients or logged. The reward endpoint validates an integer-pence amount and a stable reference.
+All requests are server-signed and use the staging-only ROTH API origin. The merchant signing secret is a Firebase Secret Manager parameter and is never returned to clients or logged. Reward issuance requires an active administrator document in the CIRCUM tenant's `adminUsers` collection; token role claims alone are not sufficient. If the administrator record carries an explicit `companyId` or `tenantId`, it must identify CIRCUM. Each reward is capped at £10 in the CIRCUM callable, and ROTH enforces the company's configured aggregate allowance (staging cap £100) atomically against its authoritative ledger. Reward references are stable and idempotent.
 
 ## Required staging configuration
 

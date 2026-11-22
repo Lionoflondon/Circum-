@@ -5,6 +5,7 @@ const {defineSecret, defineString} = require("firebase-functions/params");
 const {getFirestore} = require("firebase-admin/firestore");
 const {senderPaymentCallable} = require("./sender-app-check");
 const {createRothCentralClient, STAGING_ORIGIN} = require("./roth-central-client");
+const {isAuthorizedCircumIssuer, isValidStagingRewardAmount} = require("./roth-company-issuer");
 
 const mode = defineString("ROTH_CENTRAL_MODE", {default: "disabled"});
 const stageProject = defineString("ROTH_COMPANY_STAGING_PROJECT", {default: ""});
@@ -33,12 +34,9 @@ function requireCustomer(context) {
 
 async function requireCompanyIssuer(context) {
   const uid = requireCustomer(context);
-  const claims = context.auth.token || {};
-  const roles = Array.isArray(claims.roles) ? claims.roles.map(role => String(role).toLowerCase()) : [];
-  if (claims.admin === true || claims.super_admin === true || roles.some(role => ["admin", "super_admin", "finance_admin", "operations_admin"].includes(role))) return uid;
   const snapshot = await getFirestore().collection("adminUsers").doc(uid).get();
   const data = snapshot.exists ? snapshot.data() || {} : {};
-  if (data.status === "active" && ["admin", "super_admin", "finance_admin", "operations_admin"].includes(String(data.role || "").toLowerCase())) return uid;
+  if (isAuthorizedCircumIssuer(data)) return uid;
   throw new functions.https.HttpsError("permission-denied", "An authorised CIRCUM issuer role is required.");
 }
 
@@ -59,7 +57,7 @@ exports.issueRothFromCircum = senderPaymentCallable(async (data, context) => {
   const reason = String(data && data.reason || "").trim();
   const amountPence = Number(data && data.amountPence);
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid) || !/^[A-Za-z0-9_-]{1,160}$/.test(rewardId) ||
-      !Number.isSafeInteger(amountPence) || amountPence < 1 || amountPence > 1000000 || reason.length < 8 || reason.length > 500) {
+      !isValidStagingRewardAmount(amountPence) || reason.length < 8 || reason.length > 500) {
     throw new functions.https.HttpsError("invalid-argument", "Provide a valid customer, reward reference, pence amount and reason.");
   }
   const result = await client().issueReward({externalId: uid, rewardId, amountPence, reason});
