@@ -4,10 +4,16 @@
 const http = require("node:http");
 const {initializeApp, getApps} = require("firebase-admin/app");
 const {decodeEventData, EVENT_TYPE} = require("./rider-policy-firestore-event");
+const {referralEventConfig} = require("./roth-referral-runtime-config");
 
 const MAX_EVENT_BODY_BYTES = 2 * 1024 * 1024;
 function productionHandlers() {
   if (!getApps().length) initializeApp();
+  if (process.env.ROTH_CENTRAL_MODE === "staging") {
+    const {createConfiguredRothCentralClient} = require("./roth-central-client");
+    const centralClient = createConfiguredRothCentralClient(process.env);
+    return require("./referrals").createCloudRunHandlers({centralClient});
+  }
   return require("./referrals").cloudRunHandlers;
 }
 
@@ -30,6 +36,9 @@ function needsRetry(result) {
 
 function createServer(options = {}) {
   const handlersFactory = options.handlersFactory || productionHandlers;
+  const {sourceProject} = referralEventConfig(options.env || process.env);
+  const expectedEventSource = `//firestore.googleapis.com/projects/${sourceProject}/databases/(default)`;
+  const expectedDocumentPrefix = `projects/${sourceProject}/databases/(default)/documents/`;
   let handlers;
   return http.createServer((request, response) => {
     if (require("./completion-recovery-http").handle(request, response, {dbFactory: () => {
@@ -39,7 +48,7 @@ function createServer(options = {}) {
     if (request.method === "GET" && request.url === "/health") return writeJson(response, 200, {status: "ok", runtime: "node22", source: process.env.CIRCUM_SOURCE_SHA || "unknown"});
     if (request.url !== "/v1/events/firestore/referral-completion") return writeJson(response, 404, {error: "not_found"});
     if (request.method !== "POST") return writeJson(response, 405, {error: "method_not_allowed"});
-    if (request.headers["ce-source"] !== "//firestore.googleapis.com/projects/circum-2797c/databases/(default)") return writeJson(response, 400, {error: "invalid_event_source"});
+    if (request.headers["ce-source"] !== expectedEventSource) return writeJson(response, 400, {error: "invalid_event_source"});
     if (String(request.headers["ce-type"] || "") !== EVENT_TYPE) return writeJson(response, 400, {error: "invalid_event_type"});
     const eventId = String(request.headers["ce-id"] || "").trim();
     if (!eventId || eventId.length > 128) return writeJson(response, 400, {error: "invalid_event_id"});
@@ -53,7 +62,7 @@ function createServer(options = {}) {
       if (size > MAX_EVENT_BODY_BYTES) return writeJson(response, 413, {error: "request_too_large"});
       try {
         const decoded = decodeEventData(Buffer.concat(chunks));
-        if (!String(decoded.documentName || "").startsWith("projects/circum-2797c/databases/(default)/documents/")) return writeJson(response, 400, {error: "invalid_event_source"});
+        if (!String(decoded.documentName || "").startsWith(expectedDocumentPrefix)) return writeJson(response, 400, {error: "invalid_event_source"});
         const identity = documentIdentity(request.headers, decoded);
         if (!identity) return writeJson(response, 400, {error: "invalid_event_document"});
         if (!handlers) handlers = handlersFactory();

@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const rothLedger = require("./roth-ledger");
+const {issueCentralReferralRewards} = require("./roth-referral-issuer");
 const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
 const {
   DEFAULT_REFERRAL_REWARD_ROTH,
@@ -179,7 +180,7 @@ async function loadQualifyingActivity({db = getFirestore(), referredUserId, acti
   return activity;
 }
 
-async function activateReferralForUser({db = getFirestore(), referredUserId, activityType, activityId, userEmail = ""}) {
+async function activateReferralForUser({db = getFirestore(), referredUserId, activityType, activityId, userEmail = "", centralClient = null}) {
   const activity = await loadQualifyingActivity({db, referredUserId, activityType, activityId});
   if (!activity) return {status: "not_qualifying"};
   const referralRef = db.collection("referrals").doc(referredUserId);
@@ -204,48 +205,58 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     });
-    await rothLedger.recordRothMovement({
-      db,
-      userId: referral.referrerUserId,
-      userEmail: referral.referrerEmail,
-      amount: reward,
-      balanceType: BALANCE_TYPES.rothCredit,
-      type: TRANSACTION_TYPES.referralReward,
-      reason: "Referral activated after first completed activity",
-      relatedEntityId: referredUserId,
-      transactionId: `referral_reward_${referredUserId}_referrer`,
-      metadata: referralRewardFinanceMetadata({
-        referralCode: referral.referralCode,
-        inviterUserId: referral.referrerUserId,
+    let centralIssuance = null;
+    if (centralClient) {
+      centralIssuance = await issueCentralReferralRewards({
+        client: centralClient,
+        referral,
         referredUserId,
         rewardAmount: reward,
-        rewardStatus: REFERRAL_STATUSES.rothAwarded,
-        activityType,
-        activityId,
-        role: "inviter",
-      }),
-    });
-    await rothLedger.recordRothMovement({
-      db,
-      userId: referredUserId,
-      userEmail: referral.referredEmail || userEmail,
-      amount: reward,
-      balanceType: BALANCE_TYPES.rothCredit,
-      type: TRANSACTION_TYPES.referralWelcomeReward,
-      reason: "Joined through referral and completed first activity",
-      relatedEntityId: referredUserId,
-      transactionId: `referral_reward_${referredUserId}_referred`,
-      metadata: referralRewardFinanceMetadata({
-        referralCode: referral.referralCode,
-        inviterUserId: referral.referrerUserId,
-        referredUserId,
-        rewardAmount: reward,
-        rewardStatus: REFERRAL_STATUSES.rothAwarded,
-        activityType,
-        activityId,
-        role: "referred_user",
-      }),
-    });
+      });
+    } else {
+      await rothLedger.recordRothMovement({
+        db,
+        userId: referral.referrerUserId,
+        userEmail: referral.referrerEmail,
+        amount: reward,
+        balanceType: BALANCE_TYPES.rothCredit,
+        type: TRANSACTION_TYPES.referralReward,
+        reason: "Referral activated after first completed activity",
+        relatedEntityId: referredUserId,
+        transactionId: `referral_reward_${referredUserId}_referrer`,
+        metadata: referralRewardFinanceMetadata({
+          referralCode: referral.referralCode,
+          inviterUserId: referral.referrerUserId,
+          referredUserId,
+          rewardAmount: reward,
+          rewardStatus: REFERRAL_STATUSES.rothAwarded,
+          activityType,
+          activityId,
+          role: "inviter",
+        }),
+      });
+      await rothLedger.recordRothMovement({
+        db,
+        userId: referredUserId,
+        userEmail: referral.referredEmail || userEmail,
+        amount: reward,
+        balanceType: BALANCE_TYPES.rothCredit,
+        type: TRANSACTION_TYPES.referralWelcomeReward,
+        reason: "Joined through referral and completed first activity",
+        relatedEntityId: referredUserId,
+        transactionId: `referral_reward_${referredUserId}_referred`,
+        metadata: referralRewardFinanceMetadata({
+          referralCode: referral.referralCode,
+          inviterUserId: referral.referrerUserId,
+          referredUserId,
+          rewardAmount: reward,
+          rewardStatus: REFERRAL_STATUSES.rothAwarded,
+          activityType,
+          activityId,
+          role: "referred_user",
+        }),
+      });
+    }
     await referralRef.set({
       status: REFERRAL_STATUSES.rothAwarded,
       rewardStatus: REFERRAL_STATUSES.rothAwarded,
@@ -257,6 +268,7 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
       referredUserId,
       rewardedAt: FieldValue.serverTimestamp(),
       rewardIssuedAt: FieldValue.serverTimestamp(),
+      ...(centralIssuance ? {centralRothIssuance: centralIssuance} : {}),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     return {status: REFERRAL_STATUSES.rothAwarded, rewardAmount: reward};
@@ -273,7 +285,7 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
   }
 }
 
-async function handleDeliveryCompletedReferral({db = getFirestore(), delivery = {}, deliveryId}) {
+async function handleDeliveryCompletedReferral({db = getFirestore(), delivery = {}, deliveryId, centralClient = null}) {
   const id = `${deliveryId || delivery.deliveryId || ""}`;
   if (!id) return {status: "not_qualifying"};
   const senderId = `${delivery.senderId || delivery.userId || ""}`;
@@ -285,6 +297,7 @@ async function handleDeliveryCompletedReferral({db = getFirestore(), delivery = 
       activityType: "sender_completed_paid_booking",
       activityId: id,
       userEmail: delivery.senderEmail,
+      centralClient,
     }) : {status: "none"},
     riderId ? activateReferralForUser({
       db,
@@ -292,45 +305,53 @@ async function handleDeliveryCompletedReferral({db = getFirestore(), delivery = 
       activityType: "rider_completed_delivery",
       activityId: id,
       userEmail: delivery.riderEmail,
+      centralClient,
     }) : {status: "none"},
   ]);
   return {sender: results[0], rider: results[1]};
 }
 
-async function handleGiftCompletedReferral({db = getFirestore(), giftId, senderId, senderEmail}) {
+async function handleGiftCompletedReferral({db = getFirestore(), giftId, senderId, senderEmail, centralClient = null}) {
   if (!giftId || !senderId) return {status: "not_qualifying"};
   return activateReferralForUser({
-      db,
+    db,
     referredUserId: `${senderId}`,
     activityType: "gift_request_completed",
     activityId: `${giftId}`,
     userEmail: senderEmail,
+    centralClient,
   });
 }
 
-async function handleHealthPlusCompletedReferral({db = getFirestore(), pickupId, userId, email}) {
+async function handleHealthPlusCompletedReferral({db = getFirestore(), pickupId, userId, email, centralClient = null}) {
   if (!pickupId || !userId) return {status: "not_qualifying"};
   return activateReferralForUser({
-      db,
+    db,
     referredUserId: `${userId}`,
     activityType: "health_plus_completed",
     activityId: `${pickupId}`,
     userEmail: email,
+    centralClient,
   });
 }
 
 exports.handleDeliveryCompletedReferral = handleDeliveryCompletedReferral;
 exports.handleGiftCompletedReferral = handleGiftCompletedReferral;
 exports.handleHealthPlusCompletedReferral = handleHealthPlusCompletedReferral;
-exports.cloudRunHandlers = Object.freeze({
-  ensureReferralCode: ensureReferralCodeHandler,
-  attachReferralCode: attachReferralCodeHandler,
-  activateReferral: activateReferralHandler,
-  handleDeliveryCompletedReferral,
-  handleGiftCompletedReferral,
-  handleHealthPlusCompletedReferral,
-  becameCompleted,
-});
+function createCloudRunHandlers({centralClient = null} = {}) {
+  return Object.freeze({
+    ensureReferralCode: ensureReferralCodeHandler,
+    attachReferralCode: attachReferralCodeHandler,
+    activateReferral: activateReferralHandler,
+    handleDeliveryCompletedReferral: (args) => handleDeliveryCompletedReferral({...args, centralClient}),
+    handleGiftCompletedReferral: (args) => handleGiftCompletedReferral({...args, centralClient}),
+    handleHealthPlusCompletedReferral: (args) => handleHealthPlusCompletedReferral({...args, centralClient}),
+    becameCompleted,
+  });
+}
+
+exports.createCloudRunHandlers = createCloudRunHandlers;
+exports.cloudRunHandlers = createCloudRunHandlers();
 
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
