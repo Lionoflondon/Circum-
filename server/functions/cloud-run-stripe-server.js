@@ -33,6 +33,7 @@ function createProductionProcessor() {
     stripeRefunds: require("./stripe-refunds"),
     senderBooking: require("./sender-booking"),
     businessPayments: require("./business-payments"),
+    deliveryAdjustmentPayments: require("./delivery-adjustment-checkout"),
     healthPlus: require("./health-plus"),
     healthMembershipLifecycle: require("./health-membership-lifecycle"),
     rothLedger: require("./roth-ledger"),

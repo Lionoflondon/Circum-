@@ -90,6 +90,27 @@
               "value": "no-cache, no-store, must-revalidate"
             }
           ]
+        },
+        {
+          "source": "/reset-password{,/**}",
+          "headers": [
+            {
+              "key": "Referrer-Policy",
+              "value": "no-referrer"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'none'; script-src 'self' https://www.gstatic.com; style-src 'self'; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
+            }
+          ]
         }
       ],
       "redirects": [
@@ -112,9 +133,33 @@
           "source": "/cookie-policy",
           "destination": "/cookie_policy",
           "type": 308
+        },
+        {
+          "source": "/delete-account",
+          "destination": "/delete_account",
+          "type": 308
+        },
+        {
+          "source": "/AIR{,/}",
+          "destination": "/air/",
+          "type": 301
         }
       ],
       "rewrites": [
+        {
+          "source": "/api/roth-live/**",
+          "run": {
+            "serviceId": "circum-website-roth-live",
+            "region": "us-central1"
+          }
+        },
+        {
+          "source": "/api/roth/**",
+          "run": {
+            "serviceId": "circum-website-roth-test",
+            "region": "us-central1"
+          }
+        },
         {
           "source": "/newsletter-api/**",
           "run": {
@@ -123,8 +168,84 @@
           }
         },
         {
-          "source": "**",
-          "destination": "/index.html"
+          "source": "/rider{,/}",
+          "destination": "/seo/routes/rider.html"
+        },
+        {
+          "source": "/vanguard{,/}",
+          "destination": "/seo/routes/vanguard.html"
+        },
+        {
+          "source": "/support{,/}",
+          "destination": "/seo/routes/support.html"
+        },
+        {
+          "source": "/contact{,/}",
+          "destination": "/seo/routes/contact.html"
+        },
+        {
+          "source": "/privacy_policy{,/}",
+          "destination": "/seo/routes/privacy_policy.html"
+        },
+        {
+          "source": "/terms{,/}",
+          "destination": "/seo/routes/terms.html"
+        },
+        {
+          "source": "/cookie_policy{,/}",
+          "destination": "/seo/routes/cookie_policy.html"
+        },
+        {
+          "source": "/delete_account{,/}",
+          "destination": "/seo/routes/delete_account.html"
+        },
+        {
+          "source": "/send{,/}",
+          "destination": "/seo/routes/send.html"
+        },
+        {
+          "source": "/send/profile{,/}",
+          "destination": "/seo/routes/send/profile.html"
+        },
+        {
+          "source": "/send/health{,/}",
+          "destination": "/seo/routes/send/health.html"
+        },
+        {
+          "source": "/send/business{,/}",
+          "destination": "/seo/routes/send/business.html"
+        },
+        {
+          "source": "/gifts{,/}",
+          "destination": "/seo/routes/gifts.html"
+        },
+        {
+          "source": "/rider/onboarding{,/}",
+          "destination": "/seo/routes/rider/onboarding.html"
+        },
+        {
+          "source": "/unsubscribe{,/}",
+          "destination": "/seo/routes/unsubscribe.html"
+        },
+        {
+          "source": "/newsletter{,/}",
+          "destination": "/seo/routes/newsletter.html"
+        },
+        {
+          "source": "/send/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/rider/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/gifts/**",
+          "destination": "/seo/account.html"
+        },
+        {
+          "source": "/join/**",
+          "destination": "/seo/account.html"
         }
       ]
     },

@@ -13,6 +13,13 @@ function normalizeEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : "";
 }
 
+// .invalid is reserved for names that must never resolve. Keep this separate
+// from syntax normalization so account identity and source matching are unchanged.
+function isNonDeliverableEmail(value) {
+  const email = normalizeEmail(value);
+  return Boolean(email && /\.invalid\.?$/i.test(email.split("@")[1]));
+}
+
 function safeEmailQueueId(value) {
   return text(value).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, MAX_ID_LENGTH);
 }
@@ -83,6 +90,7 @@ async function enqueueEmail(db, record, queueCollection = null) {
 module.exports = {
   EMAIL_QUEUE_COLLECTION,
   normalizeEmail,
+  isNonDeliverableEmail,
   safeEmailQueueId,
   emailQueueId,
   queueRecord,

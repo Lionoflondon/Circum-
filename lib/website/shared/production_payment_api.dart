@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -32,15 +33,39 @@ class WebsiteProductionPaymentApi {
     final origin = _origins[family];
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final appCheckToken = await FirebaseAppCheck.instance.getToken();
-    if (origin == null ||
-        token == null ||
-        appCheckToken == null ||
-        appCheckToken.isEmpty) {
-      throw StateError('payment_auth_required');
-    }
-    final response = await http
+    if (origin == null) throw ArgumentError.value(family, 'family');
+    return invokeWebsiteProductionPayment(
+      Uri.parse('$origin/$route'),
+      data,
+      idToken: token,
+      appCheckToken: appCheckToken,
+      callable: callable,
+    );
+  }
+}
+
+/// Sends once: an interrupted write must be reconciled before retrying.
+Future<Map<String, dynamic>> invokeWebsiteProductionPayment(
+  Uri uri,
+  Map<String, dynamic> data, {
+  required String? idToken,
+  required String? appCheckToken,
+  bool callable = true,
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  final token = idToken;
+  if (token == null ||
+      token.isEmpty ||
+      appCheckToken == null ||
+      appCheckToken.isEmpty) {
+    throw StateError('payment_auth_required');
+  }
+  final transport = client ?? http.Client();
+  try {
+    final response = await transport
         .post(
-          Uri.parse('$origin/$route'),
+          uri,
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
@@ -48,18 +73,35 @@ class WebsiteProductionPaymentApi {
           },
           body: jsonEncode(callable ? {'data': data} : data),
         )
-        .timeout(const Duration(seconds: 30));
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = decoded['error'];
-      final message = error is Map ? error['message'] : decoded['message'];
-      throw StateError('${message ?? error ?? 'payment_request_failed'}');
+        .timeout(timeout);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw StateError('Payment could not be confirmed. Check its status before trying again.');
     }
-    final result = decoded['result'] ?? decoded['data'] ?? decoded;
-    return result is Map
-        ? Map<String, dynamic>.from(result)
-        : <String, dynamic>{};
+    if (decoded is! Map<String, dynamic> ||
+        response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        decoded.containsKey('error')) {
+      throw StateError('Payment could not be confirmed. Check its status before trying again.');
+    }
+    final Object? result = callable
+        ? (decoded.containsKey('result') ? decoded['result'] : decoded['data'])
+        : decoded;
+    if (result is! Map<String, dynamic> ||
+        result.isEmpty ||
+        result.containsKey('error') ||
+        result['success'] == false ||
+        result['ok'] == false) {
+      throw StateError('Payment could not be confirmed. Check its status before trying again.');
+    }
+    return result;
+  } on TimeoutException {
+    throw StateError('Payment could not be confirmed. Check its status before trying again.');
+  } on http.ClientException {
+    throw StateError('Payment could not be confirmed. Check its status before trying again.');
+  } finally {
+    if (client == null) transport.close();
   }
 }

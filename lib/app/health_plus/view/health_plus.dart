@@ -1,12 +1,11 @@
+import 'package:circum/app/sender_mobile/sender_production_payment_api.dart';
 import 'package:circum/app/sender_mobile/business_health_callable_api.dart';
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
@@ -376,16 +375,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     required HealthPlusPriceBreakdown quote,
   }) async {
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final response = await http.post(
-        Uri.parse(
-          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      return await ProductionPaymentApi.call(
+        'health_plus',
+        'createHealthPlusCheckoutSession',
+        {
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _email.text.trim(),
@@ -397,13 +390,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
               'https://circum-app-2797c.web.app/?app=health&health=success',
           'cancelUrl':
               'https://circum-app-2797c.web.app/?app=health&health=cancelled',
-        }),
+        },
+        callable: false,
       );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw _HealthCheckoutException(_checkoutErrorMessage(response.body));
-      }
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data;
     } on _HealthCheckoutException {
       rethrow;
     } catch (_) {
@@ -2255,19 +2244,6 @@ class _HealthCheckoutException implements Exception {
   final String message;
 
   const _HealthCheckoutException(this.message);
-}
-
-String _checkoutErrorMessage(String body) {
-  try {
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) {
-      final error = '${decoded['error'] ?? decoded['message'] ?? ''}'.trim();
-      if (error.isNotEmpty) return error;
-    }
-  } catch (_) {
-    // The server may return a plain text or empty error body.
-  }
-  return 'Secure payment could not be prepared. Please try again.';
 }
 
 Future<void> _openStripeCheckoutUrl(String checkoutUrl) async {

@@ -12,6 +12,7 @@ const {requireAdmin} = require("./admin-auth");
 const {adminCallable, tokenRoles, hasPermission} = require("./admin-permissions");
 const communicationEngine = require("./communication-engine");
 const checkoutReservations = require("./business-checkout-reservations");
+const {businessInvoiceIdentity} = require("./business-invoice-identity");
 const BUSINESS_ROTH_SELF_SERVE_CAP_GBP = 1000000;
 const BUSINESS_ROTH_CHECKOUT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -497,10 +498,14 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   const lineItems = normaliseLineItems(data.lineItems, data.description, total);
   const subtotal = money(lineItems.reduce((sum, item) => sum + item.amount, 0));
   const invoiceTotal = money(total || subtotal);
+  if (Math.round(subtotal * 100) !== Math.round(invoiceTotal * 100)) {
+    throw new functions.https.HttpsError("invalid-argument", "Invoice line items must add up to the invoice total.");
+  }
   const now = FieldValue.serverTimestamp();
   const dueDate = text(data.dueDate, 40) || null;
   const invoice = {
     invoiceId: invoiceRef.id,
+    ...businessInvoiceIdentity(),
     invoiceNumber,
     businessId,
     businessName: business.businessName || business.companyName || "Business",
@@ -551,6 +556,7 @@ exports.adminCreateBusinessInvoice = adminCallable(async (payload, context) => {
   });
   return {
     invoiceId: invoiceRef.id,
+    ...businessInvoiceIdentity(),
     invoiceNumber,
     businessId,
     total: invoiceTotal,

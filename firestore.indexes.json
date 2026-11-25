@@ -1,6 +1,23 @@
 {
   "indexes": [
     {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "retryable", "order": "ASCENDING"},
+        {"fieldPath": "pushDeliveryStatus", "order": "ASCENDING"},
+        {"fieldPath": "nextRetryAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "pushDeliveryStatus", "order": "ASCENDING"},
+        {"fieldPath": "retryLeaseExpiresAt", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "senderBookingDrafts",
       "queryScope": "COLLECTION",
       "fields": [

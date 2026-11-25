@@ -1,3 +1,4 @@
+import 'sender_platform_pay.dart';
 import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -221,7 +222,7 @@ Future<SenderPaymentProfile> _withDeviceWalletSupport(
   }
   var supported = false;
   try {
-    supported = await Stripe.instance.isPlatformPaySupported().timeout(
+    supported = await senderDeviceWalletSupported().timeout(
           const Duration(seconds: 4),
         );
   } catch (error) {

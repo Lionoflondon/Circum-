@@ -6,8 +6,10 @@ const {getFirestore, FieldPath, FieldValue, Timestamp} = require("firebase-admin
 const {getMessaging} = require("firebase-admin/messaging");
 const deviceTokenAuthority = require("./device-token-authority");
 const {pushMessageFor} = require("./communication-engine");
+const {reserveRetryDeliveries} = require("./notification-retry-rate-limit");
 
 const PAGE_LIMIT = 100;
+const LEGACY_PAGE_LIMIT = 10;
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -101,7 +103,9 @@ async function writeClaim(db, ref, claimId, patch) {
 
 async function recoverExpired(db, now) {
   const snapshot = await db.collection("notifications")
-      .where("pushDeliveryStatus", "==", "retrying").limit(PAGE_LIMIT).get();
+      .where("pushDeliveryStatus", "==", "retrying")
+      .where("retryLeaseExpiresAt", "<=", Timestamp.fromMillis(now))
+      .orderBy("retryLeaseExpiresAt").limit(PAGE_LIMIT).get();
   let recovered = 0;
   let uncertain = 0;
   for (const doc of snapshot.docs) {
@@ -142,27 +146,38 @@ async function processNotificationRetriesCore({
   ownedToken = (uid, role) => notificationToken(uid, role, db),
   dryRun = false,
 } = {}) {
-  if (dryRun) {
-    const preview = await db.collection("notifications")
-        .where("retryable", "==", true).orderBy(FieldPath.documentId()).limit(PAGE_LIMIT).get();
-    return {scanned: preview.size, due: preview.docs.filter((doc) => due(doc.data() || {}, now)).length,
-      wouldSkipStale: preview.docs.filter((doc) => due(doc.data() || {}, now) && isStale(doc.data() || {}, now)).length,
-      dryRun: true};
-  }
-  const recovery = await recoverExpired(db, now);
+  const recovery = dryRun ? {recovered: 0, uncertain: 0} : await recoverExpired(db, now);
   const cursorRef = db.collection("operationsState").doc("notification_retry_cursor_v2");
   const cursorSnap = await cursorRef.get();
   const cursor = clean((cursorSnap.data() || {}).lastNotificationId);
   const firstPage = () => db.collection("notifications")
-      .where("retryable", "==", true).orderBy(FieldPath.documentId()).limit(PAGE_LIMIT).get();
+      .where("retryable", "==", true).orderBy(FieldPath.documentId()).limit(LEGACY_PAGE_LIMIT).get();
   let query = db.collection("notifications")
-      .where("retryable", "==", true).orderBy(FieldPath.documentId()).limit(PAGE_LIMIT);
+      .where("retryable", "==", true).orderBy(FieldPath.documentId()).limit(LEGACY_PAGE_LIMIT);
   if (cursor) query = query.startAfter(cursor);
   let page = await query.get();
   if (page.empty && cursor) page = await firstPage();
-  const result = {scanned: page.size, sent: 0, exhausted: 0, retriedLater: 0,
-    skipped: 0, uncertain: recovery.uncertain, recovered: recovery.recovered, invalidTokenCleanupFailed: 0};
+  // Indexed due work does not wait behind future retries. The small rotating
+  // compatibility page preserves legacy records without nextRetryAt, which
+  // Firestore excludes from an inequality query; it never rewrites those rows.
+  const scheduled = await db.collection("notifications")
+      .where("retryable", "==", true).where("pushDeliveryStatus", "==", "failed")
+      .where("nextRetryAt", "<=", Timestamp.fromMillis(now))
+      .orderBy("nextRetryAt").limit(PAGE_LIMIT).get();
+  const candidates = new Map(scheduled.docs.map((doc) => [doc.id, doc]));
   for (const doc of page.docs) {
+    if (!doc.data().nextRetryAt && due(doc.data(), now)) candidates.set(doc.id, doc);
+  }
+  const docs = [...candidates.values()];
+  if (dryRun) {
+return {scanned: page.size + scheduled.size, due: docs.length,
+    wouldSkipStale: docs.filter((doc) => isStale(doc.data() || {}, now)).length, dryRun: true};
+}
+  const result = {scanned: page.size + scheduled.size, sent: 0, exhausted: 0, retriedLater: 0,
+    skipped: 0, uncertain: recovery.uncertain, recovered: recovery.recovered, invalidTokenCleanupFailed: 0, rateLimited: 0};
+  for (const doc of docs) {
+    // Non-due rows need no claim transaction; claim still rechecks fresh state.
+    if (!due(doc.data() || {}, now)) continue;
     const claimed = await claim(db, doc.ref, now);
     if (!claimed) continue;
     const {row, claimId} = claimed;
@@ -194,6 +209,18 @@ async function processNotificationRetriesCore({
         retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
       });
       result.skipped++;
+      continue;
+    }
+    const reservation = await reserveRetryDeliveries(db, Array.isArray(token) ? token.length : 1);
+    if (!reservation.allowed) {
+      await writeClaim(db, doc.ref, claimId, {
+        pushDeliveryStatus: reservation.oversized ? "manual_review" : "failed",
+        retryable: !reservation.oversized,
+        nextRetryAt: reservation.oversized ? null : Timestamp.fromMillis(reservation.retryAt),
+        failureReason: reservation.oversized ? "recipient_batch_exceeds_retry_limit" : row.failureReason,
+        retryClaimId: FieldValue.delete(), retryLeaseExpiresAt: FieldValue.delete(),
+      });
+      result.rateLimited++;
       continue;
     }
     const attempts = Number(row.deliveryAttempts || 0) + 1;
@@ -242,7 +269,7 @@ delete message.token; message.tokens = token;
       else result.uncertain++;
     }
   }
-  if (!page.empty) {
+  if (!page.empty && page.docs[page.docs.length - 1].id !== cursor) {
     await cursorRef.set({lastNotificationId: page.docs[page.docs.length - 1].id,
       updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   }

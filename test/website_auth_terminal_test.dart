@@ -78,7 +78,10 @@ void main() {
       expect(
           handler,
           contains(
-              'sendPasswordResetEmail(email: email)\n          .timeout(webAuthOperationTimeout)'));
+              "requestCircumPasswordReset(email: email, application: '${surface.toLowerCase()}')"));
+      expect(handler, isNot(contains('sendPasswordResetEmail')));
+      expect(handler, contains('passwordRecoveryAcknowledgement'));
+      expect(handler, contains('on PasswordRecoveryException'));
       expect(handler, contains('on TimeoutException'));
       expect(handler, contains('catch (_)'));
       expect(handler, contains('finally'));

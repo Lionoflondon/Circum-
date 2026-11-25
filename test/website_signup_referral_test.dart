@@ -65,11 +65,15 @@ void main() {
       () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
-    expect(source, contains('REFERRAL CODE (OPTIONAL)'));
+    final form =
+        File('lib/website/shared/account_access_page.dart').readAsStringSync();
+    expect(form, contains('Referral code (optional)'));
+    expect(source, contains('referralCode: _senderReferralCode'));
+    expect(form, contains('widget.referralCode'));
     expect(
-        source,
+        form,
         contains(
-            'Use a friend’s code. Rewards unlock after your first completed paid delivery.'));
+            'Have a friend’s code? Rewards unlock after your first completed paid delivery.'));
     final sequence = source.substring(
         source.indexOf('Future<void> _signUpSender()'),
         source.indexOf('Future<void> _sendSenderPasswordReset()'));
@@ -77,7 +81,7 @@ void main() {
         lessThan(sequence.indexOf('_allowSenderUser(user)')));
     expect(sequence.indexOf('updateSenderProfile'),
         lessThan(sequence.indexOf('applySignupReferral(')));
-    expect(source, contains('if (signupMode) ...['));
+    expect(form, contains('if (widget.signupMode) ...['));
     expect(
         source,
         contains(

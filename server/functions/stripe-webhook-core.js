@@ -23,6 +23,7 @@ function createStripeWebhookProcessor(deps) {
     stripeRefunds,
     senderBooking,
     businessPayments,
+    deliveryAdjustmentPayments,
     healthPlus,
     healthMembershipLifecycle,
     rothLedger,
@@ -53,6 +54,12 @@ function createStripeWebhookProcessor(deps) {
       eventLog(logger, {requestId, eventId: event.id, eventType: event.type, route, status: "acknowledged", latencyMs: Date.now() - startedAt});
       return response(200, body);
     };
+
+    // Website TEST financial artifacts belong exclusively to the named TEST owner.
+    const websiteMetadata = event.data?.object?.metadata || {};
+    if (!event.livemode && runtimeConfig.mode === "test" && websiteMetadata.type === "website_roth_top_up" && websiteMetadata.testDatabase === "roth-website-test") {
+      return finish({success: true, delegated: "website_roth_test"}, "website_roth_test_delegated");
+    }
 
     if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
       const giftSubscription = giftsPayment && typeof giftsPayment.handleGiftSubscriptionEvent === "function" ? await giftsPayment.handleGiftSubscriptionEvent({db, event}) : {handled: false};
@@ -90,6 +97,15 @@ function createStripeWebhookProcessor(deps) {
       return finish({success: true, refund: refundResult}, "payment_refund");
     }
     if (["payment_intent.succeeded", "payment_intent.processing", "payment_intent.payment_failed", "payment_intent.canceled"].includes(event.type)) {
+      if (deliveryAdjustmentPayments && typeof deliveryAdjustmentPayments.handlePaymentIntent === "function") {
+        try {
+          const adjustment = await deliveryAdjustmentPayments.handlePaymentIntent({db, stripe, intent: event.data.object, eventType: event.type});
+          if (adjustment.handled) return finish({success: true, adjustment}, "delivery_adjustment_intent");
+        } catch (error) {
+          logger.error("adjustment_payment_intent_failed", {eventId: event.id, errorType: error.name || "Error"});
+          return response(500, {success: false, error: "adjustment_payment_intent_failed"});
+        }
+      }
       if (businessPayments && typeof businessPayments.handleBusinessPaymentIntent === "function") {
         const businessIntent = await businessPayments.handleBusinessPaymentIntent({
           db,
@@ -131,7 +147,7 @@ function createStripeWebhookProcessor(deps) {
       }
       return finish({success: true}, "charge_succeeded");
     }
-    if (event.type === "checkout.session.completed") {
+    if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
       const session = event.data.object;
       let membershipResult;
       let routed;
@@ -139,6 +155,8 @@ function createStripeWebhookProcessor(deps) {
         membershipResult = await healthMembershipLifecycle.handleHealthMembershipCheckoutSession({db, session, event});
         routed = await routeCheckoutSessionCompleted(session, event.id, {
           businessPayments,
+          deliveryAdjustmentPayments,
+          db,
           giftsPayment,
           stripe,
           healthPlus,

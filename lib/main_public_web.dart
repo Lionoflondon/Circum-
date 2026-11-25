@@ -3,15 +3,21 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import 'website/shared/circum_website_app.dart';
 import 'website/shared/firebase/website_firebase_options.dart';
 import 'website/shared/security/circum_website_app_check.dart';
 
+// Retain the handle for the lifetime of this web app so controls are exposed
+// to assistive technology without the hidden opt-in button.
+SemanticsHandle? _websiteSemantics;
+
 Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      _websiteSemantics ??= SemanticsBinding.instance.ensureSemantics();
       _installAppCheckStartupBoundary();
       await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
       runApp(const CircumWebsiteApp());

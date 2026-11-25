@@ -72,13 +72,29 @@ async function syncChargeRefund({db, event}) {
     return {handled: true, actionRequired: true, reason: "multiple_deliveries_for_payment_intent", paymentIntentId, deliveryIds: refs.map((ref) => ref.id), reviewRequired: true, review};
   }
   const patch = refundPatch(charge);
-  await db.runTransaction(async (transaction) => {
+  const outcome = await db.runTransaction(async (transaction) => {
     const seen = await transaction.get(eventRef);
-    if (seen.exists) return;
-    for (const ref of refs) transaction.set(ref, patch, {merge: true});
-    transaction.create(eventRef, {type: event.type, paymentIntentId, deliveryIds: refs.map((ref) => ref.id), createdAt: FieldValue.serverTimestamp()});
+    if (seen.exists) return {duplicate: true};
+    // Metadata selects a candidate; only the stored provider identity binds it.
+    const deliveries = await Promise.all(refs.map((ref) => transaction.get(ref)));
+    if (deliveries.some((snap) => !snap.exists || snap.data().stripePaymentIntentId !== paymentIntentId)) {
+      return {reviewReason: "refund_payment_intent_mismatch"};
+    }
+    const current = deliveries[0].data();
+    // charge.refunded is cumulative. A delayed event cannot reduce a refund.
+    const stale = Number(current.refundedAmount || 0) > patch.refundedAmount ||
+      current.refunded === true && patch.refunded !== true;
+    if (!stale) {
+      for (const ref of refs) transaction.set(ref, patch, {merge: true});
+    }
+    transaction.create(eventRef, {type: event.type, paymentIntentId, deliveryIds: refs.map((ref) => ref.id), stale, createdAt: FieldValue.serverTimestamp()});
+    return {stale};
   });
-  return {handled: true, paymentIntentId, deliveryIds: refs.map((ref) => ref.id), refundStatus: patch.refundStatus};
+  if (outcome.reviewReason) {
+    const review = await recordPaymentArtifactReview({db, event, artifactType: "refund", objectId: charge.id || paymentIntentId, reason: outcome.reviewReason, details: {paymentIntentId, deliveryIds: refs.map((ref) => ref.id)}});
+    return {handled: true, actionRequired: true, ...review};
+  }
+  return {handled: true, paymentIntentId, deliveryIds: refs.map((ref) => ref.id), ...outcome, ...(!outcome.stale && !outcome.duplicate ? {refundStatus: patch.refundStatus} : {})};
 }
 
 module.exports = {refundPatch, syncChargeRefund};

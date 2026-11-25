@@ -170,3 +170,67 @@ test("unmatched refund is durably captured without creating a delivery or refund
   assert.equal(writes[0].name, "paymentArtifactReconciliations");
   assert.equal(writes[0].data.status, "action_required");
 });
+
+function refundFixture(delivery) {
+  const records = new Map([["deliveryRequests/delivery-a", {...delivery}]]);
+  const db = {
+    collection(name) {
+      return {doc(id) {
+        const path = `${name}/${id}`;
+        return {id, path,
+          async get() {
+return {exists: records.has(path), data: () => records.get(path)};
+},
+          async set(data) {
+records.set(path, {...records.get(path), ...data});
+},
+        };
+      }};
+    },
+    async runTransaction(callback) {
+      return callback({
+        get: (ref) => ref.get(),
+        set: (ref, data) => records.set(ref.path, {...records.get(ref.path), ...data}),
+        create: (ref, data) => {
+assert.equal(records.has(ref.path), false); records.set(ref.path, data);
+},
+      });
+    },
+  };
+  const event = {id: "evt_refund_bound", type: "charge.refunded", data: {object: {
+    id: "ch_bound", payment_intent: "pi_bound", metadata: {deliveryId: "delivery-a"},
+    amount: 1000, amount_refunded: 400, currency: "gbp",
+  }}};
+  return {db, records, event};
+}
+
+test("existing direct delivery must match the refunded provider intent", async () => {
+  for (const storedIntent of ["pi_other", undefined]) {
+    const {db, records, event} = refundFixture({stripePaymentIntentId: storedIntent});
+    const result = await syncChargeRefund({db, event});
+    assert.equal(result.reason, "refund_payment_intent_mismatch");
+    assert.equal(result.actionRequired, true);
+    assert.equal(records.get("deliveryRequests/delivery-a").refundStatus, undefined);
+    assert.equal(records.has("stripeWebhookEvents/evt_refund_bound"), false);
+    assert.equal([...records.keys()].filter((key) => key.startsWith("paymentArtifactReconciliations/")).length, 1);
+  }
+});
+
+test("matching refund is applied once and duplicate events do not rewrite it", async () => {
+  const {db, records, event} = refundFixture({stripePaymentIntentId: "pi_bound"});
+  assert.equal((await syncChargeRefund({db, event})).refundStatus, "partially_refunded");
+  assert.equal(records.get("deliveryRequests/delivery-a").refundedAmount, 400);
+  event.data.object.amount_refunded = 1000;
+  assert.equal((await syncChargeRefund({db, event})).duplicate, true);
+  assert.equal(records.get("deliveryRequests/delivery-a").refundedAmount, 400);
+});
+
+test("out-of-order cumulative refund cannot reduce amount or revert full refund", async () => {
+  for (const prior of [{refundedAmount: 900}, {refundedAmount: 1000, refunded: true, refundStatus: "refunded"}]) {
+    const {db, records, event} = refundFixture({stripePaymentIntentId: "pi_bound", ...prior});
+    assert.equal((await syncChargeRefund({db, event})).stale, true);
+    assert.equal(records.get("deliveryRequests/delivery-a").refundedAmount, prior.refundedAmount);
+    assert.equal(records.get("deliveryRequests/delivery-a").refunded, prior.refunded);
+    assert.equal(records.has("stripeWebhookEvents/evt_refund_bound"), true);
+  }
+});

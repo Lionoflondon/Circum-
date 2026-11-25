@@ -16,12 +16,15 @@ const senderNotificationState = require("./sender-notification-state");
 const riderAccount = require("./rider-account");
 const rothLedger = require("./roth-ledger");
 
+const {createPasswordRecoveryHandler} = require("./password-recovery");
+
 const {createVerificationEmailHandler} = require("./verification-email");
 
 const MAX_BODY_BYTES = 16 * 1024;
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 30;
 const OPERATIONS = Object.freeze({
+  requestCircumPasswordReset: {handler: {run: createPasswordRecoveryHandler()}, appCheckRequired: true},
   sendCircumVerificationEmail: {handler: {run: createVerificationEmailHandler()}, appCheckRequired: true},
   createSenderSetupIntent: {handler: null, appCheckRequired: true},
   detachSenderPaymentMethod: {handler: null, appCheckRequired: true},
@@ -83,7 +86,7 @@ function bearer(request) {
 
 function routeName(url) {
   const pathname = new URL(url || "/", "http://localhost").pathname;
-  const match = /^(?:\/v1\/callable)?\/(sendCircumVerificationEmail|createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy|updateSenderLocation|recordIrisLearningCandidate|closeCircumAccount|updateSenderNotificationStateLegacy)$/.exec(pathname);
+  const match = /^(?:\/v1\/callable)?\/(requestCircumPasswordReset|sendCircumVerificationEmail|createSenderSetupIntent|detachSenderPaymentMethod|setDefaultSenderPaymentMethod|saveSenderCheckoutPreference|requestSenderWalletDebit|redeemGiftCard|getSenderAccountActivity|exportSenderData|updateSenderPreferences|revokeSenderSessions|ensureSenderAccount|updateSenderNotificationState|getSenderWallet|getSenderWalletTransactions|completeSenderWalletOnboarding|listSenderPaymentMethods|verifyRiderAccountAccess|advanceRiderOnboarding|updateRiderProfile|submitRiderApplication|updateSenderProfile|updateSenderProfilePhoto|saveSenderSavedAddress|deleteSenderSavedAddress|getOrCreateSupportConversation|getSenderWalletLegacy|listSenderPaymentMethodsLegacy|updateSenderLocation|recordIrisLearningCandidate|closeCircumAccount|updateSenderNotificationStateLegacy)$/.exec(pathname);
   return match && Object.prototype.hasOwnProperty.call(OPERATIONS, match[1]) ? match[1] : null;
 }
 
@@ -166,17 +169,21 @@ function createServer(options = {}) {
         if (!dependencies) dependencies = dependenciesFactory();
         const operation = dependencies.operations[name];
         const idToken = bearer(request);
-        if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
+        // Only recovery is signed-out. All existing account operations retain Auth.
+        const recovery = name === "requestCircumPasswordReset";
         let decoded;
-        try {
-          decoded = await dependencies.verifyIdToken(idToken);
-        } catch {
-          throw callableError("unauthenticated", "Sign in to continue.");
+        if (!recovery) {
+          if (!idToken) throw callableError("unauthenticated", "Sign in to continue.");
+          try {
+            decoded = await dependencies.verifyIdToken(idToken);
+          } catch {
+            throw callableError("unauthenticated", "Sign in to continue.");
+          }
         }
         const uid = decoded && (decoded.uid || decoded.sub);
-        if (!uid) throw callableError("unauthenticated", "Invalid authentication token.");
+        if (!recovery && !uid) throw callableError("unauthenticated", "Invalid authentication token.");
         let app;
-        if (operation.appCheckRequired) {
+        if (recovery || operation.appCheckRequired) {
           const appCheckToken = clean(request.headers["x-firebase-appcheck"]);
           if (!appCheckToken) throw callableError(["createSenderSetupIntent", "detachSenderPaymentMethod", "setDefaultSenderPaymentMethod", "saveSenderCheckoutPreference", "requestSenderWalletDebit", "redeemGiftCard"].includes(name) ? "unauthenticated" : "failed-precondition", "Circum security verification is required.");
           try {
@@ -185,7 +192,7 @@ function createServer(options = {}) {
             throw callableError("unauthenticated", "Sign in to continue.");
           }
         }
-        if (!allowRequest(`${uid}:${name}`)) throw callableError("resource-exhausted", "Too many account requests. Try again shortly.");
+        if (!allowRequest(`${uid || app.appId}:${name}`)) throw callableError("resource-exhausted", "Too many account requests. Try again shortly.");
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         // Firebase's installed callable SDK sends data:null for call() with no arguments.
         const data = payload && payload.data;
@@ -195,7 +202,7 @@ function createServer(options = {}) {
           (!noArguments && (!data || typeof data !== "object" || Array.isArray(data)))) {
           throw callableError("invalid-argument", "Callable request must contain data.");
         }
-        const context = {auth: {uid, token: decoded}, app, rawRequest: request};
+        const context = {auth: uid ? {uid, token: decoded} : null, app, rawRequest: request};
         const result = await operation.handler.run(noArguments ? {} : data, context);
         console.info("account_bootstrap_success", {
           operation: name,

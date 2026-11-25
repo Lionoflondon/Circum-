@@ -12,6 +12,7 @@
       ],
       "ownedPrefixes": [
         ".github/workflows/deploy_website.yml",
+        ".github/workflows/release_public_website.yml",
         "lib/main_public_web.dart",
         "lib/website/",
         "lib/web_platform_routing.dart",
@@ -20,7 +21,14 @@
         "test/security/circum_app_check_contract_test.dart",
         "test/web_platform_routing_test.dart",
         "scripts/build_public_web.sh",
-        "scripts/deploy_public_web.sh"
+        "scripts/deploy_public_web.sh",
+        "scripts/deploy_website_roth_test.sh",
+        "scripts/verify_roth_test_containment.py",
+        "scripts/test_roth_release_controls.py",
+        "scripts/website_roth_routes.test.mjs",
+        "scripts/deploy_website_roth_live_candidate.sh",
+        "scripts/prepare_roth_live_overlays.py",
+        "scripts/test_roth_live_overlays.cjs"
       ],
       "forbiddenPrefixes": [
         "lib/main.dart",
@@ -186,6 +194,8 @@
         ".github/PULL_REQUEST_TEMPLATE/",
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js",
         ".github/workflows/deploy_firestore_rules.yml",
         ".github/workflows/deploy_functions.yml",
         ".github/workflows/rc1_deploy.yml",
@@ -221,6 +231,8 @@
         "scripts/deploy_isolated.sh",
         "scripts/finalize_web_artifact.js",
         "scripts/firebase_tools.sh",
+        "scripts/provision_runtime_secret.js",
+        "scripts/provision_runtime_secret.self_test.js",
         "scripts/release_orchestrator.js",
         "scripts/scoped_functions_deploy_list.js",
         "scripts/scoped_functions_deploy_list.test.js",
@@ -239,6 +251,11 @@
   },
   "sharedFiles": [],
   "allowedDependencyIntersections": [
+    {
+      "products": ["sender-app", "website"],
+      "files": ["lib/helper/password_recovery.dart"],
+      "reason": "The same signed-out App Check password recovery transport is used by Sender and Website; it has no product UI or account-session dependency."
+    },
     {
       "products": [
         "sender-app",
@@ -456,6 +473,89 @@
         "test/website_account_bootstrap_api_test.dart"
       ],
       "reason": "Sender notification state and canonical deep links are one explicitly reviewed cross-surface contract across the established backend authority, Sender Web, and Sender native callers; no unrelated product or backend route is included."
+    },
+    {
+      "products": [
+        "website",
+        "sender-app",
+        "backend"
+      ],
+      "files": [
+        "deploy-manifest.json",
+        "firebase.json",
+        "lib/helper/password_recovery.dart",
+        "lib/app/authentication/bloc/auth_bloc.dart",
+        "lib/app/authentication/view/create_new_password.dart",
+        "lib/app/authentication/view/forgot_password.dart",
+        "lib/website/shared/circum_website_app.dart",
+        "server/functions/business-gifts.test.js",
+        "server/functions/firestore-password-recovery-rules.test.js",
+        "server/functions/password-recovery.js",
+        "server/functions/password-recovery.test.js",
+        "server/functions/password-recovery-page.test.js",
+        "server/functions/cloud-run-account-bootstrap.js",
+        "server/functions/cloud-run-transactional-email.js",
+        "server/functions/transactional-email-templates.js",
+        "test/sender_password_recovery_test.dart",
+        "test/website_auth_terminal_test.dart",
+        "test/website_sender_auth_deterministic_contract_test.dart",
+        "web/reset-password/index.html",
+        "web/reset-password/recovery.mjs",
+        "web/reset-password/page.mjs",
+        "web/reset-password/style.css",
+        "docs/PASSWORD_RECOVERY_RELEASE.md"
+      ],
+      "reason": "Branded password recovery connects the signed-out attested request, existing transactional email owner, HTTPS action handler and Sender and Website callers as one narrow authentication contract. No financial or dispatch ownership changes."
+    },
+    {
+      "products": [
+        "website",
+        "backend"
+      ],
+      "files": [
+        "firebase.json",
+        "deploy-manifest.json",
+        ".github/workflows/deploy_website.yml",
+        "scripts/build_public_web.sh",
+        "scripts/deploy_website_roth_test.sh",
+        "scripts/website_roth_routes.test.mjs",
+        "server/functions/cloud-run-website-roth.js",
+        "server/functions/website-roth.js",
+        "server/functions/website-roth-http.test.js",
+        "server/functions/website-roth.emulator.test.js",
+        "server/functions/Dockerfile.website-roth",
+        "server/functions/cloudbuild.website-roth.yaml",
+        "lib/website/shared/premium_landing.dart",
+        "web/roth/state.mjs",
+        "web/roth/index.html",
+        "web/roth/config.js",
+        "web/roth/style.css",
+        "web/roth/app.js",
+        "web/roth/assets/circum-wordmark.png",
+        "scripts/verify_roth_test_containment.py",
+        "scripts/test_roth_release_controls.py",
+        "docs/ROTH_WEBSITE_TEST_RELEASE.md",
+        ".github/workflows/ci.yml",
+        "server/functions/stripe-webhook-core.js",
+        "server/functions/stripe-webhook-core.test.js",
+        "scripts/deploy_website_roth_live_candidate.sh",
+        "scripts/prepare_roth_live_overlays.py",
+        "scripts/test_roth_live_overlays.cjs",
+        "server/functions/cloud-run-website-roth-live.js",
+        "server/functions/website-roth-live.test.js",
+        "server/functions/cloudbuild.website-roth-live.yaml"
+      ],
+      "reason": "Website-only ROTH TEST release couples public checkout routes to the dedicated isolated TEST API and canonical ledger adapter. No Sender or Rider source or deployment."
+    },
+    {
+      "products": ["website", "backend"],
+      "files": [
+        ".github/workflows/release_public_website.yml",
+        "lib/website/tooling/public_site_seo.cjs",
+        "lib/website/tooling/validate_website_hosting_change.cjs",
+        "lib/website/tooling/verify_public_site_restore.cjs"
+      ],
+      "reason": "The public Hosting release workflow and artifact checks are reviewed with the shared deployment manifest. Production API rewrites and backend deployment paths retain their existing ownership."
     }
   ],
   "blockedPrefixes": [

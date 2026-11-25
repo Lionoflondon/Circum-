@@ -24,7 +24,9 @@ test("retry service returns bounded worker result and ignores other routes", asy
   await once(server, "listening");
   try {
     const url = `http://127.0.0.1:${server.address().port}`;
-    assert.equal((await fetch(`${url}/healthz`)).status, 200);
+    const health = await fetch(`${url}/healthz`);
+    assert.equal(health.status, 200);
+    assert.deepEqual((await health.json()).retryRateLimit, {deviceAttempts: 10, windowSeconds: 60});
     assert.equal((await fetch(`${url}/`, {method: "POST"})).status, 404);
     const preview = await fetch(`${url}/dry-run`, {method: "POST"});
     assert.deepEqual(await preview.json(), {ok: true, result: {scanned: 0, due: 0, dryRun: true}});

@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'Dockerfile.website-roth', '--build-arg', 'CIRCUM_SOURCE_SHA=${_SOURCE_SHA}', '-t', '${_IMAGE}', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'Dockerfile.roth-live-webhook-overlay', '--build-arg', 'BASE_IMAGE=${_WEBHOOK_BASE}', '--build-arg', 'EXPECTED_SOURCE_HASH=${_WEBHOOK_HASH}', '--build-arg', 'ROTH_GUARD_SHA=${_SOURCE_SHA}', '-t', '${_WEBHOOK_IMAGE}', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'Dockerfile.roth-live-email-overlay', '--build-arg', 'BASE_IMAGE=${_EMAIL_BASE}', '--build-arg', 'EXPECTED_SOURCE_HASH=${_EMAIL_HASH}', '--build-arg', 'ROTH_GUARD_SHA=${_SOURCE_SHA}', '-t', '${_EMAIL_IMAGE}', '.']
+images: ['${_IMAGE}', '${_WEBHOOK_IMAGE}', '${_EMAIL_IMAGE}']
+timeout: 600s
+options:
+  machineType: E2_MEDIUM

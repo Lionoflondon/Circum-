@@ -40,6 +40,18 @@ void main() {
       expect(route.canonicalPath, '/terms');
     });
 
+    test('contact routes resolve to the restored contact page', () {
+      for (final path in ['/contact', '/contact/']) {
+        final route = resolveCircumWebRoute(
+          Uri.parse('https://circumuk.com$path'),
+          adminHostingTarget: false,
+          publicHostingHost: true,
+        );
+        expect(route.surface, CircumWebSurface.contact);
+        expect(route.canonicalPath, '/contact');
+      }
+    });
+
     test('/support selects the dedicated public support page', () {
       final route = resolveCircumWebRoute(
         Uri.parse('https://circumuk.com/support'),
@@ -251,27 +263,38 @@ void main() {
     });
 
     test('Public homepage keeps Health Vanguard and Business entries', () {
-      final source = File(
+      final shared = File(
         'lib/website/shared/circum_website_app.dart',
       ).readAsStringSync();
 
-      expect(source, contains('Get started with Health+'));
+      final landing = File('lib/website/shared/premium_landing.dart').readAsStringSync();
+      final source = '$shared\n$landing';
+      expect(source, contains('_PremiumLanding('));
+      expect(landing, contains('Move what'));
+      expect(landing, contains("'/health/discover/', onHealthPlus"));
+      expect(landing, contains("'/business/discover/', onBusiness"));
+      expect(landing, contains("'/vanguard', onVanguard"));
       expect(source, contains('Health+'));
       expect(source, contains("_WebAppMode.rider => '/rider'"));
       expect(source, contains("_SenderStep.healthPlus => '/send/health'"));
       expect(source, contains("_SenderStep.business => '/send/business'"));
+      for (final service in ['business', 'health']) {
+        final discovery = File('web/$service/discover/index.html').readAsStringSync();
+        expect(discovery, contains('href="/send/$service"'));
+      }
       expect(source, contains("fragment: ''"));
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
-      expect(source, contains('Open Business'));
-      expect(source, contains('Trust matters more than speed.'));
-      expect(source, contains('Trusted Rider Prioritisation'));
-      expect(source, contains('Enhanced Custody Tracking'));
-      expect(source, contains('Priority Support'));
-      expect(source, contains('Priority Dispute Review'));
+      expect(shared, contains('_WebAppMode.vanguard => VanguardLandingPage('));
+      expect(shared, contains('_mode == _WebAppMode.vanguard))'));
+      final vanguard = File('lib/website/shared/vanguard_landing_page.dart').readAsStringSync();
+      expect(vanguard, contains('trusted Circum Riders prioritised'));
+      expect(vanguard, contains('Custody milestones'));
+      expect(vanguard, contains('Priority support and dispute review'));
+      expect(vanguard, contains('Optional upgrade per delivery'));
       expect(source, contains("label: 'Vanguard'"));
       expect(source, contains("label: 'Vanguard Included'"));
-      expect(source, contains('Corporate Gifts · Vanguard Included'));
+      expect(landing, contains('Built for business'));
       expect(source, contains('Add Vanguard for £1.99'));
       expect(source, contains('senderStep: _SenderStep.business'));
     });
@@ -343,20 +366,20 @@ void main() {
       );
     });
 
-    test('Vanguard copy avoids customer rider choice wording', () {
-      final source = File(
-        'lib/website/shared/circum_website_app.dart',
-      ).readAsStringSync();
-
-      expect(source, contains('Customers do not choose riders'));
-      expect(source, contains('Vanguard is not insurance'));
-      expect(source, contains('Vanguard Handling'));
-      expect(source, contains('Custody preview'));
-      expect(source, contains('When to use it'));
-      expect(source, contains('What £1.99 adds'));
-      expect(source, contains('Gifts and keepsakes'));
-      expect(source, contains('Passports and travel documents'));
-      expect(source, contains('Better handling for important items'));
+    test('Vanguard copy preserves assignment and pricing limitations', () {
+      final shared = File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final landing = File('lib/website/shared/premium_landing.dart').readAsStringSync();
+      final vanguard = File('lib/website/shared/vanguard_landing_page.dart').readAsStringSync();
+      final source = '$shared\n$landing\n$vanguard';
+      expect(landing, contains('Circum assigns your rider'));
+      expect(vanguard, contains('Circum assigns your rider'));
+      expect(vanguard, contains('Vanguard is not insurance'));
+      expect(vanguard, contains('reimbursement, financial cover or guarantees'));
+      expect(vanguard, contains('Optional upgrade £1.99. Included when required.'));
+      expect(vanguard, contains('Gifts, Business, Health+'));
+      expect(vanguard, contains('Gifts & keepsakes'));
+      expect(vanguard, contains('collection PIN'));
+      expect(vanguard, contains('receiver PIN'));
       expect(source, isNot(contains('Preferred rider matching')));
       expect(source, isNot(contains('Choose your rider')));
       expect(source, isNot(contains('Pick a rider')));

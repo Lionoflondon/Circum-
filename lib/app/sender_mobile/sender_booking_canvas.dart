@@ -1,3 +1,4 @@
+import 'sender_platform_pay.dart';
 import 'package:circum/app/sender_mobile/native_payment_return.dart';
 
 import 'native_payment_identity.dart';
@@ -4911,8 +4912,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     if (kIsWeb) return profile;
     var platformPaySupported = false;
     try {
-      platformPaySupported = await Stripe.instance
-          .isPlatformPaySupported()
+      platformPaySupported = await senderDeviceWalletSupported()
           .timeout(const Duration(seconds: 4));
     } catch (error) {
       debugPrint(

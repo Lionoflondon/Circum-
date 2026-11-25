@@ -40,6 +40,9 @@ function context(uid = "member-1") {
   return {auth: {uid, token: {email: `${uid}@example.test`}}, app: {appId: "qa-app"}};
 }
 
+// Relative fixture date keeps these tests valid after the original launch date.
+const futureDeliveryDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
 function input(overrides = {}) {
   return {
     businessId: "business-1",
@@ -49,7 +52,7 @@ function input(overrides = {}) {
     recipientName: "Maya",
     recipientEmail: "maya@example.test",
     deliveryAddress: "1 Example Street, London",
-    deliveryDate: "2026-10-12",
+    deliveryDate: futureDeliveryDate,
     ...overrides,
   };
 }
@@ -111,7 +114,7 @@ test("a paid Business Gift order materializes exactly one protected Gift", async
     [`businessGiftOrders/${orderId}`]: {
       orderId, businessId: "business-1", createdByUserId: "member-1", businessName: "Example Business",
       billingEmail: "billing@example.test", budgetGbp: 250, paymentRail: "roth",
-      recipient: {recipientName: "Maya", recipientEmail: "maya@example.test", deliveryAddress: "1 Example Street", deliveryDate: "2026-10-12"},
+      recipient: {recipientName: "Maya", recipientEmail: "maya@example.test", deliveryAddress: "1 Example Street", deliveryDate: futureDeliveryDate},
     },
     [`businessInvoices/gift_${orderId}`]: {status: "paid", total: 250, paymentMethod: "roth"},
   });

@@ -11,6 +11,10 @@ const MAX_BODY_BYTES = 32 * 1024;
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://circum-app-2797c.web.app",
   "https://circum-app-2797c.firebaseapp.com",
+  "https://circumuk.com",
+  "https://www.circumuk.com",
+  "https://circum-2797c.web.app",
+  "https://circum-2797c.firebaseapp.com",
 ]);
 const STATUS = {
   "invalid-argument": "INVALID_ARGUMENT",

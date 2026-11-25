@@ -22,8 +22,8 @@ if (oldSecret === undefined) delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET; e
   await db.doc("payoutRequests/unrelated").set({riderId: "r2", amount: 8, status: "processing", stripeAccountId: "acct_1", destinationPaymentId: "py_other", fundsReserved: true, allocationVersion: 1});
   await db.doc("riderPayoutAllocations/a1").set({payoutRequestId: "p1", earningId: "tip1", amountPence: 500, state: "reserved"});
   async function deliver(type, id) {
-    const event = {type, id, account: "acct_1", data: {object: {id: "po_1", destination: "bank_external", automatic: true}}};
-    const stripe = {webhooks: {constructEvent: () => event}, balanceTransactions: {list: () => ({autoPagingToArray: async () => [{source: "py_1"}]})}};
+    const event = {type, id, livemode: false, account: "acct_1", data: {object: {id: "po_1", destination: "bank_external", automatic: true}}};
+    const stripe = {_circumStripeMode: "test", webhooks: {constructEvent: () => event}, balanceTransactions: {list: () => ({autoPagingToArray: async () => [{source: "py_1"}]})}};
     const result = {code: 200, status(code) {
 this.code = code; return this;
 }, json(body) {
@@ -205,8 +205,8 @@ test("failed transfer preserves authoritative zero and cannot release unreserved
   for (const [id, amount, reserved] of [["zero-authority", 0, true], ["already-released", 5, false]]) {
     await db.doc(`riderEarnings/${id}`).set({availableBalance: 0, pendingWithdrawal: 0});
     await db.doc(`payoutRequests/${id}`).set({riderId: id, amount, status: "processing", riderNetPayout: 5, stripeTransferId: `tr_${id}`, fundsReserved: reserved});
-    const event = {type: "transfer.failed", id: `evt_${id}`, data: {object: {id: `tr_${id}`, amount: 500, currency: "gbp", metadata: {payoutRequestId: id}}}};
-    const stripe = {webhooks: {constructEvent: () => event}};
+    const event = {livemode: false, type: "transfer.failed", id: `evt_${id}`, data: {object: {id: `tr_${id}`, amount: 500, currency: "gbp", metadata: {payoutRequestId: id}}}};
+    const stripe = {_circumStripeMode: "test", webhooks: {constructEvent: () => event}};
     const response = {code: 200, status(code) {
       this.code = code; return this;
     }, json(body) {
@@ -239,4 +239,41 @@ test("exact withdrawal cancellation is concurrent-safe, idempotent and atomicall
   const audits = await db.collection("riderPayoutAudit").where("payoutRequestId", "==", "selected-cancel").get();
   assert.equal(audits.size, 1);
   await assert.rejects(() => callable.run({requestId: "selected-cancel"}, {...context, auth: {uid: "other-rider", token: {}}}), (error) => error.code === "permission-denied");
+});
+
+
+test("transfer reversal is reviewed exactly once without changing Rider balances or payout state", async (t) => {
+  const priorSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "emulator-only";
+  t.after(() => {
+if (priorSecret === undefined) delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET; else process.env.STRIPE_CONNECT_WEBHOOK_SECRET = priorSecret;
+});
+  for (const [id, destination, expectedBound] of [["bound-reversal", "acct_rider", true], ["wrong-account-reversal", "acct_other", false], ["orphan-reversal", "acct_rider", false], ["unsafe-id-reversal", "acct_rider", false], ["excess-amount-reversal", "acct_rider", false]]) {
+    const request = {riderId: "reversal-rider", amount: 10, status: "paid", stripeTransferId: `tr_${id}`, stripeAccountId: "acct_rider", fundsReserved: false};
+    if (id !== "orphan-reversal") await db.doc(`payoutRequests/${id}`).set(request);
+    const wallet = {availableBalance: 2, pendingWithdrawal: 0};
+    await db.doc("riderEarnings/reversal-rider").set(wallet);
+    const event = {livemode: false, id: `evt_${id}`, type: "transfer.reversed", data: {object: {id: `tr_${id}`, destination, amount: 1000, amount_reversed: id === "excess-amount-reversal" ? 1001 : 500, currency: "gbp", metadata: {payoutRequestId: id === "unsafe-id-reversal" ? "foreign/path/record" : id}}}};
+    const stripe = {_circumStripeMode: "test", webhooks: {constructEvent: () => event}};
+    const handler = handleStripeConnectWebhook(stripe);
+    const res = {status(code) {
+this.code = code; return this;
+}, json(body) {
+this.body = body;
+}, send(body) {
+this.body = body;
+}};
+    for (let n = 0; n < 2; n++) await handler({headers: {"stripe-signature": "emulator"}, rawBody: Buffer.from("fixture")}, res);
+    const audit = (await db.doc(`riderPayoutAudit/transfer_reversal_${event.id}`).get()).data();
+    assert.equal(audit.status, "action_required");
+    assert.equal(audit.payoutRequestId, expectedBound ? id : null);
+    assert.equal(audit.amountReversedPence, id === "excess-amount-reversal" ? null : 500);
+    assert.equal(audit.financialMutationPerformed, false);
+    assert.deepEqual((await db.doc("riderEarnings/reversal-rider").get()).data(), wallet);
+    const stored = await db.doc(`payoutRequests/${id}`).get();
+    if (id === "orphan-reversal") assert.equal(stored.exists, false);
+    else assert.deepEqual(stored.data(), request);
+    const audits = await db.collection("riderPayoutAudit").where("stripeEventId", "==", event.id).get();
+    assert.equal(audits.size, 1);
+  }
 });

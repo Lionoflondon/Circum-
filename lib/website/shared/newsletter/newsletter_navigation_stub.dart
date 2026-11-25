@@ -1,0 +1,1 @@
+void openNewsletterUri(Uri uri) {}

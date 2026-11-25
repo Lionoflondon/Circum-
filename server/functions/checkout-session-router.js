@@ -11,6 +11,13 @@ async function routeCheckoutSessionCompleted(
   const type = `${metadata.type || ""}`;
   const logger = deps.logger || console;
 
+  if (type === "delivery_adjustment") {
+    const finalizer = deps.deliveryAdjustmentPayments;
+    if (!finalizer || typeof finalizer.finalizeCheckout !== "function") throw new Error("delivery adjustment finalizer unavailable");
+    await finalizer.finalizeCheckout({db: deps.db, stripe: deps.stripe, session: sessionData});
+    return {handled: true, type};
+  }
+
   if (type === "business_roth_purchase" ||
       type === "business_invoice_payment") {
     if (!deps.businessPayments ||
@@ -22,6 +29,12 @@ async function routeCheckoutSessionCompleted(
         sessionData,
         eventId,
     );
+    return {handled: true, type};
+  }
+
+  if (type === "website_roth_top_up") {
+    if (typeof deps.rothLedger?.recordWebsiteRothTopUpFromStripeSession !== "function") throw new Error("Website ROTH finalizer unavailable");
+    await deps.rothLedger.recordWebsiteRothTopUpFromStripeSession(sessionData, eventId);
     return {handled: true, type};
   }
 

@@ -1,3 +1,19 @@
+import 'adjustment_checkout.dart';
+import 'website_checkout_return.dart';
+import 'business_invoice_document.dart';
+import '../../helper/password_recovery.dart';
+import 'circum_home_link.dart';
+import 'privacy/consent_tracking_gate.dart';
+import 'gifts_sign_in.dart';
+import 'account_access_page.dart';
+import 'vanguard_landing_page.dart';
+import 'service_access_frame.dart';
+import 'privacy/cookie_preferences.dart';
+import 'dart:js_interop';
+import 'rider_order_explainer.dart';
+import 'rider_recruitment_page.dart';
+import 'landing_booking_draft.dart';
+import 'landing_booking_store.dart';
 import 'policies/web_auth_terminal.dart';
 import 'rider_onboarding/application_policy.dart';
 import 'rider_onboarding/file_picker.dart';
@@ -8,6 +24,7 @@ import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -25,7 +42,6 @@ import 'package:circum/website/shared/policies/role_access.dart';
 import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
-import 'package:circum/env/env.dart';
 import 'package:circum/website/shared/address_places_api.dart';
 import 'package:circum/app/send_package/repo/iris_api.dart';
 import 'sender_notification_destination.dart';
@@ -44,7 +60,6 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web/web.dart' as web;
@@ -53,6 +68,59 @@ import 'firebase/website_firebase_options.dart';
 import 'pricing/website_delivery_pricing.dart';
 import 'pricing/website_special_handling_engine.dart';
 import 'newsletter/newsletter_widgets.dart';
+
+part 'premium_landing.dart';
+
+// Shared public-web styling follows the homepage across account and service pages.
+const _websiteHeroGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xffe2f2ff), Color(0xffeee5fb), Color(0xffffe7ef)],
+);
+
+ThemeData _websiteTheme(bool dark) {
+  final colors = _CircumColors(dark);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _landingBlue,
+    brightness: dark ? Brightness.dark : Brightness.light,
+    primary: dark ? const Color(0xffa9bfff) : _landingBlue,
+    surface: colors.panel,
+    onSurface: colors.text,
+  );
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+  final button = ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+    padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
+    shape: WidgetStatePropertyAll(shape),
+    textStyle: const WidgetStatePropertyAll(TextStyle(
+        fontFamily: 'D-DIN', fontWeight: FontWeight.w700, fontSize: 16)),
+  );
+  return ThemeData(
+    useMaterial3: true,
+    fontFamily: 'D-DIN',
+    colorScheme: scheme,
+    scaffoldBackgroundColor: colors.appBackground,
+    filledButtonTheme: FilledButtonThemeData(style: button),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: button),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: button.copyWith(
+            side: WidgetStatePropertyAll(BorderSide(color: scheme.primary)))),
+    textButtonTheme: TextButtonThemeData(style: button),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colors.field,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: colors.border)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: scheme.primary, width: 2)),
+    ),
+    dividerColor: colors.border,
+  );
+}
 
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
@@ -77,6 +145,7 @@ enum _WebAppMode {
   gifts,
   vanguard,
   support,
+  contact,
   deleteAccount,
   privacyPolicy,
   terms,
@@ -84,7 +153,7 @@ enum _WebAppMode {
   newsletterPreferences,
 }
 
-const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
+const _analyticsConsentStorageKey = 'circum_public_cookie_preferences_v2';
 const _mailchimpSiteTrackingScriptId = 'mcjs';
 const _mailchimpSiteTrackingScriptUrl =
     'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
@@ -105,8 +174,12 @@ class CircumWebsiteApp extends StatefulWidget {
 }
 
 class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
-  bool _darkMode = true;
-  bool? _optionalAnalyticsConsent;
+  bool _darkMode = false;
+  CookiePreferences? _cookieConsent;
+  bool? get _optionalAnalyticsConsent => _cookieConsent?.analytics;
+  final _consentNavigatorKey = GlobalKey<NavigatorState>();
+  JSFunction? _consentStorageListener;
+  Timer? _consentExpiryTimer;
   late final CircumWebRouteResolution _initialRoute = resolveCircumWebRoute(
     Uri.base,
     adminHostingTarget: false,
@@ -123,15 +196,24 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb && (_mode == _WebAppMode.landing ||
+        _mode == _WebAppMode.gifts || _mode == _WebAppMode.sender ||
+        _mode == _WebAppMode.vanguard)) {
+      unawaited(_loadLandingTypography());
+    }
     _redirectLegacyQueryIfNeeded();
     if (kIsWeb) {
-      _optionalAnalyticsConsent =
-          web.window.localStorage.getItem(_analyticsConsentStorageKey) ==
-              'accepted';
-      if (_optionalAnalyticsConsent == true) {
-        _enableMailchimpSiteTracking();
-        _logWebsiteVisit();
-      }
+      _cookieConsent = _readCookiePreferences();
+      if (_cookieConsent?.marketing == true) { _enableMailchimpSiteTracking(); }
+      if (_cookieConsent?.marketing != true) { _disableMailchimpSiteTracking(); }
+      if (_optionalAnalyticsConsent == true) { unawaited(_logWebsiteVisit()); }
+      _consentStorageListener = ((web.Event event) {
+        final storageEvent = event as web.StorageEvent;
+        if (storageEvent.key == _analyticsConsentStorageKey ||
+            storageEvent.key == null) { _refreshCookiePreferences(); }
+      }).toJS;
+      web.window.addEventListener('storage', _consentStorageListener);
+      _scheduleConsentExpiry();
     }
   }
 
@@ -143,6 +225,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.gifts => _WebAppMode.gifts,
       CircumWebSurface.vanguard => _WebAppMode.vanguard,
       CircumWebSurface.support => _WebAppMode.support,
+      CircumWebSurface.contact => _WebAppMode.contact,
       CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
       CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.terms => _WebAppMode.terms,
@@ -162,6 +245,31 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     };
   }
 
+  Future<void> _loadLandingTypography() async {
+    Future<void> load(String family, String file) async {
+      final response = await http
+          .get(Uri.base.resolve('/fonts/d-din/$file'))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200)
+        throw StateError('Homepage font unavailable');
+      await (FontLoader(family)
+            ..addFont(Future.value(ByteData.sublistView(response.bodyBytes))))
+          .load();
+    }
+
+    try {
+      await Future.wait([
+        load('D-DIN', 'D-DIN.ttf'),
+        load('D-DIN-Bold', 'D-DIN-Bold.ttf'),
+        if (_mode == _WebAppMode.gifts)
+          load('GiftsSerif', '../libre-baskerville/LibreBaskerville-Italic.ttf'),
+      ]);
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (kDebugMode) debugPrint('Homepage typography: $error');
+    }
+  }
+
   Future<void> _redirectLegacyQueryIfNeeded() async {
     final path = _initialRoute.legacyRedirectPath;
     if (path == null || !kIsWeb) return;
@@ -170,6 +278,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _openCanonicalPath(String path) async {
     final target = _canonicalWebUri(path);
+    if (kIsWeb) {
+      web.window.location.assign(target.toString());
+      return;
+    }
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
@@ -177,7 +289,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   static Uri _canonicalWebUri(String path) {
-    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
+    return Uri.base.resolve(path);
   }
 
   Future<void> _openSurface(
@@ -193,9 +305,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           _ => '/send',
         },
       _WebAppMode.rider => '/rider',
-      _WebAppMode.gifts => '/gifts',
+      _WebAppMode.gifts => '/gifts/discover/',
       _WebAppMode.vanguard => '/vanguard',
       _WebAppMode.support => '/support',
+      _WebAppMode.contact => '/contact',
       _WebAppMode.deleteAccount => '/delete_account',
       _WebAppMode.privacyPolicy => '/privacy_policy',
       _WebAppMode.terms => '/terms',
@@ -214,24 +327,35 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   Future<void> _logWebsiteVisit() async {
     if (_optionalAnalyticsConsent != true) return;
-    final pageUri = newsletterPublicPageUri(Uri.base);
+    final sourceUri = newsletterPublicPageUri(Uri.base);
+    const campaignKeys = {'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'};
+    final pageUri = sourceUri.replace(queryParameters: {
+      for (final entry in sourceUri.queryParameters.entries)
+        if (campaignKeys.contains(entry.key)) entry.key: entry.value.substring(0, math.min(entry.value.length, 128)),
+    }, fragment: '');
     try {
-      await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('recordWebsiteVisit').call({
-        'url': pageUri.toString(),
-        'path': pageUri.path,
-        'query': pageUri.queryParameters,
-        'appMode': _mode.name,
-      });
+      await runConsentedAnalytics(
+        allowed: () => mounted && _optionalAnalyticsConsent == true &&
+            _readCookiePreferences()?.analytics == true,
+        prepare: _ensureCircumFirebaseReady,
+        record: () async {
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('recordWebsiteVisit').call({
+            'url': pageUri.toString(),
+            'path': pageUri.path,
+            'query': pageUri.queryParameters,
+            'appMode': _mode.name,
+          });
+        },
+      );
     } catch (_) {
       // Visitor analytics must never block the app.
     }
   }
 
   void _enableMailchimpSiteTracking() {
-    if (!kIsWeb || _optionalAnalyticsConsent != true) return;
+    if (!kIsWeb || _cookieConsent?.marketing != true ||
+        DateTime.now().difference(_cookieConsent!.savedAt) >= CookiePreferences.lifetime) { return; }
 
     final existing = web.document.getElementById(
       _mailchimpSiteTrackingScriptId,
@@ -247,7 +371,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       ..id = _mailchimpSiteTrackingScriptId
       ..async = true
       ..src = _mailchimpSiteTrackingScriptUrl;
-    script.setAttribute('data-circum-consent', 'optional-analytics');
+    script.setAttribute('data-circum-consent', 'optional-marketing');
     web.document.head!.appendChild(script);
   }
 
@@ -259,6 +383,43 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     if (script != null && script.getAttribute('type') != 'text/plain') {
       script.remove();
     }
+    // Clear known first-party tracking cookies without touching auth/session data.
+    try {
+      final host = web.window.location.hostname;
+      final paths = <String>{'/', web.window.location.pathname};
+      final segments = web.window.location.pathname.split('/');
+      for (var i = 1; i < segments.length; i++) {
+        paths.add('${segments.take(i).join('/')}/');
+      }
+      final domains = <String>{'', host};
+      if (host == 'circumuk.com' || host.endsWith('.circumuk.com')) {
+        domains.add('circumuk.com');
+      }
+      for (final entry in web.document.cookie.split(';')) {
+        final name = entry.split('=').first.trim();
+        if (!(name == '_mcid' || name.startsWith('_mc_') ||
+            name == 'mc_cid' || name == 'mc_eid' || name == 'MCPopupClosed')) { continue; }
+        for (final path in paths) {
+          for (final domain in domains) {
+            web.document.cookie = '$name=; Max-Age=0; Path=$path;'
+                '${domain.isEmpty ? '' : ' Domain=$domain;'} SameSite=Lax';
+          }
+        }
+      }
+      for (final storage in [web.window.localStorage, web.window.sessionStorage]) {
+        final keys = <String>[];
+        for (var i = 0; i < storage.length; i++) {
+          final key = storage.key(i);
+          if (key != null && (key == '_mcid' || key.startsWith('_mc_') ||
+              key == 'mc_cid' || key == 'mc_eid' || key == 'MCPopupClosed')) {
+            keys.add(key);
+          }
+        }
+        for (final key in keys) { storage.removeItem(key); }
+      }
+    } catch (_) {
+      // Browser privacy restrictions must not block the consent controls.
+    }
   }
 
   @override
@@ -267,17 +428,14 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _consentNavigatorKey,
       title: _companyName,
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'Helvetica',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2563eb),
-          brightness: _darkMode ? Brightness.dark : Brightness.light,
-        ),
-      ),
+      theme: _websiteTheme(_darkMode),
       home: Scaffold(
         backgroundColor: colors.background,
+        bottomNavigationBar: _mode == _WebAppMode.landing
+            ? null
+            : const _StoreDownloadFooter(),
         body: Stack(
           children: [
             AnimatedSwitcher(
@@ -293,13 +451,14 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               },
             ),
             _CompanyLiveChatButton(colors: colors),
-            if (kIsWeb && _optionalAnalyticsConsent == null)
+            if (kIsWeb && _cookieConsent == null)
               _CookieConsentBanner(
                 colors: colors,
-                onReject: () => _setAnalyticsConsent(false),
-                onAccept: () => _setAnalyticsConsent(true),
+                onReject: () => _setCookiePreferences(false, false),
+                onAccept: () => _setCookiePreferences(true, true),
                 onManage: _showConsentPreferences,
               ),
+
           ],
         ),
       ),
@@ -325,6 +484,17 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             onToggleTheme: () => setState(() => _darkMode = !_darkMode),
           ),
         ),
+      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) && Uri.base.queryParameters['view'] != 'vision' => RiderRecruitmentPage(
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onJoin: () => _openCanonicalPath('/rider/onboarding'),
+          onLogin: () => _openCanonicalPath('/rider?access=login'),
+          onVision: () => _openCanonicalPath('/rider?view=vision'),
+        ),
+      _WebAppMode.rider when Uri.base.path != '/rider/onboarding' && !const {'login', 'join'}.contains(Uri.base.queryParameters['access']) => RiderOrderExplainer(
+          onBack: () => _openCanonicalPath('/rider'),
+          onLogin: () => _openCanonicalPath('/rider?access=login'),
+          onJoin: () => _openCanonicalPath('/rider/onboarding'),
+        ),
       _WebAppMode.rider => _PhoneStage(
           key: const ValueKey(circumRiderWebIdentity),
           colors: colors,
@@ -341,13 +511,17 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
-      _WebAppMode.vanguard => _VanguardLandingPage(
+      _WebAppMode.vanguard => VanguardLandingPage(
           key: const ValueKey('vanguard-page'),
-          colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
+          onStart: () => _openSurface(_WebAppMode.sender),
         ),
       _WebAppMode.support => _SupportPage(
           key: const ValueKey('support-page'),
+          colors: colors,
+        ),
+      _WebAppMode.contact => _ContactUsPage(
+          key: const ValueKey('contact-page'),
           colors: colors,
         ),
       _WebAppMode.deleteAccount => _AccountDeletionPage(
@@ -379,17 +553,19 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           darkMode: _darkMode,
           onStart: () => _openSurface(_WebAppMode.sender),
           onRider: () => _openSurface(_WebAppMode.rider),
-          onHealthPlus: () => _openSurface(
-            _WebAppMode.sender,
-            senderStep: _SenderStep.healthPlus,
-          ),
-          onBusiness: () => _openSurface(_WebAppMode.sender,
-              senderStep: _SenderStep.business),
+          onHealthPlus: () => kIsWeb
+              ? _openCanonicalPath('/health/discover/')
+              : _openSurface(_WebAppMode.sender, senderStep: _SenderStep.healthPlus),
+          onBusiness: () => kIsWeb
+              ? _openCanonicalPath('/business/discover/')
+              : _openSurface(_WebAppMode.sender, senderStep: _SenderStep.business),
           onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
           newsletterKey: _newsletterKey,
           newsletterSource: _newsletterSource,
+          analyticsAllowed: () => _readCookiePreferences()?.analytics == true,
           onNewsletter: _scrollToNewsletter,
+          onCookieSettings: _showConsentPreferences,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
     };
@@ -407,47 +583,123 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     }
   }
 
-  void _setAnalyticsConsent(bool accepted) {
-    if (!kIsWeb) return;
-    web.window.localStorage.setItem(
-      _analyticsConsentStorageKey,
-      accepted ? 'accepted' : 'rejected',
-    );
-    setState(() => _optionalAnalyticsConsent = accepted);
-    if (accepted) {
-      _enableMailchimpSiteTracking();
-      _logWebsiteVisit();
-    } else {
-      _disableMailchimpSiteTracking();
+  CookiePreferences? _readCookiePreferences() {
+    if (Uri.base.queryParameters['cookie_opt_out'] == '1') {
+      return CookiePreferences(analytics: false, marketing: false, savedAt: DateTime.now());
+    }
+    try {
+      return CookiePreferences.decode(
+          web.window.localStorage.getItem(_analyticsConsentStorageKey),
+          DateTime.now());
+    } catch (_) {
+      return null;
     }
   }
 
+  void _scheduleConsentExpiry() {
+    _consentExpiryTimer?.cancel();
+    final consent = _cookieConsent;
+    if (consent == null) return;
+    _consentExpiryTimer = Timer(consent.reviewDelay(DateTime.now()),
+        _refreshCookiePreferences);
+  }
+
+  void _refreshCookiePreferences() {
+    if (!mounted) return;
+    final next = _readCookiePreferences();
+    if (next?.analytics == _cookieConsent?.analytics &&
+        next?.marketing == _cookieConsent?.marketing &&
+        next?.savedAt == _cookieConsent?.savedAt) {
+      _scheduleConsentExpiry();
+      return;
+    }
+    final withdrawMarketing = _cookieConsent?.marketing == true &&
+        next?.marketing != true;
+    setState(() => _cookieConsent = next);
+    _scheduleConsentExpiry();
+    if (withdrawMarketing) {
+      _disableMailchimpSiteTracking();
+      web.window.location.reload();
+    } else if (next?.marketing == true) {
+      _enableMailchimpSiteTracking();
+    }
+  }
+
+  void _setCookiePreferences(bool analytics, bool marketing) {
+    if (!kIsWeb) return;
+    final withdrawMarketing = _cookieConsent?.marketing == true && !marketing;
+    final next = CookiePreferences(analytics: analytics, marketing: marketing,
+        savedAt: DateTime.now());
+    var persisted = false;
+    try {
+      web.window.localStorage.setItem(_analyticsConsentStorageKey, next.encode());
+      persisted = true;
+      web.window.localStorage.removeItem('circum_public_optional_analytics_consent');
+    } catch (_) {
+      // A blocked storage API must not prevent rejecting or choosing locally.
+    }
+    setState(() => _cookieConsent = next);
+    _scheduleConsentExpiry();
+    if (persisted && Uri.base.queryParameters.containsKey('cookie_opt_out')) {
+      final query = Map<String, String>.from(Uri.base.queryParameters)..remove('cookie_opt_out');
+      web.window.location.replace(Uri.base.replace(queryParameters: query).toString());
+      return;
+    }
+    if (withdrawMarketing) {
+      _disableMailchimpSiteTracking();
+      if (persisted) {
+        web.window.location.reload();
+      } else {
+        web.window.location.replace(Uri.base.replace(queryParameters: {
+          ...Uri.base.queryParameters, 'cookie_opt_out': '1'}).toString());
+      }
+      return;
+    }
+    if (marketing) { _enableMailchimpSiteTracking(); }
+    if (analytics) { unawaited(_logWebsiteVisit()); }
+  }
+
   void _showConsentPreferences() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
+    final dialogContext = _consentNavigatorKey.currentContext;
+    if (dialogContext == null) return;
+    var analytics = _cookieConsent?.analytics ?? false;
+    var marketing = _cookieConsent?.marketing ?? false;
+    showDialog<void>(context: dialogContext,
+      builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
         title: const Text('Cookie and storage preferences'),
-        content: const Text(
-          'Optional visitor analytics is currently disabled. You can allow or keep it off. Strictly necessary technologies remain active.',
-        ),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Necessary storage supports security, sign-in and requested bookings. Your choice is remembered for 180 days. You can change it using Cookie settings.'),
+            SwitchListTile(contentPadding: EdgeInsets.zero,
+              title: const Text('Visitor analytics'),
+              subtitle: const Text('Allow analytics to help Circum understand visits and improve the website. Off unless you choose it.'),
+              value: analytics, onChanged: (v) => update(() => analytics = v)),
+            SwitchListTile(contentPadding: EdgeInsets.zero,
+              title: const Text('Mailchimp marketing tracking'),
+              subtitle: const Text('Allow Mailchimp (Intuit) connected-site tracking to collect browser and visit information for marketing measurement. Newsletter signup does not require this.'),
+              value: marketing, onChanged: (v) => update(() => marketing = v)),
+            TextButton(onPressed: () => unawaited(launchUrl(
+                Uri.base.resolve('/cookie_policy'), webOnlyWindowName: '_self')),
+              child: const Text('Read Cookie Policy')),
+          ])),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _setAnalyticsConsent(false);
-            },
-            child: const Text('Reject optional'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _setAnalyticsConsent(true);
-            },
-            child: const Text('Accept optional'),
-          ),
+          OutlinedButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(false, false); }, child: const Text('Reject optional')),
+          OutlinedButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(true, true); }, child: const Text('Accept optional')),
+          FilledButton(onPressed: () { Navigator.pop(context);
+            _setCookiePreferences(analytics, marketing); }, child: const Text('Save choices')),
         ],
-      ),
-    );
+      )));
+  }
+
+  @override
+  void dispose() {
+    _consentExpiryTimer?.cancel();
+    if (kIsWeb && _consentStorageListener != null) {
+      web.window.removeEventListener('storage', _consentStorageListener);
+    }
+    super.dispose();
   }
 
   void _openRole(CircumRole role) {
@@ -817,7 +1069,9 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onToggleTheme;
   final GlobalKey newsletterKey;
   final String newsletterSource;
+  final bool Function() analyticsAllowed;
   final VoidCallback onNewsletter;
+  final VoidCallback onCookieSettings;
 
   const _LandingPage({
     super.key,
@@ -831,172 +1085,70 @@ class _LandingPage extends StatelessWidget {
     this.onGifts,
     required this.newsletterKey,
     required this.newsletterSource,
+    required this.analyticsAllowed,
     required this.onNewsletter,
+    required this.onCookieSettings,
     required this.onToggleTheme,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: onStart,
-            onRider: onRider,
-            onHealthPlus: onHealthPlus,
-            onBusiness: onBusiness,
-            onGifts: onGifts,
-            onToggleTheme: onToggleTheme,
-          ),
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors.dark
-                    ? const [
-                        Color(0xff050816),
-                        Color(0xff251047),
-                        Color(0xff1d4ed8),
-                        Color(0xff061826),
-                      ]
-                    : const [
-                        Color(0xffffffff),
-                        Color(0xfffff4de),
-                        Color(0xffffe5f3),
-                        Color(0xffebe8ff),
-                        Color(0xffdff8ff),
-                        Color(0xffffffff),
+    const landingColors = _CircumColors(false);
+    final theme = _websiteTheme(false);
+    return Theme(
+      data: theme,
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(fontFamily: 'D-DIN', color: _landingInk),
+        child: ColoredBox(
+          color: const Color(0xfffafaf7),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _PremiumLanding(
+                  onStart: onStart,
+                  onRider: onRider,
+                  onHealthPlus: onHealthPlus,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onGifts: onGifts,
+                ),
+                if (newsletterSignupEnabled)
+                  NewsletterSignupSection(
+                    key: newsletterKey,
+                    source: newsletterSource,
+                    analyticsAllowed: analyticsAllowed,
+                    background: landingColors.background,
+                    panel: const Color(0xff173b95),
+                    panelGradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xff173b95),
+                        Color(0xff49349a),
+                        Color(0xff7c2c88)
                       ],
-                stops: colors.dark
-                    ? const [0, 0.36, 0.72, 1]
-                    : const [0, 0.16, 0.39, 0.62, 0.84, 1],
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(22, 58, 22, 46),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: _SpectrumSweepPainter(dark: colors.dark),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Send anything across town.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: MediaQuery.sizeOf(context).width < 680
-                                ? 48
-                                : 76,
-                            height: 1.02,
-                            color: colors.dark
-                                ? Colors.white
-                                : const Color(0xff111827),
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(
-                                color: colors.dark
-                                    ? Colors.black.withValues(alpha: 0.32)
-                                    : Colors.white.withValues(alpha: 0.78),
-                                blurRadius: 24,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Book trusted Circum Riders for parcels, prescriptions, documents, and larger items. See the price, track the parcel, and stay in control.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontSize:
-                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
+                    ),
+                    text: Colors.white,
+                    mutedText: const Color(0xffdbeafe),
+                    border: const Color(0xff8d83db),
+                    onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
+                      '/privacy_policy',
                     ),
                   ),
-                  const SizedBox(height: 34),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 14,
-                    runSpacing: 14,
-                    children: [
-                      _PillButton(
-                        label: 'Send a Parcel',
-                        uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
-                        icon: Icons.arrow_forward,
-                        dark: true,
-                        onPressed: onStart,
-                      ),
-                      _PillButton(
-                        label: 'Earn as a Circum Rider',
-                        uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
-                        icon: Icons.two_wheeler,
-                        dark: false,
-                        onPressed: onRider,
-                      ),
-                      _PillButton(
-                        label: 'Get started with Health+',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/send/health',
-                        ),
-                        icon: Icons.health_and_safety,
-                        dark: false,
-                        onPressed: onHealthPlus,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 58),
-                  _HeroMockup(colors: colors, onStart: onStart),
-                ],
-              ),
+                _LandingFooter(
+                  colors: landingColors,
+                  onDeliveries: onStart,
+                  onHealthPlus: onHealthPlus,
+                  onGifts: onGifts,
+                  onBusiness: onBusiness,
+                  onVanguard: onVanguard,
+                  onNewsletter: onNewsletter,
+                  onCookieSettings: onCookieSettings,
+                ),
+              ],
             ),
           ),
-          _ServiceTrustBand(
-            colors: colors,
-            onHealthPlus: onHealthPlus,
-            onBusiness: onBusiness,
-            onVanguard: onVanguard,
-          ),
-          if (newsletterSignupEnabled)
-            NewsletterSignupSection(
-              key: newsletterKey,
-              source: newsletterSource,
-              background: colors.background,
-              panel: colors.panel,
-              text: colors.text,
-              mutedText: colors.mutedText,
-              border: colors.border,
-              onPrivacy: _CircumWebsiteAppState._canonicalWebUri(
-                '/privacy_policy',
-              ),
-            ),
-          _LandingFooter(
-            colors: colors,
-            onDeliveries: onStart,
-            onHealthPlus: onHealthPlus,
-            onGifts: onGifts,
-            onBusiness: onBusiness,
-            onVanguard: onVanguard,
-            onNewsletter: onNewsletter,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1124,581 +1276,6 @@ String _adminDateText(dynamic value) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
-class _LandingNav extends StatelessWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final VoidCallback onStart;
-  final VoidCallback onRider;
-  final VoidCallback onHealthPlus;
-  final VoidCallback onBusiness;
-  final VoidCallback? onGifts;
-  final VoidCallback onToggleTheme;
-
-  const _LandingNav({
-    required this.colors,
-    required this.darkMode,
-    required this.onStart,
-    required this.onRider,
-    required this.onHealthPlus,
-    required this.onBusiness,
-    this.onGifts,
-    required this.onToggleTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: Row(
-            children: [
-              Image.asset(
-                'assets/images/circum_wordmark.png',
-                width: 136,
-                height: 32,
-                fit: BoxFit.contain,
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: darkMode ? 'Light mode' : 'Dark mode',
-                onPressed: onToggleTheme,
-                icon: Icon(
-                  darkMode ? Icons.light_mode : Icons.dark_mode,
-                  color: colors.text,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (MediaQuery.sizeOf(context).width >= 560)
-                _LandingNavLink(
-                  label: 'Rider',
-                  uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
-                  colors: colors,
-                  onPressed: onRider,
-                ),
-              if (MediaQuery.sizeOf(context).width >= 680)
-                _LandingNavLink(
-                  label: 'Health+',
-                  uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
-                  colors: colors,
-                  onPressed: onHealthPlus,
-                ),
-              if (MediaQuery.sizeOf(context).width >= 760)
-                _LandingNavLink(
-                  label: 'Business',
-                  uri: _CircumWebsiteAppState._canonicalWebUri(
-                    '/send/business',
-                  ),
-                  colors: colors,
-                  onPressed: onBusiness,
-                ),
-              if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
-                Link(
-                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
-                  target: LinkTarget.self,
-                  builder: (context, followLink) {
-                    return TextButton.icon(
-                      onPressed: followLink ?? onGifts,
-                      icon: const Icon(Icons.card_giftcard, size: 18),
-                      label: Text(
-                        'Gifts',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    );
-                  },
-                )
-              else if (onGifts != null)
-                Link(
-                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
-                  target: LinkTarget.self,
-                  builder: (context, followLink) {
-                    return IconButton(
-                      tooltip: 'Gifts',
-                      onPressed: followLink ?? onGifts,
-                      icon: Icon(Icons.card_giftcard, color: colors.text),
-                    );
-                  },
-                ),
-              const SizedBox(width: 8),
-              Link(
-                uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
-                target: LinkTarget.self,
-                builder: (context, followLink) {
-                  return FilledButton(
-                    onPressed: followLink ?? onStart,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
-                      foregroundColor: colors.inverseText,
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                    ),
-                    child: const Text('Send a Parcel'),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SpectrumSweepPainter extends CustomPainter {
-  final bool dark;
-
-  const _SpectrumSweepPainter({required this.dark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sweepRect = Rect.fromLTWH(
-      size.width * 0.02,
-      size.height * 0.08,
-      size.width * 0.96,
-      size.height * 0.84,
-    );
-    final spectrum = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: _spectrumGradient,
-      ).createShader(sweepRect)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = dark ? 22 : 18
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, dark ? 28 : 22);
-
-    final path = Path()
-      ..moveTo(sweepRect.left, sweepRect.center.dy + sweepRect.height * 0.16)
-      ..cubicTo(
-        sweepRect.left + sweepRect.width * 0.22,
-        sweepRect.top - sweepRect.height * 0.12,
-        sweepRect.left + sweepRect.width * 0.44,
-        sweepRect.bottom + sweepRect.height * 0.14,
-        sweepRect.left + sweepRect.width * 0.62,
-        sweepRect.center.dy,
-      )
-      ..cubicTo(
-        sweepRect.left + sweepRect.width * 0.78,
-        sweepRect.top - sweepRect.height * 0.1,
-        sweepRect.right - sweepRect.width * 0.12,
-        sweepRect.bottom + sweepRect.height * 0.08,
-        sweepRect.right,
-        sweepRect.center.dy - sweepRect.height * 0.16,
-      );
-
-    canvas.drawPath(path, spectrum);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpectrumSweepPainter oldDelegate) {
-    return oldDelegate.dark != dark;
-  }
-}
-
-class _LandingNavLink extends StatelessWidget {
-  final String label;
-  final Uri uri;
-  final _CircumColors colors;
-  final VoidCallback onPressed;
-
-  const _LandingNavLink({
-    required this.label,
-    required this.uri,
-    required this.colors,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Link(
-      uri: uri,
-      target: LinkTarget.self,
-      builder: (context, followLink) {
-        return TextButton(
-          onPressed: followLink ?? onPressed,
-          child: Text(
-            label,
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HeroMockup extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onStart;
-
-  const _HeroMockup({required this.colors, required this.onStart});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 820;
-        final map = _MiniMap(colors: colors, active: true);
-        final panel = _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _LogoTile(colors: colors),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Your Circum Rider is on the way',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        ),
-                        Text(
-                          'Motorbike courier arriving in 8 min',
-                          style: TextStyle(
-                            color: colors.mutedText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _RouteRow(
-                colors: colors,
-                from: 'Pickup address',
-                to: 'Drop-off address',
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricPill(
-                      colors: colors,
-                      label: 'ETA',
-                      value: '14 min',
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MetricPill(
-                      colors: colors,
-                      label: 'Quote',
-                      value: '£9.80',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: Link(
-                  uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
-                  target: LinkTarget.self,
-                  builder: (context, followLink) {
-                    return FilledButton.icon(
-                      onPressed: followLink ?? onStart,
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text('Start a delivery'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.text,
-                        foregroundColor: colors.inverseText,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.panel,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: colors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(
-                  alpha: colors.dark ? 0.32 : 0.08,
-                ),
-                blurRadius: 36,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: wide
-              ? Row(
-                  children: [
-                    Expanded(flex: 6, child: map),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 4, child: panel),
-                  ],
-                )
-              : Column(children: [map, const SizedBox(height: 16), panel]),
-        );
-      },
-    );
-  }
-}
-
-class _ServiceTrustBand extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onHealthPlus;
-  final VoidCallback onBusiness;
-  final VoidCallback onVanguard;
-
-  const _ServiceTrustBand({
-    required this.colors,
-    required this.onHealthPlus,
-    required this.onBusiness,
-    required this.onVanguard,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: colors.band,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 76),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ServiceIntroCard(
-                colors: colors,
-                icon: Icons.health_and_safety,
-                title: 'Health+',
-                headline: 'Care logistics without the loose ends.',
-                body:
-                    'Prescription pickups, recurring reminders, sealed handling, and the same trusted custody layer built into important deliveries.',
-                actionLabel: 'Open Health+',
-                uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
-                badge: 'Vanguard Included',
-                highlights: const [
-                  'Prescription pickups',
-                  'Recurring reminders',
-                  'Sealed custody',
-                  'Priority handling',
-                ],
-                onPressed: onHealthPlus,
-              ),
-              const SizedBox(height: 24),
-              _ServiceIntroCard(
-                colors: colors,
-                icon: Icons.business_center,
-                title: 'Business',
-                headline: 'Operational delivery for teams.',
-                body:
-                    'Manage company deliveries, invoices, Health+, Gifts, Roth, and recurring work from one Circum workspace.',
-                actionLabel: 'Open Business',
-                uri: _CircumWebsiteAppState._canonicalWebUri('/send/business'),
-                badge: 'Corporate Gifts · Vanguard Included',
-                highlights: const [
-                  'Company deliveries',
-                  'Team access',
-                  'Invoices',
-                  'Recurring work',
-                ],
-                onPressed: onBusiness,
-              ),
-              const SizedBox(height: 24),
-              _VanguardHomepageSection(
-                colors: colors,
-                uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
-                onLearnMore: onVanguard,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ServiceIntroCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final String title;
-  final String headline;
-  final String body;
-  final String actionLabel;
-  final Uri uri;
-  final String badge;
-  final List<String> highlights;
-  final VoidCallback onPressed;
-
-  const _ServiceIntroCard({
-    required this.colors,
-    required this.icon,
-    required this.title,
-    required this.headline,
-    required this.body,
-    required this.actionLabel,
-    required this.uri,
-    required this.badge,
-    required this.highlights,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final iconMark = Container(
-          width: compact ? 74 : 88,
-          height: compact ? 74 : 88,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                const Color(0xff1d4ed8).withValues(alpha: 0.34),
-                const Color(0xff0b2340).withValues(alpha: 0.8),
-              ],
-            ),
-            border: Border.all(
-              color: const Color(0xff3b82f6).withValues(alpha: 0.48),
-              width: 1.4,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xff0a84ff).withValues(alpha: 0.13),
-                blurRadius: 24,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xff0a84ff),
-            size: compact ? 30 : 34,
-          ),
-        );
-
-        final action = _VanguardBlueActionButton(
-          label: actionLabel,
-          uri: uri,
-          onPressed: onPressed,
-        );
-
-        return Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(compact ? 24 : 32),
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: const Alignment(-0.78, -0.95),
-              radius: 1.35,
-              colors: [
-                const Color(0xff123d6f).withValues(alpha: 0.58),
-                const Color(0xff07192f).withValues(alpha: 0.94),
-                const Color(0xff040811).withValues(alpha: 0.98),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
-              width: 1.35,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xff0a84ff).withValues(alpha: 0.09),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.26),
-                blurRadius: 28,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  iconMark,
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _VanguardBlueChip(label: title),
-                        _VanguardBlueChip(label: badge),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: compact ? 22 : 26),
-              Text(
-                headline,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Georgia',
-                  fontSize: compact ? 34 : 48,
-                  height: 1.08,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                body,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: compact ? 16 : 18,
-                  height: 1.48,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (final highlight in highlights)
-                    _ServiceHighlightPill(label: highlight),
-                ],
-              ),
-              const SizedBox(height: 24),
-              action,
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _VanguardBlueChip extends StatelessWidget {
   final String label;
 
@@ -1736,346 +1313,6 @@ class _VanguardBlueChip extends StatelessWidget {
   }
 }
 
-class _VanguardBlueActionButton extends StatelessWidget {
-  final String label;
-  final Uri uri;
-  final VoidCallback onPressed;
-
-  const _VanguardBlueActionButton({
-    required this.label,
-    required this.uri,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff0a84ff).withValues(alpha: 0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Link(
-        uri: uri,
-        target: LinkTarget.self,
-        builder: (context, followLink) {
-          return FilledButton.icon(
-            onPressed: followLink ?? onPressed,
-            icon: const Icon(Icons.arrow_forward, size: 18),
-            label: Text(label),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xff0a84ff),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 50),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-              textStyle: const TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0,
-              ),
-              shape: const StadiumBorder(),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ServiceHighlightPill extends StatelessWidget {
-  final String label;
-
-  const _ServiceHighlightPill({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.052),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xff5b7fa8).withValues(alpha: 0.26),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            color: Color(0xff0a84ff),
-            size: 17,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.82),
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardHomepageSection extends StatelessWidget {
-  final _CircumColors colors;
-  final Uri uri;
-  final VoidCallback onLearnMore;
-
-  const _VanguardHomepageSection({
-    required this.colors,
-    required this.uri,
-    required this.onLearnMore,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 720;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 24 : 34,
-        narrow ? 36 : 42,
-        narrow ? 24 : 34,
-        narrow ? 30 : 36,
-      ),
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.72),
-          radius: 1.15,
-          colors: [
-            const Color(0xff0b3764).withValues(alpha: 0.72),
-            const Color(0xff07192f).withValues(alpha: 0.94),
-            const Color(0xff030812).withValues(alpha: 0.98),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: const Color(0xff5b7fa8).withValues(alpha: 0.36),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff0a84ff).withValues(alpha: 0.1),
-            blurRadius: 38,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const _VanguardShieldFallback(size: 94),
-          const SizedBox(height: 28),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            alignment: WrapAlignment.center,
-            children: const [
-              _VanguardBlueChip(label: 'Vanguard'),
-              _VanguardBlueChip(label: 'Optional add-on at checkout — £1.99'),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Trust matters more than speed.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
-              fontSize: narrow ? 34 : 50,
-              height: 1.12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Add Vanguard for £1.99 and receive enhanced custody tracking, trusted Circum Rider prioritisation, priority support, and better handling for important deliveries.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: narrow ? 17 : 19,
-              height: 1.48,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 26),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final cols = constraints.maxWidth < 640 ? 1 : 4;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: cols,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: cols == 1 ? 2.45 : 0.95,
-                children: const [
-                  _VanguardMiniCard(
-                    icon: Icons.verified_user_outlined,
-                    title: 'Trusted Rider Prioritisation',
-                    body:
-                        'Circum prioritises experienced and highly trusted Circum Riders during assignment. Customers do not choose riders.',
-                  ),
-                  _VanguardMiniCard(
-                    icon: Icons.timeline_outlined,
-                    title: 'Enhanced Custody Tracking',
-                    body:
-                        'Clear delivery milestones from assignment to delivery.',
-                  ),
-                  _VanguardMiniCard(
-                    icon: Icons.support_agent,
-                    title: 'Priority Support',
-                    body: 'Priority support and faster dispute review.',
-                  ),
-                  _VanguardMiniCard(
-                    icon: Icons.gavel_outlined,
-                    title: 'Priority Dispute Review',
-                    body: 'Priority review for Vanguard deliveries.',
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          const _VanguardHomepageTimeline(),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: [
-              _VanguardBlueActionButton(
-                label: 'Learn more',
-                uri: uri,
-                onPressed: onLearnMore,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardMiniCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _VanguardMiniCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _vanguardCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: const Color(0xff0a84ff), size: 24),
-          const Spacer(),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              height: 1.2,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            body,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              height: 1.32,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardHomepageTimeline extends StatelessWidget {
-  const _VanguardHomepageTimeline();
-
-  @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 720;
-    final steps = compact
-        ? const ['Assigned', 'Collected', 'In transit', 'Delivered']
-        : const [
-            'Circum Rider assigned',
-            'Item collected',
-            'In transit',
-            'Delivered',
-          ];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: _vanguardCardDecoration(darker: true),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (var index = 0; index < steps.length; index++) ...[
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Color(0xff0a84ff),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  steps[index],
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.86),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            if (index != steps.length - 1 && !compact)
-              Container(
-                width: 28,
-                height: 1.2,
-                color: const Color(0xff5b7fa8).withValues(alpha: 0.48),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _PhoneStage extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
@@ -2084,76 +1321,14 @@ class _PhoneStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width >= _desktopWebBreakpoint) {
-      return Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: colors.stage,
-        padding: const EdgeInsets.all(28),
-        child: Center(
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 1180),
-            decoration: BoxDecoration(
-              color: colors.appBackground,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: colors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 32,
-                  offset: Offset(0, 18),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: child,
-          ),
-        ),
-      );
-    }
-
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: colors.stage,
-      padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
-        vertical: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
+      decoration: BoxDecoration(
+        color: colors.appBackground,
+        gradient: colors.dark ? null : _websiteHeroGradient,
       ),
-      child: Center(
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 430),
-          decoration: BoxDecoration(
-            color: colors.appBackground,
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(42),
-            border: MediaQuery.sizeOf(context).width < 520
-                ? null
-                : Border.all(
-                    color: colors.dark ? Colors.black : Colors.black,
-                    width: 8,
-                  ),
-            boxShadow: [
-              if (MediaQuery.sizeOf(context).width >= 520)
-                const BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 34,
-                  offset: Offset(0, 18),
-                ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: MediaQuery.sizeOf(context).width < 520
-                ? BorderRadius.zero
-                : BorderRadius.circular(32),
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 }
@@ -2606,10 +1781,22 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'CIRCUM BUSINESS INVOICE',
       displayNumber,
       '',
+      ...businessInvoiceIdentityLines(invoice),
+      '',
       'Status: $status',
       'Issued: $issued',
       'Due: $due',
+      'Bill to: ${invoice['businessName'] ?? 'Business account'}',
+      if ('${invoice['billingEmail'] ?? ''}'.trim().isNotEmpty)
+        'Billing email: ${invoice['billingEmail']}',
       '',
+      if (invoice['lineItems'] is List) ...[
+        'Items',
+        for (final item in invoice['lineItems'] as List)
+          if (item is Map)
+            '${item['description'] ?? 'Business service'}: GBP ${_pdfMoney(item['amount'])}',
+        '',
+      ],
       'Summary',
       'Total: GBP $total',
       'Paid: GBP $paid',
@@ -2625,7 +1812,7 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
       'This copy is provided for business records and may be printed or saved as PDF.',
     ],
     title: 'CIRCUM BUSINESS INVOICE',
-    sectionTitles: const {'Summary', 'Payment', 'Records'},
+    sectionTitles: const {'Items', 'Summary', 'Payment', 'Records'},
   );
 }
 
@@ -2770,7 +1957,7 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                     icon: const Icon(Icons.menu_book_outlined),
                     label: const Text('Read Charter'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 22,
@@ -2890,24 +2077,6 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
           ),
           const SizedBox(height: 18),
         ],
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Future rank data'),
-              const SizedBox(height: 10),
-              Text(
-                'This layout can later attach delivery requirements, profit-share percentages, badges, benefits, and promotion criteria to each rank without redesigning the Riders page.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -3188,7 +2357,7 @@ class _RiderPortalTabs extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xff030712),
+        color: colors.appBackground,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
@@ -3201,10 +2370,10 @@ class _RiderPortalTabs extends StatelessWidget {
                 avatar: Icon(_riderTabIcon(tab), size: 18),
                 label: Text(_riderTabLabel(tab)),
                 onSelected: (_) => onSelected(tab),
-                selectedColor: const Color(0xff2563eb),
-                backgroundColor: const Color(0xff111827),
+                selectedColor: colors.action,
+                backgroundColor: colors.field,
                 labelStyle: TextStyle(
-                  color: Colors.white,
+                  color: selected == tab ? colors.inverseText : colors.text,
                   fontWeight: FontWeight.w900,
                 ),
                 side: BorderSide(
@@ -3443,7 +2612,7 @@ class _RiderReferralsTabState extends State<_RiderReferralsTab> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xff0b1730),
+                  color: colors.field,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xff2563eb)),
                 ),
@@ -3623,6 +2792,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void initState() {
     super.initState();
+    _signupMode = Uri.base.queryParameters['access'] != 'login';
     for (final controller in [
       _withdrawAmount,
       _bankName,
@@ -3911,24 +3081,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
     try {
       await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'rider');
       if (!mounted) return;
       setState(
-        () => _authMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _authMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _authMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum Rider account found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _authMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(
@@ -5975,7 +5135,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   @override
   Widget build(BuildContext context) {
-    const colors = _CircumColors(true);
+    final colors = widget.colors;
     return Stack(
       children: [
         LayoutBuilder(
@@ -6019,7 +5179,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               34,
                             ),
                             children: [
-                              _RiderPublicIntro(colors: colors),
+                              _RiderPublicIntro(colors: colors, onboarding: Uri.base.path == '/rider/onboarding'),
                               const SizedBox(height: 14),
                               _RiderAccessPanel(
                                 colors: colors,
@@ -6087,7 +5247,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 class _RiderPublicIntro extends StatelessWidget {
   final _CircumColors colors;
 
-  const _RiderPublicIntro({required this.colors});
+  final bool onboarding;
+  const _RiderPublicIntro({required this.colors, this.onboarding = false});
 
   @override
   Widget build(BuildContext context) {
@@ -6097,7 +5258,7 @@ class _RiderPublicIntro extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Earn with Circum.',
+            onboarding ? 'Start your Rider onboarding.' : 'Earn with Circum.',
             style: TextStyle(
               color: colors.text,
               fontSize: 34,
@@ -6107,7 +5268,9 @@ class _RiderPublicIntro extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a Circum Rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
+            onboarding
+                ? 'Step 1: create your Rider account. Then verify your email, complete your application and upload your required documents for review. Already have an account? Sign in to continue your onboarding.'
+                : 'Create a Circum Rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.45,
@@ -6181,7 +5344,7 @@ class _RiderAccessPanel extends StatelessWidget {
         children: [
           _SectionTitle(
             colors: colors,
-            title: signedIn ? 'Circum Rider account' : 'Circum Rider sign in',
+            title: signedIn ? 'Circum Rider account' : signupMode ? 'Create your Rider account' : 'Circum Rider sign in',
           ),
           const SizedBox(height: 10),
           Text(
@@ -6232,7 +5395,7 @@ class _RiderAccessPanel extends StatelessWidget {
                               : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
@@ -6368,9 +5531,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xff0f172a),
+                color: colors.field,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xff26334d)),
+                border: Border.all(color: colors.border),
               ),
               child: Text(
                 note,
@@ -6599,7 +5762,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
               : const Icon(Icons.two_wheeler),
           label: Text(submitting ? 'Sending...' : 'Send rider application'),
           style: FilledButton.styleFrom(
-            backgroundColor: colors.text,
+            backgroundColor: colors.action,
             foregroundColor: colors.inverseText,
             padding: const EdgeInsets.symmetric(vertical: 17),
             shape: RoundedRectangleBorder(
@@ -6705,7 +5868,7 @@ class _RiderWorkspace extends StatelessWidget {
     final signedIn = user != null;
     final compact = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      color: const Color(0xff030712),
+      color: colors.appBackground,
       padding: EdgeInsets.fromLTRB(
         compact ? 16 : 28,
         compact ? 18 : 28,
@@ -7007,7 +6170,7 @@ class _RiderWorkspace extends StatelessWidget {
                           : 'Request withdrawal',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
+                      backgroundColor: colors.action,
                       foregroundColor: colors.inverseText,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -7174,9 +6337,9 @@ class _RiderDocumentStatusList extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xff0f172a),
+              color: colors.field,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xff26334d)),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
@@ -7385,7 +6548,7 @@ class _AccountSecurityPanel extends StatelessWidget {
                   : const Icon(Icons.password),
               label: const Text('Change password'),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -8418,7 +7581,7 @@ class _RiderStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xff111827),
+        color: colors.panel,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xff253047)),
       ),
@@ -8748,6 +7911,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderReferralCode.text = normalizeSignupReferral(widget.referralCode!);
       _senderSignupMode = true;
     }
+    if (kIsWeb &&
+        widget.initialStep == _SenderStep.dashboard &&
+        Uri.base.queryParameters['start'] == 'delivery') {
+      final draft = takeLandingBookingDraft();
+      if (draft != null) {
+        _pickup.text = draft.pickup;
+        _dropoff.text = draft.destination;
+        _step = _SenderStep.details;
+      }
+    }
     _weight.addListener(_handleWeightChanged);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
@@ -8806,8 +7979,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           setState(() {
             _step = _SenderStep.profile;
             _senderProfileTab = 1;
-            _senderProfileMessage =
-                'This conversation is no longer available.';
+            _senderProfileMessage = 'This conversation is no longer available.';
           });
         }
         return true;
@@ -8917,9 +8089,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = widget.colors;
+    final serviceAccess = _senderUser == null &&
+        (_step == _SenderStep.business || _step == _SenderStep.healthPlus);
+    final colors = serviceAccess ? const _CircumColors(true) : widget.colors;
+    if (!_senderAuthLoading && _senderUser == null && !serviceAccess) {
+      return _buildCurrentStep(colors);
+    }
     return Stack(
       children: [
+        if (serviceAccess)
+          const Positioned.fill(child: ColoredBox(color: Color(0xff030506))),
         LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= _desktopWebBreakpoint;
@@ -8927,13 +8106,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               children: [
                 _PortalHeader(
                   colors: colors,
-                  darkMode: widget.darkMode,
+                  darkMode: colors.dark,
                   onBack: widget.onBack,
-                  onToggleTheme: widget.onToggleTheme,
+                  onToggleTheme: serviceAccess ? null : widget.onToggleTheme,
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
-                  child: desktop
+                  child: desktop && _senderUser != null
                       ? _DesktopPortalLayout(
                           colors: colors,
                           pickup: _pickup.text,
@@ -8960,7 +8139,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           child: _buildCurrentStep(colors),
                         )
                       : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                          padding: serviceAccess
+                              ? const EdgeInsets.only(bottom: 90)
+                              : const EdgeInsets.fromLTRB(18, 18, 18, 90),
                           child: _buildAnimatedStep(colors),
                         ),
                 ),
@@ -9002,21 +8183,52 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_senderUser == null) {
-      return _SenderAccessGate(
-        colors: colors,
+      if (_step == _SenderStep.business || _step == _SenderStep.healthPlus) {
+        return _SenderAccessGate(
+          colors: colors,
+          service: _step,
+          signupMode: _senderSignupMode,
+          busy: _senderAuthBusy,
+          message: _senderProfileMessage,
+          email: _senderEmail,
+          password: _senderPassword,
+          fullName: _senderName,
+          phone: _senderPhone,
+          referralCode: _senderReferralCode,
+          onToggleMode: () => setState(() => _senderSignupMode = !_senderSignupMode),
+          onSignIn: _signInSender,
+          onSignUp: _signUpSender,
+          onForgotPassword: _sendSenderPasswordReset,
+        );
+      }
+      return AccountAccessPage(
         signupMode: _senderSignupMode,
         busy: _senderAuthBusy,
-        message: _senderProfileMessage,
+        message: _senderProfileMessage ??
+            (_step == _SenderStep.details &&
+                    _pickup.text.isNotEmpty &&
+                    _dropoff.text.isNotEmpty
+                ? 'Your route is ready: ${_pickup.text} → ${_dropoff.text}. Sign in to confirm your addresses and parcel details, then see your price.'
+                : null),
         email: _senderEmail,
         password: _senderPassword,
         fullName: _senderName,
         phone: _senderPhone,
         referralCode: _senderReferralCode,
-        onToggleMode: () =>
-            setState(() => _senderSignupMode = !_senderSignupMode),
-        onSignIn: _signInSender,
+        onToggleMode: () => setState(() {
+          _senderSignupMode = !_senderSignupMode;
+          _senderProfileMessage = null;
+        }),
+        onLogIn: _signInSender,
         onSignUp: _signUpSender,
         onForgotPassword: _sendSenderPasswordReset,
+        onBack: widget.onBack,
+        onPrivacy: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
+            webOnlyWindowName: '_self')),
+        onTerms: () => unawaited(launchUrl(
+            _CircumWebsiteAppState._canonicalWebUri('/terms'),
+            webOnlyWindowName: '_self')),
       );
     }
     if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
@@ -10325,51 +9537,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           error = null;
                         });
                         try {
-                          if (Env.stripePublishableKey.trim().isEmpty) {
-                            throw StateError(
-                              'Stripe publishable key is not configured.',
-                            );
+                          final paid = await WebsiteAdjustmentCheckout.pay(adjustmentId);
+                          if (!paid) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() {
+                                busy = false;
+                                error = 'Complete secure checkout, then return here to check your payment.';
+                              });
+                            }
+                            return;
                           }
-                          Stripe.publishableKey = Env.stripePublishableKey;
-                          await Stripe.instance.applySettings();
-                          final data = await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'createDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
-                          await Stripe.instance
-                              .initPaymentSheet(
-                                paymentSheetParameters:
-                                    SetupPaymentSheetParameters(
-                                  paymentIntentClientSecret:
-                                      '${data['clientSecret']}',
-                                  merchantDisplayName: 'Circum Technologies',
-                                  style: ThemeMode.dark,
-                                ),
-                              )
-                              .timeout(const Duration(seconds: 20));
-                          await Stripe.instance.presentPaymentSheet().timeout(
-                                const Duration(seconds: 90),
-                              );
-                          await WebsiteProductionPaymentApi.call(
-                            'delivery_adjustments',
-                            'finalizeDeliveryAdjustmentPayment',
-                            {'adjustmentId': adjustmentId},
-                          );
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
                           final uid = _senderUser?.uid;
                           if (uid != null) await _loadSenderDeliveries(uid);
                         } catch (exception) {
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             busy = false;
                             error = exception is FirebaseFunctionsException
                                 ? exception.message
-                                : 'Payment was not completed. Please try again.';
+                                : 'Payment is not confirmed yet. Check its status before starting another payment.';
                           });
                         }
                       },
-                child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+                child: Text(busy ? 'Please wait...' : 'Pay or check payment'),
               ),
           ],
         ),
@@ -10664,24 +9856,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: email)
-          .timeout(webAuthOperationTimeout);
+      await requestCircumPasswordReset(email: email, application: 'sender');
       if (!mounted) return;
       setState(
-        () => _senderProfileMessage =
-            'Password reset sent. Check your email and follow the secure link.',
+        () => _senderProfileMessage = passwordRecoveryAcknowledgement,
       );
-    } on FirebaseAuthException catch (error) {
+    } on PasswordRecoveryException catch (error) {
       if (!mounted) return;
-      setState(
-        () => _senderProfileMessage = switch (error.code) {
-          'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum profile found for that email.',
-          _ =>
-            'We could not send the reset email. Check the address and try again.',
-        },
-      );
+      setState(() => _senderProfileMessage = error.message);
     } on TimeoutException {
       if (!mounted) return;
       setState(
@@ -11410,7 +10592,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'businessId': businessId,
           'invoiceId': invoiceId,
           'useRoth': useRoth,
-          'returnUrl': 'https://circumuk.com/?app=business',
+          'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
         },
       );
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -11464,7 +10646,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'businessId': businessId,
         'amount': rawAmount,
         'idempotencyKey': _businessRothCheckoutKey,
-        'returnUrl': 'https://circumuk.com/?app=business',
+        'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.business).toString(),
       }).timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -12608,7 +11790,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'checkoutMode': 'web_checkout',
             'requestId': id,
             'idempotencyKey': id,
-            'returnUrl': 'https://circum-2797c.web.app/send',
+            'returnUrl': websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.sender).toString(),
             'deliveryPayload': deliveryPayload,
           });
           session = Map<String, dynamic>.from(sessionResult.data as Map);
@@ -13004,16 +12186,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required HealthPlusPriceBreakdown quote,
   }) async {
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final response = await http.post(
-        Uri.parse(
-          'https://circum-health-plus-payments-j2b7cicfwq-uc.a.run.app/createHealthPlusCheckoutSession',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      return await WebsiteProductionPaymentApi.call(
+        'health_plus',
+        'createHealthPlusCheckoutSession',
+        {
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _healthEmail.text.trim(),
@@ -13025,16 +12201,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
-              'https://circum-2797c.web.app/send/health?health=success',
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthSuccess).toString(),
           'cancelUrl':
-              'https://circum-2797c.web.app/send/health?health=cancelled',
-        }),
+              websiteCheckoutReturn(Uri.base, WebsiteCheckoutReturn.healthCancelled).toString(),
+        },
+        callable: false,
       );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data;
     } catch (_) {
       return null;
     }
@@ -14593,6 +13765,7 @@ class _RouteLine extends StatelessWidget {
 
 class _SenderAccessGate extends StatelessWidget {
   final _CircumColors colors;
+  final _SenderStep? service;
   final bool signupMode;
   final bool busy;
   final String? message;
@@ -14608,6 +13781,7 @@ class _SenderAccessGate extends StatelessWidget {
 
   const _SenderAccessGate({
     required this.colors,
+    this.service,
     required this.signupMode,
     required this.busy,
     required this.message,
@@ -14624,126 +13798,199 @@ class _SenderAccessGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: _GlassPanel(
-          colors: colors,
+    final colors = service == null ? this.colors : const _CircumColors(true);
+    final health = service == _SenderStep.healthPlus;
+    final accent = health ? const Color(0xffd2f6ee) : const Color(0xffc6d4e8);
+    final formContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(
+            colors: colors,
+            title: signupMode
+                ? 'Create a Circum account'
+                : service != null
+                    ? 'Sign in to ${health ? 'Health+' : 'Circum Business'}'
+                    : 'Circum login',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            signupMode
+                ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
+                : service != null
+                    ? 'Use your Circum account to continue. Your existing account works here.'
+                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (signupMode) ...[
+            _InputBox(
+              colors: colors,
+              controller: fullName,
+              hint: 'Full name',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: phone,
+              hint: 'Phone number',
+            ),
+            const SizedBox(height: 10),
+          ],
+          _InputBox(
+            colors: colors,
+            controller: email,
+            hint: 'Email address',
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: password,
+            hint: 'Password',
+            obscureText: true,
+          ),
+          if (signupMode) ...[
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: referralCode,
+              hint: 'Referral code (optional)',
+            ),
+            const Text(
+              'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
+            ),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: busy ? null : onForgotPassword,
+              child: const Text('Forgot Password?'),
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              message!,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(builder: (context, constraints) {
+            final primary = FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : signupMode
+                      ? onSignUp
+                      : onSignIn,
+              icon: busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_open),
+              label: Text(
+                busy
+                    ? 'Please wait'
+                    : signupMode
+                        ? 'Create account'
+                        : 'Sign in',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: service != null
+                    ? accent
+                    : colors.dark
+                        ? const Color(0xffa9bfff)
+                        : _landingBlue,
+                foregroundColor: colors.dark ? _landingInk : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            );
+            final toggle = TextButton(
+              onPressed: busy ? null : onToggleMode,
+              child: Text(signupMode ? 'Sign in' : 'Sign up'),
+            );
+            if (constraints.maxWidth < 280) {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [primary, const SizedBox(height: 8), toggle]);
+            }
+            return Row(children: [
+              Expanded(child: primary),
+              const SizedBox(width: 10),
+              toggle
+            ]);
+          }),
+        ],
+    );
+    if (service != null) {
+      return ServiceAccessFrame(health: health, child: formContent);
+    }
+    final form = _GlassPanel(colors: colors, child: formContent);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final welcome = Padding(
+          padding: EdgeInsets.all(wide ? 40 : 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(
-                colors: colors,
-                title: signupMode ? 'Create a Circum account' : 'Circum login',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                signupMode
-                    ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (signupMode) ...[
-                _InputBox(
-                  colors: colors,
-                  controller: fullName,
-                  hint: 'Full name',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: phone,
-                  hint: 'Phone number',
-                ),
-                const SizedBox(height: 10),
-              ],
-              _InputBox(
-                colors: colors,
-                controller: email,
-                hint: 'Email address',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: password,
-                hint: 'Password',
-                obscureText: true,
-              ),
-              if (signupMode) ...[
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: referralCode,
-                  hint: 'REFERRAL CODE (OPTIONAL)',
-                ),
-                const Text(
-                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.',
-                ),
-              ],
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: busy ? null : onForgotPassword,
-                  child: const Text('Forgot Password?'),
-                ),
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  message!,
+              Text('MOVE WHAT MATTERS',
                   style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy
-                          ? null
-                          : signupMode
-                              ? onSignUp
-                              : onSignIn,
-                      icon: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_open),
-                      label: Text(
-                        busy
-                            ? 'Please wait'
-                            : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.text,
-                        foregroundColor: colors.inverseText,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  TextButton(
-                    onPressed: busy ? null : onToggleMode,
-                    child: Text(signupMode ? 'Sign in' : 'Sign up'),
-                  ),
-                ],
+                      color: colors.adminAccent,
+                      fontSize: 13,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xff007d87),
+                    Color(0xff2455f5),
+                    Color(0xff7937c8),
+                    Color(0xffc32e79)
+                  ],
+                ).createShader(bounds),
+                child: Text(
+                    signupMode
+                        ? 'Your next move\nstarts here.'
+                        : 'Welcome back.\nLet’s get moving.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'D-DIN-Bold',
+                        fontSize: wide ? 62 : 38,
+                        height: 1.02,
+                        fontWeight: FontWeight.w800)),
               ),
+              const SizedBox(height: 24),
+              Text(
+                  'Parcels, thoughtful gifts and everyday essentials. All in one place.',
+                  style: TextStyle(
+                      color: colors.mutedText, fontSize: 18, height: 1.5)),
             ],
           ),
-        ),
-      ),
+        );
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: wide
+                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(child: welcome),
+                    const SizedBox(width: 48),
+                    Expanded(child: form)
+                  ])
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [welcome, const SizedBox(height: 28), form]),
+          ),
+        );
+      },
     );
   }
 }
@@ -14839,7 +14086,7 @@ class _RoleChoiceButton extends StatelessWidget {
         icon: Icon(icon),
         label: Text(label),
         style: FilledButton.styleFrom(
-          backgroundColor: colors.text,
+          backgroundColor: colors.action,
           foregroundColor: colors.inverseText,
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
@@ -15550,7 +14797,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                 icon: Icon(Icons.arrow_back, color: colors.text),
               ),
               const SizedBox(width: 4),
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM · BUSINESS',
                 style: TextStyle(
                   color: colors.mutedText,
@@ -15558,7 +14805,7 @@ class _BusinessSenderSuiteHeader extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.4,
                 ),
-              ),
+              )),
               const Spacer(),
               IconButton(
                 tooltip: 'Refresh Business',
@@ -15922,7 +15169,7 @@ class _BusinessOperationalPill extends StatelessWidget {
       case _BusinessTone.blue:
         return const Color(0xff3b82f6);
       case _BusinessTone.roth:
-        return const Color(0xffc9a227);
+        return colors.dark ? const Color(0xff90a8cb) : const Color(0xff526b8e);
       case _BusinessTone.neutral:
         return colors.mutedText;
     }
@@ -17041,7 +16288,11 @@ class _BusinessStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final valueColor =
-        tone == _BusinessTone.roth ? const Color(0xffc9a227) : colors.text;
+        tone == _BusinessTone.roth
+            ? colors.dark
+                ? const Color(0xff90a8cb)
+                : const Color(0xff526b8e)
+            : colors.text;
     return _BusinessSurface(
       colors: colors,
       padding: const EdgeInsets.all(14),
@@ -18955,7 +18206,7 @@ class _PortalHeader extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
+  final VoidCallback? onToggleTheme;
   final VoidCallback? onProfile;
 
   const _PortalHeader({
@@ -18984,12 +18235,12 @@ class _PortalHeader extends StatelessWidget {
               icon: Icon(Icons.arrow_back, color: colors.text),
             ),
             const SizedBox(width: 8),
-            Image.asset(
+            CircumHomeLink(child: Image.asset(
               'assets/images/circum_wordmark.png',
               width: 116,
               height: 28,
               fit: BoxFit.contain,
-            ),
+            )),
             const Spacer(),
             if (onProfile != null)
               IconButton(
@@ -18997,7 +18248,7 @@ class _PortalHeader extends StatelessWidget {
                 onPressed: onProfile,
                 icon: Icon(Icons.account_circle_outlined, color: colors.text),
               ),
-            IconButton(
+            if (onToggleTheme != null) IconButton(
               tooltip: darkMode ? 'Light mode' : 'Dark mode',
               onPressed: onToggleTheme,
               icon: Icon(
@@ -19561,7 +18812,7 @@ class _DetailsStep extends StatelessWidget {
                 : const Icon(Icons.auto_awesome),
             label: Text(ctaLabel),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               disabledBackgroundColor: colors.text.withValues(alpha: 0.45),
               shape: RoundedRectangleBorder(
@@ -19760,15 +19011,15 @@ class _HealthPlusStepState extends State<_HealthPlusStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              CircumHomeLink(child: Text(
                 'CIRCUM',
                 style: TextStyle(
                   color: const Color(0xff2fae8c),
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  fontFamily: 'serif',
+                  fontFamily: 'D-DIN-Bold',
                 ),
-              ),
+              )),
               const SizedBox(height: 4),
               Text(
                 'HEALTH+ - GUIDED PICKUP',
@@ -21777,8 +21028,9 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         color: colors.text,
-        fontSize: 18,
-        fontWeight: FontWeight.w900,
+        fontSize: 24,
+        fontFamily: 'D-DIN-Bold',
+        fontWeight: FontWeight.w700,
       ),
     );
   }
@@ -22040,7 +21292,7 @@ class _VehicleStep extends StatelessWidget {
           child: FilledButton(
             onPressed: canContinue ? onContinue : null,
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -22579,7 +21831,7 @@ class _PaymentStep extends StatelessWidget {
                           : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -22834,7 +22086,7 @@ class _WebDeliveryStatusHeader extends StatelessWidget {
             'Delivery status',
             style: TextStyle(
               color: colors.text,
-              fontFamily: 'DM Serif Display',
+              fontFamily: 'D-DIN-Bold',
               fontSize: 30,
               height: 1.15,
               fontWeight: FontWeight.w400,
@@ -22895,10 +22147,10 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 height: 9,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xff60a5fa),
+                  color: Theme.of(context).colorScheme.primary,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xff60a5fa).withValues(alpha: 0.55),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.55),
                       blurRadius: 12,
                       spreadRadius: 4,
                     ),
@@ -22914,8 +22166,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xfff5f7fb),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -22923,8 +22175,8 @@ class _WebDeliveryStatusCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   body,
-                  style: const TextStyle(
-                    color: Color(0xff9ca3af),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                     height: 1.35,
                     fontWeight: FontWeight.w500,
@@ -22958,13 +22210,13 @@ class _WebDeliveryRouteCard extends StatelessWidget {
           _WebDeliveryRouteRow(
             label: 'Pickup',
             value: pickup,
-            accent: const Color(0xff60a5fa),
+            accent: Theme.of(context).colorScheme.primary,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
             child: Divider(
               height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
           _WebDeliveryRouteRow(
@@ -23014,8 +22266,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
             children: [
               Text(
                 label.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xff9ca3af),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontFamily: 'JetBrains Mono',
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
@@ -23027,8 +22279,8 @@ class _WebDeliveryRouteRow extends StatelessWidget {
                 value,
                 style: TextStyle(
                   color: pending
-                      ? const Color(0xff9ca3af)
-                      : const Color(0xfff5f7fb),
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurface,
                   fontSize: 15,
                   height: 1.35,
                   fontWeight: pending ? FontWeight.w400 : FontWeight.w600,
@@ -23064,10 +22316,10 @@ class _WebDeliveryPriceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Price breakdown',
             style: TextStyle(
-              color: Color(0xfff5f7fb),
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -23107,7 +22359,7 @@ class _WebDeliveryPriceCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 7),
-            child: Divider(color: Colors.white.withValues(alpha: 0.10)),
+            child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           _WebDeliveryPriceLine(
             label: 'Total',
@@ -23142,7 +22394,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
               label,
               style: TextStyle(
                 color:
-                    strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+                    strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: strong ? 16 : 13.5,
                 fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -23151,7 +22403,7 @@ class _WebDeliveryPriceLine extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+              color: strong ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
               fontFamily: 'JetBrains Mono',
               fontSize: strong ? 16 : 13.5,
               fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
@@ -23182,17 +22434,17 @@ class _WebDeliveryInfoBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.info_outline_rounded,
-            color: Color(0xff60a5fa),
+            color: Theme.of(context).colorScheme.primary,
             size: 18,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Color(0xff60a5fa),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
                 fontSize: 13,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
@@ -23216,9 +22468,9 @@ class _WebDeliveryPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       decoration: BoxDecoration(
-        color: const Color(0xfff5f7fb).withValues(alpha: 0.055),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: child,
     );
@@ -23788,7 +23040,7 @@ class _ChatSheet extends StatelessWidget {
                         onPressed: onSend,
                         icon: const Icon(Icons.send),
                         style: IconButton.styleFrom(
-                          backgroundColor: colors.text,
+                          backgroundColor: colors.action,
                           foregroundColor: colors.inverseText,
                         ),
                       ),
@@ -23798,161 +23050,6 @@ class _ChatSheet extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniMap extends StatelessWidget {
-  final _CircumColors colors;
-  final bool active;
-
-  const _MiniMap({required this.colors, required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.65,
-      child: CustomPaint(
-        painter: _MapPainter(colors: colors, active: active),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 22,
-              bottom: 20,
-              child: _MapPin(colors: colors, label: 'Pickup'),
-            ),
-            Positioned(
-              right: 24,
-              top: 22,
-              child: _MapPin(colors: colors, label: 'Drop-off'),
-            ),
-            Positioned(
-              left: active ? 175 : 132,
-              top: active ? 78 : 98,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xff2563eb),
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x552563eb),
-                      blurRadius: 18,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.two_wheeler,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MapPainter extends CustomPainter {
-  final _CircumColors colors;
-  final bool active;
-
-  _MapPainter({required this.colors, required this.active});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final background = Paint()
-      ..shader = LinearGradient(
-        colors: colors.dark
-            ? [const Color(0xff111827), const Color(0xff1e293b)]
-            : [const Color(0xffeff6ff), const Color(0xfff8fafc)],
-      ).createShader(Offset.zero & size);
-    final rect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      const Radius.circular(24),
-    );
-    canvas.drawRRect(rect, background);
-
-    final road = Paint()
-      ..color = colors.dark ? const Color(0xff334155) : const Color(0xffffffff)
-      ..strokeWidth = 18
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path()
-      ..moveTo(size.width * 0.06, size.height * 0.78)
-      ..quadraticBezierTo(
-        size.width * 0.28,
-        size.height * 0.46,
-        size.width * 0.48,
-        size.height * 0.58,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.68,
-        size.height * 0.70,
-        size.width * 0.90,
-        size.height * 0.18,
-      );
-    canvas.drawPath(path, road);
-
-    final route = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: _spectrumGradient,
-      ).createShader(Offset.zero & size)
-      ..strokeWidth = 5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, route);
-
-    final grid = Paint()
-      ..color = colors.dark
-          ? Colors.white.withValues(alpha: 0.04)
-          : Colors.black.withValues(alpha: 0.04)
-      ..strokeWidth = 1;
-    for (double x = 30; x < size.width; x += 52) {
-      canvas.drawLine(Offset(x, 0), Offset(x - 40, size.height), grid);
-    }
-    for (double y = 24; y < size.height; y += 48) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 28), grid);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapPainter oldDelegate) {
-    return oldDelegate.colors.dark != colors.dark ||
-        oldDelegate.active != active;
-  }
-}
-
-class _MapPin extends StatelessWidget {
-  final _CircumColors colors;
-  final String label;
-
-  const _MapPin({required this.colors, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: colors.panel.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.border),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: colors.text,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -25008,7 +24105,8 @@ class _InputBox extends StatelessWidget {
       enabled: enabled,
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
       decoration: InputDecoration(
-        hintText: hint,
+        labelText: hint,
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
         hintStyle: TextStyle(color: colors.mutedText),
         filled: true,
         fillColor: colors.field,
@@ -25017,8 +24115,8 @@ class _InputBox extends StatelessWidget {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
     );
@@ -26353,7 +25451,7 @@ class _DriverRatingPrompt extends StatelessWidget {
                         : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: colors.text,
+                backgroundColor: colors.action,
                 foregroundColor: colors.inverseText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -26515,7 +25613,7 @@ class _CompletedDeliveryActions extends StatelessWidget {
             icon: const Icon(Icons.add_box_outlined),
             label: const Text('Book another delivery'),
             style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
+              backgroundColor: colors.action,
               foregroundColor: colors.inverseText,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
@@ -26615,32 +25713,16 @@ class _GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.96),
-            colors.adminAccent.withValues(alpha: colors.dark ? 0.10 : 0.06),
-            colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.94),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+        color: colors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: colors.dark ? 0.18 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: colors.adminGlow.withValues(
-              alpha: colors.dark ? 0.12 : 0.08,
-            ),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
+              color: Colors.black.withValues(alpha: colors.dark ? 0.16 : 0.035),
+              blurRadius: 24,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: child,
@@ -26692,550 +25774,6 @@ class _MetricPill extends StatelessWidget {
   }
 }
 
-class _LogoTile extends StatelessWidget {
-  final _CircumColors colors;
-
-  const _LogoTile({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: colors.text,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Icon(Icons.all_inclusive, color: colors.inverseText),
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  final String label;
-  final Uri uri;
-  final IconData icon;
-  final bool dark;
-  final VoidCallback onPressed;
-
-  const _PillButton({
-    required this.label,
-    required this.uri,
-    required this.icon,
-    required this.dark,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Link(
-      uri: uri,
-      target: LinkTarget.self,
-      builder: (context, followLink) {
-        return FilledButton.icon(
-          onPressed: followLink ?? onPressed,
-          icon: Icon(icon),
-          label: Text(label),
-          style: FilledButton.styleFrom(
-            backgroundColor: dark ? Colors.black : const Color(0xfff3f4f6),
-            foregroundColor: dark ? Colors.white : Colors.black,
-            shape: const StadiumBorder(),
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-            textStyle: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _VanguardLandingPage extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onBack;
-
-  const _VanguardLandingPage({
-    super.key,
-    required this.colors,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Scaffold(
-      backgroundColor: const Color(0xff030812),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.78),
-                    radius: 1.08,
-                    colors: [
-                      const Color(0xff0b3764).withValues(alpha: 0.74),
-                      const Color(0xff07192f).withValues(alpha: 0.93),
-                      const Color(0xff030812),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            ListView(
-              padding: EdgeInsets.fromLTRB(
-                narrow ? 22 : 40,
-                narrow ? 42 : 30,
-                narrow ? 22 : 40,
-                72,
-              ),
-              children: [
-                Row(
-                  children: [
-                    if (!narrow) ...[
-                      IconButton(
-                        tooltip: 'Back',
-                        onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Image.asset(
-                      'assets/images/circum_wordmark.png',
-                      width: narrow ? 142 : 154,
-                      errorBuilder: (context, error, stackTrace) => const Text(
-                        'CIRCUM',
-                        style: TextStyle(
-                          color: Color(0xff0a84ff),
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 3,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: narrow ? 118 : 64),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 860),
-                    child: Column(
-                      children: [
-                        const _VanguardShieldFallback(size: 148),
-                        const SizedBox(height: 54),
-                        Text(
-                          'Vanguard',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Georgia',
-                            fontSize: narrow ? 68 : 88,
-                            height: 0.96,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Vanguard gives your delivery enhanced\nhandling, priority support, trusted Circum Rider\nprioritisation, and stronger custody tracking\nfor important items.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.73),
-                            fontSize: narrow ? 26 : 30,
-                            height: 1.55,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        Text(
-                          'Optional add-on at checkout — £1.99',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: narrow ? 20 : 23,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: narrow ? 88 : 78),
-                        Text(
-                          'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'Georgia',
-                            fontSize: narrow ? 45 : 62,
-                            height: 1.18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 46),
-                        _VanguardFeatureCard(
-                          icon: Icons.verified_user_outlined,
-                          title: 'Trusted Rider Prioritisation',
-                          body:
-                              'Circum prioritises experienced and highly trusted Circum Riders during assignment. Customers do not choose Circum Riders.',
-                        ),
-                        const SizedBox(height: 24),
-                        _VanguardFeatureCard(
-                          icon: Icons.support_agent,
-                          title: 'Priority support',
-                          body:
-                              'Vanguard deliveries receive priority support and dispute review.',
-                        ),
-                        const SizedBox(height: 24),
-                        _VanguardFeatureCard(
-                          icon: Icons.timeline_outlined,
-                          title: 'Enhanced custody tracking',
-                          body:
-                              'Clearer delivery milestones create stronger visibility from assignment to delivery.',
-                        ),
-                        const SizedBox(height: 40),
-                        const _VanguardTimelineCard(),
-                        const SizedBox(height: 40),
-                        const _VanguardChecklistCard(
-                          title: 'When to use it',
-                          items: [
-                            'Gifts and keepsakes',
-                            'Signed documents',
-                            'Passports and travel documents',
-                            'Electronics and valuable items',
-                            'Fragile items',
-                            'Sentimental items',
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        const _VanguardChecklistCard(
-                          title: 'What £1.99 adds',
-                          items: [
-                            'Trusted Rider Prioritisation',
-                            'Priority support',
-                            'Enhanced custody tracking',
-                            'Priority dispute review',
-                            'Better handling for important items',
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        const _VanguardImportantCard(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VanguardShieldFallback extends StatelessWidget {
-  final double size;
-
-  const _VanguardShieldFallback({this.size = 170});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            const Color(0xff1e88ff).withValues(alpha: 0.22),
-            const Color(0xff1e3a8a).withValues(alpha: 0.12),
-            const Color(0xff0a84ff).withValues(alpha: 0.03),
-          ],
-        ),
-        border: Border.all(
-          color: const Color(0xff0a84ff).withValues(alpha: 0.5),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff0a84ff).withValues(alpha: 0.13),
-            blurRadius: 48,
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          Icons.shield_outlined,
-          size: size * 0.48,
-          color: const Color(0xff0a84ff),
-        ),
-      ),
-    );
-  }
-}
-
-class _VanguardFeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _VanguardFeatureCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
-      padding: EdgeInsets.all(narrow ? 30 : 34),
-      decoration: _vanguardCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: const Color(0xff0a84ff), size: 34),
-          const SizedBox(height: 28),
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: narrow ? 26 : 30,
-              height: 1.14,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            body,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: narrow ? 21 : 24,
-              height: 1.42,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardTimelineCard extends StatelessWidget {
-  const _VanguardTimelineCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    const steps = [
-      'Circum Rider assigned',
-      'Item collected',
-      'In transit',
-      'Delivery attempt',
-      'Delivered',
-    ];
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(darker: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Custody preview',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
-              fontSize: narrow ? 42 : 52,
-              height: 1.02,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 34),
-          ...List.generate(steps.length, (index) {
-            final last = index == steps.length - 1;
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xff0a84ff),
-                      ),
-                    ),
-                    if (!last)
-                      Container(
-                        width: 2,
-                        height: 48,
-                        color: const Color(0xff475569).withValues(alpha: 0.5),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 24),
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Text(
-                    steps[index],
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: narrow ? 22 : 26,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardChecklistCard extends StatelessWidget {
-  final String title;
-  final List<String> items;
-
-  const _VanguardChecklistCard({required this.title, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
-              fontSize: narrow ? 42 : 52,
-              height: 1.04,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 34),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.check_circle_outline,
-                    color: Color(0xff0a84ff),
-                    size: 28,
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
-                        fontSize: narrow ? 23 : 27,
-                        height: 1.18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VanguardImportantCard extends StatelessWidget {
-  const _VanguardImportantCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-        narrow ? 34 : 42,
-        narrow ? 44 : 48,
-      ),
-      decoration: _vanguardCardDecoration(darker: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Important',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Georgia',
-              fontSize: narrow ? 42 : 52,
-              height: 1.04,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: narrow ? 22 : 27,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-BoxDecoration _vanguardCardDecoration({bool darker = false}) {
-  return BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(darker ? 0xff101722 : 0xff102845).withValues(alpha: 0.86),
-        Color(darker ? 0xff0b1019 : 0xff0b1a2c).withValues(alpha: 0.92),
-      ],
-    ),
-    borderRadius: BorderRadius.circular(28),
-    border: Border.all(
-      color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
-      width: 1.4,
-    ),
-    boxShadow: [
-      BoxShadow(
-        color: const Color(0xff0a84ff).withValues(alpha: 0.08),
-        blurRadius: 34,
-        offset: const Offset(0, 18),
-      ),
-    ],
-  );
-}
-
 class _ComplianceSection {
   final String title;
   final String body;
@@ -27248,6 +25786,7 @@ class _CompliancePage extends StatelessWidget {
   final String intro;
   final List<_ComplianceSection> sections;
   final List<Widget> actions;
+  final bool colourPop;
 
   const _CompliancePage({
     required this.colors,
@@ -27255,89 +25794,124 @@ class _CompliancePage extends StatelessWidget {
     required this.intro,
     required this.sections,
     required this.actions,
+    this.colourPop = false,
   });
 
   @override
   Widget build(BuildContext context) => SelectionArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 820),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CIRCUM',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 42),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 38,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    intro,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontSize: 17,
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  ...sections.map(
-                    (section) => Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
-                          color: colors.panel,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.border),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: colourPop ? const EdgeInsets.all(28) : EdgeInsets.zero,
+                decoration: colourPop
+                    ? BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [_landingBlue, Color(0xff173b95)],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              section.title,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              section.body,
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontSize: 15,
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
+                        borderRadius: BorderRadius.circular(24),
+                      )
+                    : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircumHomeLink(child: Text(
+                      'CIRCUM',
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                      ),
+                    )),
+                    SizedBox(height: colourPop ? 24 : 42),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.text,
+                        fontSize: 38,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  Wrap(spacing: 18, runSpacing: 12, children: actions),
-                ],
+                    const SizedBox(height: 18),
+                    Text(
+                      intro,
+                      style: TextStyle(
+                        color: colourPop ? Colors.white : colors.mutedText,
+                        fontSize: 17,
+                        height: 1.55,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 28),
+              ...sections.map(
+                (section) => Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: colors.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colourPop
+                            ? colors.action.withValues(alpha: .35)
+                            : colors.border,
+                      ),
+                      gradient: colourPop
+                          ? LinearGradient(
+                              colors: [
+                                colors.panel,
+                                Color.alphaBlend(
+                                  colors.action.withValues(alpha: .08),
+                                  colors.panel,
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          section.title,
+                          style: TextStyle(
+                            color: colourPop ? colors.action : colors.text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          section.body,
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Wrap(spacing: 18, runSpacing: 12, children: actions),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _AccountDeletionPage extends StatelessWidget {
@@ -27438,6 +26012,214 @@ class _SupportPage extends StatelessWidget {
       );
 }
 
+class _ContactUsPage extends StatefulWidget {
+  final _CircumColors colors;
+  const _ContactUsPage({super.key, required this.colors});
+
+  @override
+  State<_ContactUsPage> createState() => _ContactUsPageState();
+}
+
+class _ContactUsPageState extends State<_ContactUsPage> {
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _subject = TextEditingController();
+  final _message = TextEditingController();
+  String? _note;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _subject.dispose();
+    _message.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_sending) return;
+    final email = _email.text.trim();
+    final message = _message.text.trim();
+    if (_name.text.trim().isEmpty || !email.contains('@') || message.isEmpty) {
+      setState(() => _note = 'Add your name, a valid email, and a message.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _note = 'Sending your message...';
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitWebsiteContactEmail').call({
+        'name': _name.text.trim(),
+        'email': email,
+        'subject': _subject.text.trim(),
+        'message': message,
+      });
+      if (!mounted) return;
+      _name.clear();
+      _email.clear();
+      _subject.clear();
+      _message.clear();
+      setState(() => _note = 'Your message has been sent. We’ll be in touch.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _note = 'We could not send your message. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CONTACT CIRCUM',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'We’re here to help.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Send us a message about your account, a delivery, or anything else.',
+                  style: TextStyle(color: colors.mutedText, fontSize: 16),
+                ),
+                const SizedBox(height: 28),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: colors.panel,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final narrow = constraints.maxWidth < 520;
+                          final name = _LiveChatField(
+                            colors: colors,
+                            controller: _name,
+                            label: 'Your name',
+                            icon: Icons.person_outline,
+                          );
+                          final email = _LiveChatField(
+                            colors: colors,
+                            controller: _email,
+                            label: 'Email address',
+                            icon: Icons.alternate_email,
+                          );
+                          return narrow
+                              ? Column(
+                                  children: [
+                                    name,
+                                    const SizedBox(height: 14),
+                                    email,
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Expanded(child: name),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: email),
+                                  ],
+                                );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _LiveChatField(
+                        colors: colors,
+                        controller: _subject,
+                        label: 'Subject (optional)',
+                        icon: Icons.short_text,
+                      ),
+                      const SizedBox(height: 14),
+                      _LiveChatField(
+                        colors: colors,
+                        controller: _message,
+                        label: 'How can we help?',
+                        icon: Icons.chat_bubble_outline,
+                        minLines: 5,
+                        maxLines: 8,
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _sending ? null : _send,
+                          icon: const Icon(Icons.email_outlined),
+                          label: const Text('Send message'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xff3b82f6),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                      if (_note != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_note!, style: TextStyle(color: colors.mutedText)),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    'Your message will be sent securely to the CIRCUM support team.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.mutedText, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: TextButton(
+                    onPressed: () => launchUrl(
+                      Uri.base.replace(
+                        path: '/',
+                        queryParameters: {},
+                        fragment: '',
+                      ),
+                      webOnlyWindowName: '_self',
+                    ),
+                    child: const Text('Back to CIRCUM'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PrivacyPolicyPage extends StatelessWidget {
   final _CircumColors colors;
   const _PrivacyPolicyPage({super.key, required this.colors});
@@ -27445,6 +26227,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _CompliancePage(
         colors: colors,
+        colourPop: true,
         title: 'Privacy Policy',
         intro:
             'Version 2.0. Effective 19 September 2026. This policy explains how Circum Technologies Ltd uses personal data across the Circum User and Circum Rider services, our websites, applications, and related delivery, payment, support, and communications services. All User and Rider account holders must be at least 18 years old.',
@@ -27463,7 +26246,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'How we obtain personal data',
-            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Firebase and Google Cloud, Google Maps, Stripe, Apple notification services, Firebase Cloud Messaging and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
+            'We receive personal data from you; from another User, Rider, recipient, business customer, or authorised user; automatically from websites, apps, devices, location and service events; from providers including Google (account, hosting, security and analytics services), Google Maps, Stripe, Apple notification services, Google push notification services and Resend; from authorities, advisers, insurers or verification providers where lawful; and from operational assessments created from these sources.',
           ),
           _ComplianceSection(
             'Why we use data and lawful bases',
@@ -27495,7 +26278,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Service messages push notifications and marketing',
-            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Firebase Cloud Messaging. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
+            'We send essential authentication, onboarding, delivery, tracking, payment, payout, support, safety and policy messages. If notifications are enabled, we process a device push token, account role and preferences, and use Apple Push Notification service and Google push notification services. Tokens are associated with their verified account owner. Essential communications may continue even if you opt out of marketing.',
           ),
           _ComplianceSection(
             'Newsletter and Resend',
@@ -27507,7 +26290,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Who we share data with',
-            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Firebase and Google Cloud; Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Firebase Cloud Messaging; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
+            'We share only what is reasonably necessary with the User, assigned Rider, recipient and authorised business users; Google (account, hosting, security and analytics services); Google Maps; Stripe and supported wallet providers; Apple Push Notification service and Google push notification services; Resend; enabled verification, communications, hosting, security, support, analytics or error-monitoring providers; advisers, auditors, insurers and banks; lawful authorities; and parties to a protected corporate transaction. Providers may act as processors or independent controllers. We do not sell personal data.',
           ),
           _ComplianceSection(
             'International transfers',
@@ -27584,19 +26367,19 @@ class _CookiePolicyPage extends StatelessWidget {
         sections: const [
           _ComplianceSection(
             'What we use',
-            'The website uses browser storage for your optional analytics preference. Strictly necessary browser and hosting technologies support page delivery, navigation, security, and requested functionality.',
+            'Necessary technologies support page delivery, security and sign-in through Google account and security services, including reCAPTCHA Enterprise. When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional analytics and marketing tracking stay off until you actively enable their respective switches.',
           ),
           _ComplianceSection(
             'Optional visitor analytics',
-            'If you choose Accept optional, the website may send a visit record containing the page, URL, query parameters, app mode, and, where you are signed in, the account context available to the service. This is used for visitor analytics and service improvement. It is off by default and is not required to browse the website.',
+            'Analytics sends a page visit record to Circum’s analytics service (provided by Google). This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Mailchimp (Intuit) connected-site marketing tracking is a separate optional purpose and may collect browser, device and visit information and use its own cookies or storage. Neither purpose is required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website tracking permission.',
           ),
           _ComplianceSection(
             'Storage and duration',
-            'The preference is stored in your browser under a CIRCUM preference key until you remove it, clear site data, or change your choice. The website does not claim a fixed duration for other strictly necessary browser or hosting technologies where the browser or provider controls that duration.',
+            'circum_public_cookie_preferences_v2 stores your choices, notice version and choice date for 180 days. After expiry or a notice version change we ask again with optional purposes off. The booking key circum.landingBooking.v1 is tab-scoped, expires after 30 minutes and is consumed once. Authentication and security storage duration depends on your session and provider. Mailchimp controls its own storage and retention; see its privacy information linked below.',
           ),
           _ComplianceSection(
             'Your choices',
-            'You can reject optional analytics, accept it, or reopen these choices from this page. You can also clear CIRCUM site data in your browser settings. Rejecting optional analytics does not disable necessary service functionality.',
+            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from the website footer or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
           ),
           _ComplianceSection(
             'Relationship with privacy information',
@@ -27604,7 +26387,7 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'PECR and data protection',
-            'CIRCUM applies the UK Privacy and Electronic Communications Regulations and the UK data-protection framework to technologies used on this website. We will review this policy before introducing analytics, advertising, tracking pixels, behavioural tracking, fingerprinting, or other optional technologies.',
+            'This notice was updated on 8 October 2026. Circum uses opt-in for its optional purposes under PECR and UK GDPR; browsing or scrolling is not consent. Plain social profile links do not load social-network tracking on Circum. When you follow a link, the destination platform applies its own privacy and cookie rules.',
           ),
           _ComplianceSection(
             'Contact',
@@ -27612,6 +26395,12 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
         ],
         actions: [
+          TextButton(onPressed: () => unawaited(launchUrl(
+            Uri.parse('https://www.intuit.com/privacy/statement/'),
+            webOnlyWindowName: '_blank')), child: const Text('Mailchimp / Intuit privacy')),
+          TextButton(onPressed: () => unawaited(launchUrl(
+            Uri.parse('https://policies.google.com/privacy'),
+            webOnlyWindowName: '_blank')), child: const Text('Google privacy')),
           TextButton(
             onPressed: onManageConsent,
             child: const Text('Manage preferences'),
@@ -27661,10 +26450,10 @@ class _CookieConsentBanner extends StatelessWidget {
               spacing: 12,
               runSpacing: 10,
               children: [
-                const SizedBox(
-                  width: 420,
-                  child: Text(
-                    'CIRCUM uses optional visitor analytics only with your permission. Necessary technologies remain active.',
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: const Text(
+                    'Necessary storage keeps Circum working. Optional visitor analytics and Mailchimp marketing tracking stay off until you choose. We remember your choice for 180 days; change it any time in Cookie settings.',
                   ),
                 ),
                 TextButton(
@@ -27675,7 +26464,7 @@ class _CookieConsentBanner extends StatelessWidget {
                   onPressed: onReject,
                   child: const Text('Reject optional'),
                 ),
-                FilledButton(
+                OutlinedButton(
                   onPressed: onAccept,
                   child: const Text('Accept optional'),
                 ),
@@ -27773,201 +26562,168 @@ class _LandingFooter extends StatelessWidget {
   final VoidCallback onBusiness;
   final VoidCallback onVanguard;
   final VoidCallback onNewsletter;
+  final VoidCallback onCookieSettings;
 
-  const _LandingFooter({
-    required this.colors,
-    required this.onDeliveries,
-    required this.onHealthPlus,
-    required this.onGifts,
-    required this.onBusiness,
-    required this.onVanguard,
-    required this.onNewsletter,
-  });
+  const _LandingFooter(
+      {required this.colors,
+      required this.onDeliveries,
+      required this.onHealthPlus,
+      required this.onGifts,
+      required this.onBusiness,
+      required this.onVanguard,
+      required this.onNewsletter,
+      required this.onCookieSettings});
+
+  Widget _link(String label, String path, VoidCallback action) =>
+      _FooterServiceLink(
+          label: label,
+          uri: _CircumWebsiteAppState._canonicalWebUri(path),
+          onPressed: action, foregroundColor: Colors.white);
+
+  Widget _page(String label, String path) => _link(label, path, () {
+        unawaited(launchUrl(_CircumWebsiteAppState._canonicalWebUri(path),
+            webOnlyWindowName: '_self'));
+      });
+
+  Widget _group(String title, List<Widget> children) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Semantics(
+            header: true,
+            child: Text(title,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700))),
+        const SizedBox(height: 12),
+        ...children
+      ]);
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      child: Center(
-        child: ConstrainedBox(
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 28),
+        decoration: BoxDecoration(
+            color: const Color(0xff071c27),
+            border: Border(top: BorderSide(color: Colors.white12))),
+        child: Center(
+            child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 24,
-                runSpacing: 18,
+          child: LayoutBuilder(builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 1000;
+            final narrow = constraints.maxWidth < 560;
+            final columnWidth = (constraints.maxWidth - 24) / 2;
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Image.asset(
-                    'assets/images/circum_wordmark.png',
-                    width: 118,
-                    height: 28,
-                    fit: BoxFit.contain,
-                  ),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 8,
-                    children: [
-                      if (newsletterSignupEnabled)
-                        _FooterServiceLink(
-                          label: 'Newsletter',
-                          uri: _CircumWebsiteAppState._canonicalWebUri('/'),
-                          onPressed: onNewsletter,
-                        ),
-                      _FooterServiceLink(
-                        label: 'Support',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/support',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/support',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Privacy Policy',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/privacy_policy',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/privacy_policy',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Terms of Service',
-                        uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Cookie Policy',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/cookie_policy',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/cookie_policy',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                      _FooterServiceLink(
-                        label: 'Account deletion',
-                        uri: _CircumWebsiteAppState._canonicalWebUri(
-                          '/delete_account',
-                        ),
-                        onPressed: () {
-                          unawaited(
-                            launchUrl(
-                              _CircumWebsiteAppState._canonicalWebUri(
-                                '/delete_account',
-                              ),
-                              webOnlyWindowName: '_self',
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '© ${DateTime.now().year} Circum Technologies Ltd.',
-                    style: TextStyle(color: colors.mutedText),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Services',
-                style: TextStyle(
-                  color: colors.text,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _FooterServiceLink(
-                    label: 'Deliveries',
-                    uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
-                    onPressed: onDeliveries,
-                  ),
-                  _FooterServiceLink(
-                    label: 'Health+',
-                    uri: _CircumWebsiteAppState._canonicalWebUri(
-                      '/send/health',
-                    ),
-                    onPressed: onHealthPlus,
-                  ),
-                  if (onGifts != null)
-                    _FooterServiceLink(
-                      label: 'Gifts by Circum',
-                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
-                      onPressed: onGifts!,
-                    ),
-                  _FooterServiceLink(
-                    label: 'Business',
-                    uri: _CircumWebsiteAppState._canonicalWebUri(
-                      '/send/business',
-                    ),
-                    onPressed: onBusiness,
-                  ),
-                  _FooterServiceLink(
-                    label: 'Vanguard',
-                    uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
-                    onPressed: onVanguard,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+                  Wrap(spacing: 24, runSpacing: 32, children: [
+                    SizedBox(
+                        width: wide ? 270 : narrow ? constraints.maxWidth : columnWidth,
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircumHomeLink(
+                                  child: Image.asset(
+                                      'assets/images/circum_wordmark.png',
+                                      width: 156,
+                                      height: 38,
+                                      fit: BoxFit.contain, color: Colors.white)),
+                              const SizedBox(height: 16),
+                              Text('Your world. Connected.',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 16)),
+                              const SizedBox(height: 16),
+                              Wrap(spacing: 16, runSpacing: 4, children: [
+                                Link(
+                                    uri: Uri.parse(
+                                        'https://www.instagram.com/circumuk/'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('Instagram'))),
+                                Link(
+                                    uri: Uri.parse(
+                                        'https://www.tiktok.com/@circumuk'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('TikTok'))),
+                                Link(
+                                    uri: Uri.parse('https://x.com/circumuk'),
+                                    target: LinkTarget.blank,
+                                    builder: (_, follow) => TextButton(
+                                        onPressed: follow,
+                                        style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 48), padding: EdgeInsets.zero),
+                                        child: const Text('X'))),
+                              ]),
+                            ])),
+                    SizedBox(
+                        width: wide ? 170 : columnWidth,
+                        child: _group('Services', [
+                          _link('Deliveries', '/send', onDeliveries),
+                          _page('London delivery services', '/delivery/'),
+                          _link('Health+', '/health/discover/', onHealthPlus),
+                          if (onGifts != null)
+                            _link('Gifts', '/gifts/discover/', onGifts!),
+                          _link('Circum Business', '/business/discover/',
+                              onBusiness),
+                          _page('ROTH', '/roth/'),
+                          _page('Riders', '/rider'),
+                          _page('The Future', '/air/'),
+                          _link('Vanguard', '/vanguard', onVanguard),
+                        ])),
+                    SizedBox(
+                        width: wide ? 190 : columnWidth,
+                        child: _group('Help & privacy', [
+                          _page('Contact us', '/contact'),
+                          _page('Support', '/support'),
+                          if (newsletterSignupEnabled)
+                            _FooterServiceLink(
+                                label: 'Newsletter',
+                                uri: _CircumWebsiteAppState._canonicalWebUri(
+                                    '/'),
+                                onPressed: onNewsletter,
+                                localAction: true, foregroundColor: Colors.white),
+                          _page('Privacy Policy', '/privacy_policy'),
+                          _page('Terms of Service', '/terms'),
+                          _page('Cookie Policy', '/cookie_policy'),
+                          _FooterServiceLink(
+                              label: 'Cookie settings',
+                              uri: _CircumWebsiteAppState._canonicalWebUri(
+                                  '/cookie_policy'),
+                              onPressed: onCookieSettings,
+                              localAction: true, foregroundColor: Colors.white),
+                          _page('Account deletion', '/delete_account'),
+                        ])),
+                    SizedBox(
+                        width: wide ? constraints.maxWidth - 702 : narrow ? constraints.maxWidth : columnWidth,
+                        child: const _StoreDownloads(inFooter: true)),
+                  ]),
+                  const SizedBox(height: 32),
+                  Divider(color: Colors.white12),
+                  const SizedBox(height: 16),
+                  Text('© ${DateTime.now().year} Circum Technologies Ltd.',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ]);
+          }),
+        )),
+      );
 }
 
 class _FooterServiceLink extends StatelessWidget {
   final String label;
   final Uri uri;
   final VoidCallback onPressed;
+  final bool localAction;
+  final Color foregroundColor;
 
   const _FooterServiceLink({
     required this.label,
     required this.uri,
     required this.onPressed,
+    this.localAction = false,
+    this.foregroundColor = _landingInk,
   });
 
   @override
@@ -27977,10 +26733,13 @@ class _FooterServiceLink extends StatelessWidget {
       target: LinkTarget.self,
       builder: (context, followLink) {
         return TextButton(
-          onPressed: followLink ?? onPressed,
+          onPressed: kIsWeb && !localAction
+              ? () => web.window.location.assign(uri.toString())
+              : onPressed,
           style: TextButton.styleFrom(
+            foregroundColor: foregroundColor,
             padding: EdgeInsets.zero,
-            minimumSize: const Size(0, 36),
+            minimumSize: const Size(0, 48),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(label),
@@ -28503,6 +27262,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final colors = widget.colors;
     final narrow = MediaQuery.sizeOf(context).width < 760;
     final signedIn = FirebaseAuth.instance.currentUser != null;
+    if (!signedIn) {
+      return GiftsSignIn(
+        emailController: _previewEmail,
+        passwordController: _previewPassword,
+        signingIn: _signingIn,
+        message: _message,
+        onSignIn: _signInToPreview,
+        onBack: widget.onBack,
+        onPrivacy: () => launchUrl(Uri.base.resolve('/privacy_policy'), webOnlyWindowName: '_self'),
+        onTerms: () => launchUrl(Uri.base.resolve('/terms'), webOnlyWindowName: '_self'),
+      );
+    }
+
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
@@ -28520,7 +27292,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   onPressed: widget.onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                Image.asset('assets/images/circum_wordmark.png', width: 126),
+                CircumHomeLink(child: Image.asset('assets/images/circum_wordmark.png', width: 126)),
               ],
             ),
             const SizedBox(height: 22),
@@ -28531,11 +27303,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: Image.asset(
+                      child: CircumHomeLink(child: Image.asset(
                         'assets/images/gifts_by_circum_logo.jpg',
                         width: narrow ? 280 : 390,
                         semanticLabel: 'Gifts by Circum logo',
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -28573,71 +27345,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       child: _HealthChip(label: 'Vanguard Included'),
                     ),
                     const SizedBox(height: 16),
-                    if (!signedIn)
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Sign in to Gifts',
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Sign in to create and pay for a curated gift experience.',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            _giftField(
-                              _previewEmail,
-                              'Email address',
-                              Icons.email_outlined,
-                              type: TextInputType.emailAddress,
-                            ),
-                            _giftField(
-                              _previewPassword,
-                              'Password',
-                              Icons.lock_outline,
-                              obscure: true,
-                            ),
-                            if (_message != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                _message!,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            FilledButton.icon(
-                              onPressed: _signingIn ? null : _signInToPreview,
-                              icon: _signingIn
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.lock_open),
-                              label: Text(
-                                _signingIn
-                                    ? 'Signing in...'
-                                    : 'Sign in and continue',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     if (signedIn) ...[
                       _GlassPanel(
                         colors: colors,
@@ -29383,12 +28090,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                     icon: const Icon(Icons.arrow_back),
                   ),
                   const SizedBox(width: 8),
-                  Image.asset(
+                  CircumHomeLink(child: Image.asset(
                     'assets/images/circum_wordmark.png',
                     width: 126,
                     height: 30,
                     fit: BoxFit.contain,
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -29425,11 +28132,11 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                         child: Semantics(
                           image: true,
                           label: 'Gifts by Circum logo',
-                          child: Image.asset(
+                          child: CircumHomeLink(child: Image.asset(
                             'assets/images/gifts_by_circum_logo.jpg',
                             fit: BoxFit.contain,
                             semanticLabel: 'Gifts by Circum logo',
-                          ),
+                          )),
                         ),
                       ),
                     ),
@@ -29672,11 +28379,11 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
             height: compact ? size.height * 0.92 : double.infinity,
             padding: EdgeInsets.zero,
             decoration: BoxDecoration(
-              color: const Color(0xff07090f),
+              color: colors.panel,
               borderRadius: compact
                   ? BorderRadius.circular(24)
                   : const BorderRadius.horizontal(left: Radius.circular(24)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+              border: Border.all(color: colors.border),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xff3b82f6).withValues(alpha: 0.12),
@@ -29739,23 +28446,23 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
+                          CircumHomeLink(child: Text(
                             'Circum',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.68),
-                              fontFamily: 'JetBrains Mono',
+                              color: colors.mutedText,
+                              fontFamily: 'D-DIN',
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
                             ),
-                          ),
+                          )),
                           const Spacer(),
                           IconButton(
                             tooltip: 'Close contact form',
                             onPressed: () => setState(() => _open = false),
                             icon: Icon(
                               Icons.close,
-                              color: Colors.white.withValues(alpha: 0.68),
+                              color: colors.mutedText,
                             ),
                           ),
                         ],
@@ -29771,18 +28478,18 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               'Contact Circum',
                               style: TextStyle(
                                 color: const Color(0xff60a5fa),
-                                fontFamily: 'JetBrains Mono',
+                                fontFamily: 'D-DIN',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
                               ),
                             ),
                             const SizedBox(height: 18),
-                            const Text(
+                            Text(
                               'How can we help you?',
                               style: TextStyle(
-                                color: Color(0xfff5f7fb),
-                                fontFamily: 'DM Serif Display',
+                                color: colors.text,
+                                fontFamily: 'D-DIN-Bold',
                                 fontSize: 34,
                                 height: 1.25,
                                 fontWeight: FontWeight.w400,
@@ -29792,7 +28499,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'Send Circum a message about deliveries, riders, accounts, payments, partnerships, or anything else you need help with.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.62),
+                                color: colors.mutedText,
                                 fontSize: 15,
                                 height: 1.55,
                                 fontWeight: FontWeight.w600,
@@ -29855,7 +28562,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             Text(
                               'If your message is about an existing delivery, include your delivery reference if you have it.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.58),
+                                color: colors.mutedText,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -29878,7 +28585,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   top: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.14),
+                                    color: colors.border,
                                   ),
                                 ),
                               ),
@@ -29888,9 +28595,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                                   Text(
                                     'Press enter or',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.56,
-                                      ),
+                                      color: colors.mutedText,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -30023,23 +28728,22 @@ class _CircumColors {
 
   const _CircumColors(this.dark);
 
-  Color get background => dark ? Colors.black : Colors.white;
-  Color get appBackground => dark ? const Color(0xff030712) : Colors.white;
-  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff3f4f6);
-  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff8fafc);
+  Color get background => dark ? Colors.black : _landingPaper;
+  Color get appBackground => dark ? const Color(0xff030712) : _landingPaper;
+  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff0f2f8);
+  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff3f4fa);
   Color get panel => dark ? const Color(0xff111827) : Colors.white;
-  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff3f4f6);
-  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffe5e7eb);
-  Color get text => dark ? Colors.white : Colors.black;
+  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff0f2f8);
+  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffdce2e9);
+  Color get text => dark ? Colors.white : _landingInk;
+  Color get action => dark ? const Color(0xffa9bfff) : _landingBlue;
   Color get inverseText => dark ? Colors.black : Colors.white;
-  Color get mutedText =>
-      dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
+  Color get mutedText => dark ? const Color(0xff9ca3af) : _landingMuted;
   Color get success => const Color(0xff16a34a);
   Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
       dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
-  Color get adminAccent =>
-      dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
+  Color get adminAccent => dark ? const Color(0xff38bdf8) : _landingBlue;
   Color get adminGlow =>
       dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }

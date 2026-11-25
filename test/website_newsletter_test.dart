@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Widget signup(NewsletterCall call, {String source = 'homepage'}) =>
+  Widget signup(NewsletterCall call,
+          {String source = 'homepage', bool Function()? analyticsAllowed}) =>
       MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
@@ -18,10 +19,34 @@ void main() {
               onPrivacy: Uri.parse('https://circumuk.com/privacy_policy'),
               call: call,
               source: source,
+              analyticsAllowed: analyticsAllowed,
             ),
           ),
         ),
       );
+
+  testWidgets(
+      'newsletter tracking is blocked before consent and after withdrawal',
+      (tester) async {
+    var allowed = false;
+    final calls = <String>[];
+    await tester.pumpWidget(signup((name, data) async {
+      calls.add(name);
+      return {'ok': true};
+    }, analyticsAllowed: () => allowed));
+    await tester.pumpAndSettle();
+    expect(calls, isEmpty);
+    allowed = true;
+    await tester.tap(find.text('Join CIRCUM →'));
+    await tester.pumpAndSettle();
+    expect(calls, ['recordNewsletterAnalytics']);
+    allowed = false;
+    calls.clear();
+    await tester.enterText(find.byType(TextField), 'consent@example.com');
+    await tester.tap(find.text('Join CIRCUM →'));
+    await tester.pumpAndSettle();
+    expect(calls, ['submitNewsletterSignup']);
+  });
 
   test('newsletter marketing entry is dormant in the default build', () {
     expect(newsletterSignupEnabled, isFalse);
@@ -35,7 +60,7 @@ void main() {
         'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
 
     expect(shell, contains('id="mcjs" type="text/plain"'));
-    expect(shell, contains('data-circum-consent="optional-analytics"'));
+    expect(shell, contains('data-circum-consent="optional-marketing"'));
     expect(shell, contains(trackingUrl));
     expect(source, contains('_enableMailchimpSiteTracking()'));
     expect(source, contains("existing.getAttribute('type') != 'text/plain'"));

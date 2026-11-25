@@ -1,36 +1,12 @@
-name: Deploy Website
-
+# Historical workflow ID. Keep disabled in GitHub so old refs cannot publish.
+name: Retired Website Deployment
 on:
   workflow_dispatch:
-    inputs:
-      enable_newsletter:
-        description: "Enable the approved newsletter signup surface"
-        required: true
-        default: false
-        type: boolean
-
 jobs:
-  deploy-website:
+  retired:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    permissions: {}
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: flutter pub get
-      - run: node scripts/deploy_guard.self_test.js
-      - run: node scripts/deploy_guard.js --target=website --base HEAD
-      - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
-      - run: NEWSLETTER_SIGNUP_ENABLED="${{ inputs.enable_newsletter }}" PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" PUBLIC_WEB_STATIC_MAPS_API_KEY="${{ secrets.PUBLIC_WEB_STATIC_MAPS_API_KEY }}" scripts/build_public_web.sh
-      - run: node scripts/validate_web_artifacts.js --surface=website
-      - uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
-      - run: npm install -g firebase-tools
-      - run: firebase deploy --only hosting:public --project circum-2797c
+      - run: |
+          echo 'Use Release Public Website from protected main.'
+          exit 1

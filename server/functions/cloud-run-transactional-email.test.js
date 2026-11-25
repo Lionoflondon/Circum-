@@ -221,6 +221,24 @@ test("extracts only canonical emailQueue document ids", () => {
   assert.equal(queueEmailIdFromName("projects/p/databases/(default)/documents/giftEmailNotifications/e1"), null);
 });
 
+test("queued invalid-domain recipients are terminally suppressed before provider invocation, including replay", async () => {
+  for (const recipient of [{to: "qa@example.invalid"}, {to: "QA@SUB.EXAMPLE.INVALID"},
+    {to: "qa@example.invalid."}, {to: "", recipientEmail: "legacy@example.invalid"}]) {
+    const db = fakeDb({"emailQueue/email-1": record(recipient)});
+    let calls = 0;
+    const options = {db, emailId: "email-1", eventId: "invalid-domain", apiKey: "test-key",
+      fetchImpl: async () => {
+ calls += 1; throw new Error("provider must not be called");
+}};
+    assert.deepEqual(await processEmailQueueRecord(options), {status: "suppressed", reason: "non_deliverable_domain"});
+    assert.equal(db.read("emailQueue", "email-1").status, "suppressed");
+    assert.equal(db.read("emailQueue", "email-1").failureReason, "non_deliverable_domain");
+    await processEmailQueueRecord({...options, eventId: "replay"});
+    assert.equal(calls, 0);
+    assert.equal(db.read("emailQueue", "email-1").status, "suppressed");
+  }
+});
+
 test("valid queue record is claimed once and persisted as sent", async () => {
   const db = fakeDb({"emailQueue/email-1": record()});
   let calls = 0;

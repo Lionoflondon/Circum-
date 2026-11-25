@@ -153,12 +153,32 @@ return {data: refunds.filter((r) => r.payment_intent === id)};
   const afterLocation = await handle({action: "read"}, rider);
   assert.equal(afterLocation.records.activeDeliveries.find((d) => d.id.endsWith("_a")).status, "arrived_at_dropoff");
   assert.equal(afterLocation.records.deliveryRequests.find((d) => d.id.endsWith("_a")).status, "completed");
-  for (const name of ["prescriptionPickups", "healthPlusProfiles", "businessInvoices", "notifications", "deliveryRequests", "walletTransactions"]) assert.equal((await db.collection(name).get()).size, 0, name);
+  for (const name of ["prescriptionPickups", "healthPlusProfiles", "businessInvoices", "walletTransactions"]) assert.equal((await db.collection(name).get()).size, 0, name);
+  const rootDeliveries = await db.collection("deliveryRequests").get();
+  const expectedDeliveryIds = [...paginationInsert.expectedOrder, cancellationProbe.deliveryId].sort();
+  assert.deepEqual(rootDeliveries.docs.map((doc) => doc.id).sort(), expectedDeliveryIds);
+  for (const doc of rootDeliveries.docs) {
+    assert.equal(doc.data().isSyntheticQa, true);
+    assert.equal(doc.data().qaFixtureId, fixtureId);
+    assert.equal(doc.data().senderId, "qa_sender");
+    assert.equal(doc.data().realDispatch, false);
+  }
+  // Wallet notification certification deliberately seeds one root projection
+  // for the allowlisted QA Sender. Reject every other root notification.
+  const rootNotifications = await db.collection("notifications").get();
+  assert.deepEqual(rootNotifications.docs.map((doc) => doc.id), [walletNotification.notificationId]);
+  const qaNotification = rootNotifications.docs[0].data();
+  assert.equal(qaNotification.recipientId, "qa_sender");
+  assert.equal(qaNotification.isSyntheticQa, true);
+  assert.equal(qaNotification.qaFixtureId, fixtureId);
+  assert.equal(qaNotification.suppressExternalSideEffects, true);
   await db.doc(`qaSpecialFlowFixtures/${fixtureId}`).update({expiresAt: require("firebase-admin/firestore").Timestamp.fromMillis(1)});
   assert.deepEqual(await f.expire(), {processed: 1});
   assert([...objects.values()].every((o) => o.status === "expired"));
   assert.equal(refunds.length, intents.size);
   assert.equal((await db.doc(`qaSpecialFlowFixtures/${fixtureId}`).get()).data().archived, true);
+  assert.equal((await db.doc(`notifications/${walletNotification.notificationId}`).get()).exists, false);
+  assert.equal((await db.collection("deliveryRequests").get()).size, 0);
   await assert.rejects(handle({action: "health"}), /expired/);
   const second = await f.handle({action: "prepare", requestId: "lifecycle_b"}, operator);
   assert.notEqual(second.fixtureId, fixtureId);
@@ -171,7 +191,8 @@ return {data: refunds.filter((r) => r.payment_intent === id)};
   const publicFixture = (await db.doc(`qaSpecialFlowFixtures/${second.fixtureId}`).get()).data();
   const access = await qaPublic.activeFixtureForRider(db, {...ctx, auth: {uid: "not_allowlisted"}}, env);
   assert.equal(access, null);
-  const riderAccess = await qaPublic.authorizePublicDelivery(db, {...ctx, auth: {uid: "qa_rider"}}, publicCreated.deliveryId, env);
+  await assert.rejects(qaPublic.authorizePublicDelivery(db, {...ctx, auth: {uid: "qa_rider"}}, publicCreated.deliveryId, env), /not permitted/);
+  const riderAccess = await qaPublic.authorizePublicDelivery(db, {...ctx, auth: {uid: "qa_rider"}}, publicCreated.deliveryId, env, {allowUnassigned: true});
   assert.equal(riderAccess.uid, "qa_rider");
   const offer = await qaPublic.getPublicOffer({db, access: {uid: "qa_rider", fixture: publicFixture}, projection: require("./rider-offers").projection});
   assert.equal(offer.eligible, true);
@@ -182,8 +203,9 @@ return {data: refunds.filter((r) => r.payment_intent === id)};
   const accepted = await qaPublic.accept({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, env});
   assert.equal(accepted.qaOnly, true);
   assert.equal((await qaPublic.accept({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, env})).idempotent, true);
-  await assert.rejects(qaPublic.transition({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, action: "verify_collection_pin", pin: "0000", env}), /incorrect/);
+  await assert.rejects(qaPublic.transition({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, action: "verify_collection_pin", pin: "0000", env}), /Cannot move/);
   for (const [action, pin] of [["start_heading_to_pickup"], ["arrived_at_pickup"], ["verify_collection_pin", "2468"], ["confirm_collected"], ["start_delivery"], ["arrived_at_dropoff"], ["verify_receiver_pin", "8642"]]) {
+    if (action === "verify_collection_pin") await assert.rejects(qaPublic.transition({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, action, pin: "0000", env}), /incorrect/);
     await qaPublic.transition({db, context: {...ctx, auth: {uid: "qa_rider"}}, deliveryId: publicCreated.deliveryId, action, pin, env});
   }
   assert.equal((await db.doc(`deliveryRequests/${publicCreated.deliveryId}`).get()).data().status, "delivered");

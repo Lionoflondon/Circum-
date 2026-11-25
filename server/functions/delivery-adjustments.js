@@ -20,14 +20,8 @@ function getStripeClient() {
   return cachedStripe;
 }
 
-const stripe = new Proxy({}, {
-  get(_target, property) {
-    return getStripeClient()[property];
-  },
-});
 const iris = require("./iris-core");
 const {
-  verifiedAdjustmentPayment,
   DISCREPANCY_REASONS,
   buildAdjustment,
   isMaterialDiscrepancy,
@@ -253,46 +247,12 @@ exports.cancelAdjustedCollection = senderPaymentCallable(async (data, context) =
 
 exports.createDeliveryAdjustmentPayment = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  const db = getFirestore();
-  const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
-  const adjustment = await adjustmentRef.get();
-  if (!adjustment.exists || adjustment.data().senderId !== context.auth.uid) throw new functions.https.HttpsError("permission-denied", "Only the sender can pay this adjustment.");
-  if (adjustment.data().status !== "awaiting_sender_payment" || adjustment.data().adminDecision !== "approve") throw new functions.https.HttpsError("failed-precondition", "This adjustment is not approved for payment.");
-  const amount = Math.round(Number(adjustment.data().additionalAmount) * 100);
-  if (amount <= 0) throw new functions.https.HttpsError("failed-precondition", "No additional payment is due.");
-  const intent = await stripe.paymentIntents.create({
-    amount,
-    currency: "gbp",
-    payment_method_types: ["card"],
-    metadata: {feature: "delivery_adjustment", adjustmentId: adjustment.id, bookingId: adjustment.data().bookingId, senderId: context.auth.uid},
-  }, {idempotencyKey: `delivery-adjustment-${adjustment.id}`});
-  await adjustmentRef.update({paymentIntentId: intent.id, paymentStatus: intent.status, updatedAt: Date.now()});
-  return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
+  return require("./delivery-adjustment-checkout").createPayment({db: getFirestore(), stripe: getStripeClient(), adjustmentId: data.adjustmentId, senderId: context.auth.uid, hosted: data.hostedCheckout === true});
 }, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  const db = getFirestore();
-  const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
-  const adjustment = await adjustmentRef.get();
-  if (!adjustment.exists || adjustment.data().senderId !== context.auth.uid) throw new functions.https.HttpsError("permission-denied", "Only the sender can finalize this adjustment.");
-  if (!adjustment.data().paymentIntentId) throw new functions.https.HttpsError("failed-precondition", "Adjustment payment was not created.");
-  const intent = await stripe.paymentIntents.retrieve(adjustment.data().paymentIntentId);
-  if (intent.status !== "succeeded") throw new functions.https.HttpsError("failed-precondition", "The additional payment has not succeeded.");
-  const bookingRef = db.collection("deliveryRequests").doc(adjustment.data().bookingId);
-  await db.runTransaction(async (transaction) => {
-    const latest = await transaction.get(adjustmentRef);
-    const booking = await transaction.get(bookingRef);
-    if (latest.data().status === "paid") return;
-    if (latest.data().status !== "awaiting_sender_payment" || latest.data().adminDecision !== "approve" ||
-        !verifiedAdjustmentPayment(intent, latest.data(), latest.id) ||
-        booking.data().status !== "awaiting_sender_adjustment") {
-      throw new functions.https.HttpsError("failed-precondition", "Adjustment payment does not match the approved collection.");
-    }
-    const riderAdjustmentAmount = Number(latest.data().additionalAmount) || 0;
-    transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
-    transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "riderAdjustment": riderAdjustmentAmount, "updatedAt": Date.now()});
-  });
-  await notifyUser(adjustment.data().riderId, "rider", "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
+  const result = await require("./delivery-adjustment-checkout").finalizePayment({db: getFirestore(), stripe: getStripeClient(), adjustmentId: data.adjustmentId, senderId: context.auth.uid});
+  if (!result.duplicate) await notifyUser(result.riderId, "rider", "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: data.adjustmentId});
   return {success: true};
 }, {secrets: ["STRIPE_SECRET_KEY"]});
