@@ -2540,7 +2540,8 @@
       "generation": "Gen 1",
       "productionPurpose": "rothCentral.beginRothAccountLink",
       "callers": [
-        "docs/ROTH_CENTRAL_STAGING.md"
+        "docs/ROTH_CENTRAL_STAGING.md",
+        "lib/app/sender_mobile/roth_central_staging.dart"
       ],
       "criticality": "P0/P1-review-required",
       "authRequired": true,
@@ -5491,7 +5492,8 @@
       "generation": "Gen 1",
       "productionPurpose": "rothCentral.getRothCentralCompanyBalance",
       "callers": [
-        "docs/ROTH_CENTRAL_STAGING.md"
+        "docs/ROTH_CENTRAL_STAGING.md",
+        "lib/app/sender_mobile/roth_central_staging.dart"
       ],
       "criticality": "review-required",
       "authRequired": true,
