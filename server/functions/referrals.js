@@ -6,6 +6,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const rothLedger = require("./roth-ledger");
 const {issueCentralReferralRewards} = require("./roth-referral-issuer");
+const {referralAwardMode} = require("./roth-referral-runtime-config");
 const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
 const {
   DEFAULT_REFERRAL_REWARD_ROTH,
@@ -192,6 +193,7 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
   if (referral.referrerUserId === referredUserId) return {status: "rejected"};
   const reward = Number(referral.rewardAmount || DEFAULT_REWARD);
   try {
+    const issuanceMode = referralAwardMode(process.env, centralClient);
     await db.runTransaction(async (transaction) => {
       const latest = await transaction.get(referralRef);
       if (!latest.exists || latest.data().status === REFERRAL_STATUSES.rothAwarded || latest.data().status === "rewarded") return;
@@ -206,7 +208,7 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
       }, {merge: true});
     });
     let centralIssuance = null;
-    if (centralClient) {
+    if (issuanceMode === "central") {
       centralIssuance = await issueCentralReferralRewards({
         client: centralClient,
         referral,
@@ -274,13 +276,17 @@ async function activateReferralForUser({db = getFirestore(), referredUserId, act
     return {status: REFERRAL_STATUSES.rothAwarded, rewardAmount: reward};
   } catch (error) {
     console.error("Referral activation failed", error);
-    await referralRef.set({
-      status: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
-      rewardStatus: REFERRAL_STATUSES.review,
-      needsReview: true,
-      reviewReason: error.message,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+    await db.runTransaction(async (transaction) => {
+      const latest = await transaction.get(referralRef);
+      if (!latest.exists || [REFERRAL_STATUSES.rothAwarded, "rewarded"].includes(latest.data().status)) return;
+      transaction.set(referralRef, {
+        status: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
+        rewardStatus: REFERRAL_STATUSES.review,
+        needsReview: true,
+        reviewReason: error.message,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
     return {status: "review"};
   }
 }

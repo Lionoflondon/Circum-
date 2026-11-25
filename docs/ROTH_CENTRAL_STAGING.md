@@ -8,6 +8,7 @@ This isolated branch adds an App Check enforced callable bridge for CIRCUM's com
 - `getRothCentralCompanyBalance` reads CIRCUM's company allocation for the authenticated linked identity.
 - `issueRothFromCircum` permits an active company administrator to issue an idempotent reward against a verified linked identity.
 - The Cloud Run referral event handler can issue both inviter and referred-customer rewards to central ROTH. Each recipient has a stable reward reference, amounts are converted to integer pence, and the synthetic staging reward cap is £10. An unlinked identity or failed API call remains reviewable and retryable; it never falls back to CIRCUM's local ledger in that handler.
+- When central staging mode is selected, all referral award paths fail closed unless the scoped central client is injected; legacy direct referral-ledger writes are disabled for that runtime. Retry-state writes also preserve an already-awarded referral if concurrent handlers finish out of order.
 
 All requests are server-signed and use the staging-only ROTH API origin. The merchant signing secret is a Firebase Secret Manager parameter and is never returned to clients or logged. The reward endpoint validates an integer-pence amount and a stable reference.
 

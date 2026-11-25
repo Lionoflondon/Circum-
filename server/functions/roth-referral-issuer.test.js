@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {issueCentralReferralRewards, MAX_STAGING_REWARD_PENCE} = require("./roth-referral-issuer");
-const {referralEventConfig} = require("./roth-referral-runtime-config");
+const {referralEventConfig, referralAwardMode} = require("./roth-referral-runtime-config");
 
 test("central referral issuance uses stable per-recipient references and integer pence", async () => {
   const calls = [];
@@ -48,4 +48,12 @@ test("CIRCUM referral event remains production-pinned unless staging is explicit
   assert.deepEqual(referralEventConfig({GCLOUD_PROJECT: "circum-stg-71", ROTH_COMPANY_STAGING_PROJECT: "circum-stg-71", ROTH_CENTRAL_MODE: "staging"}), {sourceProject: "circum-stg-71", centralStaging: true});
   assert.throws(() => referralEventConfig({GCLOUD_PROJECT: "circum-2797c", ROTH_COMPANY_STAGING_PROJECT: "circum-2797c", ROTH_CENTRAL_MODE: "staging"}), /isolated staging project/);
   assert.throws(() => referralEventConfig({GCLOUD_PROJECT: "circum-stg-71", ROTH_COMPANY_STAGING_PROJECT: "circum-other-stg", ROTH_CENTRAL_MODE: "staging"}), /isolated staging project/);
+});
+
+test("legacy referral issuance is disabled in central staging mode unless the scoped client is injected", () => {
+  const staging = {GCLOUD_PROJECT: "circum-stg-71", ROTH_COMPANY_STAGING_PROJECT: "circum-stg-71", ROTH_CENTRAL_MODE: "staging"};
+  assert.throws(() => referralAwardMode(staging), /legacy issuance is disabled/);
+  assert.equal(referralAwardMode(staging, {issueReward: async () => ({})}), "central");
+  assert.equal(referralAwardMode({GCLOUD_PROJECT: "circum-2797c", ROTH_CENTRAL_MODE: "disabled"}), "legacy");
+  assert.throws(() => referralAwardMode({ROTH_CENTRAL_MODE: "unexpected"}), /Unsupported CIRCUM central ROTH mode/);
 });

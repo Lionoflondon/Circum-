@@ -12,4 +12,15 @@ function referralEventConfig(env = process.env) {
   return {sourceProject: projectId, centralStaging: true};
 }
 
-module.exports = {referralEventConfig};
+function referralAwardMode(env = process.env, centralClient = null) {
+  const config = referralEventConfig(env);
+  if (config.centralStaging) {
+    if (!centralClient || typeof centralClient.issueReward !== "function") {
+      throw new Error("Central ROTH client is required for CIRCUM staging referral awards; legacy issuance is disabled.");
+    }
+    return "central";
+  }
+  return "legacy";
+}
+
+module.exports = {referralEventConfig, referralAwardMode};
