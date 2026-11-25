@@ -43,20 +43,36 @@ function createRothCentralClient({baseUrl, keyId, secret, fetchImpl = fetch, clo
   }
 
   return {
-    startLink(externalId) { return request("startLink", {externalId}); },
-    balance(externalId) { return request("balance", {externalId}); },
+    startLink(externalId) {
+      return request("startLink", {externalId});
+    },
+    balance(externalId) {
+      return request("balance", {externalId});
+    },
     issueReward({externalId, rewardId, amountPence, campaignId, reason}) {
       return request("reward", {externalId, rewardId, amountPence, campaignId, reason}, `circum_reward_${rewardId}`);
     },
     issueRewardByHandle({handle, rewardId, amountPence, campaignId, reason}) {
       return request("rewardByHandle", {handle, rewardId, amountPence, campaignId, reason}, `circum_reward_${rewardId}`);
     },
-    reserve({externalId, orderId, amountPence}) { return request("reserve", {externalId, orderId, amountPence}, `circum_order_${orderId}`); },
-    confirm({orderId, reservationId}) { return request("confirm", {orderId, reservationId}, `circum_confirm_${orderId}`); },
-    cancel({orderId, reservationId}) { return request("cancel", {orderId, reservationId}, `circum_cancel_${orderId}`); },
-    refund({refundId, journalId, amountPence, reason}) { return request("refund", {refundId, journalId, amountPence, reason}, `circum_refund_${refundId}`); },
-    receipt(journalId) { return request("receipt", {journalId}); },
-    settlements() { return request("settlements", null, null, "GET"); },
+    reserve({externalId, orderId, amountPence}) {
+      return request("reserve", {externalId, orderId, amountPence}, `circum_order_${orderId}`);
+    },
+    confirm({orderId, reservationId}) {
+      return request("confirm", {orderId, reservationId}, `circum_confirm_${orderId}`);
+    },
+    cancel({orderId, reservationId}) {
+      return request("cancel", {orderId, reservationId}, `circum_cancel_${orderId}`);
+    },
+    refund({refundId, journalId, amountPence, reason}) {
+      return request("refund", {refundId, journalId, amountPence, reason}, `circum_refund_${refundId}`);
+    },
+    receipt(journalId) {
+      return request("receipt", {journalId});
+    },
+    settlements() {
+      return request("settlements", null, null, "GET");
+    },
   };
 }
 

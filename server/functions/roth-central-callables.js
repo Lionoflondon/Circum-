@@ -34,8 +34,8 @@ function requireCustomer(context) {
 async function requireCompanyIssuer(context) {
   const uid = requireCustomer(context);
   const claims = context.auth.token || {};
-  const roles = Array.isArray(claims.roles) ? claims.roles.map(role => String(role).toLowerCase()) : [];
-  if (claims.admin === true || claims.super_admin === true || roles.some(role => ["admin", "super_admin", "finance_admin", "operations_admin"].includes(role))) return uid;
+  const roles = Array.isArray(claims.roles) ? claims.roles.map((role) => String(role).toLowerCase()) : [];
+  if (claims.admin === true || claims.super_admin === true || roles.some((role) => ["admin", "super_admin", "finance_admin", "operations_admin"].includes(role))) return uid;
   const snapshot = await getFirestore().collection("adminUsers").doc(uid).get();
   const data = snapshot.exists ? snapshot.data() || {} : {};
   if (data.status === "active" && ["admin", "super_admin", "finance_admin", "operations_admin"].includes(String(data.role || "").toLowerCase())) return uid;
@@ -63,6 +63,6 @@ exports.issueRothFromCircum = senderPaymentCallable(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "Provide a valid customer, reward reference, pence amount and reason.");
   }
   const result = await client().issueReward({externalId: uid, rewardId, amountPence, reason});
-  return { ...result, actorUid };
+  return {...result, actorUid};
 }, scopedOptions);
 
