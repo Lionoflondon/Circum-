@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "server/functions/index.js",
-  "sourceExportCount": 283,
-  "gen1ExportCount": 187,
+  "sourceExportCount": 286,
+  "gen1ExportCount": 190,
   "firebaseFunctionsV1Files": [
     "server/functions/accept-ride-requests.js",
     "server/functions/account-bootstrap-compat.js",
@@ -62,6 +62,7 @@
     "server/functions/rider-iris-acknowledgement.js",
     "server/functions/rider-offers.js",
     "server/functions/rider-presence.js",
+    "server/functions/roth-central-callables.js",
     "server/functions/roth-grant-campaigns.js",
     "server/functions/roth-ledger.js",
     "server/functions/scheduled-road-charge-refunds.js",
@@ -2529,6 +2530,33 @@
       "currentProductionRuntime": "Firebase Functions Gen 1 export",
       "cloudRunReplacement": [],
       "migrationStatus": "REPLACE WITH CLOUD RUN + EVENTARC",
+      "retirementStatus": "not-retired"
+    },
+    {
+      "functionName": "beginRothAccountLink",
+      "sourceFile": "server/functions/roth-central-callables.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "rothCentral.beginRothAccountLink",
+      "callers": [
+        "docs/ROTH_CENTRAL_STAGING.md"
+      ],
+      "criticality": "P0/P1-review-required",
+      "authRequired": true,
+      "appCheckRequired": true,
+      "secrets": [
+        "ROTH_CIRCUM_MERCHANT_KEY_ID",
+        "ROTH_CIRCUM_MERCHANT_SECRET"
+      ],
+      "firestoreCollections": [
+        "adminUsers"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": false,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
       "retirementStatus": "not-retired"
     },
     {
@@ -5456,6 +5484,33 @@
       "retirementStatus": "managed-deployment-disabled"
     },
     {
+      "functionName": "getRothCentralCompanyBalance",
+      "sourceFile": "server/functions/roth-central-callables.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "rothCentral.getRothCentralCompanyBalance",
+      "callers": [
+        "docs/ROTH_CENTRAL_STAGING.md"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": true,
+      "secrets": [
+        "ROTH_CIRCUM_MERCHANT_KEY_ID",
+        "ROTH_CIRCUM_MERCHANT_SECRET"
+      ],
+      "firestoreCollections": [
+        "adminUsers"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": false,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
+    },
+    {
       "functionName": "getSenderAccountActivity",
       "sourceFile": "server/functions/sender-account.js",
       "triggerType": "callable",
@@ -6065,6 +6120,33 @@
       ],
       "migrationStatus": "CLOUD RUN ONLY — LEGACY URL RETAINED",
       "retirementStatus": "managed-deployment-disabled"
+    },
+    {
+      "functionName": "issueRothFromCircum",
+      "sourceFile": "server/functions/roth-central-callables.js",
+      "triggerType": "callable",
+      "triggerDefinition": {},
+      "generation": "Gen 1",
+      "productionPurpose": "rothCentral.issueRothFromCircum",
+      "callers": [
+        "docs/ROTH_CENTRAL_STAGING.md"
+      ],
+      "criticality": "review-required",
+      "authRequired": true,
+      "appCheckRequired": true,
+      "secrets": [
+        "ROTH_CIRCUM_MERCHANT_KEY_ID",
+        "ROTH_CIRCUM_MERCHANT_SECRET"
+      ],
+      "firestoreCollections": [
+        "adminUsers"
+      ],
+      "externalProviders": [],
+      "idempotencyProtectionDetected": false,
+      "currentProductionRuntime": "Firebase Functions Gen 1 export",
+      "cloudRunReplacement": [],
+      "migrationStatus": "MIGRATE TO CLOUD RUN",
+      "retirementStatus": "not-retired"
     },
     {
       "functionName": "listBusinessRothTransactions",
