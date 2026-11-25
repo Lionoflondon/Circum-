@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,7 @@ import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
+import 'roth_central_staging.dart';
 import 'sender_wallet_cloud_run_api.dart';
 
 const _senderWalletSheetInitTimeout = Duration(seconds: 20);
@@ -898,16 +900,23 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     }
   }
 
-  void _openRothInformation() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const _WalletInformationScreen(
-            title: 'Roth',
-            icon: Icons.account_balance_wallet_outlined,
-            body:
-                'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
-          ),
-        ),
-      );
+  void _openRothInformation() {
+    final isCentralStaging = isRothCentralStagingEnabled(
+      Firebase.app().options.projectId,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => isCentralStaging
+            ? const CircumRothCentralLinkScreen()
+            : const _WalletInformationScreen(
+                title: 'Roth',
+                icon: Icons.account_balance_wallet_outlined,
+                body:
+                    'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
+              ),
+      ),
+    );
+  }
 
   void _openEarnRoth() => Navigator.of(context).push(
         MaterialPageRoute<void>(

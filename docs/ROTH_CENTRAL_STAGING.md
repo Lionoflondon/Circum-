@@ -10,6 +10,12 @@ This isolated branch adds an App Check enforced callable bridge for CIRCUM's com
 - The Cloud Run referral event handler can issue both inviter and referred-customer rewards to central ROTH. Each recipient has a stable reward reference, amounts are converted to integer pence, and the synthetic staging reward cap is £10. An unlinked identity or failed API call remains reviewable and retryable; it never falls back to CIRCUM's local ledger in that handler.
 - When central staging mode is selected, all referral award paths fail closed unless the scoped central client is injected; legacy direct referral-ledger writes are disabled for that runtime. Retry-state writes also preserve an already-awarded referral if concurrent handlers finish out of order.
 
+## Sender account linking UI
+
+- The Sender wallet's Roth information action opens the central ROTH link flow only when both `ROTH_CENTRAL_STAGING_ENABLED=true` and `ROTH_COMPANY_STAGING_PROJECT=<verified-isolated-project-id>` are supplied at build time, and the initialized Firebase app project exactly matches that configured project. The production project `circum-2797c`, mismatched project IDs, and non-staging project names fail the client gate; the default build has the feature disabled.
+- The customer creates a five-minute link code in Sender, approves the named CIRCUM account from the ROTH customer app, then returns to Sender to refresh the CIRCUM allocation. The client displays only the verified central allocation and reservations returned by the authenticated callable; it never copies or stores a balance locally.
+- This adds account linking and allocation visibility only. It does not yet route Sender/Rider checkout, delivery reservations, cancellations, refunds, or legacy wallet balances through central ROTH. Those flows remain disabled from central staging until their end-to-end server transaction and migration safeguards are implemented and tested.
+
 All requests are server-signed and use the staging-only ROTH API origin. The merchant signing secret is a Firebase Secret Manager parameter and is never returned to clients or logged. The reward endpoint validates an integer-pence amount and a stable reference.
 
 ## Required staging configuration
