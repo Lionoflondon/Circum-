@@ -42,22 +42,9 @@
     src="https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js"></script>
 
   <script>
-    // The value below is injected by flutter build, do not touch.
+    // Keep the injected Flutter service worker and browser caches intact so
+    // repeat visits can reuse downloaded application resources.
     const serviceWorkerVersion = null;
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (const registration of registrations) {
-          registration.unregister();
-        }
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (const key of keys) {
-          caches.delete(key);
-        }
-      });
-    }
   </script>
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
   
