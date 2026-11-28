@@ -6,6 +6,7 @@ const {
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
   payoutRecoveryCandidate,
+  lateBankPayoutFailure,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
   stripeConnectAccountIdempotencyKey,
@@ -302,4 +303,16 @@ test("recovery shares the primary 23-hour retry fence while known transfers rema
   assert.equal(payoutRecoveryCandidate(record, now), false);
   assert.equal(payoutRecoveryCandidate({...record, stripeTransferId: "tr_known"}, now), true);
   assert.equal(payoutRecoveryCandidate({...record, transferAttemptStartedAt: new Date(now - 22 * 60 * 60 * 1000)}, now), true);
+});
+
+
+test("late bank failure requires exact paid request lineage and never rearms recovery", () => {
+  const request = {status: "paid", stripePayoutId: "po_paid", stripeAccountId: "acct_rider", riderNetPayout: 2.6};
+  const args = {request, payout: {id: "po_paid", amount: 260, currency: "gbp"}, accountId: "acct_rider", eventType: "payout.failed"};
+  assert.equal(lateBankPayoutFailure(args), true);
+  assert.equal(lateBankPayoutFailure({...args, eventType: "payout.canceled"}), true);
+  assert.equal(lateBankPayoutFailure({...args, eventType: "payout.paid"}), false);
+  assert.equal(lateBankPayoutFailure({...args, accountId: "acct_other"}), false);
+  for (const payout of [{id: "po_other", amount: 260, currency: "gbp"}, {id: "po_paid", amount: 261, currency: "gbp"}, {id: "po_paid", amount: 260, currency: "usd"}]) assert.equal(lateBankPayoutFailure({...args, payout}), false);
+  assert.equal(payoutRecoveryCandidate({status: "processing", fundsReserved: true, stripeTransferId: "tr_bound", payoutAccountingReviewRequired: true, updatedAt: new Date(1)}, Date.now()), false);
 });
