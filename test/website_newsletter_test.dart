@@ -52,19 +52,20 @@ void main() {
     expect(newsletterSignupEnabled, isFalse);
   });
 
-  test('Mailchimp site tracking is present but consent-gated', () {
+  test('retired Mailchimp tracking is absent and newsletter stays CIRCUM-hosted', () {
     final shell = File('web/index.html').readAsStringSync();
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
-    const trackingUrl =
-        'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
+    final newsletter =
+        File('lib/website/shared/newsletter/newsletter_widgets.dart').readAsStringSync();
 
-    expect(shell, contains('id="mcjs" type="text/plain"'));
-    expect(shell, contains('data-circum-consent="optional-marketing"'));
-    expect(shell, contains(trackingUrl));
-    expect(source, contains('_enableMailchimpSiteTracking()'));
-    expect(source, contains("existing.getAttribute('type') != 'text/plain'"));
-    expect(source, contains(trackingUrl));
+    expect(shell, isNot(contains('chimpstatic.com')));
+    expect(source, isNot(contains('chimpstatic.com')));
+    expect(source, isNot(contains('_enableMailchimpSiteTracking')));
+    expect(source, contains('_removeMailchimpSiteTracking();'));
+    expect(newsletter, contains("Uri.base.resolve('/newsletter-api/v1/callable/\$name')"));
+    expect(newsletter, contains("'submitNewsletterSignup'"));
+    expect(source, isNot(contains('Mailchimp marketing tracking')));
   });
 
   test('preference tokens are removed from visitor and support URL metadata',

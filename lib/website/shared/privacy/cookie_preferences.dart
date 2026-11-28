@@ -2,15 +2,13 @@ import 'dart:convert';
 
 /// Consent is purpose-specific and expires so visitors can review their choice.
 class CookiePreferences {
-  static const version = 2;
+  static const version = 3;
   static const lifetime = Duration(days: 180);
   final bool analytics;
-  final bool marketing;
   final DateTime savedAt;
 
   const CookiePreferences({
     required this.analytics,
-    required this.marketing,
     required this.savedAt,
   });
 
@@ -26,7 +24,6 @@ class CookiePreferences {
   String encode() => jsonEncode({
         'version': version,
         'analytics': analytics,
-        'marketing': marketing,
         'savedAt': savedAt.toUtc().toIso8601String(),
       });
 
@@ -35,9 +32,8 @@ class CookiePreferences {
     try {
       final value = jsonDecode(raw);
       if (value is! Map ||
-          value['version'] != version ||
+          (value['version'] != version && value['version'] != 2) ||
           value['analytics'] is! bool ||
-          value['marketing'] is! bool ||
           value['savedAt'] is! String) {
         return null;
       }
@@ -49,7 +45,6 @@ class CookiePreferences {
       }
       return CookiePreferences(
           analytics: value['analytics'] as bool,
-          marketing: value['marketing'] as bool,
           savedAt: date);
     } catch (_) {
       return null;
