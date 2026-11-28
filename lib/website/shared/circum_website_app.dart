@@ -154,9 +154,6 @@ enum _WebAppMode {
 }
 
 const _analyticsConsentStorageKey = 'circum_public_cookie_preferences_v2';
-const _mailchimpSiteTrackingScriptId = 'mcjs';
-const _mailchimpSiteTrackingScriptUrl =
-    'https://chimpstatic.com/mcjs-connected/js/users/b21e126d2912f3a0d50cc2727/ab39fe9ec15e5ad7acd1bc638.js';
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -204,8 +201,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     _redirectLegacyQueryIfNeeded();
     if (kIsWeb) {
       _cookieConsent = _readCookiePreferences();
-      if (_cookieConsent?.marketing == true) { _enableMailchimpSiteTracking(); }
-      if (_cookieConsent?.marketing != true) { _disableMailchimpSiteTracking(); }
+      _removeMailchimpSiteTracking();
       if (_optionalAnalyticsConsent == true) { unawaited(_logWebsiteVisit()); }
       _consentStorageListener = ((web.Event event) {
         final storageEvent = event as web.StorageEvent;
@@ -353,37 +349,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     }
   }
 
-  void _enableMailchimpSiteTracking() {
-    if (!kIsWeb || _cookieConsent?.marketing != true ||
-        DateTime.now().difference(_cookieConsent!.savedAt) >= CookiePreferences.lifetime) { return; }
-
-    final existing = web.document.getElementById(
-      _mailchimpSiteTrackingScriptId,
-    );
-    if (existing != null) {
-      // The HTML shell contains a non-executing placeholder. Replace it only
-      // after consent so the Mailchimp script cannot run prematurely.
-      if (existing.getAttribute('type') != 'text/plain') return;
-      existing.remove();
-    }
-
-    final script = web.HTMLScriptElement()
-      ..id = _mailchimpSiteTrackingScriptId
-      ..async = true
-      ..src = _mailchimpSiteTrackingScriptUrl;
-    script.setAttribute('data-circum-consent', 'optional-marketing');
-    web.document.head!.appendChild(script);
-  }
-
-  void _disableMailchimpSiteTracking() {
+  void _removeMailchimpSiteTracking() {
     if (!kIsWeb) return;
-    final script = web.document.getElementById(
-      _mailchimpSiteTrackingScriptId,
-    );
-    if (script != null && script.getAttribute('type') != 'text/plain') {
-      script.remove();
-    }
-    // Clear known first-party tracking cookies without touching auth/session data.
+    // Clean up tracking residue from the retired integration without touching
+    // auth, consent, or session data.
+    web.document.getElementById('mcjs')?.remove();
     try {
       final host = web.window.location.hostname;
       final paths = <String>{'/', web.window.location.pathname};
@@ -454,8 +424,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             if (kIsWeb && _cookieConsent == null)
               _CookieConsentBanner(
                 colors: colors,
-                onReject: () => _setCookiePreferences(false, false),
-                onAccept: () => _setCookiePreferences(true, true),
+                onReject: () => _setCookiePreferences(false),
+                onAccept: () => _setCookiePreferences(true),
                 onManage: _showConsentPreferences,
               ),
 
@@ -585,7 +555,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
 
   CookiePreferences? _readCookiePreferences() {
     if (Uri.base.queryParameters['cookie_opt_out'] == '1') {
-      return CookiePreferences(analytics: false, marketing: false, savedAt: DateTime.now());
+      return CookiePreferences(analytics: false, savedAt: DateTime.now());
     }
     try {
       return CookiePreferences.decode(
@@ -608,27 +578,17 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     if (!mounted) return;
     final next = _readCookiePreferences();
     if (next?.analytics == _cookieConsent?.analytics &&
-        next?.marketing == _cookieConsent?.marketing &&
         next?.savedAt == _cookieConsent?.savedAt) {
       _scheduleConsentExpiry();
       return;
     }
-    final withdrawMarketing = _cookieConsent?.marketing == true &&
-        next?.marketing != true;
     setState(() => _cookieConsent = next);
     _scheduleConsentExpiry();
-    if (withdrawMarketing) {
-      _disableMailchimpSiteTracking();
-      web.window.location.reload();
-    } else if (next?.marketing == true) {
-      _enableMailchimpSiteTracking();
-    }
   }
 
-  void _setCookiePreferences(bool analytics, bool marketing) {
+  void _setCookiePreferences(bool analytics) {
     if (!kIsWeb) return;
-    final withdrawMarketing = _cookieConsent?.marketing == true && !marketing;
-    final next = CookiePreferences(analytics: analytics, marketing: marketing,
+    final next = CookiePreferences(analytics: analytics,
         savedAt: DateTime.now());
     var persisted = false;
     try {
@@ -645,17 +605,6 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       web.window.location.replace(Uri.base.replace(queryParameters: query).toString());
       return;
     }
-    if (withdrawMarketing) {
-      _disableMailchimpSiteTracking();
-      if (persisted) {
-        web.window.location.reload();
-      } else {
-        web.window.location.replace(Uri.base.replace(queryParameters: {
-          ...Uri.base.queryParameters, 'cookie_opt_out': '1'}).toString());
-      }
-      return;
-    }
-    if (marketing) { _enableMailchimpSiteTracking(); }
     if (analytics) { unawaited(_logWebsiteVisit()); }
   }
 
@@ -663,7 +612,6 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     final dialogContext = _consentNavigatorKey.currentContext;
     if (dialogContext == null) return;
     var analytics = _cookieConsent?.analytics ?? false;
-    var marketing = _cookieConsent?.marketing ?? false;
     showDialog<void>(context: dialogContext,
       builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
         title: const Text('Cookie and storage preferences'),
@@ -674,21 +622,17 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
               title: const Text('Visitor analytics'),
               subtitle: const Text('Allow analytics to help Circum understand visits and improve the website. Off unless you choose it.'),
               value: analytics, onChanged: (v) => update(() => analytics = v)),
-            SwitchListTile(contentPadding: EdgeInsets.zero,
-              title: const Text('Mailchimp marketing tracking'),
-              subtitle: const Text('Allow Mailchimp (Intuit) connected-site tracking to collect browser and visit information for marketing measurement. Newsletter signup does not require this.'),
-              value: marketing, onChanged: (v) => update(() => marketing = v)),
             TextButton(onPressed: () => unawaited(launchUrl(
                 Uri.base.resolve('/cookie_policy'), webOnlyWindowName: '_self')),
               child: const Text('Read Cookie Policy')),
           ])),
         actions: [
           OutlinedButton(onPressed: () { Navigator.pop(context);
-            _setCookiePreferences(false, false); }, child: const Text('Reject optional')),
+            _setCookiePreferences(false); }, child: const Text('Reject optional')),
           OutlinedButton(onPressed: () { Navigator.pop(context);
-            _setCookiePreferences(true, true); }, child: const Text('Accept optional')),
+            _setCookiePreferences(true); }, child: const Text('Accept optional')),
           FilledButton(onPressed: () { Navigator.pop(context);
-            _setCookiePreferences(analytics, marketing); }, child: const Text('Save choices')),
+            _setCookiePreferences(analytics); }, child: const Text('Save choices')),
         ],
       )));
   }
@@ -26367,19 +26311,19 @@ class _CookiePolicyPage extends StatelessWidget {
         sections: const [
           _ComplianceSection(
             'What we use',
-            'Necessary technologies support page delivery, security and sign-in through Google account and security services, including reCAPTCHA Enterprise. When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional analytics and marketing tracking stay off until you actively enable their respective switches.',
+            'Necessary technologies support page delivery, security and sign-in through Google account and security services, including reCAPTCHA Enterprise. When you start a booking, tab-scoped session storage holds your typed pickup and destination for up to 30 minutes and removes the draft when used. Your cookie choice is stored separately. Optional visitor analytics stay off until you actively enable them.',
           ),
           _ComplianceSection(
             'Optional visitor analytics',
-            'Analytics sends a page visit record to Circum’s analytics service (provided by Google). This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Mailchimp (Intuit) connected-site marketing tracking is a separate optional purpose and may collect browser, device and visit information and use its own cookies or storage. Neither purpose is required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website tracking permission.',
+            'Analytics sends a page visit record to Circum’s analytics service (provided by Google). This can include the page, URL, non-sensitive campaign query parameters, app mode and account context if signed in. Analytics is optional and is not required to browse, book or subscribe to the newsletter. Newsletter email permission is separate from website analytics permission.',
           ),
           _ComplianceSection(
             'Storage and duration',
-            'circum_public_cookie_preferences_v2 stores your choices, notice version and choice date for 180 days. After expiry or a notice version change we ask again with optional purposes off. The booking key circum.landingBooking.v1 is tab-scoped, expires after 30 minutes and is consumed once. Authentication and security storage duration depends on your session and provider. Mailchimp controls its own storage and retention; see its privacy information linked below.',
+            'Your visitor analytics choice and choice date are stored for 180 days. Existing choices are retained when the preference format is updated. After expiry we ask again with optional analytics off. The booking key circum.landingBooking.v1 is tab-scoped, expires after 30 minutes and is consumed once. Authentication and security storage duration depends on your session and provider.',
           ),
           _ComplianceSection(
             'Your choices',
-            'Reject optional and Accept optional are equally available, or use Manage preferences to select each purpose separately. Reopen Cookie settings from the website footer or Manage preferences here. Withdrawing Mailchimp permission reloads the page to stop already-running tracking; this may interrupt an unfinished form. We remove known accessible Mailchimp tracking cookies and storage on this domain. We cannot remove cookies controlled by other domains; clear these in your browser settings. Other open Circum tabs receive updated choices. Necessary service storage remains available.',
+            'Reject optional and Accept optional are equally available, or use Manage preferences to enable visitor analytics. Reopen Cookie settings from the website footer or Manage preferences here. You can change your choice at any time. Necessary service storage remains available.',
           ),
           _ComplianceSection(
             'Relationship with privacy information',
@@ -26395,9 +26339,6 @@ class _CookiePolicyPage extends StatelessWidget {
           ),
         ],
         actions: [
-          TextButton(onPressed: () => unawaited(launchUrl(
-            Uri.parse('https://www.intuit.com/privacy/statement/'),
-            webOnlyWindowName: '_blank')), child: const Text('Mailchimp / Intuit privacy')),
           TextButton(onPressed: () => unawaited(launchUrl(
             Uri.parse('https://policies.google.com/privacy'),
             webOnlyWindowName: '_blank')), child: const Text('Google privacy')),
@@ -26453,7 +26394,7 @@ class _CookieConsentBanner extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: const Text(
-                    'Necessary storage keeps Circum working. Optional visitor analytics and Mailchimp marketing tracking stay off until you choose. We remember your choice for 180 days; change it any time in Cookie settings.',
+                    'Necessary storage keeps Circum working. Optional visitor analytics stay off until you choose. We remember your choice for 180 days; change it any time in Cookie settings.',
                   ),
                 ),
                 TextButton(
